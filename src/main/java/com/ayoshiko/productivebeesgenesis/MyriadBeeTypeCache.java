@@ -189,9 +189,6 @@ public final class MyriadBeeTypeCache {
 	 * @param level 服务端世界
 	 */
 	public static void updateBeeTypeCache(ServerLevel level) {
-		if (com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime.reloadBlocked(level.getServer())) {
-			return;
-		}
 		long currentTick = level.getGameTime();
 		if (!warmupComplete && currentTick < nextWarmupTick) return;
 		nextWarmupTick = currentTick + 20L;
@@ -210,8 +207,7 @@ public final class MyriadBeeTypeCache {
 		CompiledBeeTypeFilter filter = CompiledBeeTypeFilter.compile(mode.name(), filteredList);
 
 		List<ResourceLocation> newCache = AbstractCombEventHandler.buildBeeTypeCache(
-				level, excluded, beeType -> filter.allows(beeType.toString())
-						&& com.ayoshiko.productivebeesgenesis.resource.ResourceInputAdmission.allowsBee(level.getServer(), beeType));
+				level, excluded, beeType -> filter.allows(beeType.toString()));
 
 		if (newCache.isEmpty()) {
 			logEmptyResult(filter, currentTick);
@@ -233,7 +229,7 @@ public final class MyriadBeeTypeCache {
 			List<ItemStack> variants = resolveHoneycombTemplates(level, type);
 			if (variants.isEmpty()) continue;
 			resolvedTypes.add(type);
-			honeycombByType.put(type, variants.getFirst());
+			honeycombByType.put(type, variants.get(0));
 			honeycombVariants.put(type, variants);
 			List<ItemStack> mappedBlocks = new ArrayList<>();
 			for (ItemStack comb : variants) {
@@ -243,7 +239,7 @@ public final class MyriadBeeTypeCache {
 			}
 			if (!mappedBlocks.isEmpty()) {
 				blockTypes.add(type);
-				blockByType.put(type, mappedBlocks.getFirst());
+				blockByType.put(type, mappedBlocks.get(0));
 				blockVariants.put(type, List.copyOf(mappedBlocks));
 				for (ItemStack block : mappedBlocks) addDistinct(blocks, block);
 			}
@@ -259,14 +255,6 @@ public final class MyriadBeeTypeCache {
 	}
 
 	/** 枚举同蜂种的所有配方，按完整组件去重；缺失时等待重载，不伪造蜜脾。 */
-	public static int availableForms(ServerLevel level, ResourceLocation beeType) {
-		List<ItemStack> templates = resolveHoneycombTemplates(level, beeType);
-		if (templates.isEmpty()) {
-			return 0;
-		}
-		return templates.stream().anyMatch(comb -> !RandomHoneycombSelector.buildCombBlockTemplate(beeType, comb).isEmpty()) ? 3 : 1;
-	}
-
 	private static List<ItemStack> resolveHoneycombTemplates(ServerLevel level, ResourceLocation beeType) {
 		List<ItemStack> result = new ArrayList<>();
 		for (ItemStack output : BeeInfoHelper.getAllBeeProduce(level, beeType)) {
@@ -279,7 +267,7 @@ public final class MyriadBeeTypeCache {
 
 	private static void addDistinct(List<ItemStack> templates, ItemStack candidate) {
 		for (ItemStack template : templates) {
-			if (ItemStack.isSameItemSameComponents(template, candidate)) return;
+			if (ItemStack.isSameItemSameTags(template, candidate)) return;
 		}
 		templates.add(candidate.copyWithCount(1));
 	}
@@ -292,7 +280,7 @@ public final class MyriadBeeTypeCache {
 
 	private static final net.minecraft.tags.TagKey<net.minecraft.world.item.Item> HONEYCOMBS =
 			net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.ITEM,
-					ResourceLocation.fromNamespaceAndPath("c", "honeycombs"));
+					new ResourceLocation("c", "honeycombs"));
 
 	private static void logEmptyResult(CompiledBeeTypeFilter filter, long currentTick) {
 		if (filter.isEmptyWhitelist()) {

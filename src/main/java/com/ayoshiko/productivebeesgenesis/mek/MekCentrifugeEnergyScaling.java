@@ -7,7 +7,7 @@ import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
-import mekanism.common.tile.interfaces.IUpgradeTile;
+import mekanism.common.tile.interfaces.ITileUpgradable;
 import mekanism.common.util.MekanismUtils;
 
 /** Coordinates high-parallel energy pricing and the local centrifuge energy buffer. */
@@ -40,6 +40,9 @@ public final class MekCentrifugeEnergyScaling {
 		if (upgradedEnergyPerTick <= 0L) return 0L;
 		return dividePositive(upgradedEnergyPerTick, BASE_ENERGY_USAGE_DIVISOR);
 	}
+	public static mekanism.api.math.FloatingLong balancedSmeltingEnergyPerTick(mekanism.api.math.FloatingLong energy) {
+		return energy.divide(BASE_ENERGY_USAGE_DIVISOR);
+	}
 
 	/** Applies the built-in balance reduction to a configured base storage capacity. */
 	public static long balancedBaseCapacity(long configuredCapacity) {
@@ -60,7 +63,7 @@ public final class MekCentrifugeEnergyScaling {
 	public static long requiredEnergyPerTick(PbRecipeContext context, int batchMultiplier) {
 		MachineEnergyContainer<?> container = context.energyContainer();
 		if (container == null) return 0L;
-		long energyPerOperation = Math.max(0L, container.getEnergyPerTick());
+		long energyPerOperation = Math.max(0L, com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(container.getEnergyPerTick()));
 		int operationsPerTick = Math.max(1, context.operationsPerTick());
 		int productivityParallel = Math.max(1, context.productivityParallelModifier());
 		int processes = Math.max(1, context.processes());
@@ -83,7 +86,7 @@ public final class MekCentrifugeEnergyScaling {
 	public static long requiredSmeltingEnergyPerTick(PbRecipeContext context, int batchMultiplier) {
 		MachineEnergyContainer<?> container = context.energyContainer();
 		if (container == null) return 0L;
-		long energyPerOperation = Math.max(0L, container.getEnergyPerTick());
+		long energyPerOperation = Math.max(0L, com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(container.getEnergyPerTick()));
 		int operationsPerTick = Math.max(1, context.operationsPerTick());
 		int processes = Math.max(1, context.processes());
 		long activeDemand = activeEnergyDemand(context, energyPerOperation,
@@ -214,10 +217,10 @@ public final class MekCentrifugeEnergyScaling {
 	public static void prepareBatchCapacity(PbRecipeContext context, long required) {
 		MachineEnergyContainer<?> container = context.energyContainer();
 		if (container == null || context.hasCreativeUpgrade()) return;
-		long baseCapacity = Math.max(1L, container.getBaseMaxEnergy());
+		long baseCapacity = Math.max(1L, com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(container.getBaseMaxEnergy()));
 		long normalCapacity = normalCapacityFor(context, container, baseCapacity);
 		long targetCapacity = batchCapacity(normalCapacity, required);
-		if (container.getMaxEnergy() != targetCapacity) container.setMaxEnergy(targetCapacity);
+		if (com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(container.getMaxEnergy()) != targetCapacity) container.setMaxEnergy(com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.fromFe(targetCapacity));
 	}
 
 	/**
@@ -234,8 +237,8 @@ public final class MekCentrifugeEnergyScaling {
 			}
 			return;
 		}
-		long baseCapacity = Math.max(1L, container.getBaseMaxEnergy());
-		long currentCapacity = container.getMaxEnergy();
+		long baseCapacity = Math.max(1L, com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(container.getBaseMaxEnergy()));
+		long currentCapacity = com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(container.getMaxEnergy());
 		long upgradeFingerprint = Long.MIN_VALUE;
 		Ae2OutputStateHolder capacityCache = null;
 		if (ae2Loaded && context instanceof IAe2OutputHostBase ae2Host) {
@@ -247,7 +250,7 @@ public final class MekCentrifugeEnergyScaling {
 		}
 		long desired = normalCapacityFor(context, container, baseCapacity);
 		if (currentCapacity != desired) {
-			container.setMaxEnergy(desired);
+			container.setMaxEnergy(com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.fromFe(desired));
 		}
 		if (capacityCache != null) {
 			capacityCache.cacheNormalizedCapacity(baseCapacity, desired, upgradeFingerprint);
@@ -255,20 +258,19 @@ public final class MekCentrifugeEnergyScaling {
 	}
 
 	/**
-	 * 普通与强化能量升级共同决定容量；直接读取两个计数，不遍历无关升级。
+	 * Capacity only depends on ENERGY upgrades. Reading that counter directly keeps
+	 * accelerated sub-ticks allocation-free without walking unrelated upgrade types.
 	 */
 	private static long upgradeFingerprint(PbRecipeContext context) {
-		if (!(context instanceof IUpgradeTile upgradeTile)) return Long.MIN_VALUE;
-		int energy = upgradeTile.getComponent().getUpgrades(Upgrade.ENERGY);
-		int empoweredEnergy = MekUpgradeSupport.getEmpoweredEnergyUpgrades(upgradeTile);
-		return ((long) energy << Integer.SIZE) | Integer.toUnsignedLong(empoweredEnergy);
+		if (!(context instanceof ITileUpgradable upgradeTile)) return Long.MIN_VALUE;
+		return upgradeTile.getComponent().getUpgrades(Upgrade.ENERGY);
 	}
 
 	private static long normalCapacityFor(PbRecipeContext context,
 			MachineEnergyContainer<?> container, long baseCapacity) {
 		long upgradedCapacity = baseCapacity;
-		if (context instanceof IUpgradeTile upgradeTile) {
-			upgradedCapacity = MekanismUtils.getMaxEnergy(upgradeTile, baseCapacity);
+		if (context instanceof ITileUpgradable upgradeTile) {
+			upgradedCapacity = com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(MekanismUtils.getMaxEnergy(upgradeTile, com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.fromFe(baseCapacity)));
 		}
 		return normalCapacity(baseCapacity, upgradedCapacity);
 	}

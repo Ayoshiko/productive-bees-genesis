@@ -1,9 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import net.minecraft.world.item.ItemStack;
+
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import mekanism.common.inventory.container.MekanismContainer;
 import mekanism.common.inventory.container.sync.SyncableBoolean;
-import mekanism.common.inventory.container.sync.SyncableByteArray;
+import mekanism.common.inventory.container.sync.SyncableItemStack;
 import mekanism.common.inventory.container.sync.SyncableEnum;
 import mekanism.common.inventory.container.sync.SyncableFloat;
 import mekanism.common.inventory.container.sync.SyncableInt;
@@ -215,9 +217,14 @@ public class ApiarySlotSerializer {
 			// = 每 gameTick 49 次 NBT 压缩序列化 + 全数组 hashCode）。
 			// BeeSlot 仅在蜜蜂实质变化时更新 beeData 引用，引用相等即复用缓存，
 			// 序列化次数从 每 tick×N 降为 仅蜜蜂变化时。
-			container.track(SyncableByteArray.create(
-					() -> serializeBeeDataCached(slotIndex, slot),
-					bytes -> slot.setBeeData(deserializeBeeData(bytes))
+			container.track(SyncableItemStack.create(
+					() -> {
+						ItemStack sync = new ItemStack(net.minecraft.world.item.Items.PAPER);
+						CompoundTag data = slot.getBeeData();
+						sync.setTag(data == null ? null : data.copy());
+						return sync;
+					},
+					stack -> slot.setBeeData(stack.getTag() == null ? null : stack.getTag().copy())
 			));
 			// 已居住 tick 数 — tooltip 进度显示
 			container.track(SyncableInt.create(
@@ -296,7 +303,9 @@ public class ApiarySlotSerializer {
 		try {
 			ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
 			// 限制 NBT 解压堆内存为 64KB，防止恶意数据导致 OOM
-			return NbtIo.readCompressed(bais, NbtAccounter.create(65536L));
+			try (java.io.DataInputStream input = new java.io.DataInputStream(new java.util.zip.GZIPInputStream(bais))) {
+                return NbtIo.read(input, new NbtAccounter(65536L));
+            }
 		} catch (RuntimeException e) {
 			// 捕获 NbtAccounter 超限及反序列化异常，记录 WARN 并返回 null 避免崩溃
 			// DevLog 节流日志便于排查（网络同步路径，避免恶意客户端刷屏）

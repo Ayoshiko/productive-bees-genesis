@@ -13,9 +13,9 @@ import net.minecraft.client.resources.model.ModelState;
 import net.minecraft.client.resources.model.UnbakedModel;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.GsonHelper;
-import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
-import net.neoforged.neoforge.client.model.geometry.IGeometryLoader;
-import net.neoforged.neoforge.client.model.geometry.IUnbakedGeometry;
+import net.minecraftforge.client.model.geometry.IGeometryBakingContext;
+import net.minecraftforge.client.model.geometry.IGeometryLoader;
+import net.minecraftforge.client.model.geometry.IUnbakedGeometry;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -149,8 +149,8 @@ public abstract class AbstractMaskGeometryLoader<T extends AbstractMaskGeometryL
 		 */
 		@NotNull
 		protected BakedModel bakeBaseModel(@NotNull ModelBaker baker, @NotNull ModelState modelState,
-				@NotNull Function<Material, TextureAtlasSprite> spriteGetter) {
-			return this.baseModel.bake(baker, this.baseModel, spriteGetter, modelState, true);
+				@NotNull Function<Material, TextureAtlasSprite> spriteGetter, @NotNull ResourceLocation modelLocation) {
+			return this.baseModel.bake(baker, this.baseModel, spriteGetter, modelState, modelLocation, true);
 		}
 	}
 }

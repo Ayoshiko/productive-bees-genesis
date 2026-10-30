@@ -3,19 +3,20 @@ package com.ayoshiko.productivebeesgenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import cy.jdkdigital.productivebees.ProductiveBees;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.SpawnEggItem;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 /**
 	 * 创造模式物品栏事件处理器
@@ -30,7 +31,7 @@ import java.util.Collection;
 	 * 启用时使用 {@link BuildCreativeModeTabContentsEvent#accept} 添加物品，
 	 * 禁用时使用 {@link BuildCreativeModeTabContentsEvent#remove} 移除物品。
 	 */
-@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
+@EventBusSubscriber(bus = EventBusSubscriber.Bus.MOD, modid = ProductiveBeesGenesis.MOD_ID)
 public final class CreativeTabEventHandler {
 
 	private CreativeTabEventHandler() {}
@@ -66,15 +67,15 @@ public final class CreativeTabEventHandler {
 		}
 
 		// 获取万象创世蜜蜂的刷怪蛋物品
-		ResourceLocation myriadSpawnEggId = ResourceLocation.fromNamespaceAndPath(
+		ResourceLocation myriadSpawnEggId = new ResourceLocation(
 				PBConstants.PRODUCTIVE_BEES_MOD_ID, "spawn_egg_" + PBConstants.MYRIADCREATIONS_TYPE.getPath());
 		var myriadSpawnEgg = BuiltInRegistries.ITEM.get(myriadSpawnEggId);
 
 		// 从父标签页中移除万象创世刷怪蛋
-		removeSpawnEggsFromList(event.getParentEntries(), myriadSpawnEgg, event,
+		removeSpawnEggsFromList(creativeEntries(event), myriadSpawnEgg, event,
 			CreativeModeTab.TabVisibility.PARENT_TAB_ONLY);
 		// 从搜索标签页中移除万象创世刷怪蛋
-		removeSpawnEggsFromList(event.getSearchEntries(), myriadSpawnEgg, event,
+		removeSpawnEggsFromList(creativeEntries(event), myriadSpawnEgg, event,
 			CreativeModeTab.TabVisibility.SEARCH_TAB_ONLY);
 	}
 
@@ -91,11 +92,11 @@ public final class CreativeTabEventHandler {
 	 */
 	private static void addMyriadCreationsCombs(BuildCreativeModeTabContentsEvent event) {
 		ItemStack honeycomb = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
-		honeycomb.set(ModDataComponents.BEE_TYPE.get(), PBConstants.MYRIADCREATIONS_TYPE);
+		PbDataComponents.setBeeType(honeycomb, PBConstants.MYRIADCREATIONS_TYPE);
 		safeAccept(event, honeycomb);
 
 		ItemStack combBlock = new ItemStack(ModItems.CONFIGURABLE_COMB_BLOCK.get());
-		combBlock.set(ModDataComponents.BEE_TYPE.get(), PBConstants.MYRIADCREATIONS_TYPE);
+		PbDataComponents.setBeeType(combBlock, PBConstants.MYRIADCREATIONS_TYPE);
 		safeAccept(event, combBlock);
 	}
 
@@ -104,10 +105,15 @@ public final class CreativeTabEventHandler {
 	 */
 	private static void safeAccept(BuildCreativeModeTabContentsEvent event, ItemStack stack) {
 		// 检查父标签页和搜索标签页是否已存在相同条目
-		if (containsStack(event.getParentEntries(), stack) || containsStack(event.getSearchEntries(), stack)) {
+		if (containsStack(creativeEntries(event), stack) || containsStack(creativeEntries(event), stack)) {
 			return;
 		}
 		event.accept(stack);
+	}
+	private static Collection<ItemStack> creativeEntries(BuildCreativeModeTabContentsEvent event) {
+		List<ItemStack> stacks = new ArrayList<>();
+		for (var entry : event.getEntries()) stacks.add(entry.getKey());
+		return stacks;
 	}
 
 	/**
@@ -136,7 +142,7 @@ public final class CreativeTabEventHandler {
 		for (ItemStack stack : new ArrayList<>(entries)) {
 			if (stack.isEmpty()) continue;
 			if (isMyriadCreationsSpawnEgg(stack, myriadSpawnEgg)) {
-				event.remove(stack, visibility);
+				event.getEntries().remove(stack);
 			}
 		}
 	}
@@ -157,9 +163,9 @@ public final class CreativeTabEventHandler {
 
 			// 检查是否为 Configurable Spawn Egg 携带万象创世类型
 			if (stack.getItem() == ModItems.CONFIGURABLE_SPAWN_EGG.get()) {
-				var entityData = stack.get(net.minecraft.core.component.DataComponents.ENTITY_DATA);
+				var entityData = stack.getTagElement("EntityTag");
 				if (entityData != null) {
-					var nbt = entityData.copyTag();
+					var nbt = entityData.copy();
 					if (nbt != null) {
 						String beeType = nbt.getString("type");
 						if (PBConstants.MYRIADCREATIONS_TYPE_STRING.equals(beeType)) {

@@ -106,7 +106,8 @@ public class ServerTickTimeMonitor {
 	 *
 	 * @param event 服务端 tick Pre 事件
 	 */
-	public void onTickPre(net.neoforged.neoforge.event.tick.ServerTickEvent.Pre event) {
+	public void onTickPre(net.minecraftforge.event.TickEvent.ServerTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.START) return;
 		tickStartNanos = System.nanoTime();
 	}
 
@@ -121,7 +122,8 @@ public class ServerTickTimeMonitor {
 	 *
 	 * @param event 服务端 tick Post 事件
 	 */
-	public void onTickPost(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {
+	public void onTickPost(net.minecraftforge.event.TickEvent.ServerTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
 		long start = tickStartNanos;
 		tickStartNanos = UNSET_TICK_START;
 		double durationMs = sampleMsFor(start, System.nanoTime());

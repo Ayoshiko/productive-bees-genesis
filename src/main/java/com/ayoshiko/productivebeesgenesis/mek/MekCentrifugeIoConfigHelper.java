@@ -5,7 +5,6 @@ import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import com.ayoshiko.productivebeesgenesis.logistics.GenesisTileComponentEjector;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-import com.ayoshiko.productivebeesgenesis.resource.ResourceMekEnergyConfig;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
@@ -108,7 +107,7 @@ final class MekCentrifugeIoConfigHelper {
 			return multiHolder;
 		}
 		// SINGLE 模式:保持原逻辑(单槽共享,容量随进程数和 tier 倍率缩放)
-		FluidTankHelper helper = FluidTankHelper.forSideWithConfig(factory);
+		FluidTankHelper helper = FluidTankHelper.forSideWithConfig(factory::getDirection, factory::getConfig);
 		long baseCapacity = readFluidTankCapacitySafely();
 		long multiplier = fluidTankMultiplier.getAsInt();
 		int capacity = SaturatingMath.saturatingToInt(
@@ -184,7 +183,7 @@ final class MekCentrifugeIoConfigHelper {
 		}
 		// 重新调用setupItemIOConfig，将tertiaryOutputSlots注册到OUTPUT DataType
 		configComponent.setupItemIOConfig(inputSlots, outputSlots, energySlot, false);
-		ResourceMekEnergyConfig.setup(factory, configComponent, energyContainer);
+		configComponent.setupInputConfig(TransmissionType.ENERGY, energyContainer);
 		// Task 6: 配置流体输出侧面（右侧）— 区分 MULTI_PER_FLUID 和 SINGLE 模式
 		// MULTI_PER_FLUID 模式：使用 IProxiedSlotInfo.FluidProxy 包装 MultiFluidTankHolder,
 		//   Ejector 通过 IProxiedSlotInfo.FluidProxy.getTanks() -> multiHolder.getTanks() 动态获取槽列表

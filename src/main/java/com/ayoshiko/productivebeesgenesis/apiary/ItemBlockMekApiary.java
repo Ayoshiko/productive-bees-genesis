@@ -6,12 +6,9 @@ import com.ayoshiko.productivebeesgenesis.util.ItemStackBlockEntityDataHelper;
 import com.ayoshiko.productivebeesgenesis.util.NumberFormatter;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
-import mekanism.common.attachments.component.UpgradeAware;
-import mekanism.common.attachments.containers.energy.EnergyContainersBuilder;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeUpgradeSupport;
 import mekanism.common.item.block.ItemBlockTooltip;
-import mekanism.common.registries.MekanismDataComponents;
 import mekanism.common.util.StorageUtils;
 import mekanism.common.util.text.UpgradeDisplay;
 import net.minecraft.ChatFormatting;
@@ -77,10 +74,10 @@ public class ItemBlockMekApiary extends ItemBlockTooltip<MekApiaryBlock<?, ?>> {
 	 * 避免扳手拆卸后DataComponents不完整时StorageUtils.addStoredEnergy抛出NPE。
 	 */
 	@Override
-	protected void addTypeDetails(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
+	protected void addTypeDetails(@NotNull ItemStack stack, @NotNull net.minecraft.world.level.Level context,
 			@NotNull List<Component> tooltip, @NotNull TooltipFlag flag) {
 		try {
-			if (exposesEnergyCapOrTooltips()) {
+			if (exposesEnergyCap(stack)) {
 				StorageUtils.addStoredEnergy(stack, tooltip, false);
 			}
 		} catch (Exception e) {
@@ -99,7 +96,7 @@ public class ItemBlockMekApiary extends ItemBlockTooltip<MekApiaryBlock<?, ?>> {
 	 * 数据来源：getDrops()写入BLOCK_ENTITY_DATA的saveCustomDataForItem()NBT。
 	 */
 	@Override
-	protected void addStats(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
+	protected void addStats(@NotNull ItemStack stack, @NotNull net.minecraft.world.level.Level context,
 							@NotNull List<Component> tooltip, @NotNull TooltipFlag flag) {
 		super.addStats(stack, context, tooltip, flag);
 		CompoundTag customNbt = ItemStackBlockEntityDataHelper.readCustomBlockEntityData(stack);
@@ -139,7 +136,7 @@ public class ItemBlockMekApiary extends ItemBlockTooltip<MekApiaryBlock<?, ?>> {
 	 * super 失败（被 try-catch 吞掉）时调用 addMekUpgradesDetails 独立渲染升级信息。
 	 */
 	@Override
-	protected void addDetails(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
+	protected void addDetails(@NotNull ItemStack stack, @NotNull net.minecraft.world.level.Level context,
 			@NotNull List<Component> tooltip, @NotNull TooltipFlag flag) {
 		boolean superSucceeded = false;
 		try {
@@ -174,17 +171,7 @@ public class ItemBlockMekApiary extends ItemBlockTooltip<MekApiaryBlock<?, ?>> {
 	 * @param tooltip  tooltip 列表
 	 */
 	private void addMekUpgradesDetails(@NotNull ItemStack stack, @NotNull List<Component> tooltip) {
-		try {
-			if (!Attribute.has(getBlock(), AttributeUpgradeSupport.class)) return;
-			UpgradeAware upgradeAware = stack.get(MekanismDataComponents.UPGRADES);
-			if (upgradeAware == null) return;
-			for (Map.Entry<Upgrade, Integer> entry : upgradeAware.upgrades().entrySet()) {
-				tooltip.add(UpgradeDisplay.of(entry.getKey(), entry.getValue()).getTextComponent());
-			}
-		} catch (Exception e) {
-			// 防御：UPGRADES 组件缺失或格式异常时跳过，不影响其他 tooltip 渲染
-			ProductiveBeesGenesis.LOGGER.warn("渲染蜂箱 MEK 升级 tooltip 时异常", e);
-		}
+		// Standard upgrades are rendered by the inherited Mekanism NBT tooltip.
 	}
 
 	/**
@@ -365,7 +352,4 @@ public class ItemBlockMekApiary extends ItemBlockTooltip<MekApiaryBlock<?, ?>> {
 	 * 根据 {@link mekanism.common.block.attribute.AttributeEnergy} 配置创建能量容器。
 	 * 蜂箱支持 ENERGY 升级，走升级动态容量分支。
 	 */
-	public EnergyContainersBuilder buildDefaultEnergyContainers(EnergyContainersBuilder builder) {
-		return addDefaultEnergyContainers(builder);
-	}
 }

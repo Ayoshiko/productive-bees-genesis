@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis;
 
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
@@ -43,7 +43,7 @@ public final class RandomHoneycombSelector {
 
 	/** 兜底蜜蜂类型（缓存为空或异常时使用） */
 	public static final ResourceLocation FALLBACK_BEE_TYPE =
-			ResourceLocation.fromNamespaceAndPath("productivebees", "iron");
+			new ResourceLocation("productivebees", "iron");
 
 	private RandomHoneycombSelector() {
 		// 工具类禁止实例化
@@ -63,7 +63,7 @@ public final class RandomHoneycombSelector {
 
 			ItemStack stack = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
 			int randomIndex = ThreadLocalRandom.current().nextInt(cachedBeeTypes.size());
-			stack.set(ModDataComponents.BEE_TYPE.get(), cachedBeeTypes.get(randomIndex));
+			PbDataComponents.setBeeType(stack, cachedBeeTypes.get(randomIndex));
 			return stack;
 		} catch (Exception e) {
 			// M9: LogThrottle 节流，避免 tick 路径异常刷屏
@@ -106,7 +106,7 @@ public final class RandomHoneycombSelector {
 
 			ItemStack stack = new ItemStack(ModItems.CONFIGURABLE_COMB_BLOCK.get());
 			int randomIndex = ThreadLocalRandom.current().nextInt(cachedBeeTypes.size());
-			stack.set(ModDataComponents.BEE_TYPE.get(), cachedBeeTypes.get(randomIndex));
+			PbDataComponents.setBeeType(stack, cachedBeeTypes.get(randomIndex));
 			return stack;
 		} catch (Exception e) {
 			// M9: LogThrottle 节流，避免 tick 路径异常刷屏
@@ -260,7 +260,7 @@ public final class RandomHoneycombSelector {
 			return null;
 		}
 		for (ItemStack template : templates) {
-			if (template != null && type.equals(template.get(ModDataComponents.BEE_TYPE.get()))) {
+			if (template != null && type.equals(PbDataComponents.getBeeType(template))) {
 				return template;
 			}
 		}
@@ -282,7 +282,7 @@ public final class RandomHoneycombSelector {
 		ItemStack[] templates = new ItemStack[cachedBeeTypes.size()];
 		for (int i = 0; i < cachedBeeTypes.size(); i++) {
 			ItemStack stack = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
-			stack.set(ModDataComponents.BEE_TYPE.get(), cachedBeeTypes.get(i));
+			PbDataComponents.setBeeType(stack, cachedBeeTypes.get(i));
 			templates[i] = stack;
 		}
 		return templates;
@@ -303,13 +303,13 @@ public final class RandomHoneycombSelector {
 			ItemStack resolvedTemplate) {
 		if (resolvedTemplate == null || resolvedTemplate.isEmpty()) {
 			ItemStack fallback = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
-			fallback.set(ModDataComponents.BEE_TYPE.get(), beeType);
+			PbDataComponents.setBeeType(fallback, beeType);
 			return fallback;
 		}
 		ItemStack template = resolvedTemplate.copyWithCount(1);
 		if (template.getItem() == ModItems.CONFIGURABLE_HONEYCOMB.get()
-				&& template.get(ModDataComponents.BEE_TYPE.get()) == null) {
-			template.set(ModDataComponents.BEE_TYPE.get(), beeType);
+				&& PbDataComponents.getBeeType(template) == null) {
+			PbDataComponents.setBeeType(template, beeType);
 		}
 		return template;
 	}
@@ -486,14 +486,14 @@ public final class RandomHoneycombSelector {
 	/** 创建兜底蜜脾（缓存为空或异常时使用） */
 	public static ItemStack createFallbackHoneycomb() {
 		ItemStack fallback = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
-		fallback.set(ModDataComponents.BEE_TYPE.get(), FALLBACK_BEE_TYPE);
+		PbDataComponents.setBeeType(fallback, FALLBACK_BEE_TYPE);
 		return fallback;
 	}
 
 	/** 创建兜底蜜脾块（缓存为空或异常时使用） */
 	public static ItemStack createFallbackCombBlock() {
 		ItemStack fallback = new ItemStack(ModItems.CONFIGURABLE_COMB_BLOCK.get());
-		fallback.set(ModDataComponents.BEE_TYPE.get(), FALLBACK_BEE_TYPE);
+		PbDataComponents.setBeeType(fallback, FALLBACK_BEE_TYPE);
 		return fallback;
 	}
 }

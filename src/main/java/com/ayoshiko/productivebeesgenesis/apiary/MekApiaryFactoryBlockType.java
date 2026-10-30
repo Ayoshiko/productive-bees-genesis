@@ -19,7 +19,7 @@ import mekanism.common.tier.FactoryTier;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
-import net.neoforged.neoforge.registries.DeferredHolder;
+import net.minecraftforge.registries.RegistryObject;
 
 import java.util.List;
 import java.util.Map;
@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 	 * 工厂版通用机械蜂箱 BlockType 定义
 	 * <br/>
 	 * 参考 {@link com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType} 的工厂版模式，
-	 * 但使用 {@link Machine.MachineBuilder#createMachine} 而非 {@code createFactoryMachine}。
+	 * 但使用 {@link com.ayoshiko.productivebeesgenesis.util.ForgeMachineBuilder#createMachine} 而非 {@code createFactoryMachine}。
 	 * <p>
 	 * 关键设计决策：蜂箱工厂不继承 {@code TileEntityFactory}，因此不走 MEK 的 CachedRecipe 管线。
 	 * 蜜蜂生产逻辑完全复用父类 {@link TileEntityMekApiary} 的 {@code ApiaryTickHandler}。
@@ -95,7 +95,7 @@ public final class MekApiaryFactoryBlockType {
 	 */
 	private static BlockTypeTile<TileEntityMekApiaryFactory> createFactoryBlockType(
 			FactoryTier tier, long usage, long storage, mekanism.api.text.ILangEntry description) {
-		var builder = Machine.MachineBuilder
+		var builder = com.ayoshiko.productivebeesgenesis.util.ForgeMachineBuilder
 				.createMachine(() -> getFactoryTileEntityType(tier), description)
 				.withEnergyConfig(() -> MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(usage),
 						() -> MekCentrifugeEnergyScaling.balancedBaseCapacity(storage))
@@ -106,7 +106,7 @@ public final class MekApiaryFactoryBlockType {
 				.with(new AttributeTier<>(tier));
 
 		// 添加升级属性 — 最高级（CREATIVE）无下一级，跳过添加避免自指
-		DeferredHolder<Block, ?> nextTierBlock = getNextTierBlock(tier);
+		RegistryObject<?> nextTierBlock = getNextTierBlock(tier);
 		if (nextTierBlock != null) {
 			builder.with(new AttributeUpgradeable(MekCentrifugeBlockType.wrapAsBlockRegistryObject(nextTierBlock)));
 		}
@@ -132,7 +132,7 @@ public final class MekApiaryFactoryBlockType {
 	 * 原实现返回 ModBlocks.ULTIMATE_MEK_APIARY_FACTORY（自指），
 	 * 导致 ItemMaxTierInstaller 的 while 循环无法终止，游戏卡死。
 	 */
-	private static DeferredHolder<Block, ?> getNextTierBlock(FactoryTier currentTier) {
+	private static RegistryObject<?> getNextTierBlock(FactoryTier currentTier) {
 		return switch (currentTier) {
 			case BASIC -> ModBlocks.ADVANCED_MEK_APIARY_FACTORY;
 			case ADVANCED -> ModBlocks.ELITE_MEK_APIARY_FACTORY;
@@ -156,7 +156,7 @@ public final class MekApiaryFactoryBlockType {
 	 * CREATIVE 是最高级，返回 null 表示无下一级（与 EME 的 INFINITE_MULTIVERSAL 一致，不添加升级属性，
 	 * 避免 AttributeUpgradeable 自指导致 ItemMaxTierInstaller 的 while 循环死循环）。
 	 */
-	private static DeferredHolder<Block, ?> getEMNextTierBlock(FactoryTier currentTier) {
+	private static RegistryObject<?> getEMNextTierBlock(FactoryTier currentTier) {
 		String name = currentTier.name();
 		return switch (name) {
 			case "OVERCLOCKED" -> getEMApiaryFactoryBlock("quantum");
@@ -174,10 +174,9 @@ public final class MekApiaryFactoryBlockType {
 	 * EM 蜂箱工厂方块由 ModBlocks 在 EM 加载时注册，此处通过 DeferredHolder.create 按注册名创建延迟 Holder。
 	 * 注册名遵循 {tier}_mek_apiary_factory 命名约定（使用 EM 的 tier 小写名）。
 	 */
-	private static DeferredHolder<Block, ?> getEMApiaryFactoryBlock(String tierName) {
+	private static RegistryObject<?> getEMApiaryFactoryBlock(String tierName) {
 		String registryName = tierName + "_mek_apiary_factory";
-		return DeferredHolder.create(Registries.BLOCK,
-				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, registryName));
+		return RegistryObject.create(new ResourceLocation(ProductiveBeesGenesis.MOD_ID, registryName), Registries.BLOCK, ProductiveBeesGenesis.MOD_ID);
 	}
 
 	/**
@@ -190,10 +189,9 @@ public final class MekApiaryFactoryBlockType {
 	 * 本方法不引用任何 ME 类（仅用 String 参数），可安全在守卫块外定义，
 	 * 避免触发 ME 类加载导致 NoClassDefFoundError。
 	 */
-	private static DeferredHolder<Block, ?> getMEApiaryFactoryBlock(String tierName) {
+	private static RegistryObject<?> getMEApiaryFactoryBlock(String tierName) {
 		String registryName = tierName + "_extra_mek_apiary_factory";
-		return DeferredHolder.create(Registries.BLOCK,
-				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, registryName));
+		return RegistryObject.create(new ResourceLocation(ProductiveBeesGenesis.MOD_ID, registryName), Registries.BLOCK, ProductiveBeesGenesis.MOD_ID);
 	}
 
 	/**

@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.compat.mekanism_extras;
 
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import com.jerry.mekanism_extras.common.tier.ExtraFactoryTier;
 
 /** Mekanism Extras factory layout formulas isolated from the common layout helper. */
 public final class MEFactoryLayoutHelper {

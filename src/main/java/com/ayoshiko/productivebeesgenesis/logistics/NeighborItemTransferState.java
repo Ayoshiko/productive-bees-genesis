@@ -2,7 +2,7 @@ package com.ayoshiko.productivebeesgenesis.logistics;
 
 import java.util.Arrays;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.items.IItemHandler;
+import net.minecraftforge.items.IItemHandler;
 
 /** 每个输出面的预算与本刻拒收记录，目标替换后由弹出器整体重建。仅服务端线程访问。 */
 final class NeighborItemTransferState {
@@ -28,7 +28,7 @@ final class NeighborItemTransferState {
 		for (int i = 0; i < rejectedCount; i++) {
 			// 大批量拒收不代表减半后的批量也会被拒收。
 			if (rejected[i].getCount() == count
-					&& ItemStack.isSameItemSameComponents(rejected[i], stack)) return true;
+					&& ItemStack.isSameItemSameTags(rejected[i], stack)) return true;
 		}
 		return false;
 	}

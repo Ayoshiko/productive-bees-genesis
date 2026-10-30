@@ -64,7 +64,7 @@ public interface TileEntityFactoryAccessor {
 	 * @param value 要设置的 lastUsage 值
 	 */
 	@Accessor("lastUsage")
-	void productivebeesgenesis$setLastUsage(long value);
+	void productivebeesgenesis$setLastUsage(mekanism.api.math.FloatingLong value);
 
 	/**
 	 * 访问 TileEntityFactory 的 private 字段 `sortingNeeded`（类型：`boolean`）
@@ -103,8 +103,7 @@ public interface TileEntityFactoryAccessor {
 	 *
 	 * @param value 要设置的 operationsPerTick 值
 	 */
-	@Accessor("operationsPerTick")
-	void productivebeesgenesis$setOperationsPerTick(int value);
+
 
 	/**
 	 * 访问 TileEntityFactory 的 private 字段 `ticksRequired`（类型：`int`）
@@ -123,8 +122,7 @@ public interface TileEntityFactoryAccessor {
 	 *
 	 * @return 原始 operationsPerTick 字段值
 	 */
-	@Accessor("operationsPerTick")
-	int productivebeesgenesis$getOperationsPerTick();
+
 
 	/**
 	 * 访问 TileEntityFactory 的 private 字段 `ticksRequired`（类型：`int`）

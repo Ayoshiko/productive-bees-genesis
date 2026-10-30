@@ -1,11 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -26,28 +22,16 @@ public record SyncAeInputTagFilterPayload(
 		String blacklist,
 		String whitelistErrorKey,
 		String blacklistErrorKey
-) implements CustomPacketPayload {
+)  {
 
-	public static final CustomPacketPayload.Type<SyncAeInputTagFilterPayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "sync_ae_input_tag_filter"));
-
-	public static final StreamCodec<ByteBuf, SyncAeInputTagFilterPayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, SyncAeInputTagFilterPayload::pos,
-					ByteBufCodecs.stringUtf8(NetworkSecurityConstants.MAX_TAG_EXPRESSION_LENGTH),
-					SyncAeInputTagFilterPayload::whitelist,
-					ByteBufCodecs.stringUtf8(NetworkSecurityConstants.MAX_TAG_EXPRESSION_LENGTH),
-					SyncAeInputTagFilterPayload::blacklist,
-					ByteBufCodecs.stringUtf8(NetworkSecurityConstants.MAX_TAG_FILTER_ERROR_KEY_LENGTH),
-					SyncAeInputTagFilterPayload::whitelistErrorKey,
-					ByteBufCodecs.stringUtf8(NetworkSecurityConstants.MAX_TAG_FILTER_ERROR_KEY_LENGTH),
-					SyncAeInputTagFilterPayload::blacklistErrorKey,
-					SyncAeInputTagFilterPayload::new
-			);
-
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static SyncAeInputTagFilterPayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new SyncAeInputTagFilterPayload(buf.readBlockPos(), buf.readUtf(512), buf.readUtf(512), buf.readUtf(64), buf.readUtf(64));
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+        buf.writeUtf(whitelist, 512);
+        buf.writeUtf(blacklist, 512);
+        buf.writeUtf(whitelistErrorKey, 64);
+        buf.writeUtf(blacklistErrorKey, 64);
+    }
 }

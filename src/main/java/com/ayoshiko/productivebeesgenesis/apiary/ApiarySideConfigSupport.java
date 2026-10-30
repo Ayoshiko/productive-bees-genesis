@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.logistics.GenesisTileComponentEjector;
-import com.ayoshiko.productivebeesgenesis.resource.ResourceMekEnergyConfig;
 import mekanism.api.RelativeSide;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import mekanism.common.lib.transmitter.TransmissionType;
@@ -34,7 +33,8 @@ final class ApiarySideConfigSupport {
 				List.of(tile.slotManager().getCageInSlot(), tile.slotManager().getGeneTreatSlot()),
 				outputSlots,
 				tile.slotManager().getEnergySlot(), false);
-		ResourceMekEnergyConfig.setup(tile, tile.configComponent,
+		// 能量输入配置
+		tile.configComponent.setupInputConfig(TransmissionType.ENERGY,
 				tile.accessor().productivebeesgenesis$getEnergyContainer());
 		// 流体输出配置（右侧）
 		tile.configComponent.setupOutputConfig(TransmissionType.FLUID,

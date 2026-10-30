@@ -11,8 +11,9 @@ import mekanism.client.gui.element.progress.GuiProgress;
 import mekanism.client.gui.element.progress.ProgressType;
 import mekanism.client.gui.element.slot.GuiVirtualSlot;
 import mekanism.client.gui.element.slot.SlotType;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
-import mekanism.client.render.IFancyFontRenderer.TextAlignment;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.TextAlignment;
 import mekanism.client.render.IFancyFontRenderer;
 import mekanism.common.MekanismLang;
 import mekanism.common.inventory.container.SelectedWindowData;
@@ -21,7 +22,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -41,7 +42,7 @@ import java.util.Map;
 	 * 使本组件可被蜂箱与离心机共用。{@link GuiPbSupportedUpgrades} 的升级类型集合
 	 * 由 provider 的支持范围动态生成。
 	 */
-public class GuiPbUpgradeWindow extends GuiWindow {
+public class GuiPbUpgradeWindow extends PinnableGuiWindow {
 
 	public static final int WINDOW_WIDTH = 198;
 
@@ -85,27 +86,25 @@ public class GuiPbUpgradeWindow extends GuiWindow {
 
 		addChild(new GuiPbSupportedUpgrades(gui, relativeX + LEFT_PANEL_X, relativeY + 68, supportedTypes));
 
-		rightScreen = addChild(new GuiInnerScreen(gui, scrollList.getRelativeRight(), relativeY + PANEL_Y,
+		rightScreen = addChild(new GuiInnerScreen(gui, (scrollList.getRelativeX() + scrollList.getWidth()), relativeY + PANEL_Y,
 				RIGHT_PANEL_WIDTH, PANEL_HEIGHT));
 
 		addChild(new GuiProgress(provider::getClientInstallingProgress, ProgressType.INSTALLING, gui,
-				rightScreen.getRelativeRight() + 3, relativeY + 37));
+				(rightScreen.getRelativeX() + rightScreen.getWidth()) + 3, relativeY + 37));
 		// Bug 3：移除卸载进度条，卸载为瞬时操作无动画（与MEK原版一致）
 
-		removeButton = addChild(new DigitalButton(gui, scrollList.getRelativeRight() + 1, relativeY + BUTTON_Y,
-				56, BUTTON_HEIGHT, MekanismLang.UPGRADE_UNINSTALL, (element, mouseX, mouseY) -> {
+		removeButton = addChild(new DigitalButton(gui, (scrollList.getRelativeX() + scrollList.getWidth()) + 1, relativeY + BUTTON_Y,
+				56, BUTTON_HEIGHT, MekanismLang.UPGRADE_UNINSTALL, () -> {
 					if (scrollList.hasSelection()) {
 						PbUpgradeType selected = scrollList.getSelection();
 						if (selected != null) {
 							boolean removeAll = Screen.hasShiftDown();
-							PacketDistributor.sendToServer(new PbUpgradeExtractPayload(
+							ForgeNetwork.sendToServer(new PbUpgradeExtractPayload(
 									provider.getBlockPos(), selected.getId(), removeAll));
 						}
-						return true;
 					}
-					return false;
-				}));
-		removeButton.setTooltip(MekanismLang.UPGRADE_UNINSTALL_TOOLTIP);
+				}, null));
+		removeButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(MekanismLang.UPGRADE_UNINSTALL_TOOLTIP.translate()));
 
 		if (gui() instanceof AbstractContainerScreen<?> containerScreen) {
 			if (containerScreen.getMenu() instanceof IPbUpgradeSlotContainer slotContainer) {
@@ -113,11 +112,11 @@ public class GuiPbUpgradeWindow extends GuiWindow {
 				var outputSlot = slotContainer.getPbUpgradeOutputSlot();
 				if (inputSlot != null) {
 					addChild(new GuiVirtualSlot(this, SlotType.NORMAL, gui,
-							rightScreen.getRelativeRight() + 2, relativeY + 18, inputSlot));
+							(rightScreen.getRelativeX() + rightScreen.getWidth()) + 2, relativeY + 18, inputSlot));
 				}
 				if (outputSlot != null) {
 					addChild(new GuiVirtualSlot(this, SlotType.NORMAL, gui,
-							rightScreen.getRelativeRight() + 2, relativeY + 72, outputSlot));
+							(rightScreen.getRelativeX() + rightScreen.getWidth()) + 2, relativeY + 72, outputSlot));
 				}
 			}
 		}
@@ -148,7 +147,7 @@ public class GuiPbUpgradeWindow extends GuiWindow {
 	 */
 	private static int calculateHeight(IGuiWrapper gui, IPbUpgradeProvider provider) {
 		PbUpgradeType[] types = collectSupportedTypes(provider);
-		return 76 + Math.max(18, 12 * GuiPbSupportedUpgrades.calculateNeededRows(gui, types));
+		return 76 + Math.max(18, 12 * GuiPbSupportedUpgrades.calculateNeededRows(gui.getFont(), types));
 	}
 
 	private void updateEnabledButtons() {
@@ -177,24 +176,24 @@ public class GuiPbUpgradeWindow extends GuiWindow {
 				}
 				int lines = titleRenderer.renderWithScale(guiGraphics,
 						rightScreen.getRelativeX() + 2, rightScreen.getRelativeY() + 2,
-						TextAlignment.LEFT, selectedType.getColor(), screenWidth - 2, 0.6F);
+						selectedType.getColor(), screenWidth - 2, 0.6F);
 
 				int textY = rightScreen.getRelativeY() + 2 + 6 * lines;
 				Component countText = Component.translatable("gui.productivebeesgenesis.pb_upgrade_window.count",
 						amount, max);
-				rightScreen.drawScaledScrollingString(guiGraphics, countText, 0, textY - rightScreen.getRelativeY(),
-						TextAlignment.LEFT, screenTextColor(), screenWidth, 2, true, 0.6F, msSelected);
+				com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(rightScreen, guiGraphics, countText, 0, textY - rightScreen.getRelativeY(),
+						TextAlignment.LEFT, 0xFFFFC800, screenWidth, 2, true, 0.7F, msSelected);
 
 				textY += 8;
 				Component desc = PbUpgradeTooltipHelper.descriptionComponent(selectedType);
-				rightScreen.drawScaledScrollingString(guiGraphics, desc, 0, textY - rightScreen.getRelativeY() + 2,
-						TextAlignment.LEFT, screenTextColor(), screenWidth, 2, true, 0.6F, msSelected);
+				com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(rightScreen, guiGraphics, desc, 0, textY - rightScreen.getRelativeY() + 2,
+						TextAlignment.LEFT, 0xFFFFFFFF, screenWidth, 2, true, 0.7F, msSelected);
 			}
 		} else {
 			// Bug 7：未选择时用 WrappedTextRenderer 自动换行渲染
 			noSelectionRenderer.renderWithScale(guiGraphics,
 					rightScreen.getRelativeX() + 2, rightScreen.getRelativeY() + 2,
-					TextAlignment.LEFT, screenTextColor(), screenWidth - 2, 0.8F);
+					screenTextColor(), screenWidth - 2, 0.8F);
 		}
 	}
 

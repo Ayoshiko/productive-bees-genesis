@@ -3,9 +3,9 @@ package com.ayoshiko.productivebeesgenesis.recipe;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.registries.RegisterEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.registries.RegisterEvent;
 
 /**
 	 * ApiaryShapedRecipe 配方序列化器注册器
@@ -18,7 +18,7 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 	 * {@link ApiaryShapedRecipe.ApiaryShapedRecipeSerializer#fromJson} 创建 {@link ApiaryShapedRecipe}
 	 * 实例，使 {@code assemble} 覆盖（合成升级数据转移）真正生效。
 	 */
-@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
+@EventBusSubscriber(bus = EventBusSubscriber.Bus.MOD, modid = ProductiveBeesGenesis.MOD_ID)
 public final class ApiaryRecipeSerializerRegistrar {
 
 	private ApiaryRecipeSerializerRegistrar() {
@@ -29,7 +29,7 @@ public final class ApiaryRecipeSerializerRegistrar {
 	public static void register(RegisterEvent event) {
 		if (event.getRegistryKey().equals(Registries.RECIPE_SERIALIZER)) {
 			event.register(Registries.RECIPE_SERIALIZER,
-					ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "apiary_shaped"),
+					new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "apiary_shaped"),
 					() -> ApiaryShapedRecipe.SERIALIZER);
 		}
 	}

@@ -36,31 +36,6 @@ public final class Ae2CentrifugeInputReturnService {
 	private Ae2CentrifugeInputReturnService() {
 	}
 
-	/** 先从生产槽接管到返还缓冲；网络断线或拒收不会继续占用输入槽。 */
-	public static boolean retainUnprocessableInput(BlockEntity entity, IInventorySlot slot, int lane) {
-		if (!(entity instanceof IAe2InputHost host) || !(entity instanceof IAe2OutputHostBase)) return false;
-		var holder = host.productivebeesgenesis$getAe2StateHolder();
-		if (holder == null || entity.getLevel() == null) return false;
-		var input = slot.getStack().copy();
-		if (input.isEmpty()) return true;
-		var key = AEItemKey.of(input);
-		if (key == null) return false;
-		String fingerprint = Ae2ItemFingerprint.encode(key, entity.getLevel().registryAccess());
-		var custody = holder.getPendingItemBuffer();
-		if (custody.isBlocked() || !custody.canAcceptReturn(fingerprint, input.getCount())) return false;
-		var transfer = custody.transfer();
-		transfer.beginSlotWithdrawal(() -> fingerprint, input.getCount(), lane);
-		try {
-			int withdrawn = slot.shrinkStack(input.getCount(), Action.EXECUTE);
-			transfer.extracted(withdrawn);
-			transfer.finish(custody, entity.getLevel().getGameTime(), true);
-		} finally {
-			host.productivebeesgenesis$markAe2StateChanged();
-			holder.invalidateInputInventoryViewCache();
-		}
-		return slot.isEmpty();
-	}
-
 	static CentrifugeAeReturnResult transfer(BlockEntity blockEntity,
 			List<IInventorySlot> inputSlots) {
 		if (!(blockEntity instanceof IAe2InputHost host)
@@ -97,7 +72,6 @@ public final class Ae2CentrifugeInputReturnService {
 		}
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return false;
-		if (holder.getPendingItemBuffer().isBlocked()) return true;
 		if (MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(outputHost)) {
 			holder.setUnprocessableInputReturnCheckPending(false);
 			return false;
@@ -128,7 +102,6 @@ public final class Ae2CentrifugeInputReturnService {
 			backoff.recordFailure(now);
 			return true;
 		}
-		if (!Ae2LeftoverReturner.canReturnNow(holder, storage, level.getGameTime())) return true;
 
 		CentrifugeAeReturnResult result = returnInputSlots(host, holder, storage, inputSlots, unprocessable);
 		if (result.returnedToAe() > 0L || result.pending() > 0L) {
@@ -138,8 +111,8 @@ public final class Ae2CentrifugeInputReturnService {
 		boolean remains = hasMatchingInput(inputSlots, unprocessable);
 		if (unprocessable.validationFailed()) return true;
 		if (remains) {
-			if (result.retryFailed()) backoff.recordFailure(now);
-		} else if (result.pending() == 0L && result.returnedToAe() > 0L) {
+			backoff.recordFailure(now);
+		} else if (!remains && result.pending() == 0L && result.returnedToAe() > 0L) {
 			backoff.recordSuccess();
 		}
 		if (!remains) {
@@ -154,58 +127,39 @@ public final class Ae2CentrifugeInputReturnService {
 			Predicate<ItemStack> shouldReturn) {
 		long returnedToAe = 0L;
 		long pending = 0L;
-		boolean retryFailed = false;
 		var level = host.productivebeesgenesis$getAe2Level();
 		if (level == null) return CentrifugeAeReturnResult.offline();
-		if (holder.getPendingItemBuffer().isBlocked()) {
-			return CentrifugeAeReturnResult.online(0, holder.getPendingItemBuffer().getTotalAmount());
-		}
-		for (int slotIndex = 0; slotIndex < inputSlots.size(); slotIndex++) {
-			IInventorySlot slot = inputSlots.get(slotIndex);
+		for (IInventorySlot slot : inputSlots) {
 			if (slot == null || slot.isEmpty()) continue;
 			ItemStack current = slot.getStack();
 			if (!shouldReturn.test(current)) continue;
-			// 一次模拟与提交共用许可；已接受的模拟必须完成交接，预算只阻止后续车道。
-			if (!Ae2LeftoverReturner.canReturnNow(holder, storage, level.getGameTime())) break;
 			AEItemKey key = AEItemKey.of(current);
-			if (key == null) {
-				retryFailed = true;
-				continue;
-			}
+			if (key == null) continue;
 			String fingerprint;
 			try {
 				fingerprint = Ae2ItemFingerprint.encode(key, level.registryAccess());
 			} catch (LinkageError | RuntimeException e) {
 				LogThrottle.warn("centrifuge_input_return_fingerprint",
 						"离心机输入返还生成物品指纹失败，跳过槽位: {}", e.toString());
-				retryFailed = true;
 				continue;
 			}
 			if (fingerprint.isBlank() || !holder.getPendingItemBuffer().canRegister(fingerprint)) {
 				LogThrottle.warn("centrifuge_input_return_pending_full",
 						"离心机输入返还缓冲已满，保留源槽物品 key={}", key);
-				retryFailed = true;
 				continue;
 			}
 
 			int requested = Math.max(0, current.getCount());
 			long acceptedByStorage;
 			try {
-				acceptedByStorage = Ae2LeftoverReturner.timedInsert(
-						holder, storage, key, requested, Actionable.SIMULATE, ACTION_SOURCE, level.getGameTime());
-				if (acceptedByStorage < 0 || acceptedByStorage > requested) {
-					throw new IllegalStateException("Invalid ME return simulation count");
-				}
+				acceptedByStorage = SaturatingMath.clampToRequest(
+						storage.insert(key, requested, Actionable.SIMULATE, ACTION_SOURCE), requested);
 			} catch (LinkageError | RuntimeException e) {
 				LogThrottle.warn("centrifuge_input_return_insert_simulate",
 						"离心机输入返还模拟插入 AE2 失败，跳过槽位: {}", e.toString());
-				retryFailed = true;
 				continue;
 			}
-			if (acceptedByStorage <= 0L) {
-				retryFailed = true;
-				continue;
-			}
+			if (acceptedByStorage <= 0L) continue;
 
 			int requestedExtract = SaturatingMath.saturatingToInt(acceptedByStorage);
 			try {
@@ -214,43 +168,53 @@ public final class Ae2CentrifugeInputReturnService {
 			} catch (RuntimeException e) {
 				LogThrottle.warn("centrifuge_input_return_extract_simulate",
 						"离心机输入返还模拟提取失败，跳过槽位: {}", e.toString());
-				retryFailed = true;
 				continue;
 			}
-			if (requestedExtract <= 0) {
-				retryFailed = true;
-				continue;
-			}
-			var custody = holder.getPendingItemBuffer();
-			var transfer = custody.transfer();
-			transfer.beginSlotWithdrawal(() -> fingerprint, requestedExtract, slotIndex);
+			if (requestedExtract <= 0) continue;
+			int extractedCount;
 			try {
-				int extractedCount = slot.shrinkStack(requestedExtract, Action.EXECUTE);
-				transfer.extracted(extractedCount);
-				if (extractedCount > 0) {
-					transfer.offer(extractedCount, -1);
-					long inserted = Ae2LeftoverReturner.timedInsert(
-							holder, storage, key, extractedCount, Actionable.MODULATE, ACTION_SOURCE, level.getGameTime());
-					transfer.accepted(inserted);
-					returnedToAe = SaturatingMath.saturatingAdd(returnedToAe, inserted);
-				}
-				long knownRemainder = transfer.knownAmount();
-				transfer.finish(custody, level.getGameTime(), true);
-				pending = SaturatingMath.saturatingAdd(pending, knownRemainder);
-				if (knownRemainder > 0) retryFailed = true;
-			} catch (LinkageError | RuntimeException error) {
-				LogThrottle.error("centrifuge_input_return_unknown",
-						"离心机输入返还待核验；停止重试 request={} target={} known={} offered={}: {}",
-						transfer.request(), transfer.destination(), transfer.knownAmount(), transfer.offeredAmount(), error.toString());
-				pending = SaturatingMath.saturatingAdd(pending, transfer.retainedAmount());
-				retryFailed = true;
+				extractedCount = slot.shrinkStack(requestedExtract, Action.EXECUTE);
+			} catch (RuntimeException e) {
+				LogThrottle.warn("centrifuge_input_return_extract",
+						"离心机输入返还执行提取失败，跳过槽位: {}", e.toString());
+				continue;
 			}
-			if (!slot.isEmpty()) retryFailed = true;
-			host.productivebeesgenesis$markAe2StateChanged();
-			if (custody.isBlocked()) break;
+			extractedCount = Math.max(0, Math.min(requestedExtract, extractedCount));
+			if (extractedCount <= 0) continue;
+			int inserted;
+			try {
+				inserted = SaturatingMath.saturatingToInt(SaturatingMath.clampToRequest(
+						storage.insert(key, extractedCount, Actionable.MODULATE, ACTION_SOURCE),
+						extractedCount));
+			} catch (LinkageError | RuntimeException e) {
+				LogThrottle.error("centrifuge_input_return_insert_unknown",
+						"离心机输入返还执行插入 AE2 结果未知；物品隔离并停止自动重试 key={} count={}: {}",
+						key, extractedCount, e.toString());
+				long quarantined = holder.getPendingItemBuffer().enqueueUncertain(
+						fingerprint, extractedCount, level.getGameTime());
+				pending = SaturatingMath.saturatingAdd(pending, quarantined);
+				continue;
+			}
+			returnedToAe = SaturatingMath.saturatingAdd(returnedToAe, inserted);
+			if (inserted < extractedCount) {
+				int unaccepted = extractedCount - inserted;
+				long queued = holder.getPendingItemBuffer().enqueueReturnToNetwork(
+						fingerprint, unaccepted, level.getGameTime());
+				pending = SaturatingMath.saturatingAdd(pending, queued);
+				if (queued < unaccepted) {
+					// The preflight above normally reserves this entry. Preserve any exceptional remainder
+					// through the established input-slot/network fallback if the buffer changed reentrantly.
+					ItemStack remainder = key.toStack(unaccepted - SaturatingMath.saturatingToInt(queued));
+					int remaining = returnRemainder(host, holder, storage, inputSlots, key, remainder);
+					if (remaining > 0) {
+						long fallbackQueued = holder.getPendingItemBuffer().enqueueReturnToNetwork(
+								fingerprint, remaining, level.getGameTime());
+						pending = SaturatingMath.saturatingAdd(pending, fallbackQueued);
+					}
+				}
+			}
 		}
-
-		return CentrifugeAeReturnResult.online(returnedToAe, pending, retryFailed);
+		return CentrifugeAeReturnResult.online(returnedToAe, pending);
 	}
 
 	static long reclassifyUnprocessablePendingInputs(IAe2InputHost host,
@@ -310,4 +274,13 @@ public final class Ae2CentrifugeInputReturnService {
 		}
 	}
 
+	private static int returnRemainder(IAe2InputHost host, Ae2OutputStateHolder holder,
+			MEStorage storage, List<IInventorySlot> inputSlots, AEItemKey key, ItemStack remainder) {
+		int before = remainder.getCount();
+		int remaining = Ae2LeftoverReturner.returnLeftoverToMe(holder, storage, key, remainder,
+				ACTION_SOURCE, holder.getPushState().getReturnBackoff(),
+				host.productivebeesgenesis$getAe2Level(), host.productivebeesgenesis$getAe2BlockPos(),
+				inputSlots);
+		return Math.max(0, Math.min(before, remaining));
+	}
 }

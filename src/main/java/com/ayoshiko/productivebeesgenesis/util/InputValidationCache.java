@@ -5,7 +5,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.level.Level;
 
 import javax.annotation.Nullable;
@@ -76,13 +76,13 @@ public class InputValidationCache {
 			Item item = stack.getItem();
 			// configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分（缓存物品引用，避免每次 DeferredHolder.value）
 			if (item == PbCombItemRefs.honeycomb() || item == PbCombItemRefs.combBlock()) {
-				return new InputFingerprint(item, stack.get(PbDataComponents.beeType()), 0);
+				return new InputFingerprint(item, PbDataComponents.getBeeType(stack), 0);
 			}
 			// 普通熔炼原料通常没有组件补丁；同 Item 的默认组件固定，无需每次计算完整组件哈希。
-			if (stack.getComponentsPatch().isEmpty()) {
+			if (!stack.hasTag()) {
 				return new InputFingerprint(item, null, 0);
 			}
-			return new InputFingerprint(item, null, ItemStack.hashItemAndComponents(stack));
+			return new InputFingerprint(item, null, java.util.Objects.hash(stack.getItem(), stack.getTag()));
 		}
 	}
 
@@ -94,7 +94,7 @@ public class InputValidationCache {
 	 */
 	public record ValidationResult(
 			boolean valid,
-			@Nullable RecipeHolder<CentrifugeRecipe> recipe,
+			@Nullable CentrifugeRecipe recipe,
 			@Nullable ResourceLocation beeType,
 			boolean isCombBlock) {
 		/** 无效输入的常量结果 */

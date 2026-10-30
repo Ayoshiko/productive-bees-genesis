@@ -1,0 +1,52 @@
+{
+  "conditions": [
+    {
+      "type": "forge:and",
+      "values": [
+        {
+          "type": "forge:mod_loaded",
+          "modid": "emextras"
+        },
+        {
+          "type": "forge:mod_loaded",
+          "modid": "mekanism_extras"
+        },
+        {
+          "type": "forge:mod_loaded",
+          "modid": "evolvedmekanism"
+        }
+      ]
+    }
+  ],
+  "type": "productivebeesgenesis:apiary_shaped",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "mekanism_extras:alloys/thermonuclear"
+    },
+    "C": {
+      "tag": "forge:circuits/supreme_quantum"
+    },
+    "P": {
+      "item": "productivebeesgenesis:supreme_extra_mek_centrifuge_factory"
+    },
+    "Q": {
+      "item": "productivebeesgenesis:quantum_mek_centrifuge_factory"
+    },
+    "T": {
+      "tag": "evolvedmekanism:alloys/subatomic"
+    },
+    "X": {
+      "item": "mekanism:steel_casing"
+    }
+  },
+  "pattern": [
+    "ACT",
+    "PXQ",
+    "TCA"
+  ],
+  "result": {
+    "count": 1,
+    "item": "productivebeesgenesis:supreme_quantum_emextra_mek_centrifuge_factory"
+  }
+}

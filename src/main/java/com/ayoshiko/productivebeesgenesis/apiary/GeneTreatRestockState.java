@@ -59,7 +59,7 @@ public final class GeneTreatRestockState {
 	/** 更新有效小食模板；空槽保留上一次完整组件快照。 */
 	public boolean observe(ItemStack stack) {
 		if (!enabled || isSuspended() || !ApiarySlotManager.isGeneTreat(stack)
-				|| ItemStack.isSameItemSameComponents(template, stack)) return false;
+				|| ItemStack.isSameItemSameTags(template, stack)) return false;
 		template = stack.copyWithCount(1);
 		extractionKey = null;
 		nextAttempt = Long.MIN_VALUE;
@@ -103,8 +103,8 @@ public final class GeneTreatRestockState {
 			// 本地槽归服务端独占；MEK 在通知监听器前已修改库存，异常时也按实际差额记账。
 			ItemStack after = slot.getStack();
 			int inserted = ItemStack.matches(before, after) ? 0
-					: (before.isEmpty() || ItemStack.isSameItemSameComponents(before, stack))
-					&& ItemStack.isSameItemSameComponents(after, stack)
+					: (before.isEmpty() || ItemStack.isSameItemSameTags(before, stack))
+					&& ItemStack.isSameItemSameTags(after, stack)
 					? after.getCount() - before.getCount() : -1;
 			if (inserted < 0 || inserted > stack.getCount()) {
 				deliveryUnknown = true;
@@ -151,9 +151,9 @@ public final class GeneTreatRestockState {
 		tag.putBoolean("suspended", suspended);
 		tag.putBoolean("extraction_unknown", extractionUnknown);
 		tag.putBoolean("delivery_unknown", deliveryUnknown);
-		if (!template.isEmpty()) tag.put("template", template.save(provider));
+		if (!template.isEmpty()) tag.put("template", template.save(new CompoundTag()));
 		ListTag items = new ListTag();
-		for (ItemStack stack : pending) items.add(stack.save(provider));
+		for (ItemStack stack : pending) items.add(stack.save(new CompoundTag()));
 		tag.put("pending", items);
 		return tag;
 	}
@@ -191,16 +191,14 @@ public final class GeneTreatRestockState {
 		List<ItemStack> restored = new ArrayList<>();
 		ListTag items = tag.getList("pending", Tag.TAG_COMPOUND);
 		for (int i = 0; i < items.size(); i++) {
-			ItemStack stack = ItemStack.parse(provider, items.getCompound(i)).orElseThrow(
-					() -> new IllegalArgumentException("Invalid saved gene-treat restock item"));
+			ItemStack stack = readSavedStack(items.getCompound(i));
 			if (!ApiarySlotManager.isGeneTreat(stack) || stack.getCount() > stack.getMaxStackSize()) {
 				throw new IllegalArgumentException("Invalid saved gene-treat restock stack");
 			}
 			restored.add(stack);
 		}
 		ItemStack restoredTemplate = tag.contains("template", Tag.TAG_COMPOUND)
-				? ItemStack.parse(provider, tag.getCompound("template")).orElseThrow(
-						() -> new IllegalArgumentException("Invalid saved gene-treat template")) : ItemStack.EMPTY;
+				? readSavedStack(tag.getCompound("template")) : ItemStack.EMPTY;
 		if (!restoredTemplate.isEmpty() && (!ApiarySlotManager.isGeneTreat(restoredTemplate)
 				|| restoredTemplate.getCount() != 1)) throw new IllegalArgumentException("Invalid gene-treat template");
 		enabled = tag.getBoolean("enabled");
@@ -215,9 +213,15 @@ public final class GeneTreatRestockState {
 		failures = 0;
 	}
 
+	private static ItemStack readSavedStack(CompoundTag tag) {
+		ItemStack stack = ItemStack.of(tag);
+		if (stack.isEmpty()) throw new IllegalArgumentException("Invalid saved gene-treat stack");
+		return stack;
+	}
+
 	/** 合成时首输入继承设置，所有输入的已提取物品逐项保留；超出边界拒绝合成。 */
 	public static CompoundTag mergeSaved(List<CompoundTag> states) {
-		CompoundTag merged = states.isEmpty() ? new CompoundTag() : states.getFirst().copy();
+		CompoundTag merged = states.isEmpty() ? new CompoundTag() : states.get(0).copy();
 		ListTag allPending = new ListTag();
 		boolean suspended = false;
 		for (CompoundTag state : states) {

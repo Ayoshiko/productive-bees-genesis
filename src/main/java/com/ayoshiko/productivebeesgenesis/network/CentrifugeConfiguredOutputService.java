@@ -13,9 +13,9 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.items.IItemHandler;
-import net.neoforged.neoforge.items.ItemHandlerHelper;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.minecraftforge.items.IItemHandler;
+import net.minecraftforge.items.ItemHandlerHelper;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -66,8 +66,9 @@ final class CentrifugeConfiguredOutputService {
 					|| dataType == null || !dataType.canOutput()) continue;
 			configuredOutputSides++;
 			try {
-				IItemHandler handler = level.getCapability(Capabilities.ItemHandler.BLOCK,
-						sourcePos.relative(worldSide), worldSide.getOpposite());
+				BlockEntity neighbor = level.getBlockEntity(sourcePos.relative(worldSide));
+				IItemHandler handler = neighbor == null ? null : neighbor.getCapability(
+						ForgeCapabilities.ITEM_HANDLER, worldSide.getOpposite()).orElse(null);
 				if (handler != null && uniqueHandlers.add(handler)) handlers.add(handler);
 			} catch (LinkageError | RuntimeException e) {
 				LogThrottle.warn("centrifuge_input_return_capability",
@@ -146,7 +147,7 @@ final class CentrifugeConfiguredOutputService {
 	private static boolean matches(ItemStack actual, ItemStack expected) {
 		if (expected.isEmpty()) return actual.isEmpty();
 		return actual.getCount() == expected.getCount()
-				&& ItemStack.isSameItemSameComponents(actual, expected);
+				&& ItemStack.isSameItemSameTags(actual, expected);
 	}
 
 	private static int clampRemainder(int requested, ItemStack remainder) {

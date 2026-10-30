@@ -3,10 +3,10 @@ package com.ayoshiko.productivebeesgenesis.util;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
-import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
+import com.ayoshiko.productivebeesgenesis.util.ChancedOutput;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -15,8 +15,9 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.item.crafting.RecipeHolder;
-import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.nbt.IntArrayTag;
+import com.mojang.datafixers.util.Pair;
 
 import javax.annotation.Nullable;
 
@@ -46,9 +47,9 @@ public final class CentrifugeRecipeIndex {
 
 	/** 不可变快照：封装蜜脾索引、蜜脾块索引和特殊蜜脾块索引，保证原子替换 */
 	private record RecipeIndexSnapshot(
-			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> index,
-			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> combBlockIndex,
-			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> specialCombBlockIndex) {
+			Map<ResourceLocation, CentrifugeRecipe> index,
+			Map<ResourceLocation, CentrifugeRecipe> combBlockIndex,
+			Map<ResourceLocation, CentrifugeRecipe> specialCombBlockIndex) {
 		static final RecipeIndexSnapshot EMPTY =
 				new RecipeIndexSnapshot(Map.of(), Map.of(), Map.of());
 	}
@@ -56,20 +57,20 @@ public final class CentrifugeRecipeIndex {
 	/**
 	 * Wax 物品标签 — 复刻 PB 热力离心机 stripWax 行为
 	 * <br/>
-	 * PB 原版 ModTags.Common.WAXES = c:waxes，蜜脾块离心时过滤此标签的产出。
+	 * PB 原版 com.ayoshiko.productivebeesgenesis.util.ForgeBeeTags.WAXES = c:waxes，蜜脾块离心时过滤此标签的产出。
 	 * 蜜脾离心保留 Wax（符合 PB 原版），仅蜜脾块配方派生时过滤。
 	 */
 	private static final TagKey<Item> WAXES_TAG = TagKey.create(
-			Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "waxes"));
+			Registries.ITEM, new ResourceLocation("forge", "wax"));
 
 	/**
-	 * 蜜脾块存储标签 — 复刻 PB ModTags.Common.STORAGE_BLOCK_HONEYCOMBS
+	 * 蜜脾块存储标签 — 复刻 PB com.ayoshiko.productivebeesgenesis.util.ForgeBeeTags.STORAGE_BLOCK_HONEYCOMBS
 	 * <br/>
 	 * 标签 {@code c:storage_blocks/honeycombs} 包含 vanilla/PB 所有蜜脾块物品，
 	 * 用于识别蜜脾块输入以走特殊蜜脾块配方查找路径。
 	 */
 	private static final TagKey<Item> STORAGE_BLOCKS_HONEYCOMBS = TagKey.create(
-			Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "storage_blocks/honeycombs"));
+			Registries.ITEM, new ResourceLocation("forge", "storage_blocks/honeycombs"));
 
 	/** 当前快照 — volatile 引用保证原子替换 */
 	private static volatile RecipeIndexSnapshot snapshot = RecipeIndexSnapshot.EMPTY;
@@ -110,9 +111,9 @@ public final class CentrifugeRecipeIndex {
 	 */
 	public static void rebuild(net.minecraft.world.item.crafting.RecipeManager recipeManager) {
 		try {
-			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> newIndex = new HashMap<>();
-			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> newCombBlockIndex = new HashMap<>();
-			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> newSpecialCombBlockIndex = new HashMap<>();
+			Map<ResourceLocation, CentrifugeRecipe> newIndex = new HashMap<>();
+			Map<ResourceLocation, CentrifugeRecipe> newCombBlockIndex = new HashMap<>();
+			Map<ResourceLocation, CentrifugeRecipe> newSpecialCombBlockIndex = new HashMap<>();
 			// Bug 1 修复：客户端可能无法访问 SERVER 配置，try-catch 降级到默认值 4
 			int multiplier;
 			try {
@@ -126,33 +127,33 @@ public final class CentrifugeRecipeIndex {
 		// v2.3 单遍扫描 + putIfAbsent 存在 Bug：若单蜜脾配方先于原生蜜脾块配方被处理，
 		// 派生配方会先写入 combBlockIndex，后续原生配方因 putIfAbsent 被丢弃，导致产出错误。
 		// 两遍扫描确保原生蜜脾块配方始终优先于派生配方。
-		List<RecipeHolder<CentrifugeRecipe>> allRecipes = recipeManager
+		List<CentrifugeRecipe> allRecipes = recipeManager
 				.getAllRecipesFor(ModRecipeTypes.CENTRIFUGE_TYPE.get());
 
 		// 第一遍：收集所有原生蜜脾块配方（configurable_comb 输入 + bee_type），stripWax 后存入 combBlockIndex
-		for (RecipeHolder<CentrifugeRecipe> holder : allRecipes) {
+		for (CentrifugeRecipe holder : allRecipes) {
 			try {
-				ItemStack[] inputItems = holder.value().ingredient.getItems();
+				ItemStack[] inputItems = holder.ingredient.getItems();
 				if (inputItems.length == 0) continue;
-				ResourceLocation beeType = inputItems[0].get(ModDataComponents.BEE_TYPE.get());
+				ResourceLocation beeType = PbDataComponents.getBeeType(inputItems[0]);
 				if (inputItems[0].getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get() && beeType != null) {
-					RecipeHolder<CentrifugeRecipe> strippedRecipe = stripWaxFromRecipe(holder);
+					CentrifugeRecipe strippedRecipe = stripWaxFromRecipe(holder);
 					if (strippedRecipe != null) {
 						// put 覆盖：同 bee_type 多个原生配方时保留最后一个（理论不应出现，但防御性处理）
 						newCombBlockIndex.put(beeType, strippedRecipe);
 					}
 				}
 			} catch (Exception e) {
-				ProductiveBeesGenesis.LOGGER.warn("离心配方索引：第一遍扫描跳过无法解析的配方 {}", holder.id(), e);
+				ProductiveBeesGenesis.LOGGER.warn("离心配方索引：第一遍扫描跳过无法解析的配方 {}", holder.getId(), e);
 			}
 		}
 
 		// 第二遍：处理单蜜脾配方和特殊蜜脾配方
-		for (RecipeHolder<CentrifugeRecipe> holder : allRecipes) {
+		for (CentrifugeRecipe holder : allRecipes) {
 			try {
-				ItemStack[] inputItems = holder.value().ingredient.getItems();
+				ItemStack[] inputItems = holder.ingredient.getItems();
 				if (inputItems.length == 0) continue;
-				ResourceLocation beeType = inputItems[0].get(ModDataComponents.BEE_TYPE.get());
+				ResourceLocation beeType = PbDataComponents.getBeeType(inputItems[0]);
 
 				// 跳过原生蜜脾块配方（第一遍已处理）
 				if (inputItems[0].getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get() && beeType != null) {
@@ -168,7 +169,7 @@ public final class CentrifugeRecipeIndex {
 							// 模块 5 修复：构造对应的蜜脾块 ingredient，而非使用单蜜脾
 							Ingredient blockIngredient = getCombBlockIngredient(inputItem);
 							if (blockIngredient != null) {
-								RecipeHolder<CentrifugeRecipe> blockRecipe =
+								CentrifugeRecipe blockRecipe =
 										deriveCombBlockRecipe(holder, itemId, multiplier, blockIngredient);
 								if (blockRecipe != null) {
 									newSpecialCombBlockIndex.put(itemId, blockRecipe);
@@ -185,9 +186,9 @@ public final class CentrifugeRecipeIndex {
 					if (!newCombBlockIndex.containsKey(beeType)) {
 						// 模块 5 修复：构造带 bee_type 的 configurable_comb 蜜脾块 ingredient
 						ItemStack combBlockStack = new ItemStack(ModItems.CONFIGURABLE_COMB_BLOCK.get());
-						combBlockStack.set(ModDataComponents.BEE_TYPE.get(), beeType);
+						PbDataComponents.setBeeType(combBlockStack, beeType);
 						Ingredient blockIngredient = Ingredient.of(combBlockStack);
-						RecipeHolder<CentrifugeRecipe> blockRecipe =
+						CentrifugeRecipe blockRecipe =
 								deriveCombBlockRecipe(holder, beeType, multiplier, blockIngredient);
 						if (blockRecipe != null) {
 							newCombBlockIndex.putIfAbsent(beeType, blockRecipe);
@@ -195,7 +196,7 @@ public final class CentrifugeRecipeIndex {
 					}
 				}
 			} catch (Exception e) {
-				ProductiveBeesGenesis.LOGGER.warn("离心配方索引：第二遍扫描跳过无法解析的配方 {}", holder.id(), e);
+				ProductiveBeesGenesis.LOGGER.warn("离心配方索引：第二遍扫描跳过无法解析的配方 {}", holder.getId(), e);
 			}
 		}
 			// 原子替换：使用不可变快照，保证读线程看到一致状态
@@ -220,22 +221,13 @@ public final class CentrifugeRecipeIndex {
 	 * @return 过滤 Wax 后的蜜脾块配方，失败返回 null
 	 */
 	@Nullable
-	private static RecipeHolder<CentrifugeRecipe> stripWaxFromRecipe(RecipeHolder<CentrifugeRecipe> originalHolder) {
-		try {
-			CentrifugeRecipe original = originalHolder.value();
-			List<ChancedOutput> strippedOutputs = new ArrayList<>(original.itemOutput.size());
-			for (ChancedOutput chanced : original.itemOutput) {
-				// 模块 6：过滤 Wax 产出，复刻 PB 热力离心机 stripWax=true 行为
-				if (isWaxOutput(chanced)) continue;
-				strippedOutputs.add(chanced);
-			}
-			CentrifugeRecipe strippedRecipe = new CentrifugeRecipe(
-					original.ingredient, strippedOutputs, original.fluidOutput, original.getProcessingTime());
-			return new RecipeHolder<>(originalHolder.id(), strippedRecipe);
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("过滤蜜脾块配方 Wax 失败: recipe={}", originalHolder.id(), e);
-			return null;
-		}
+	private static CentrifugeRecipe stripWaxFromRecipe(CentrifugeRecipe originalHolder) {
+        Map<Ingredient, IntArrayTag> outputs = new java.util.LinkedHashMap<>();
+        originalHolder.itemOutput.forEach((ingredient, values) -> {
+            if (!isWaxOutput(ingredient)) outputs.put(ingredient, values.copy());
+        });
+        return new CentrifugeRecipe(originalHolder.getId(), originalHolder.ingredient, outputs,
+                originalHolder.fluidOutput, originalHolder.getProcessingTime());
 	}
 
 	/**
@@ -298,33 +290,25 @@ public final class CentrifugeRecipeIndex {
 	 * @return 蜜脾块离心配方，派生失败返回 null
 	 */
 	@Nullable
-	private static RecipeHolder<CentrifugeRecipe> deriveCombBlockRecipe(
-			RecipeHolder<CentrifugeRecipe> honeycombRecipe,
+	private static CentrifugeRecipe deriveCombBlockRecipe(
+			CentrifugeRecipe honeycombRecipe,
 			ResourceLocation beeType, int multiplier,
 			Ingredient blockIngredient) {
-		try {
-			CentrifugeRecipe original = honeycombRecipe.value();
-			List<ChancedOutput> blockOutputs = new ArrayList<>(original.itemOutput.size());
-			for (ChancedOutput chanced : original.itemOutput) {
-				// 模块 3：过滤 Wax 产出，复刻 PB 热力离心机 stripWax=true 行为
-				if (isWaxOutput(chanced)) continue;
-				blockOutputs.add(new ChancedOutput(chanced.ingredient(),
-						SaturatingMath.saturatingToInt(
-								SaturatingMath.saturatingMultiply(chanced.min(), multiplier)),
-						SaturatingMath.saturatingToInt(
-								SaturatingMath.saturatingMultiply(chanced.max(), multiplier)),
-						chanced.chance()));
-			}
-			SizedFluidIngredient blockFluid = new SizedFluidIngredient(
-					original.fluidOutput.ingredient(), SaturatingMath.saturatingToInt(
-							SaturatingMath.saturatingMultiply(original.fluidOutput.amount(), multiplier)));
-			CentrifugeRecipe blockRecipe = new CentrifugeRecipe(
-					blockIngredient, blockOutputs, blockFluid, original.getProcessingTime());
-			return new RecipeHolder<>(honeycombRecipe.id().withSuffix("_block"), blockRecipe);
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("派生蜜脾块配方失败: beeType={}", beeType, e);
-			return null;
-		}
+        Map<Ingredient, IntArrayTag> outputs = new java.util.LinkedHashMap<>();
+        honeycombRecipe.itemOutput.forEach((ingredient, tag) -> {
+            if (isWaxOutput(ingredient)) return;
+            int[] values = tag.getAsIntArray();
+            if (values.length < 3) throw new IllegalArgumentException("Invalid PB recipe output");
+            outputs.put(ingredient, new IntArrayTag(new int[] {
+                SaturatingMath.saturatingToInt(SaturatingMath.saturatingMultiply(values[0], multiplier)),
+                SaturatingMath.saturatingToInt(SaturatingMath.saturatingMultiply(values[1], multiplier)),
+                values[2]}));
+        });
+        var fluid = honeycombRecipe.fluidOutput;
+        var scaledFluid = fluid == null ? Pair.of("minecraft:empty", 0) : Pair.of(fluid.getFirst(),
+                SaturatingMath.saturatingToInt(SaturatingMath.saturatingMultiply(fluid.getSecond(), multiplier)));
+        ResourceLocation id = new ResourceLocation(honeycombRecipe.getId().getNamespace(), honeycombRecipe.getId().getPath() + "_block");
+        return new CentrifugeRecipe(id, blockIngredient, outputs, scaledFluid, honeycombRecipe.getProcessingTime());
 	}
 
 	/**
@@ -337,8 +321,8 @@ public final class CentrifugeRecipeIndex {
 	 * @param chanced 配方输出条目
 	 * @return true 表示该产出是 Wax（应在蜜脾块配方中过滤）
 	 */
-	private static boolean isWaxOutput(ChancedOutput chanced) {
-		ItemStack[] items = chanced.ingredient().getItems();
+	private static boolean isWaxOutput(Ingredient ingredient) {
+		ItemStack[] items = ingredient.getItems();
 		for (ItemStack stack : items) {
 			if (stack.is(WAXES_TAG)) return true;
 		}
@@ -352,7 +336,7 @@ public final class CentrifugeRecipeIndex {
 	 * @return 蜜脾离心配方，未命中返回 null（调用方需回退到全量遍历）
 	 */
 	@Nullable
-	public static RecipeHolder<CentrifugeRecipe> get(ResourceLocation beeType) {
+	public static CentrifugeRecipe get(ResourceLocation beeType) {
 		return snapshot.index.get(beeType);
 	}
 
@@ -365,7 +349,7 @@ public final class CentrifugeRecipeIndex {
 	 * @return 蜜脾块离心配方，未命中返回 null
 	 */
 	@Nullable
-	public static RecipeHolder<CentrifugeRecipe> getCombBlock(ResourceLocation beeType) {
+	public static CentrifugeRecipe getCombBlock(ResourceLocation beeType) {
 		return snapshot.combBlockIndex.get(beeType);
 	}
 
@@ -383,7 +367,7 @@ public final class CentrifugeRecipeIndex {
 	 * @return 派生的特殊蜜脾块离心配方，未命中返回 null（调用方需回退到全量遍历）
 	 */
 	@Nullable
-	public static RecipeHolder<CentrifugeRecipe> getSpecialCombBlock(ItemStack stack) {
+	public static CentrifugeRecipe getSpecialCombBlock(ItemStack stack) {
 		if (stack.isEmpty()) return null;
 		// 蜜脾块 → 单蜜脾（与 rebuild 时索引键统一为单蜜脾物品ID）
 		ItemStack singleComb = SpecialCombBlockRecipeHandler.getSingleComb(stack);
@@ -395,7 +379,7 @@ public final class CentrifugeRecipeIndex {
 	/**
 	 * 判断物品是否在 c:storage_blocks/honeycombs 标签中 — 模块 1
 	 * <br/>
-	 * 复刻 PB ModTags.Common.STORAGE_BLOCK_HONEYCOMBS，
+	 * 复刻 PB com.ayoshiko.productivebeesgenesis.util.ForgeBeeTags.STORAGE_BLOCK_HONEYCOMBS，
 	 * 用于在配方查找路径中识别蜜脾块输入（包含 vanilla 和 PB 所有蜜脾块）。
 	 *
 	 * @param stack 输入物品

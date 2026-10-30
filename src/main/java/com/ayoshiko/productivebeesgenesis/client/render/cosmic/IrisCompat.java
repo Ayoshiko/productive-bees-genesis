@@ -7,7 +7,7 @@ import net.minecraft.world.item.ItemDisplayContext;
 import java.lang.reflect.Method;
 
 /**
-	 * Iris 光影兼容工具类
+	 * Oculus 1.20.1 光影兼容工具类（使用其 Iris v0 公共 API）
 	 * <br/>
 	 * 通过反射检测 Iris 是否启用光影包；若启用则将第一/第三人称手持视角的 cosmic 光晕渲染延迟到世界渲染结束后执行。
 	 * <p>
@@ -50,12 +50,11 @@ public final class IrisCompat {
 				getInstance = irisApi.getMethod("getInstance");
 				isShaderPackInUse = irisApi.getMethod("isShaderPackInUse");
 				initialized = true;
-			} catch (Throwable t) {
-				// 此处需捕获 Throwable 而非 Exception：Iris API 不兼容变更会抛出
-				// LinkageError/NoClassDefFoundError 等 Error 子类；静态初始化块若不捕获会导致类初始化失败
-				// 一次性 ERROR 日志（静态初始化仅执行一次，无需节流）
+			} catch (ClassNotFoundException ignored) {
+				// 未安装可选光影模组是正常状态。
+			} catch (LinkageError | ReflectiveOperationException | RuntimeException t) {
 				ProductiveBeesGenesis.LOGGER.warn(
-						"Iris 光影兼容初始化失败, cosmic 光晕将不延迟渲染: {}", t.toString());
+						"Oculus 光影兼容初始化失败, cosmic 光晕将不延迟渲染: {}", t.toString());
 			}
 			INITIALIZED = initialized;
 			GET_INSTANCE = getInstance;

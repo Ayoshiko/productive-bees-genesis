@@ -1,10 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -22,22 +19,16 @@ import net.minecraft.resources.ResourceLocation;
 	 */
 public record ApiaryToggleSortingPayload(
 		BlockPos pos
-) implements CustomPacketPayload {
+)  {
 
 	/** 数据包类型标识 */
-	public static final CustomPacketPayload.Type<ApiaryToggleSortingPayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "apiary_toggle_sorting"));
 
 	/** 流编解码器 — 仅编解码 BlockPos */
-	public static final StreamCodec<ByteBuf, ApiaryToggleSortingPayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, ApiaryToggleSortingPayload::pos,
-					ApiaryToggleSortingPayload::new
-			);
 
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static ApiaryToggleSortingPayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new ApiaryToggleSortingPayload(buf.readBlockPos());
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+    }
 }

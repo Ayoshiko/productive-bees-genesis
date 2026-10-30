@@ -2,7 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import net.minecraft.network.chat.Component;
 
 /** Compact text button used for the AE2 input control row. */

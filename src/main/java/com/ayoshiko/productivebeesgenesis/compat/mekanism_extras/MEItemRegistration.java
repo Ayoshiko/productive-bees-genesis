@@ -7,9 +7,8 @@ import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.mek.ItemBlockMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
-import net.neoforged.neoforge.registries.DeferredBlock;
-import net.neoforged.neoforge.registries.DeferredItem;
+import com.jerry.mekanism_extras.common.tier.ExtraFactoryTier;
+import net.minecraftforge.registries.RegistryObject;
 
 import java.util.Map;
 
@@ -23,10 +22,10 @@ import java.util.Map;
 	 * 因为仅在 ME 加载时由 {@link MECompatLoader} 调用。
 	 * <p>
 	 * 注册结果填充到 {@link ModItems#ME_FACTORY_ITEMS} 和 {@link ModItems#ME_APIARY_FACTORY_ITEMS}
-	 * （通配类型 {@code Map<Object, DeferredItem<?>>}，由主注册类定义），
+	 * （通配类型 {@code Map<Object, RegistryObject<?>>}，由主注册类定义），
 	 * 使用 {@link ModItems#machineItemProperties} 添加 Mekanism DataComponents。
 	 * <p>
-	 * 适配说明：{@link ModBlocks#ME_FACTORIES} 为通配类型 {@code Map<Object, DeferredBlock<?>>}，
+	 * 适配说明：{@link ModBlocks#ME_FACTORIES} 为通配类型 {@code Map<Object, RegistryObject<?>>}，
 	 * 遍历时需将 {@code deferredBlock.get()} 强制转换为 {@link MekCentrifugeBlock} 或 {@link MekApiaryBlock}。
 	 */
 public final class MEItemRegistration {
@@ -44,13 +43,13 @@ public final class MEItemRegistration {
 		if (!MekCompatHooks.isMekanismExtrasLoaded()) {
 			return;
 		}
-		for (Map.Entry<Object, DeferredBlock<?>> entry : ModBlocks.ME_FACTORIES.entrySet()) {
+		for (Map.Entry<Object, RegistryObject<?>> entry : ModBlocks.ME_FACTORIES.entrySet()) {
 			ExtraFactoryTier tier = (ExtraFactoryTier) entry.getKey();
-			DeferredBlock<?> deferredBlock = entry.getValue();
+			RegistryObject<?> deferredBlock = entry.getValue();
 			String registryName = tier.getAdvanceTier().getLowerName() + "_extra_mek_centrifuge_factory";
 			// 延迟解析：deferredBlock.get() 必须在 supplier 内调用（Item RegisterEvent 阶段），
 			// 不能在模组构造阶段调用（此时 Block RegisterEvent 未触发，DeferredHolder 未绑定）
-			DeferredItem<ItemBlockMekCentrifuge> deferredItem = ModItems.ITEMS.register(registryName,
+			RegistryObject<ItemBlockMekCentrifuge> deferredItem = ModItems.ITEMS.register(registryName,
 					() -> {
 						MekCentrifugeBlock<?, ?> block = (MekCentrifugeBlock<?, ?>) deferredBlock.get();
 						return new ItemBlockMekCentrifuge(block, ModItems.machineItemProperties(block));
@@ -71,12 +70,12 @@ public final class MEItemRegistration {
 		if (!MekCompatHooks.isMekanismExtrasLoaded()) {
 			return;
 		}
-		for (Map.Entry<Object, DeferredBlock<?>> entry : ModBlocks.ME_APIARY_FACTORIES.entrySet()) {
+		for (Map.Entry<Object, RegistryObject<?>> entry : ModBlocks.ME_APIARY_FACTORIES.entrySet()) {
 			ExtraFactoryTier tier = (ExtraFactoryTier) entry.getKey();
-			DeferredBlock<?> deferredBlock = entry.getValue();
+			RegistryObject<?> deferredBlock = entry.getValue();
 			String registryName = tier.getAdvanceTier().getLowerName() + "_extra_mek_apiary_factory";
 			// 延迟解析：deferredBlock.get() 必须在 supplier 内调用（Item RegisterEvent 阶段）
-			DeferredItem<ItemBlockMekApiaryFactory> deferredItem = ModItems.ITEMS.register(registryName,
+			RegistryObject<ItemBlockMekApiaryFactory> deferredItem = ModItems.ITEMS.register(registryName,
 					() -> {
 						MekApiaryBlock<?, ?> block = (MekApiaryBlock<?, ?>) deferredBlock.get();
 						return new ItemBlockMekApiaryFactory(block, ModItems.machineItemProperties(block));

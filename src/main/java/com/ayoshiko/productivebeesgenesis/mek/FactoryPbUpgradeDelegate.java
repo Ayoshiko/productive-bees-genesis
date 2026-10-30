@@ -167,7 +167,7 @@ public class FactoryPbUpgradeDelegate implements IPbUpgradeProvider, ICentrifuge
 
 	// ===== 原版安装桥接 =====
 
-	/** 获取 PB 原版安装桥接器 — 供 IUpgradeableBlockEntity.getUpgradeHandler 返回 */
+	/** 获取 PB 原版安装桥接器 — 供 UpgradeableBlockEntity.getUpgradeHandler 返回 */
 	@NotNull
 	public PbUpgradeInstallHandler getInstallHandler() {
 		return pbUpgradeInstallHandler;

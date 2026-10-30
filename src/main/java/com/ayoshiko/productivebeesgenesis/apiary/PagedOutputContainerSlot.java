@@ -86,7 +86,7 @@ final class PagedOutputContainerSlot extends InventoryContainerSlot {
 
 	@Override
 	public void set(@NotNull ItemStack stack) {
-		currentSlot().setStackUnchecked(stack);
+		((com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor) currentSlot()).productivebeesgenesis$setStackUnchecked(stack);
 		setChanged();
 	}
 

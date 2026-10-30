@@ -1,101 +1,35 @@
-name: Build
+name: Forge build
 
 on:
   push:
-    branches:
-      - main-neo/1.21.1
+    branches: ['forge/1.20.1', 'port/forge-1.20.1-*']
   pull_request:
+    branches: ['forge/1.20.1']
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build:
-    name: NeoForge 1.21.1 build
+  package:
+    name: Forge 1.20.1 / Java 17
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java 21
-        uses: actions/setup-java@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
-
-      - name: Restore development compile dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p libs
-          fetch() {
-            curl --fail --location --retry 3 --retry-all-errors "$1" --output "libs/$2"
-            test -s "libs/$2"
-          }
-          curse_maven() {
-            fetch "https://www.cursemaven.com/curse/maven/$1/$2/$1-$2.jar" "$3"
-          }
-
-          curse_maven productivebees-377897 8987967 productivebees-1.21.1-13.14.0.jar
-          unzip -p libs/productivebees-1.21.1-13.14.0.jar \
-            META-INF/jarjar/productivelib-1.21.1-0.2.0.jar \
-            > libs/productivelib-1.21.1-0.2.0.jar
-          test -s libs/productivelib-1.21.1-0.2.0.jar
-
-          curse_maven mekanism-268560 7904058 Mekanism-1.21.1-10.7.19.85.jar
-          curse_maven mekanism-extras-1026040 8677677 mekanism_extras-1.21.1-1.4.1.jar
-          curse_maven mekanism-extras-1026040 7921191 mekanism_extras-1.21.1-1.4.0.jar
-          curse_maven evolved-mekanism-1230085 7599592 'Evolved Mekanism-1.21.1-1.2.1-fix3.jar'
-          curse_maven evolved-mekanism-extras-1268159 8118026 EvolvedMekanismExtras-1.21.1-1.2.1.jar
-          curse_maven jdte-1566414 8622543 jdte-0.5.9-alpha1.jar
-          curse_maven jade-324717 7545219 Jade-1.21.1-NeoForge-15.10.5.jar
-          curse_maven kubejs-238086 8083208 kubejs-neoforge-2101.7.2-build.368.jar
-          fetch https://maven.latvian.dev/releases/dev/latvian/mods/rhino/2101.2.7-build.85/rhino-2101.2.7-build.85.jar \
-            rhino-2101.2.7-build.85.jar
-          curse_maven jei-238222 8407142 jei-1.21.1-neoforge-19.36.0.360.jar
-          curse_maven applied-energistics-2-223794 7027323 appliedenergistics2-1.21.1-19.2.17.jar
-          curse_maven applied-flux-965012 6217144 AppliedFlux-1.21-2.1.5-neoforge.jar
-
-          # Compile-only APIs for optional integrations; these do not change mod runtime metadata.
-          curse_maven jdte-1566414 9027141 jdte-0.6.1.0.jar
-          curse_maven just-dire-things-1002348 7463040 justdirethings-1.5.7.jar
-          curse_maven ars-nouveau-401955 8346406 ars_nouveau-1.21.1-5.12.1.jar
-          curse_maven industrial-foregoing-souls-904394 7441306 industrial-foregoing-souls-1.21.1-1.10.7.jar
-          curse_maven projecte-226410 6611984 ProjectE-1.21.1-PE1.1.0.jar
-          curse_maven ae2-lightning-tech-1527395 9024605 ae2lt-2.1.1.jar
-          curse_maven pneumaticcraft-repressurized-281849 8436524 'pneumaticcraft-repressurized-8.2.21+mc1.21.1.jar'
-          fetch 'https://github.com/SorrowMist/UselessMod/releases/download/1.21.1-2.4.5.13/useless_mod-1.21.1-2.4.5.13.jar' \
-            useless_mod-1.21.1-2.4.5.13.jar
-          printf '%s  %s\n' '8621b8dd0b63880e51e8b9d2ee560dd164dc6c755a7290bb0620a05b5195d971' \
-            'libs/useless_mod-1.21.1-2.4.5.13.jar' | sha256sum --check
-          fetch 'https://cdn.modrinth.com/data/SglcIh0L/versions/xrg5MjEA/experiencelib-1.21.1-1.2.1.jar' \
-            experiencelib-1.21.1-1.2.1.jar
-          printf '%s  %s\n' '4e9757f770fda51495e3f63a1d84cf470994efa5482b32d9807d3903a6f3f07d01019561bdac54706d07722e985911307f357e7c5621c5e038786e7023e29e04' \
-            'libs/experiencelib-1.21.1-1.2.1.jar' | sha512sum --check
-
-          # Match the Mixin runtime bundled by NeoForge 1.21.1.
-          fetch 'https://maven.neoforged.net/releases/net/fabricmc/sponge-mixin/0.15.2%2Bmixin.0.8.7/sponge-mixin-0.15.2%2Bmixin.0.8.7.jar' \
-            sponge-mixin.jar
-
-      - name: Build
-        shell: bash
-        run: bash ./gradlew build --stacktrace
-
-      - name: Upload mod JAR
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/wrapper-validation@v4
+      - name: Restore verified Forge compile inputs
+        run: python3 tools/prepare_forge_dependencies.py
+      - name: Compile and reobfuscate distributable
+        run: ./gradlew --no-daemon jarJar reobfJarJar
+      - name: Upload Forge artifact
         uses: actions/upload-artifact@v4
         with:
-          name: productivebeesgenesis-neoforge-1.21.1
+          name: productivebeesgenesis-forge-1.20.1
+          path: build/libs/*-all.jar
           if-no-files-found: error
-          path: |
-            build/libs/*.jar
-            !build/libs/*-sources.jar
-            !build/libs/*-javadoc.jar

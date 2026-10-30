@@ -8,7 +8,6 @@ import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.EMECompatLoader;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MECompatLoader;
 import com.ayoshiko.productivebeesgenesis.item.ItemInfinityCreationComb;
-import com.ayoshiko.productivebeesgenesis.item.BeeDesignerItem;
 import com.ayoshiko.productivebeesgenesis.item.ItemInfinityCreationCombBlock;
 import com.ayoshiko.productivebeesgenesis.item.EssenceConversionUpgradeItem;
 import com.ayoshiko.productivebeesgenesis.item.GeneSamplerPluginItem;
@@ -19,13 +18,9 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import mekanism.api.RelativeSide;
 import mekanism.api.security.SecurityMode;
-import mekanism.common.attachments.component.AttachedEjector;
-import mekanism.common.attachments.component.AttachedSideConfig.LightConfigInfo;
-import mekanism.common.attachments.component.AttachedSideConfig;
-import mekanism.common.attachments.component.UpgradeAware;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeUpgradeSupport;
 import mekanism.common.block.attribute.Attributes.AttributeRedstone;
@@ -33,15 +28,13 @@ import mekanism.common.block.attribute.Attributes.AttributeSecurity;
 import mekanism.common.content.blocktype.BlockTypeTile;
 import mekanism.common.content.blocktype.Machine;
 import mekanism.common.lib.transmitter.TransmissionType;
-import mekanism.common.registries.MekanismDataComponents;
 import mekanism.common.tier.FactoryTier;
 import mekanism.common.tile.component.config.DataType;
 import mekanism.common.tile.interfaces.IRedstoneControl.RedstoneControl;
 import net.minecraft.Util;
 import net.minecraft.world.item.Item;
-import net.neoforged.neoforge.registries.DeferredBlock;
-import net.neoforged.neoforge.registries.DeferredItem;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraftforge.registries.RegistryObject;
+import net.minecraftforge.registries.DeferredRegister;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -63,11 +56,14 @@ import java.util.concurrent.ConcurrentHashMap;
 	 */
 public final class ModItems {
 
-	public static final DeferredRegister.Items ITEMS =
-			DeferredRegister.createItems(ProductiveBeesGenesis.MOD_ID);
+	public static final DeferredRegister<net.minecraft.world.item.Item> ITEMS =
+			DeferredRegister.create(net.minecraftforge.registries.ForgeRegistries.ITEMS, ProductiveBeesGenesis.MOD_ID);
 
-	public static final DeferredItem<BeeDesignerItem> BEE_DESIGNER =
-			ITEMS.register("bee_designer", () -> new BeeDesignerItem(new Item.Properties()));
+	/** PB 13 upgrades backported for Genesis machines; PB 12 has no corresponding items. */
+	public static final RegistryObject<cy.jdkdigital.productivebees.common.item.UpgradeItem> TIME_2_UPGRADE =
+			ITEMS.register("time_2_upgrade", () -> new cy.jdkdigital.productivebees.common.item.UpgradeItem(new Item.Properties()));
+	public static final RegistryObject<cy.jdkdigital.productivebees.common.item.UpgradeItem> STABILITY_UPGRADE =
+			ITEMS.register("stability_upgrade", () -> new cy.jdkdigital.productivebees.common.item.UpgradeItem(new Item.Properties()));
 
 	/**
 	 * MEK离心机默认侧面配置：物品标准机器、流体右侧输出（默认不自动弹出）、能量仅输入
@@ -77,17 +73,9 @@ public final class ModItems {
 	 * 使用 new LightConfigInfo(Map.of(RIGHT, OUTPUT), false) 创建与 RIGHT_OUTPUT 相同的
 	 * sideConfig 但 isEjecting=false 的实例。
 	 */
-	public static final AttachedSideConfig MEK_CENTRIFUGE_SIDE_CONFIG = Util.make(() -> {
-		Map<TransmissionType, LightConfigInfo> configInfo = new EnumMap<>(TransmissionType.class);
-		configInfo.put(TransmissionType.ITEM, LightConfigInfo.MACHINE);
-		// 流体右侧输出但不自动弹出 — 修复：原 RIGHT_OUTPUT 的 isEjecting=true 导致流体被弹出
-		configInfo.put(TransmissionType.FLUID, new LightConfigInfo(Map.of(RelativeSide.RIGHT, DataType.OUTPUT), false));
-		configInfo.put(TransmissionType.ENERGY, LightConfigInfo.INPUT_ONLY);
-		return new AttachedSideConfig(configInfo);
-	});
 
 	/** 基础MEK离心机BlockItem */
-	public static final DeferredItem<ItemBlockMekCentrifuge> MEK_CENTRIFUGE =
+	public static final RegistryObject<ItemBlockMekCentrifuge> MEK_CENTRIFUGE =
 			ITEMS.register("mek_centrifuge", () -> new ItemBlockMekCentrifuge(ModBlocks.MEK_CENTRIFUGE.get(),
 				machineItemProperties(ModBlocks.MEK_CENTRIFUGE.get())));
 
@@ -98,94 +86,92 @@ public final class ModItems {
 	 * 注意：当前复用MEK_CENTRIFUGE_SIDE_CONFIG（物品标准机器/流体右侧输出/能量仅输入），
 	 * 后续Task 3将创建蜂箱专属侧面配置（可能调整流体输入侧）。
 	 */
-	public static final DeferredItem<ItemBlockMekApiary> MEK_APIARY =
+	public static final RegistryObject<ItemBlockMekApiary> MEK_APIARY =
 			ITEMS.register("mek_apiary", () -> new ItemBlockMekApiary(ModBlocks.MEK_APIARY.get(),
 				machineItemProperties(ModBlocks.MEK_APIARY.get())));
 
 	/** 通用机械蜂箱 — 基础工厂BlockItem（含SORTING组件） */
-	public static final DeferredItem<ItemBlockMekApiaryFactory> BASIC_MEK_APIARY_FACTORY =
+	public static final RegistryObject<ItemBlockMekApiaryFactory> BASIC_MEK_APIARY_FACTORY =
 			ITEMS.register("basic_mek_apiary_factory",
 					() -> new ItemBlockMekApiaryFactory(ModBlocks.BASIC_MEK_APIARY_FACTORY.get(),
 							machineItemProperties(ModBlocks.BASIC_MEK_APIARY_FACTORY.get())));
 
 	/** 通用机械蜂箱 — 高级工厂BlockItem */
-	public static final DeferredItem<ItemBlockMekApiaryFactory> ADVANCED_MEK_APIARY_FACTORY =
+	public static final RegistryObject<ItemBlockMekApiaryFactory> ADVANCED_MEK_APIARY_FACTORY =
 			ITEMS.register("advanced_mek_apiary_factory",
 					() -> new ItemBlockMekApiaryFactory(ModBlocks.ADVANCED_MEK_APIARY_FACTORY.get(),
 							machineItemProperties(ModBlocks.ADVANCED_MEK_APIARY_FACTORY.get())));
 
 	/** 通用机械蜂箱 — 精英工厂BlockItem */
-	public static final DeferredItem<ItemBlockMekApiaryFactory> ELITE_MEK_APIARY_FACTORY =
+	public static final RegistryObject<ItemBlockMekApiaryFactory> ELITE_MEK_APIARY_FACTORY =
 			ITEMS.register("elite_mek_apiary_factory",
 					() -> new ItemBlockMekApiaryFactory(ModBlocks.ELITE_MEK_APIARY_FACTORY.get(),
 							machineItemProperties(ModBlocks.ELITE_MEK_APIARY_FACTORY.get())));
 
 	/** 通用机械蜂箱 — 终极工厂BlockItem */
-	public static final DeferredItem<ItemBlockMekApiaryFactory> ULTIMATE_MEK_APIARY_FACTORY =
+	public static final RegistryObject<ItemBlockMekApiaryFactory> ULTIMATE_MEK_APIARY_FACTORY =
 			ITEMS.register("ultimate_mek_apiary_factory",
 					() -> new ItemBlockMekApiaryFactory(ModBlocks.ULTIMATE_MEK_APIARY_FACTORY.get(),
 							machineItemProperties(ModBlocks.ULTIMATE_MEK_APIARY_FACTORY.get())));
 
 	/** 基础工厂BlockItem */
-	public static final DeferredItem<ItemBlockMekCentrifuge> BASIC_MEK_CENTRIFUGE_FACTORY =
+	public static final RegistryObject<ItemBlockMekCentrifuge> BASIC_MEK_CENTRIFUGE_FACTORY =
 			ITEMS.register("basic_mek_centrifuge_factory",
 					() -> new ItemBlockMekCentrifuge(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY.get(),
 							machineItemProperties(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY.get())));
 
 	/** 高级工厂BlockItem */
-	public static final DeferredItem<ItemBlockMekCentrifuge> ADVANCED_MEK_CENTRIFUGE_FACTORY =
+	public static final RegistryObject<ItemBlockMekCentrifuge> ADVANCED_MEK_CENTRIFUGE_FACTORY =
 			ITEMS.register("advanced_mek_centrifuge_factory",
 					() -> new ItemBlockMekCentrifuge(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY.get(),
 							machineItemProperties(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY.get())));
 
 	/** 精英工厂BlockItem */
-	public static final DeferredItem<ItemBlockMekCentrifuge> ELITE_MEK_CENTRIFUGE_FACTORY =
+	public static final RegistryObject<ItemBlockMekCentrifuge> ELITE_MEK_CENTRIFUGE_FACTORY =
 			ITEMS.register("elite_mek_centrifuge_factory",
 					() -> new ItemBlockMekCentrifuge(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY.get(),
 							machineItemProperties(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY.get())));
 
 	/** 终极工厂BlockItem */
-	public static final DeferredItem<ItemBlockMekCentrifuge> ULTIMATE_MEK_CENTRIFUGE_FACTORY =
+	public static final RegistryObject<ItemBlockMekCentrifuge> ULTIMATE_MEK_CENTRIFUGE_FACTORY =
 			ITEMS.register("ultimate_mek_centrifuge_factory",
 					() -> new ItemBlockMekCentrifuge(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY.get(),
 							machineItemProperties(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY.get())));
 
 	/** 无尽·创世蜜脾 — 自定义蜜脾物品，预置 bee_type 数据组件，带 tooltip 提示 */
-	public static final DeferredItem<ItemInfinityCreationComb> INFINITY_CREATION_COMB =
-			ITEMS.register("infinitycreation_comb", () -> new ItemInfinityCreationComb(new Item.Properties()
-					.component(ModDataComponents.BEE_TYPE.get(),
-							PBConstants.MYRIADCREATIONS_TYPE)));
+	public static final RegistryObject<ItemInfinityCreationComb> INFINITY_CREATION_COMB =
+			ITEMS.register("infinitycreation_comb", () -> new ItemInfinityCreationComb(new Item.Properties()));
 
 	/** 无尽·创世蜜脾块 BlockItem，带 tooltip 提示 */
-	public static final DeferredItem<ItemInfinityCreationCombBlock> INFINITY_CREATION_COMB_BLOCK_ITEM =
+	public static final RegistryObject<ItemInfinityCreationCombBlock> INFINITY_CREATION_COMB_BLOCK_ITEM =
 			ITEMS.register("infinitycreation_comb_block",
 					() -> new ItemInfinityCreationCombBlock(ModBlocks.INFINITY_CREATION_COMB_BLOCK.get(),
 							new Item.Properties()));
 
 	/** Discards honey and pollen-puff byproducts in supported hives and centrifuges. */
-	public static final DeferredItem<UselessByproductUpgradeItem> BYPRODUCT_DESTRUCTION_UPGRADE =
+	public static final RegistryObject<UselessByproductUpgradeItem> BYPRODUCT_DESTRUCTION_UPGRADE =
 			ITEMS.register("byproduct_destruction_upgrade",
 					() -> new UselessByproductUpgradeItem(new Item.Properties()));
 
 	/** 将唯一同物合成配方的产物按比例自动转化的 PB 升级。 */
-	public static final DeferredItem<EssenceConversionUpgradeItem> ESSENCE_CONVERSION_UPGRADE =
+	public static final RegistryObject<EssenceConversionUpgradeItem> ESSENCE_CONVERSION_UPGRADE =
 			ITEMS.register("essence_conversion_upgrade",
 					() -> new EssenceConversionUpgradeItem(new Item.Properties()));
 
 	/** 将资源蜜蜂离心产出的粗矿按熔炼配方直接转为锭。 */
-	public static final DeferredItem<RawOreSmeltingUpgradeItem> RAW_ORE_SMELTING_UPGRADE =
+	public static final RegistryObject<RawOreSmeltingUpgradeItem> RAW_ORE_SMELTING_UPGRADE =
 			ITEMS.register("raw_ore_smelting_upgrade",
 					() -> new RawOreSmeltingUpgradeItem(new Item.Properties()));
 
 	/** 将基因采样限制为蜜蜂种类（TYPE）基因。 */
-	public static final DeferredItem<GeneSamplerPluginItem> GENE_TYPE_ONLY_UPGRADE =
+	public static final RegistryObject<GeneSamplerPluginItem> GENE_TYPE_ONLY_UPGRADE =
 			ITEMS.register("gene_type_only_upgrade", () -> new GeneSamplerPluginItem(
 					new Item.Properties(),
 					"item.productivebeesgenesis.gene_type_only_upgrade.description.summary",
 					"item.productivebeesgenesis.gene_type_only_upgrade.description.limit"));
 
 	/** 让基因采样器直接生成 100% 纯度基因。 */
-	public static final DeferredItem<GeneSamplerPluginItem> GENE_FULL_PURITY_UPGRADE =
+	public static final RegistryObject<GeneSamplerPluginItem> GENE_FULL_PURITY_UPGRADE =
 			ITEMS.register("gene_full_purity_upgrade", () -> new GeneSamplerPluginItem(
 					new Item.Properties(),
 					"item.productivebeesgenesis.gene_full_purity_upgrade.description.summary",
@@ -197,53 +183,53 @@ public final class ModItems {
 	 * Key=FactoryTier（EM运行时扩展的枚举值），Value=对应的DeferredItem。
 	 * 使用ConcurrentHashMap保证线程安全。
 	 */
-	public static final Map<FactoryTier, DeferredItem<ItemBlockMekCentrifuge>> EM_FACTORY_ITEMS =
+	public static final Map<FactoryTier, RegistryObject<ItemBlockMekCentrifuge>> EM_FACTORY_ITEMS =
 			new ConcurrentHashMap<>();
 
 	/**
 	 * ME工厂BlockItem映射 — 由registerMEFactoryItems()在ME加载时填充
 	 * <br/>
 	 * Key=ExtraFactoryTier（ME 独立枚举，运行时由 compat 包写入），Value=对应的 DeferredItem。
-	 * 使用通配类型 {@code Map<Object, DeferredItem<?>>} 避免主注册类编译期依赖 ME 的类
+	 * 使用通配类型 {@code Map<Object, RegistryObject<?>>} 避免主注册类编译期依赖 ME 的类
 	 * （ExtraFactoryTier/ItemBlockMekCentrifuge 的 ME 子类等）。
 	 * 实际填充由 {@link MECompatLoader#registerFactoryItems()} 委托
 	 * {@link com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEItemRegistration} 完成。
 	 * 使用 ConcurrentHashMap 保证线程安全。
 	 */
-	public static final Map<Object, DeferredItem<?>> ME_FACTORY_ITEMS = new ConcurrentHashMap<>();
+	public static final Map<Object, RegistryObject<?>> ME_FACTORY_ITEMS = new ConcurrentHashMap<>();
 
 	/**
 	 * EME工厂BlockItem映射 — 由registerEMEFactoryItems()在EME加载时填充
 	 * <br/>
 	 * Key=EMExtraFactoryTier（EME 独立枚举，编译时不存在），Value=对应的 DeferredItem。
-	 * 使用通配类型 {@code Object}/{@code DeferredItem<?>}，避免主注册类编译期依赖 EME 类。
+	 * 使用通配类型 {@code Object}/{@code RegistryObject<?>}，避免主注册类编译期依赖 EME 类。
 	 * 实际填充由 {@link EMECompatLoader#registerCentrifugeItems()} 委托
 	 * {@link com.ayoshiko.productivebeesgenesis.compat.emextras.EMEItemRegistration} 完成。
 	 * 使用 ConcurrentHashMap 保证线程安全。
 	 */
-	public static final Map<Object, DeferredItem<?>> EME_FACTORY_ITEMS = new ConcurrentHashMap<>();
+	public static final Map<Object, RegistryObject<?>> EME_FACTORY_ITEMS = new ConcurrentHashMap<>();
 
 	/**
 	 * ME 蜂箱工厂 BlockItem 映射 — 由 registerMEApiaryFactoryItems() 在 ME 加载时填充
 	 * <br/>
 	 * Key=ExtraFactoryTier（ME 独立枚举，运行时由 compat 包写入），Value=对应的 DeferredItem。
-	 * 使用通配类型 {@code Map<Object, DeferredItem<?>>} 避免主注册类编译期依赖 ME 的类。
+	 * 使用通配类型 {@code Map<Object, RegistryObject<?>>} 避免主注册类编译期依赖 ME 的类。
 	 * 实际填充由 {@link MECompatLoader#registerApiaryFactoryItems()} 委托
 	 * {@link com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEItemRegistration} 完成。
 	 * 使用 ConcurrentHashMap 保证线程安全。
 	 */
-	public static final Map<Object, DeferredItem<?>> ME_APIARY_FACTORY_ITEMS = new ConcurrentHashMap<>();
+	public static final Map<Object, RegistryObject<?>> ME_APIARY_FACTORY_ITEMS = new ConcurrentHashMap<>();
 
 	/**
 	 * EME 蜂箱工厂 BlockItem 映射 — 由 registerEMEApiaryFactoryItems() 在 EME 加载时填充
 	 * <br/>
 	 * Key=EMExtraFactoryTier（EME 独立枚举，编译时不存在），Value=对应的 DeferredItem。
-	 * 使用通配类型 {@code Object}/{@code DeferredItem<?>}，避免主注册类编译期依赖 EME 类。
+	 * 使用通配类型 {@code Object}/{@code RegistryObject<?>}，避免主注册类编译期依赖 EME 类。
 	 * 实际填充由 {@link EMECompatLoader#registerApiaryItems()} 委托
 	 * {@link com.ayoshiko.productivebeesgenesis.compat.emextras.EMEItemRegistration} 完成。
 	 * 使用 ConcurrentHashMap 保证线程安全。
 	 */
-	public static final Map<Object, DeferredItem<?>> EME_APIARY_FACTORY_ITEMS = new ConcurrentHashMap<>();
+	public static final Map<Object, RegistryObject<?>> EME_APIARY_FACTORY_ITEMS = new ConcurrentHashMap<>();
 
 	/**
 	 * EM 蜂箱工厂 BlockItem 映射 — 由 registerEMApiaryFactoryItems() 在 EM 加载时填充
@@ -252,7 +238,7 @@ public final class ModItems {
 	 * EM 蜂箱工厂复用 ItemBlockMekApiaryFactory（与原版 4 等级相同）。
 	 * 使用 ConcurrentHashMap 保证线程安全。
 	 */
-	public static final Map<FactoryTier, DeferredItem<ItemBlockMekApiaryFactory>> EM_APIARY_FACTORY_ITEMS =
+	public static final Map<FactoryTier, RegistryObject<ItemBlockMekApiaryFactory>> EM_APIARY_FACTORY_ITEMS =
 			new ConcurrentHashMap<>();
 
 	private ModItems() {}
@@ -270,14 +256,14 @@ public final class ModItems {
 		if (!MekCompatHooks.isEvolvedMekanismLoaded()) {
 			return;
 		}
-		for (Map.Entry<FactoryTier, DeferredBlock<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
+		for (Map.Entry<FactoryTier, RegistryObject<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
 			Machine.FactoryMachine<TileEntityMekCentrifugeFactory>>>> entry : ModBlocks.EM_FACTORIES.entrySet()) {
 			FactoryTier tier = entry.getKey();
-			DeferredBlock<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
+			RegistryObject<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
 				Machine.FactoryMachine<TileEntityMekCentrifugeFactory>>> deferredBlock = entry.getValue();
 			String registryName = tier.getBaseTier().getLowerName() + "_mek_centrifuge_factory";
 			// 注册BlockItem，使用与原版相同的machineItemProperties添加Mekanism DataComponents
-			DeferredItem<ItemBlockMekCentrifuge> deferredItem = ITEMS.register(registryName,
+			RegistryObject<ItemBlockMekCentrifuge> deferredItem = ITEMS.register(registryName,
 					() -> new ItemBlockMekCentrifuge(deferredBlock.get(), machineItemProperties(deferredBlock.get())));
 			EM_FACTORY_ITEMS.put(tier, deferredItem);
 		}
@@ -348,13 +334,13 @@ public final class ModItems {
 		if (!MekCompatHooks.isEvolvedMekanismLoaded()) {
 			return;
 		}
-		for (Map.Entry<FactoryTier, DeferredBlock<MekApiaryBlock<TileEntityMekApiaryFactory,
+		for (Map.Entry<FactoryTier, RegistryObject<MekApiaryBlock<TileEntityMekApiaryFactory,
 			BlockTypeTile<TileEntityMekApiaryFactory>>>> entry : ModBlocks.EM_APIARY_FACTORIES.entrySet()) {
 			FactoryTier tier = entry.getKey();
-			DeferredBlock<MekApiaryBlock<TileEntityMekApiaryFactory,
+			RegistryObject<MekApiaryBlock<TileEntityMekApiaryFactory,
 				BlockTypeTile<TileEntityMekApiaryFactory>>> deferredBlock = entry.getValue();
 			String registryName = tier.getBaseTier().getLowerName() + "_mek_apiary_factory";
-			DeferredItem<ItemBlockMekApiaryFactory> deferredItem = ITEMS.register(registryName,
+			RegistryObject<ItemBlockMekApiaryFactory> deferredItem = ITEMS.register(registryName,
 					() -> new ItemBlockMekApiaryFactory(deferredBlock.get(), machineItemProperties(deferredBlock.get())));
 			EM_APIARY_FACTORY_ITEMS.put(tier, deferredItem);
 		}
@@ -383,20 +369,6 @@ public final class ModItems {
 	 * EJECTOR和SIDE_CONFIG在machineProperties中添加，SECURITY/REDSTONE/UPGRADES在blockItemProperties中添加。
 	 */
 	public static Item.Properties machineItemProperties(net.minecraft.world.level.block.Block block) {
-		Item.Properties props = new Item.Properties();
-		// 机器属性：弹出器 + 侧面配置（使用离心机专用配置，包含流体右侧输出）
-		props.component(MekanismDataComponents.EJECTOR, AttachedEjector.DEFAULT);
-		props.component(MekanismDataComponents.SIDE_CONFIG, MEK_CENTRIFUGE_SIDE_CONFIG);
-		// 条件属性：安全模式 + 红石控制 + 升级
-		if (Attribute.has(block, AttributeSecurity.class)) {
-			props.component(MekanismDataComponents.SECURITY, SecurityMode.PUBLIC);
-		}
-		if (Attribute.has(block, AttributeRedstone.class)) {
-			props.component(MekanismDataComponents.REDSTONE_CONTROL, RedstoneControl.DISABLED);
-		}
-		if (Attribute.has(block, AttributeUpgradeSupport.class)) {
-			props.component(MekanismDataComponents.UPGRADES, UpgradeAware.EMPTY);
-		}
-		return props;
+		return new Item.Properties();
 	}
 }

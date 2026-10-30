@@ -69,8 +69,6 @@ class Ae2OptionalDependencyGuardTest {
 			"client/screen/GlobalGearButton.java",
 			"client/screen/StockGearButton.java",
 			"client/screen/GuiAeInputConfig.java",
-			"client/screen/authoring/DesignerAeItemKey.java",
-			"client/screen/authoring/DesignerAeKeyPicker.java",
 			"network/Ae2PayloadHandlers.java",
 			"network/Ae2FilterPayloadHandlers.java",
 			"network/Ae2CentrifugeInputReturnService.java");
@@ -107,33 +105,14 @@ class Ae2OptionalDependencyGuardTest {
 	}
 
 	@Test
-	@DisplayName("编辑器的 AE2 选择和目录清理必须先确认可选依赖")
-	void designerAe2EntrypointsAreGuarded() throws Exception {
-		String fields = Files.readString(Path.of(SOURCE_ROOT + "client/screen/authoring/DesignerResourceFields.java"));
-		int guard = fields.indexOf("if (ModList.get().isLoaded(\"ae2\"))");
-		int missing = fields.indexOf("screen.note(\"dependency\"", guard);
-		assertTrue(guard >= 0 && missing > guard, "AE2 选择器必须有未安装依赖的分支");
-		int picker = fields.indexOf("new DesignerAeKeyPicker(");
-		int conversion = fields.indexOf("DesignerAeItemKey.select(");
-		assertTrue(picker > guard && picker < missing, "AE 键目录只能从 AE2 存在的分支打开");
-		assertTrue(conversion > guard && conversion < missing, "物品键转换只能从 AE2 存在的分支调用");
-		String client = Files.readString(Path.of(SOURCE_ROOT + "client/screen/authoring/BeeDesignerClient.java"));
-		Pattern guardedClear = Pattern.compile("if \\(net\\.neoforged\\.fml\\.ModList\\.get\\(\\)\\.isLoaded\\(\"ae2\"\\)\\) \\{\\s*DesignerAeKeyPicker\\.clear\\(\\);\\s*\\}");
-		assertTrue(guardedClear.matcher(client).results().count() == 2,
-				"登出和标签重载两处目录清理都必须先确认 AE2");
-	}
-
-	@Test
 	@DisplayName("mods.toml 中所有代码级可选集成都必须声明为 optional 依赖")
 	void modsTomlDeclaresOptionalDependencies() throws Exception {
 		String toml = Files.readString(Path.of("src/main/templates/META-INF/neoforge.mods.toml"));
 		// 逐个依赖块检查 type="optional"：非 optional 会让加载器强制要求该模组存在
 		for (String modId : List.of(
-				"ae2", "appflux", "appmek", "ars_nouveau", "arseng", "mekanism_extras", "emextras", "evolvedmekanism",
-				"mekanism_empowered", "mekanism_empowered_unleashed", "jei", "jade", "kubejs", "jdte", "useless_mod", "iris",
-				"buildinggadgets2", "mekenergistics", "create", "meinfinitycell",
-				"industrialforegoingsouls", "soulplied_energistics", "projecte", "appliedpneumatics",
-				"experiencelib", "appex", "ae2lt", "pneumaticcraft")) {
+				"ae2", "appflux", "mekanism_extras", "emextras", "evolvedmekanism",
+				"mekanism_empowered", "jei", "jade", "kubejs", "jdte", "iris",
+				"buildinggadgets2", "mekenergistics", "create", "meinfinitycell")) {
 			int blockStart = toml.indexOf("modId=\"" + modId + "\"");
 			assertTrue(blockStart >= 0, "mods.toml 必须声明 " + modId + " 依赖");
 			int blockEnd = toml.indexOf("[[", blockStart + 1);
@@ -218,16 +197,6 @@ class Ae2OptionalDependencyGuardTest {
 		assertTrue(plugin.replace("\r\n", "\n").contains("if (MEKENERGISTICS_MIXINS.contains(simpleName)) {\n"
 				+ "\t\t\treturn Holder.MEKENERGISTICS_LOADED;"),
 				"Existing installer guards must keep their original loading condition");
-		int resourceStart = plugin.indexOf("if (JDTE_RESOURCE_MIXINS.contains(simpleName))");
-		assertTrue(resourceStart >= 0, "JDTE resource bridge must have a separate transaction gate");
-		int resourceEnd = plugin.indexOf("\n\t\t}", resourceStart);
-		assertTrue(resourceEnd > resourceStart);
-		String resourceGuard = plugin.substring(resourceStart, resourceEnd);
-		assertTrue(resourceGuard.contains("Holder.JDTE_LOADED &&")
-				&& resourceGuard.contains("mod.getModId().equals(\"jdte\")")
-				&& resourceGuard.contains("mod.getVersion().toString().equals(\"0.6.1.0\")")
-				&& resourceGuard.contains("&& com.ayoshiko.productivebeesgenesis.resource.JdteResourceMixinContract.supported()"),
-				"Strict JDTE resource hooks require presence, verified version and bytecode preflight");
 		List<String> unregistered = new ArrayList<>();
 		List<String> strictOptionalInjectors = new ArrayList<>();
 		Matcher matcher = Pattern.compile("\"([A-Za-z0-9_$.]+)\"").matcher(config);
@@ -238,17 +207,11 @@ class Ae2OptionalDependencyGuardTest {
 			String source = Files.readString(sourcePath);
 			Set<String> requiredGates = requiredMixinGates(entry, source);
 			if (requiredGates.isEmpty()) continue;
-			String simpleName = entry.substring(entry.lastIndexOf('.') + 1);
-			Set<String> registeredSets = memberships.getOrDefault(simpleName, Set.of());
-			boolean verifiedResourceBridge = entry.equals("jdte.JdteBioFactoryResourceMixin")
-					&& registeredSets.contains("JDTE_RESOURCE_MIXINS");
-			if (verifiedResourceBridge) {
-				// 资产事务不能允许半组注入继续生产；结构漂移由专用字节码门禁用整组桥。
-				assertTrue(source.matches("(?s).*require\\s*=\\s*1.*"));
-				assertFalse(source.matches("(?s).*require\\s*=\\s*0.*"));
-			} else if (hasMethodBodyInjector(source) && !source.matches("(?s).*require\\s*=\\s*0.*")) {
+			if (hasMethodBodyInjector(source) && !source.matches("(?s).*require\\s*=\\s*0.*")) {
 				strictOptionalInjectors.add(entry);
 			}
+			String simpleName = entry.substring(entry.lastIndexOf('.') + 1);
+			Set<String> registeredSets = memberships.getOrDefault(simpleName, Set.of());
 			for (String gate : requiredGates) {
 				if (registeredSets.stream().noneMatch(setName -> setProvidesGate(setName, gate))) {
 					unregistered.add(entry + " 缺少 " + gate + " 门控，当前集合=" + registeredSets);
@@ -260,7 +223,7 @@ class Ae2OptionalDependencyGuardTest {
 						+ "在该模组未安装时会被无条件应用并抛 NoClassDefFoundError（issue #8 同类）: "
 						+ unregistered);
 		assertTrue(strictOptionalInjectors.isEmpty(),
-				() -> "可选方法体注入必须 require=0，或使用已验证版本及结构门控的完整事务桥: "
+				() -> "可选第三方模组的方法体注入必须 require=0；上游改签名时应降级功能而不是阻止整合包启动: "
 						+ strictOptionalInjectors);
 
 		String irisConfig = Files.readString(
@@ -276,7 +239,7 @@ class Ae2OptionalDependencyGuardTest {
 	@Test
 	@DisplayName("基础宿主包不得直接链接 ME/EME 等可选模组类型")
 	void alwaysLoadedHostPackagesDoNotImportOptionalTypes() throws Exception {
-		List<String> hostPrefixes = List.of("apiary/", "mek/", "init/", "inventory/", "menu/", "item/", "resource/", "api/resource/");
+		List<String> hostPrefixes = List.of("apiary/", "mek/", "init/", "inventory/", "menu/", "item/");
 		List<String> isolatedFiles = List.of(
 				"apiary/ApiaryTierMultiplierResolverDelegate.java",
 				"apiary/ApiaryTierMultiplierResolverMEDelegate.java",
@@ -284,21 +247,13 @@ class Ae2OptionalDependencyGuardTest {
 		List<String> optionalImports = List.of(
 				"import appeng.", "import com.glodblock.", "import com.jerry.mekextras.",
 				"import io.github.masyumero.emextras.", "import com.jdte.", "import mezz.jei.",
-				"import snownee.jade.", "import dev.latvian.mods.kubejs.", "import net.irisshaders.",
-				"import com.hollingsworth.arsnouveau.", "import gripe._90.arseng.",
-				"import com.buuz135.industrialforegoingsouls.", "import com.buuz135.soulplied_energistics.",
-				"import es.degrassi.experiencelib.", "import es.degrassi.appexp.", "import com.moakiee.ae2lt.",
-				"import moze_intel.projecte.", "import me.desht.pneumaticcraft.");
+				"import snownee.jade.", "import dev.latvian.mods.kubejs.", "import net.irisshaders.");
 		List<String> offenders = new ArrayList<>();
 		try (Stream<Path> files = Files.walk(Path.of(SOURCE_ROOT))) {
 			for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
 				String relative = file.toString().replace('\\', '/').substring(SOURCE_ROOT.length());
 				if (hostPrefixes.stream().noneMatch(relative::startsWith)) continue;
-				if (relative.startsWith("mek/ae2/") || relative.startsWith("resource/ars/")
-						|| relative.startsWith("resource/souls/") || relative.startsWith("resource/emc/")
-						|| relative.startsWith("resource/experience/") || relative.startsWith("resource/lightning/")
-						|| relative.startsWith("resource/air/")
-						|| isolatedFiles.contains(relative)) continue;
+				if (relative.startsWith("mek/ae2/") || isolatedFiles.contains(relative)) continue;
 				String source = Files.readString(file);
 				for (String optionalImport : optionalImports) {
 					if (source.contains(optionalImport)) offenders.add(relative + " 含 " + optionalImport);

@@ -1,11 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.Collections;
@@ -61,7 +57,7 @@ public record SyncAeInputFilterEntriesPayload(
 	boolean unlimitedAllFallback,
 	boolean globalNetworkStock,
 	long globalReserveAmount
-) implements CustomPacketPayload {
+)  {
 
 	/** Backward-compatible constructor for callers that do not provide stock metadata. */
 	public SyncAeInputFilterEntriesPayload(BlockPos pos, int filterMode, boolean preciseMode,
@@ -79,64 +75,30 @@ public record SyncAeInputFilterEntriesPayload(
 	 * StreamCodec.composite supports at most six fields in this NeoForge version.
 	 * Encode the per-entry metadata lists as one composite field.
 	 */
-	private record DirectState(List<Long> amounts, List<Long> reserveAmounts, List<Long> visibleAmounts,
-			List<Boolean> unlimited, List<Boolean> networkStock, StockDefaults defaults) {}
 	/**
 	 * 每条目「本机可加工」标记与三个全局默认值打包在同一复合字段里。
 	 * <p>
 	 * 原因：{@code StreamCodec.composite} 在本 NeoForge 版本最多六个字段，
 	 * {@link DirectState} 已经用满，故把这份展示态标记并入 StockDefaults 这一层。
 	 */
-	private record StockDefaults(boolean unlimitedAllFallback, boolean globalNetworkStock, long globalReserveAmount,
-			List<Boolean> processable) {}
-	private static final StreamCodec<ByteBuf, StockDefaults> STOCK_DEFAULTS_CODEC = StreamCodec.composite(
-			ByteBufCodecs.BOOL, StockDefaults::unlimitedAllFallback,
-			ByteBufCodecs.BOOL, StockDefaults::globalNetworkStock,
-			ByteBufCodecs.VAR_LONG, StockDefaults::globalReserveAmount,
-			ByteBufCodecs.BOOL.apply(ByteBufCodecs.list(1024)), StockDefaults::processable,
-			StockDefaults::new);
 
-	private static final StreamCodec<ByteBuf, DirectState> DIRECT_STATE_CODEC =
-			StreamCodec.composite(
-					ByteBufCodecs.VAR_LONG.apply(ByteBufCodecs.list(1024)), DirectState::amounts,
-					ByteBufCodecs.VAR_LONG.apply(ByteBufCodecs.list(1024)), DirectState::reserveAmounts,
-					ByteBufCodecs.VAR_LONG.apply(ByteBufCodecs.list(1024)), DirectState::visibleAmounts,
-					ByteBufCodecs.BOOL.apply(ByteBufCodecs.list(1024)), DirectState::unlimited,
-					ByteBufCodecs.BOOL.apply(ByteBufCodecs.list(1024)), DirectState::networkStock,
-					STOCK_DEFAULTS_CODEC, DirectState::defaults,
-					DirectState::new
-			);
-
-	public static final CustomPacketPayload.Type<SyncAeInputFilterEntriesPayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "sync_ae_input_filter_entries"));
-
-	public static final StreamCodec<ByteBuf, SyncAeInputFilterEntriesPayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, SyncAeInputFilterEntriesPayload::pos,
-					ByteBufCodecs.VAR_INT, SyncAeInputFilterEntriesPayload::filterMode,
-					ByteBufCodecs.BOOL, SyncAeInputFilterEntriesPayload::preciseMode,
-					ByteBufCodecs.VAR_INT.apply(ByteBufCodecs.list(1024)), SyncAeInputFilterEntriesPayload::indices,
-					// 限制单个entry最大256字符（beeType ResourceLocation足够），防止恶意超大字符串导致OOM
-					ByteBufCodecs.stringUtf8(NetworkSecurityConstants.MAX_FILTER_ENTRY_LENGTH)
-					.apply(ByteBufCodecs.list(1024)), SyncAeInputFilterEntriesPayload::entries,
-					DIRECT_STATE_CODEC,
-					payload -> new DirectState(payload.amounts(), payload.reserveAmounts(), payload.visibleAmounts(),
-							payload.unlimited(), payload.networkStock(),
-							new StockDefaults(payload.unlimitedAllFallback(), payload.globalNetworkStock(),
-									payload.globalReserveAmount(), payload.processable())),
-					(pos, filterMode, preciseMode, indices, entries, directState) -> new SyncAeInputFilterEntriesPayload(
-							pos, filterMode, preciseMode, indices, entries,
-							directState.amounts(), directState.reserveAmounts(), directState.visibleAmounts(),
-							directState.unlimited(), directState.networkStock(),
-							directState.defaults().processable(),
-							directState.defaults().unlimitedAllFallback(),
-							directState.defaults().globalNetworkStock(),
-							directState.defaults().globalReserveAmount())
-			);
-
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static SyncAeInputFilterEntriesPayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new SyncAeInputFilterEntriesPayload(buf.readBlockPos(), buf.readVarInt(), buf.readBoolean(), PacketIO.readList(buf, () -> buf.readVarInt(), 1024), PacketIO.readList(buf, () -> buf.readUtf(4097), 1024), PacketIO.readList(buf, () -> buf.readVarLong(), 1024), PacketIO.readList(buf, () -> buf.readVarLong(), 1024), PacketIO.readList(buf, () -> buf.readVarLong(), 1024), PacketIO.readList(buf, () -> buf.readBoolean(), 1024), PacketIO.readList(buf, () -> buf.readBoolean(), 1024), PacketIO.readList(buf, () -> buf.readBoolean(), 1024), buf.readBoolean(), buf.readBoolean(), buf.readVarLong());
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+        buf.writeVarInt(filterMode);
+        buf.writeBoolean(preciseMode);
+        PacketIO.writeList(buf, indices, v -> { buf.writeVarInt(v); }, 1024);
+        PacketIO.writeList(buf, entries, v -> { buf.writeUtf(v, 4097); }, 1024);
+        PacketIO.writeList(buf, amounts, v -> { buf.writeVarLong(v); }, 1024);
+        PacketIO.writeList(buf, reserveAmounts, v -> { buf.writeVarLong(v); }, 1024);
+        PacketIO.writeList(buf, visibleAmounts, v -> { buf.writeVarLong(v); }, 1024);
+        PacketIO.writeList(buf, unlimited, v -> { buf.writeBoolean(v); }, 1024);
+        PacketIO.writeList(buf, networkStock, v -> { buf.writeBoolean(v); }, 1024);
+        PacketIO.writeList(buf, processable, v -> { buf.writeBoolean(v); }, 1024);
+        buf.writeBoolean(unlimitedAllFallback);
+        buf.writeBoolean(globalNetworkStock);
+        buf.writeVarLong(globalReserveAmount);
+    }
 }

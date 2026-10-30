@@ -26,7 +26,6 @@ public final class GenesisTileComponentEjector extends TileComponentEjector impl
 	private final TileEntityMekanism tile;
 	private final FastItemEjector itemEjector;
 	private final FastFluidEjector fluidEjector;
-	private final OutputCustody custody;
 	private final OutputWakeNotifier wakeNotifier = new OutputWakeNotifier();
 
 	@Nullable
@@ -41,7 +40,6 @@ public final class GenesisTileComponentEjector extends TileComponentEjector impl
 			IntSupplier fluidEjectRate) {
 		super(tile, chemicalEjectRate, fluidEjectRate);
 		this.tile = tile;
-		this.custody = new OutputCustody(tile::setChanged);
 		this.itemEjector = new FastItemEjector(tile);
 		this.fluidEjector = new FastFluidEjector(tile);
 	}
@@ -89,8 +87,6 @@ public final class GenesisTileComponentEjector extends TileComponentEjector impl
 
 	@Override
 	public void tickServer() {
-		recoverLocal();
-		if (custody.blocked()) return;
 		if (vanillaTickRequired) {
 			super.tickServer();
 			return;
@@ -105,44 +101,6 @@ public final class GenesisTileComponentEjector extends TileComponentEjector impl
 		if (fluidConfig != null && isEjecting(fluidConfig, TransmissionType.FLUID)) {
 			fluidEjector.tick(tile, fluidConfig, gameTime);
 		}
-	}
-
-	public OutputCustody outputCustody() { return custody; }
-
-    private void recoverLocal() {
-        if (itemConfig != null && !custody.recoveredItem().isEmpty()) {
-            for (var type : itemConfig.getSupportedDataTypes()) {
-                if (!type.canOutput()) continue;
-                if (itemConfig.getSlotInfo(type) instanceof mekanism.common.tile.component.config.slot.InventorySlotInfo info) {
-                    for (var slot : info.getSlots()) {
-                        custody.recoverItem(stack -> ItemPushHelper.accepted(stack,
-                                slot.insertItem(stack.copy(), mekanism.api.Action.EXECUTE, mekanism.api.AutomationType.INTERNAL)));
-                    }
-                }
-            }
-        }
-        if (fluidConfig != null && !custody.recoveredFluid().isEmpty()) {
-            for (var type : fluidConfig.getSupportedDataTypes()) {
-                if (!type.canOutput()) continue;
-                if (fluidConfig.getSlotInfo(type) instanceof mekanism.common.tile.component.config.slot.FluidSlotInfo info) {
-                    for (var tank : info.getTanks()) custody.recoverFluid(stack -> stack.getAmount()
-                            - tank.insert(stack.copy(), mekanism.api.Action.EXECUTE, mekanism.api.AutomationType.INTERNAL).getAmount());
-                }
-            }
-        }
-    }
-
-	@Override
-	public net.minecraft.nbt.CompoundTag serialize(net.minecraft.core.HolderLookup.Provider provider) {
-		var tag = super.serialize(provider);
-		tag.put("output_custody", custody.save(provider));
-		return tag;
-	}
-
-	@Override
-	public void deserialize(net.minecraft.nbt.CompoundTag tag, net.minecraft.core.HolderLookup.Provider provider) {
-		super.deserialize(tag, provider);
-		custody.loadRaw(provider, tag.get("output_custody"));
 	}
 
 	@Override

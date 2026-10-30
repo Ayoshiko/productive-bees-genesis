@@ -21,7 +21,7 @@ public final class Ae2ItemFingerprint {
 
 	public static String encode(AEItemKey key, HolderLookup.Provider registries) {
 		if (key == null || registries == null) return "";
-		return key.toTag(registries).toString();
+		return key.toTag().toString();
 	}
 
 	/**
@@ -70,7 +70,7 @@ public final class Ae2ItemFingerprint {
 			return null;
 		}
 		try {
-			return AEItemKey.fromTag(registries, TagParser.parseTag(fingerprint));
+			return AEItemKey.fromTag(TagParser.parseTag(fingerprint));
 		} catch (CommandSyntaxException | RuntimeException ignored) {
 			return null;
 		}

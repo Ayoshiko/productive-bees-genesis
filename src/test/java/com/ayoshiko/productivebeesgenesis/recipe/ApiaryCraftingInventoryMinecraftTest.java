@@ -303,37 +303,6 @@ class ApiaryCraftingInventoryMinecraftTest {
 		assertEquals(invalid, second.get(DataComponents.BLOCK_ENTITY_DATA).copyTag());
 	}
 
-    @Test
-    void nativeSideSettingsSurviveActualCraftingWithoutMutatingInputs() {
-        var provider = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
-        var first = new ItemStack(ModItems.MEK_APIARY.get());
-        var second = first.copy();
-        var source = tile(first);
-        source.getData(com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.TYPE).setNativeOutput(source,
-                com.ayoshiko.productivebeesgenesis.resource.ResourceNativeType.CHEMICAL, 9, true);
-        source.getData(com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.TYPE).setNativeOutput(source,
-                com.ayoshiko.productivebeesgenesis.resource.ResourceNativeType.ENERGY, 4, true);
-        var expected = source.getData(com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.TYPE).nativeConfigData();
-        source.saveToItem(first, provider);
-        var expectedEnergy = first.get(mekanism.common.registries.MekanismDataComponents.SIDE_CONFIG);
-        assertNotNull(expectedEnergy);
-        var other = tile(second);
-        other.getData(com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.TYPE).setNativeOutput(other,
-                com.ayoshiko.productivebeesgenesis.resource.ResourceNativeType.CHEMICAL, 2, false);
-        other.saveToItem(second, provider);
-        var before = first.copy();
-        var wrapper = new ApiaryShapedRecipe(recipe(first, new ItemStack(ModItems.BASIC_MEK_APIARY_FACTORY.get())));
-        for (var inputs : List.of(List.of(first), List.of(first, second))) {
-            var result = wrapper.assemble(CraftingInput.of(inputs.size(), 1, inputs), provider);
-            assertFalse(result.isEmpty());
-            assertEquals(expectedEnergy, result.get(mekanism.common.registries.MekanismDataComponents.SIDE_CONFIG));
-            var restored = tile(result);
-            restored.loadCustomOnly(result.get(DataComponents.BLOCK_ENTITY_DATA).copyTag(), provider);
-            assertEquals(expected, restored.getData(com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.TYPE).nativeConfigData());
-            assertStack(before, first);
-        }
-    }
-
 	private static TileEntityMekApiary tile(ItemStack stack) {
 		var block = (MekApiaryBlock<?, ?>) ((BlockItem) stack.getItem()).getBlock();
 		return (TileEntityMekApiary) block.getTileType().get().create(BlockPos.ZERO, block.defaultBlockState());

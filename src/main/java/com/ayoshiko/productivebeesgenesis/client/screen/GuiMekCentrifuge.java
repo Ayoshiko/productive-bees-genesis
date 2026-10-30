@@ -14,14 +14,14 @@ import mekanism.client.gui.element.progress.ProgressType;
 import mekanism.client.gui.element.tab.GuiEnergyTab;
 import mekanism.client.gui.element.tab.GuiRedstoneControlTab;
 import mekanism.client.gui.element.tab.GuiWarningTab;
-import mekanism.client.recipe_viewer.type.RecipeViewerRecipeType;
+import mekanism.client.jei.MekanismJEIRecipeType;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.inventory.warning.IWarningTracker;
 import mekanism.common.inventory.warning.WarningTracker.WarningType;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
-import net.neoforged.fml.ModList;
+import net.minecraftforge.fml.ModList;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -66,7 +66,7 @@ public class GuiMekCentrifuge
 				.warning(WarningType.NOT_ENOUGH_ENERGY, tile.getWarningCheck(RecipeError.NOT_ENOUGH_ENERGY)));
 		addRenderableWidget(new GuiEnergyTab(this, tile.getEnergyContainer(),
 				new EnergyUsageDisplaySmoother(() -> tile.getActive()
-						? tile.getEnergyContainer().getEnergyPerTick() : 0L)));
+						? com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(tile.getEnergyContainer().getEnergyPerTick()) : 0L)));
 		// Tab 布局重排:GuiEnergyTab 下移 Δ=+19(y=137→156),与左侧 Tab 布局对称
 		for (GuiEventListener child : children()) {
 			if (child instanceof GuiEnergyTab energyTab) {
@@ -79,12 +79,18 @@ public class GuiMekCentrifuge
 		addRenderableWidget(new GuiFluidGauge(() -> tile.getFluidOutputTank(), () -> tile.getFluidTanks(null),
 				GaugeType.SMALL, this, FactoryLayoutHelper.getCentrifugeFluidTankX(),
 				FactoryLayoutHelper.getCentrifugeFluidTankY()));
-		addRenderableWidget(new GuiProgress(
+		GuiProgress progress = new GuiProgress(
 				() -> ProgressDisplaySmoother.smooth(tile, 0, tile.getScaledProgress()),
-				ProgressType.BAR, this, 86, 38)
-				.recipeViewerCategories(RecipeViewerRecipeType.SMELTING,
-						jeiViewerTypeOrNull())
-				.warning(WarningType.INPUT_DOESNT_PRODUCE_OUTPUT, tile.getWarningCheck(RecipeError.INPUT_DOESNT_PRODUCE_OUTPUT)));
+				ProgressType.BAR, this, 86, 38);
+		var viewerType = jeiViewerTypeOrNull();
+		if (viewerType != null) {
+			progress.jeiCategories(MekanismJEIRecipeType.SMELTING, viewerType);
+		} else {
+			progress.jeiCategories();
+		}
+		progress.warning(WarningType.INPUT_DOESNT_PRODUCE_OUTPUT,
+				tile.getWarningCheck(RecipeError.INPUT_DOESNT_PRODUCE_OUTPUT));
+		addRenderableWidget(progress);
 		CentrifugeInputReturnButton inputReturnButton = CentrifugeInputReturnButton.createForCentrifuge(
 				this, imageWidth, tile.getBlockPos());
 		if (inputReturnButton != null) addRenderableWidget(inputReturnButton);
@@ -101,7 +107,7 @@ public class GuiMekCentrifuge
 	 * @return JEI 配方查看器类型，JEI 未安装时为 null
 	 */
 	@org.jetbrains.annotations.Nullable
-	private static mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType
+	private static mekanism.client.jei.MekanismJEIRecipeType
 			<cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe> jeiViewerTypeOrNull(
 	) {
 		if (ModList.get() != null && ModList.get().isLoaded("jei")) {
@@ -119,7 +125,7 @@ public class GuiMekCentrifuge
 	@Override
 	protected void addWarningTab(IWarningTracker warningTracker) {
 		// 警告 Tab 上移 Δ=-11(y=109→98),与左侧 Tab 序列对齐
-		GuiWarningTab tab = addRenderableWidget(new GuiWarningTab(this, warningTracker, true));
+		GuiWarningTab tab = addRenderableWidget(new GuiWarningTab(this, warningTracker, 109));
 		tab.move(0, -11);
 	}
 
@@ -138,7 +144,7 @@ public class GuiMekCentrifuge
 	@Override
 	protected void drawForegroundText(@NotNull net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY) {
 		renderTitleText(guiGraphics);
-		renderInventoryText(guiGraphics);
+		guiGraphics.drawString(getFont(), playerInventoryTitle, inventoryLabelX, inventoryLabelY, screenTextColor(), false);
 		super.drawForegroundText(guiGraphics, mouseX, mouseY);
 	}
 }

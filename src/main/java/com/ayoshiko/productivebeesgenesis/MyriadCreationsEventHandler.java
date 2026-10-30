@@ -12,11 +12,11 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.server.ServerStoppedEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.items.IItemHandlerModifiable;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.event.TickEvent.ServerTickEvent;
+import net.minecraftforge.items.IItemHandlerModifiable;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
@@ -80,7 +80,8 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 
 	/** 服务器 tick 事件 — 仅在首次加载或缓存失效后重建蜜蜂类型缓存 */
 	@SubscribeEvent
-	public static void onServerTick(ServerTickEvent.Post event) {
+	public static void onServerTick(ServerTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
 		// 万象创世功能被禁用时，跳过缓存更新
 		if (!isMyriadCreationsEnabled()) return;
 		if (MyriadBeeTypeCache.onServerTick()) {
@@ -193,7 +194,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		while (count > 0) {
 			int stackSize = Math.min(64, count);
 			ItemStack stack = new ItemStack(item, stackSize);
-			stack.set(PbDataComponents.beeType(), PBConstants.MYRIADCREATIONS_TYPE);
+			PbDataComponents.setBeeType(stack, PBConstants.MYRIADCREATIONS_TYPE);
 			out.add(stack);
 			count -= stackSize;
 		}
@@ -210,7 +211,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * 万象创世功能是否启用的缓存值（volatile 读取避免重复配置查询）
 	 * <br/>
 	 * processPbRecipesAndUpdate 每 tick 调 32 次（16 myriad + 16 comb）isMyriadCreationsEnabled()，
-	 * 每次需 2 次 volatile read（ModConfigSpec.isLoaded + myraidConfigValue.get()）。
+	 * 每次需 2 次 volatile read（ForgeConfigSpec.isLoaded + myraidConfigValue.get()）。
 	 * 缓存到 volatile 字段后单次访问仅 1 次 volatile read，
 	 * ModConfigEvent.Reloading 时通过 {@link #invalidateEnabledCache()} 同步更新。
 	 */
@@ -244,7 +245,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		if (stack == null || stack.isEmpty()) return false;
 		try {
 			if (stack.getItem() == com.ayoshiko.productivebeesgenesis.util.PbCombItemRefs.honeycomb()) {
-				ResourceLocation beeType = stack.get(PbDataComponents.beeType());
+				ResourceLocation beeType = PbDataComponents.getBeeType(stack);
 				return isMyriadCreationsBeeType(beeType);
 			}
 		} catch (Exception e) {
@@ -263,7 +264,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		if (stack == null || stack.isEmpty()) return false;
 		try {
 			if (stack.getItem() == com.ayoshiko.productivebeesgenesis.util.PbCombItemRefs.combBlock()) {
-				ResourceLocation beeType = stack.get(PbDataComponents.beeType());
+				ResourceLocation beeType = PbDataComponents.getBeeType(stack);
 				return isMyriadCreationsBeeType(beeType);
 			}
 		} catch (Exception e) {
@@ -301,7 +302,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	private static ResourceLocation getBeeTypeFromStack(ItemStack stack) {
 		if (stack.isEmpty()) return null;
 		if (isConfigurableHoneycomb(stack) || isConfigurableCombBlock(stack)) {
-			return stack.get(PbDataComponents.beeType());
+			return PbDataComponents.getBeeType(stack);
 		}
 		return null;
 	}

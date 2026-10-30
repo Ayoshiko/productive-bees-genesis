@@ -1,9 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
-import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredientFactory;
-import net.minecraft.network.RegistryFriendlyByteBuf;
+import cy.jdkdigital.productivebees.compat.jei.ingredients.BeeIngredient;
+import cy.jdkdigital.productivebees.compat.jei.ingredients.BeeIngredientFactory;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -24,7 +24,7 @@ import net.minecraft.resources.ResourceLocation;
 public final class BeeIngredientFallback {
 
 	/** fallback 用的原版蜜蜂 ResourceLocation */
-	private static final ResourceLocation VANILLA_BEE_RL = ResourceLocation.parse(PBConstants.VANILLA_BEE_TYPE);
+	private static final ResourceLocation VANILLA_BEE_RL = new ResourceLocation(PBConstants.VANILLA_BEE_TYPE);
 
 	private BeeIngredientFallback() {
 		// 工具类禁止实例化
@@ -57,7 +57,7 @@ public final class BeeIngredientFallback {
 	 *
 	 * @param buffer 网络字节缓冲区
 	 */
-	public static void writeFallbackBeeIngredient(RegistryFriendlyByteBuf buffer) {
+	public static void writeFallbackBeeIngredient(FriendlyByteBuf buffer) {
 		BeeIngredient fallback = getFallback();
 		if (fallback != null) {
 			fallback.toNetwork(buffer);

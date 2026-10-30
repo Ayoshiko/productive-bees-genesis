@@ -47,7 +47,7 @@ public final class DyeProduceResolver {
 		if (!"botania".equals(id.getNamespace())) return ItemStack.EMPTY;
 		String color = matchMysticalColor(id.getPath());
 		if (color == null) return ItemStack.EMPTY;
-		Item petal = BuiltInRegistries.ITEM.get(ResourceLocation.fromNamespaceAndPath("botania", color + "_petal"));
+		Item petal = BuiltInRegistries.ITEM.get(new ResourceLocation("botania", color + "_petal"));
 		if (petal == Items.AIR) return ItemStack.EMPTY;
 		return new ItemStack(petal);
 	}

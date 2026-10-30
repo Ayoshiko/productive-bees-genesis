@@ -23,7 +23,7 @@ import mekanism.common.tile.interfaces.ISideConfiguration;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 
 import java.util.Set;
 
@@ -240,15 +240,13 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 			shared.itemSnapshotKeys = new Object[slotCount];
 			shared.itemSnapshotAmounts = new long[slotCount];
 		}
-		Object keyCache = shared.host.productivebeesgenesis$getAeItemKeyCache();
-		AeItemKeyCache cache = keyCache instanceof AeItemKeyCache existing ? existing : null;
 		int count = 0;
 		for (int i = 0; i < slotCount; i++) {
 			IInventorySlot slot = outputSlot(i);
 			if (slot == null || slot.isEmpty()) continue;
 			ItemStack stack = slot.getStack();
 			if (stack.isEmpty() || stack.getCount() <= 0) continue;
-			AEItemKey key = cache == null ? AEItemKey.of(stack) : cache.get(i, stack);
+			AEItemKey key = AEItemKey.of(stack);
 			if (key == null) continue;
 			shared.itemSnapshotKeys[count] = key;
 			shared.itemSnapshotAmounts[count] = stack.getCount();
@@ -276,8 +274,8 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 	private AEFluidKey getCachedFluidKey(int index, FluidStack stack) {
 		Ae2OutputStateHolder holder = shared.host.productivebeesgenesis$getAe2StateHolder();
 		Object fluid = stack.getFluid();
-		boolean componentsEmpty = stack.isComponentsPatchEmpty();
-		int componentsHash = componentsEmpty ? 0 : stack.getComponents().hashCode();
+		boolean componentsEmpty = !stack.hasTag();
+		int componentsHash = componentsEmpty ? 0 : java.util.Objects.hashCode(stack.getTag());
 		if (holder.getCachedFluidPushKeyFluid(index) == fluid
 				&& holder.isCachedFluidPushKeyComponentsEmpty(index) == componentsEmpty
 				&& (componentsEmpty

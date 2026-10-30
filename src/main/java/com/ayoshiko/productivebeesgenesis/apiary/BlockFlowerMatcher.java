@@ -5,9 +5,11 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.material.Fluid;
 
 /**
  * blocks 类花朵匹配工具（纯静态，无状态）
@@ -29,7 +31,7 @@ final class BlockFlowerMatcher {
 	 *   <li>flowerTag：先检查物品标签（TagKey&lt;Item&gt;），若不匹配且物品为 BlockItem，再检查方块标签（TagKey&lt;Block&gt;）</li>
 	 *   <li>flowerItem：ItemStack.is(Item)</li>
 	 *   <li>flowerBlock：BlockItem 对应方块的注册表 ID 精确匹配</li>
-	 *   <li>flowerFluid：流体能力容器或传统桶内容匹配流体或流体标签</li>
+	 *   <li>flowerFluid：BucketItem.content 匹配流体或流体标签</li>
 	 * </ol>
 	 * 任一匹配即返回 true。不检查 inverseFlower（与 PB isFlowerItem 行为一致）。
 	 * <p>
@@ -45,7 +47,7 @@ final class BlockFlowerMatcher {
 	static boolean matches(ItemStack stack, FlowerPreference pref) {
 		// flowerTag：先检查物品标签，再检查方块标签（BlockItem 场景）
 		if (!pref.flowerTag().isEmpty()) {
-			ResourceLocation tagId = ResourceLocation.parse(pref.flowerTag());
+			ResourceLocation tagId = new ResourceLocation(pref.flowerTag());
 			// 1. 检查物品标签（与 PB isFlowerItem 一致）
 			TagKey<Item> itemTag = TagKey.create(BuiltInRegistries.ITEM.key(), tagId);
 			if (stack.is(itemTag)) return true;
@@ -57,7 +59,7 @@ final class BlockFlowerMatcher {
 		}
 		// flowerItem：检查具体物品
 		if (!pref.flowerItem().isEmpty()) {
-			Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(pref.flowerItem()));
+			Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(pref.flowerItem()));
 			if (stack.is(item)) return true;
 		}
 		// flowerBlock：检查方块物品（如 sculk_bee 对应 minecraft:sculk_catalyst）
@@ -68,8 +70,20 @@ final class BlockFlowerMatcher {
 				if (blockId.toString().equals(pref.flowerBlock())) return true;
 			}
 		}
-		// 传统 flowerFluid 扩展到流体能力容器；仍保留桶的兼容回退。
-		if (!pref.flowerFluid().isEmpty() && pref.container() != null) return pref.container().matches(stack, null);
+		// flowerFluid：检查流体桶
+		if (!pref.flowerFluid().isEmpty() && stack.getItem() instanceof BucketItem bucket) {
+			String fluidId = pref.flowerFluid();
+			if (fluidId.startsWith("#")) {
+				// 流体标签匹配 — 使用 Holder.is(TagKey) 替代 deprecated 的 Fluid.is(TagKey)
+				TagKey<Fluid> fluidTag = TagKey.create(BuiltInRegistries.FLUID.key(),
+						new ResourceLocation(fluidId.substring(1)));
+				if (BuiltInRegistries.FLUID.wrapAsHolder(bucket.getFluid()).is(fluidTag)) return true;
+			} else {
+				// 具体流体匹配
+				Fluid fluid = BuiltInRegistries.FLUID.get(new ResourceLocation(fluidId));
+				if (bucket.getFluid().isSame(fluid)) return true;
+			}
+		}
 		return false;
 	}
 }

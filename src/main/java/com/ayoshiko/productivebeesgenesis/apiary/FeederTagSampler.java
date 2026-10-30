@@ -115,7 +115,7 @@ final class FeederTagSampler {
 	 * 用于 dye_bee 等蜜蜂从喂食槽推断产物，dye 不一定是 BlockItem（如玫瑰红染料）。
 	 *
 	 * @param slots   喂食槽列表
-	 * @param itemTag 物品标签（如 ModTags.Common.DYES）
+	 * @param itemTag 物品标签（如 net.minecraftforge.common.Tags.Items.DYES）
 	 * @return 匹配 ItemStack 的副本；无匹配返回 {@link ItemStack#EMPTY}
 	 */
 	static ItemStack randomItem(List<FeederInventorySlot> slots, TagKey<Item> itemTag) {

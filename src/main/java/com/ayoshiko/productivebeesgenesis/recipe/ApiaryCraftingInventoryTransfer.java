@@ -2,7 +2,6 @@ package com.ayoshiko.productivebeesgenesis.recipe;
 
 import java.util.List;
 import mekanism.api.inventory.IInventorySlot;
-import mekanism.common.attachments.containers.ContainerType;
 import net.minecraft.world.item.ItemStack;
 
 /** 工作台升级按蜂箱槽位用途重建库存，避免 MEK 通用插入把小食塞进蜂笼输出槽。 */
@@ -16,13 +15,13 @@ final class ApiaryCraftingInventoryTransfer {
 
 	static boolean transfer(List<ItemStack> inputs, ItemStack result) {
 		// 回退结果可能仍带着旧等级的库存长度；必须从目标物品的创建器获取新布局。
-		result.set(ContainerType.ITEM.getComponentType(), ContainerType.ITEM.createNewAttachment(result));
-		var target = ContainerType.ITEM.createHandler(result);
-		if (target == null) return false;
-		List<IInventorySlot> slots = target.getInventorySlots(null);
+		List<IInventorySlot> slots = LegacyMachineInventory.emptyTarget(result);
+		if (slots == null) return false;
 		for (ItemStack input : inputs) {
-			if (!transferSlots(ContainerType.ITEM.getOrEmpty(input).containers(), slots)) return false;
+			List<IInventorySlot> source = LegacyMachineInventory.read(input);
+			if (source == null || !transferSlots(source.stream().map(IInventorySlot::getStack).toList(), slots)) return false;
 		}
+		LegacyMachineInventory.write(result, slots);
 		return true;
 	}
 
@@ -55,14 +54,14 @@ final class ApiaryCraftingInventoryTransfer {
 		return true;
 	}
 
-	private static ItemStack mergeIntoSlot(IInventorySlot slot, ItemStack stack) {
+	static ItemStack mergeIntoSlot(IInventorySlot slot, ItemStack stack) {
 		ItemStack stored = slot.getStack();
 		if (stored.isEmpty()) {
 			// 与安装器/NBT 恢复一致，已有超堆叠库存不能被物品组件的默认 64 上限截断。
 			slot.setStack(stack.copy());
 			return ItemStack.EMPTY;
 		}
-		if (!ItemStack.isSameItemSameComponents(stored, stack)) return stack;
+		if (!ItemStack.isSameItemSameTags(stored, stack)) return stack;
 		int room = Math.max(0, slot.getLimit(stack) - stored.getCount());
 		int moved = Math.min(room, stack.getCount());
 		if (moved == 0) return stack;

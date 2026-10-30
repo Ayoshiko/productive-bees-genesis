@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["UHU", "SBS", "UHU"],
+  "key": {
+    "B": {"item": "productivebees:upgrade_base"},
+    "H": {"item": "minecraft:heart_of_the_sea"},
+    "S": {"item": "minecraft:nether_star"},
+    "U": {"item": "productivebees:upgrade_time"}
+  },
+  "result": {"item": "productivebeesgenesis:time_2_upgrade"}
+}

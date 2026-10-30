@@ -54,7 +54,7 @@ public final class BatchEnergyLedger {
 
 	/** 将待扣能量一次性从本地容器提取。 */
 	public void flush(MachineEnergyContainer<?> container) {
-		flush(amount -> container.extract(amount, Action.EXECUTE, AutomationType.INTERNAL));
+		flush(amount -> com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.extractFe(container, amount, Action.EXECUTE, AutomationType.INTERNAL));
 	}
 
 	/**

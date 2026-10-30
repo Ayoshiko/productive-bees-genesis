@@ -16,7 +16,7 @@ import mekanism.api.recipes.cache.CachedRecipe;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import mekanism.api.recipes.inputs.IInputHandler;
 import mekanism.api.recipes.outputs.IOutputHandler;
-import mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType;
+import mekanism.client.jei.MekanismJEIRecipeType;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import mekanism.common.inventory.container.MekanismContainer;
 import mekanism.common.inventory.container.sync.SyncableBoolean;
@@ -25,10 +25,8 @@ import mekanism.common.recipe.IMekanismRecipeTypeProvider;
 import mekanism.common.recipe.lookup.cache.InputRecipeCache.SingleItem;
 import mekanism.common.recipe.lookup.monitor.FactoryRecipeCacheLookupMonitor;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -80,7 +78,7 @@ final class TileEntityEMExtraFactoryDelegates {
 		// 修复 SORTING 字段丢失：父类 writeSustainedData 会用 isSorting() 写入 SORTING=false
 		// （AE2 拉取期间 isSorting() 锁死为 false），需用 accessor 获取真实 sorting 字段值覆盖
 		// EME 的 TileEntityEMExtraFactory 不继承 Mekanism 的 TileEntityFactory，必须用 EME 专用 Accessor
-		data.putBoolean(mekanism.api.SerializationConstants.SORTING, sorting);
+		data.putBoolean(mekanism.api.NBTConstants.SORTING, sorting);
 	}
 
 	/**
@@ -90,20 +88,15 @@ final class TileEntityEMExtraFactoryDelegates {
 	 * （因 isSorting() 在 AE2 拉取期间锁死为 false），需通过 accessor 获取真实 sorting 状态。
 	 * EME 的 TileEntityEMExtraFactory 不继承 Mekanism 的 TileEntityFactory，必须用 EME 专用 Accessor
 	 */
-	static void collectImplicitComponents(@NotNull DataComponentMap.Builder builder, boolean sorting,
-			@NotNull Runnable superCollect) {
-		superCollect.run();
-		builder.set(mekanism.common.registries.MekanismDataComponents.SORTING, sorting);
-	}
 
 	@NotNull
-	static IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
+	static IMekanismRecipeTypeProvider<ItemStackToItemStackRecipe,
 			SingleItem<ItemStackToItemStackRecipe>> getRecipeType() {
 		return MekCentrifugeFactoryHelper.getSmeltingRecipeType();
 	}
 
 	@NotNull
-	static IRecipeViewerRecipeType<ItemStackToItemStackRecipe> recipeViewerType() {
+	static MekanismJEIRecipeType<ItemStackToItemStackRecipe> recipeViewerType() {
 		return MekCentrifugeFactoryHelper.getSmeltingRecipeViewerType();
 	}
 

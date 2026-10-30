@@ -1,8 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.jei;
 
 import com.ayoshiko.productivebeesgenesis.apiary.client.GuiMekApiary;
-import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredientFactory;
-import mezz.jei.api.gui.builder.IClickableIngredientFactory;
+import cy.jdkdigital.productivebees.compat.jei.ingredients.BeeIngredientFactory;
+
 import mezz.jei.api.gui.handlers.IGuiContainerHandler;
 import mezz.jei.api.runtime.IClickableIngredient;
 import mezz.jei.api.runtime.IIngredientManager;
@@ -19,13 +19,12 @@ final class ApiaryJeiGuiHandler implements IGuiContainerHandler<GuiMekApiary<?, 
 	}
 
 	@Override
-	public Optional<? extends IClickableIngredient<?>> getClickableIngredientUnderMouse(
-			IClickableIngredientFactory factory, GuiMekApiary<?, ?> screen, double mouseX, double mouseY) {
+	public Optional<IClickableIngredient<?>> getClickableIngredientUnderMouse(
+			GuiMekApiary<?, ?> screen, double mouseX, double mouseY) {
 		return screen.getBeeUnderMouse(mouseX, mouseY).flatMap(hovered -> {
 			var bee = BeeIngredientFactory.getOrCreateList().get(hovered.type().toString());
 			if (bee == null) return Optional.empty();
-			return ingredients.getIngredientTypeChecked(bee)
-					.flatMap(type -> factory.createBuilder(type, bee).buildWithArea(hovered.area()));
+			return ingredients.createClickableIngredient(bee, hovered.area(), false).map(value -> (IClickableIngredient<?>) value);
 		});
 	}
 }

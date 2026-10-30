@@ -16,8 +16,7 @@ import mekanism.api.math.MathUtils;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import mekanism.api.recipes.cache.CachedRecipe;
-import mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType;
-import mekanism.client.recipe_viewer.type.RecipeViewerRecipeType;
+import mekanism.client.jei.MekanismJEIRecipeType;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import mekanism.common.inventory.slot.EnergyInventorySlot;
@@ -32,10 +31,8 @@ import mekanism.common.tile.interfaces.ISideConfiguration;
 import mekanism.common.util.InventoryUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
-import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.common.util.TriPredicate;
+import net.minecraftforge.common.util.TriPredicate;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -181,7 +178,7 @@ public final class MekCentrifugeFactoryHelper {
 			// AE2 注能是否触发容器 listener 取决于兼容工厂的父类接线；显式解除旧暂停，
 			// 保证本次完整计算能在预算充足时立即清除 NOT_ENOUGH_ENERGY。
 			for (RecipeCacheLookupMonitor<?> monitor : monitors) {
-				monitor.unpause();
+				monitor.onContentsChanged();
 			}
 			// 先完整执行一次，让监视器创建、替换并正常清除各 lane 的错误状态。
 			// 作用域会让本次完整 tick（包括新建缓存）只向账本记账，不立即写能量容器。
@@ -244,15 +241,15 @@ public final class MekCentrifugeFactoryHelper {
 
 	/** 返回SMELTING配方类型（Mekanism原版熔炼配方） */
 	@NotNull
-	public static IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
+	public static IMekanismRecipeTypeProvider<ItemStackToItemStackRecipe,
 			SingleItem<ItemStackToItemStackRecipe>> getSmeltingRecipeType() {
 		return MekanismRecipeType.SMELTING;
 	}
 
 	/** 返回SMELTING JEI配方查看器类型 */
 	@NotNull
-	public static IRecipeViewerRecipeType<ItemStackToItemStackRecipe> getSmeltingRecipeViewerType() {
-		return RecipeViewerRecipeType.SMELTING;
+	public static MekanismJEIRecipeType<ItemStackToItemStackRecipe> getSmeltingRecipeViewerType() {
+		return MekanismJEIRecipeType.SMELTING;
 	}
 
 	// ===== 配方相关纯函数 =====
@@ -271,7 +268,7 @@ public final class MekCentrifugeFactoryHelper {
 
 	/** 检查输入物品是否有SMELTING配方 */
 	public static boolean containsSmeltingInput(
-			@NotNull IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
+			@NotNull IMekanismRecipeTypeProvider<ItemStackToItemStackRecipe,
 					SingleItem<ItemStackToItemStackRecipe>> recipeType,
 			@NotNull Level level, @NotNull ItemStack input) {
 		return recipeType.getInputCache().containsInput(level, input);
@@ -279,7 +276,7 @@ public final class MekCentrifugeFactoryHelper {
 
 	/** 检查输入物品是否有效（同时查找SMELTING和PB配方） */
 	public static boolean isValidInputItem(
-			@NotNull IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
+			@NotNull IMekanismRecipeTypeProvider<ItemStackToItemStackRecipe,
 					SingleItem<ItemStackToItemStackRecipe>> recipeType,
 			@NotNull Level level, @NotNull ItemStack stack,
 			@NotNull PbRecipeProcessor pbProcessor) {
@@ -295,7 +292,7 @@ public final class MekCentrifugeFactoryHelper {
 	 */
 	@NotNull
 	public static InputValidationCache.ValidationResult getInputValidationResult(
-			@NotNull IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
+			@NotNull IMekanismRecipeTypeProvider<ItemStackToItemStackRecipe,
 					SingleItem<ItemStackToItemStackRecipe>> recipeType,
 			@NotNull Level level, @NotNull ItemStack stack,
 			@NotNull PbRecipeProcessor pbProcessor, boolean allowSmelting) {
@@ -304,17 +301,17 @@ public final class MekCentrifugeFactoryHelper {
 		// 熔炼配方会抢占输入，或在熔炼兼容关闭时把万象物品误判为无效。
 		if (MyriadCreationsEventHandler.isMyriadCreationsItem(stack)) {
 			return new InputValidationCache.ValidationResult(true, null,
-					stack.get(PbDataComponents.beeType()),
+					PbDataComponents.getBeeType(stack),
 					stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get());
 		}
 		if (allowSmelting && containsSmeltingInput(recipeType, level, stack)) {
 			return new InputValidationCache.ValidationResult(true, null, null, false);
 		}
-		RecipeHolder<CentrifugeRecipe> recipe = pbProcessor.findPbRecipe(stack);
+		CentrifugeRecipe recipe = pbProcessor.findPbRecipe(stack);
 		if (recipe == null) {
 			return InputValidationCache.ValidationResult.INVALID;
 		}
-		ResourceLocation beeType = stack.get(PbDataComponents.beeType());
+		ResourceLocation beeType = PbDataComponents.getBeeType(stack);
 		boolean isCombBlock = stack.getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get();
 		return new InputValidationCache.ValidationResult(true, recipe, beeType, isCombBlock);
 	}
@@ -322,12 +319,12 @@ public final class MekCentrifugeFactoryHelper {
 	/** 查找SMELTING配方（PB配方不走Mekanism管线，由tryProcessPbRecipe独立处理） */
 	@Nullable
 	public static ItemStackToItemStackRecipe findSmeltingRecipe(
-			@NotNull IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
+			@NotNull IMekanismRecipeTypeProvider<ItemStackToItemStackRecipe,
 					SingleItem<ItemStackToItemStackRecipe>> recipeType,
 			@NotNull Level level, @NotNull ItemStack fallbackInput,
 			@NotNull IInventorySlot outputSlot) {
 		return recipeType.getInputCache().findTypeBasedRecipe(
-				level, fallbackInput, outputSlot.getStack(), OUTPUT_CHECK);
+				level, fallbackInput, recipe -> OUTPUT_CHECK.test(recipe, fallbackInput, outputSlot.getStack()));
 	}
 
 	/** PB 配方输出兼容性回退检查 — SMELTING 检查失败后调用,验证 PB 配方输出与现有输出槽兼容 */
@@ -344,11 +341,11 @@ public final class MekCentrifugeFactoryHelper {
 														@NotNull IInventorySlot outputSlot,
 														@Nullable IInventorySlot secondaryOutputSlot,
 														@Nullable IInventorySlot tertiaryOutputSlot) {
-		RecipeHolder<CentrifugeRecipe> pbRecipe = pbProcessor.findPbRecipe(fallbackInput);
+		CentrifugeRecipe pbRecipe = pbProcessor.findPbRecipe(fallbackInput);
 		if (pbRecipe == null) {
 			return false;
 		}
-		return PbRecipeOutputChecker.isPbOutputCompatible(pbRecipe.value(), outputSlot, secondaryOutputSlot,
+		return PbRecipeOutputChecker.isPbOutputCompatible(pbRecipe, outputSlot, secondaryOutputSlot,
 				tertiaryOutputSlot, pbProcessor.suppressesUselessByproducts());
 	}
 
@@ -394,7 +391,7 @@ public final class MekCentrifugeFactoryHelper {
 		}
 		// Remaining PB energy budget for this tick; debit only actual consumption so
 		// a shared buffer cannot be over-committed across parallel lanes.
-		long remainingEnergy = Math.max(0L, energyContainer.getEnergy());
+		long remainingEnergy = Math.max(0L, com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(energyContainer.getEnergy()));
 		for (int processOffset = 0; processOffset < processes; processOffset++) {
 			int i = (processStart + processOffset) % processes;
 			ItemStack input = inputSlots.get(i).getStack();
@@ -409,7 +406,7 @@ public final class MekCentrifugeFactoryHelper {
 			remainingInputLanes--;
 			boolean isMyriad = MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
 					|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
-			RecipeHolder<CentrifugeRecipe> preFoundRecipe = null;
+			CentrifugeRecipe preFoundRecipe = null;
 			if (!isMyriad) {
 				preFoundRecipe = pbProcessor.hasReservedPbRecipe(i, input)
 						? pbProcessor.getReservedPbRecipe(i)
@@ -417,14 +414,14 @@ public final class MekCentrifugeFactoryHelper {
 			}
 			if (isMyriad || preFoundRecipe != null) {
 				pbProcessor.setTickMultiplier(batchMultiplier);
-				long energyBeforeProcess = energyContainer.getEnergy();
+				long energyBeforeProcess = com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(energyContainer.getEnergy());
 				if (pbProcessor.tryProcessPbRecipe(i, preFoundRecipe, processEnergyBudget)) {
 					context.setPbActiveState(true, i);
 				} else {
 					context.productivebeesgenesis$onProcessDeactivated(i);
 				}
 				remainingEnergy = Math.max(0L,
-						remainingEnergy - Math.max(0L, energyBeforeProcess - energyContainer.getEnergy()));
+						remainingEnergy - Math.max(0L, energyBeforeProcess - com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(energyContainer.getEnergy())));
 				continue;
 			}
 			// 缓存SMELTING配方检查结果，输入变更时才重新查询
@@ -438,7 +435,7 @@ public final class MekCentrifugeFactoryHelper {
 				continue;
 			}
 			pbProcessor.setTickMultiplier(batchMultiplier);
-			long energyBeforeProcess = energyContainer.getEnergy();
+			long energyBeforeProcess = com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(energyContainer.getEnergy());
 			if (pbProcessor.tryProcessPbRecipe(i, null, processEnergyBudget)) {
 				// setPbActiveState 同时更新激活计数和 Mekanism 状态。
 				context.setPbActiveState(true, i);
@@ -447,7 +444,7 @@ public final class MekCentrifugeFactoryHelper {
 				context.productivebeesgenesis$onProcessDeactivated(i);
 			}
 			remainingEnergy = Math.max(0L,
-					remainingEnergy - Math.max(0L, energyBeforeProcess - energyContainer.getEnergy()));
+					remainingEnergy - Math.max(0L, energyBeforeProcess - com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(energyContainer.getEnergy())));
 		}
 
 		// Task 11: 整体激活 = SMELTING 激活（super 后 currentActive）|| PB 激活（计数器 O(1)，替代 O(processes) 遍历）
@@ -460,7 +457,7 @@ public final class MekCentrifugeFactoryHelper {
 		// super.onUpdateServer() 可能从能量槽回填能量（EnergyInventorySlot.fillOrConvert），
 		// 导致当前能量高于 energyBeforeSuper，差值为负。使用 Math.max(0, ...) 保护，
 		// 避免负值传递给 setLastUsage（lastUsage 用于 GUI 显示能耗，负值无意义）
-		long totalUsage = Math.max(0, energyBeforeSuper - energyContainer.getEnergy());
+		long totalUsage = Math.max(0, energyBeforeSuper - com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(energyContainer.getEnergy()));
 		if (totalUsage > 0) {
 			setLastUsage.accept(totalUsage);
 		}

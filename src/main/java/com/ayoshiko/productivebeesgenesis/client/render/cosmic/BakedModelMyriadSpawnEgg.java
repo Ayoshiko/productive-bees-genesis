@@ -4,10 +4,10 @@ import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.resources.model.BakedModel;
-import net.minecraft.core.component.DataComponents;
+
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
+import net.minecraft.nbt.CompoundTag;
 
 /** Selects the animated Myriad Creations texture for PB's shared configurable spawn egg. */
 public final class BakedModelMyriadSpawnEgg extends WrappedItemModel {
@@ -30,8 +30,8 @@ public final class BakedModelMyriadSpawnEgg extends WrappedItemModel {
 	}
 
 	static boolean isMyriadSpawnEgg(ItemStack stack) {
-		CustomData entityData = stack.get(DataComponents.ENTITY_DATA);
+		CompoundTag entityData = stack.getTagElement("EntityTag");
 		return entityData != null
-				&& PBConstants.MYRIADCREATIONS_TYPE_STRING.equals(entityData.copyTag().getString("type"));
+				&& PBConstants.MYRIADCREATIONS_TYPE_STRING.equals(entityData.getString("type"));
 	}
 }

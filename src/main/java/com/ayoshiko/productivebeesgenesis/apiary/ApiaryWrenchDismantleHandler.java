@@ -12,10 +12,10 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 
 /**
 	 * 通用扳手 shift+右键拆卸事件处理器 — 修复 omnitools/AE2 等通用扳手无法拆卸本模组机器
@@ -89,13 +89,13 @@ public final class ApiaryWrenchDismantleHandler {
 			return;
 		}
 		// 辐射环境下禁止拆卸（与 MEK 原版行为一致）
-		if (tile.getRadiationScale() > 0) {
+		if (tile.getRadiationScale() > 0 || !mekanism.common.util.SecurityUtils.get().canAccess(player, tile)) {
 			event.setCanceled(true);
 			event.setCancellationResult(InteractionResult.FAIL);
 			return;
 		}
 		// 执行拆卸并取消事件，阻止 omnitools 的 Item.useOn 拦截（打开配置 UI）
-		WorldUtils.dismantleBlock(state, level, pos, tile, player, stack);
+		WorldUtils.dismantleBlock(state, level, pos, tile);
 		event.setCanceled(true);
 		event.setCancellationResult(InteractionResult.SUCCESS);
 	}

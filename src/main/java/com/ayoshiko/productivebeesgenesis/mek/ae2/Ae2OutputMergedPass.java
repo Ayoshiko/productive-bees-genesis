@@ -66,10 +66,9 @@ final class Ae2OutputMergedPass {
 		// Spark 优化：insert 耗时预算 — 与 key 数量限制同位检查，预算耗尽时当前 key 未尝试
 		// 即成为 firstDeferredKey，复用既有 cursor 轮转恢复逻辑（无饥饿）
 		long spentInsertNanos = 0L;
-		long successfulDelayNanos = 0;
+		boolean slowInsertDetected = false;
 		int heldKeys = 0;
 		Ae2InsertCostTracker costTracker = buffers.insertCostTracker;
-		costTracker.useNetwork(ctx.meStorage());
 		// 自适应键配额：健康网络恒等于 MAX_ITEM_KEYS_PER_TICK（无损），
 		// 昂贵网络按实测均值收缩，未提交的键留原槽由 firstDeferredKey 轮转恢复
 		int keyQuota = costTracker.keyQuota(Ae2PushLimits.MAX_ITEM_KEYS_PER_TICK);
@@ -99,22 +98,27 @@ final class Ae2OutputMergedPass {
 				firstAttemptedKey = key;
 				firstAttemptedAmount = totalCount;
 			}
-			var measured = ctx.buffers().measuredStorage.prepare(ctx.meStorage(), gameTick, costTracker);
+			long insertStart = System.nanoTime();
 			int pushed = Ae2OutputCommitter.pushBatchKey(key, totalCount, keyToEntries.get(key),
-					measured, Ae2PushLimits.ActionSourceHolder.INSTANCE,
-					ctx.holder().getOutputLedger(), com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(ctx.host()));
-			long insertCost = measured.lastCostNanos();
+					ctx.meStorage(), Ae2PushLimits.ActionSourceHolder.INSTANCE,
+					ctx.holder().getOutputLedger());
+			long insertCost = System.nanoTime() - insertStart;
 			boolean slowInsert = Ae2GlobalInsertBudget.isSlowOperation(insertCost);
 			if (slowInsert) {
 				// 只累计慢 insert 的超出耗时 — 健康网络预算恒 0，满速推送不受限
 				spentInsertNanos += insertCost - Ae2GlobalInsertBudget.SLOW_INSERT_NANOS;
+				slowInsertDetected = true;
 			}
+			Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
+			ctx.holder().recordNetworkCost(ctx.meStorage(), gameTick, insertCost,
+					Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
+			// 自适应记账：全额计入 EWMA 与 tick 预算（下一 tick 的 keyQuota 据此收缩/放开）
+			costTracker.record(gameTick, insertCost);
 			if (pushed > 0) {
-				long delay = costTracker.successDelayNanos();
-				ctx.keyBackoff().recordSuccess(key, System.nanoTime(), delay);
-				successfulDelayNanos = Math.max(successfulDelayNanos, delay);
+				if (slowInsert) ctx.keyBackoff().recordFailure(key, System.nanoTime());
+				else ctx.keyBackoff().recordSuccess(key);
 			} else {
-				ctx.keyBackoff().recordFailure(key, System.nanoTime());
+				ctx.keyBackoff().recordFailure(key, slowInsert ? System.nanoTime() : nowNanos);
 			}
 			pushedItems = SaturatingMath.saturatingToInt(SaturatingMath.saturatingAdd(pushedItems, pushed));
 			attemptedKeys++;
@@ -136,11 +140,15 @@ final class Ae2OutputMergedPass {
 			host.productivebeesgenesis$onAe2PushComplete(pushedItems);
 			host.productivebeesgenesis$markAe2StateChanged();
 		}
-		// 成功的成本延迟与拒收指数分开，避免一次抖动长期阻塞整机。
+		// 慢 insert 优先于成功复位判定（与逐槽路径同语义）：病态网络 insert 仍会成功，
+		// 先 recordSuccess 会每轮清零指数，窗口恒卡 50ms（每 50ms 一次 5-10ms 网络遍历）。
+		// 慢 insert 禁止复位，指数累积至 1s 封顶；网络恢复（insert 变快）后一次成功即复位。
 		Ae2PushBackoff itemBackoff = ctx.itemBackoff();
-		if (pushedItems > 0) {
-			itemBackoff.recordSuccessWithDelay(System.nanoTime(), successfulDelayNanos);
-			if (successfulDelayNanos > 0) Ae2OutputBackoffLog.logSlowInsertDelay(successfulDelayNanos);
+		if (slowInsertDetected) {
+			itemBackoff.recordFailure(System.nanoTime());
+			Ae2OutputBackoffLog.logSlowInsertBackoff(itemBackoff);
+		} else if (pushedItems > 0) {
+			itemBackoff.recordSuccess();
 		} else if (firstAttemptedKey != null) {
 			Ae2OutputBackoffLog.handleCompleteFailure(itemBackoff, firstAttemptedKey, firstAttemptedAmount);
 		} else if (heldKeys > 0) {

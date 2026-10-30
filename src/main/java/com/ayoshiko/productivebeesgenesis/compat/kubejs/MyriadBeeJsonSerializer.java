@@ -32,6 +32,20 @@ public final class MyriadBeeJsonSerializer {
 	 */
 	private MyriadBeeJsonSerializer() {
 	}
+	public static JsonObject beeTypeIngredient(String itemId, String beeType) {
+		JsonObject item = new JsonObject();
+		item.addProperty("type", "forge:nbt");
+		item.addProperty("item", itemId);
+		JsonObject entity = new JsonObject();
+		entity.addProperty("type", beeType);
+		JsonObject nbt = new JsonObject();
+		nbt.add("EntityTag", entity);
+		item.add("nbt", nbt);
+		return item;
+	}
+	private static int percentage(double probability) {
+		return Double.isFinite(probability) ? (int) Math.round(Math.max(0, Math.min(1, probability)) * 100) : 100;
+	}
 
 	/**
 	 * 将群系规格转换为 JSON 元素
@@ -97,7 +111,7 @@ public final class MyriadBeeJsonSerializer {
 			itemJson.addProperty("item", itemId);
 		}
 		outputJson.add("item", itemJson);
-		outputJson.addProperty("chance", chance);
+		outputJson.addProperty("chance", percentage(chance));
 		return outputJson;
 	}
 
@@ -136,12 +150,10 @@ public final class MyriadBeeJsonSerializer {
 		itemJson.addProperty("item", itemId);
 		// configurable_honeycomb 需要 bee_type 组件才能正确关联蜜蜂类型
 		if (itemId.contains("configurable_honeycomb")) {
-			JsonObject components = new JsonObject();
-			components.addProperty(PBConstants.PRODUCTIVE_BEES_MOD_ID + ":bee_type", beeType);
-			itemJson.add("components", components);
+			itemJson = beeTypeIngredient(itemId, beeType);
 		}
 		resultJson.add("item", itemJson);
-		resultJson.addProperty("chance", chance);
+		resultJson.addProperty("chance", percentage(chance));
 		return resultJson;
 	}
 }

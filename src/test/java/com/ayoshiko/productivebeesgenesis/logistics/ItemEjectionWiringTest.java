@@ -31,7 +31,7 @@ class ItemEjectionWiringTest {
 	@Test
 	void slotsRetainSimulationRollbackAndIndependentProgress() throws Exception {
 		String source = read("FastItemEjector.java");
-		String slots = source.substring(source.indexOf("private long pushSlots("), source.indexOf("private void returnHome("));
+		String slots = source.substring(source.indexOf("private long pushSlots("), source.indexOf("private static void returnHome("));
 		assertTrue(slots.indexOf("simulateInsert(") < slots.indexOf("Action.EXECUTE"));
 		assertTrue(slots.contains("returnHome(slots, slot, leftover)"));
 		assertTrue(slots.contains("state.budget.canAttempt(gameTime, false)"));

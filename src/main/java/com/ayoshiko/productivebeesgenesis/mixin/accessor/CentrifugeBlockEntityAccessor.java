@@ -9,8 +9,9 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 	 * <br/>
 	 * 原始方法签名：{@code protected int getProductivityModifier()}
 	 */
-@Mixin(CentrifugeBlockEntity.class)
+@Mixin(value = CentrifugeBlockEntity.class, remap = false)
 public interface CentrifugeBlockEntityAccessor {
-	@Invoker("getProductivityModifier")
-	int productivebeesgenesis$getProductivityModifier();
+	@org.spongepowered.asm.mixin.gen.Accessor("inventoryHandler")
+	net.minecraftforge.common.util.LazyOptional<net.minecraftforge.items.IItemHandlerModifiable> productivebeesgenesis$getInventoryHandler();
+
 }

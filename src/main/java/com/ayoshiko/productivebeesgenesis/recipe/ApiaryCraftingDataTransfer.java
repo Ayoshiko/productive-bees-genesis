@@ -16,13 +16,9 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.inventory.IInventorySlot;
-import mekanism.common.attachments.containers.ContainerType;
-import mekanism.common.attachments.containers.item.ComponentBackedItemHandler;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.interfaces.IHasTileEntity;
 import mekanism.common.tier.FactoryTier;
-import mekanism.common.registries.MekanismDataComponents;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -30,11 +26,10 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
-import net.minecraft.world.item.crafting.CraftingInput;
+import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.neoforged.neoforge.items.ItemHandlerHelper;
+import net.minecraftforge.items.ItemHandlerHelper;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -72,21 +67,6 @@ final class ApiaryCraftingDataTransfer {
 	 */
 	static void transferAllBlockEntityData(List<ItemStack> inputs, ItemStack dest, Block outputBlock, boolean isApiary) {
 		String targetTileId = resolveBlockEntityTypeId(outputBlock);
-		// MEK 合成只合并库存等升级数据；侧面组件采用矩阵中首份设置。
-		for (var input : inputs) {
-			var config = input.get(MekanismDataComponents.SIDE_CONFIG);
-			if (config != null) {
-				dest.set(MekanismDataComponents.SIDE_CONFIG, config);
-				break;
-			}
-		}
-		for (var input : inputs) {
-			var ejector = input.get(MekanismDataComponents.EJECTOR);
-			if (ejector != null) {
-				dest.set(MekanismDataComponents.EJECTOR, ejector);
-				break;
-			}
-		}
 		if (inputs.size() == 1) {
 			// 单输入场景：直接深拷贝 BLOCK_ENTITY_DATA 到输出
 			transferBlockEntityDataDirect(inputs.get(0), dest, targetTileId);
@@ -94,7 +74,7 @@ final class ApiaryCraftingDataTransfer {
 			// 多输入场景：按合并策略合并 NBT 后写入输出
 			CompoundTag mergedNbt = mergeMachineInputs(inputs, outputBlock, isApiary, targetTileId, dest);
 			if (mergedNbt != null) {
-				dest.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(mergedNbt));
+				dest.addTagElement("BlockEntityTag", mergedNbt);
 			}
 		}
 	}
@@ -103,10 +83,10 @@ final class ApiaryCraftingDataTransfer {
 	@Nullable
 	private static CompoundTag readBlockEntityData(@Nullable ItemStack stack) {
 		if (stack == null || stack.isEmpty()) return null;
-		CustomData data = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+		CompoundTag data = stack.getTagElement("BlockEntityTag");
 		if (data == null) return null;
 		try {
-			return data.copyTag();
+			return data.copy();
 		} catch (Exception e) {
 			DevLog.error("合成升级: 读取输出已有 BLOCK_ENTITY_DATA 失败", e);
 			return null;
@@ -146,9 +126,9 @@ final class ApiaryCraftingDataTransfer {
 	 * @param expectCentrifuge 输出是否为离心机
 	 * @return 同类型机器方块输入列表（保持矩阵扫描顺序）
 	 */
-	static List<ItemStack> collectMachineInputs(CraftingInput inv, boolean expectApiary, boolean expectCentrifuge) {
-		List<ItemStack> inputs = new ArrayList<>(inv.size());
-		for (int i = 0; i < inv.size(); i++) {
+	static List<ItemStack> collectMachineInputs(CraftingContainer inv, boolean expectApiary, boolean expectCentrifuge) {
+		List<ItemStack> inputs = new ArrayList<>(inv.getContainerSize());
+		for (int i = 0; i < inv.getContainerSize(); i++) {
 			ItemStack stack = inv.getItem(i);
 			if (stack.isEmpty()) continue;
 			if (!(stack.getItem() instanceof BlockItem bi)) continue;
@@ -179,17 +159,21 @@ final class ApiaryCraftingDataTransfer {
 	 * @param targetTileId 目标方块的 BlockEntityType 注册键，null 时保留源 id
 	 */
 	static void transferBlockEntityDataDirect(ItemStack src, ItemStack dest, @Nullable String targetTileId) {
-		CustomData srcData = src.get(DataComponents.BLOCK_ENTITY_DATA);
+		CompoundTag srcData = src.getTagElement("BlockEntityTag");
 		if (srcData == null) {
 			// 输入无 BLOCK_ENTITY_DATA（新合成机器方块），无需转移
 			return;
 		}
-		CompoundTag nbt = srcData.copyTag();
+		CompoundTag nbt = srcData.copy();
 		// 替换为目标方块的 BlockEntityType 注册键（不能 remove：CODEC_WITH_ID 校验顶层 id）
 		if (targetTileId != null) {
 			nbt.putString("id", targetTileId);
 		}
-		dest.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(nbt));
+		CompoundTag targetData = dest.getTagElement("BlockEntityTag");
+        if (targetData != null && targetData.contains(mekanism.api.NBTConstants.ITEMS, Tag.TAG_LIST)) {
+            nbt.put(mekanism.api.NBTConstants.ITEMS, targetData.getList(mekanism.api.NBTConstants.ITEMS, Tag.TAG_COMPOUND).copy());
+        }
+        dest.addTagElement("BlockEntityTag", nbt);
 	}
 
 	/**
@@ -216,13 +200,13 @@ final class ApiaryCraftingDataTransfer {
 		List<CompoundTag> nbts = new ArrayList<>(inputs.size());
 		List<CompoundTag> restockStates = new ArrayList<>(inputs.size());
 		for (ItemStack input : inputs) {
-			CustomData data = input.get(DataComponents.BLOCK_ENTITY_DATA);
+			CompoundTag data = input.getTagElement("BlockEntityTag");
 			if (data == null) {
 				if (isApiary) restockStates.add(new CompoundTag());
 				continue;
 			}
 			try {
-				CompoundTag nbt = data.copyTag();
+				CompoundTag nbt = data.copy();
 				nbts.add(nbt);
 				if (isApiary) {
 					if (nbt.contains(GeneTreatRestockState.NBT_KEY)
@@ -244,19 +228,12 @@ final class ApiaryCraftingDataTransfer {
 		// 后 3 个蜂箱输出槽里的物品会静默消失（无日志、无告警）。
 		// 降级路径下 dest 的 NBT 本就是首输入的副本，行为与原先完全一致 ——
 		// 因此这次改动只会「多保留」数据，不会少保留。
-		CompoundTag merged = readBlockEntityData(dest);
-		if (merged == null) {
-			if (nbts.isEmpty()) {
-				return null;
-			}
-			merged = nbts.get(0);
-		} else if (nbts.isEmpty()) {
-			// dest 有数据但输入都读不出来：只需修正 id 即可返回
-			if (targetTileId != null) {
-				merged.putString("id", targetTileId);
-			}
-			return merged;
-		}
+        CompoundTag targetData = readBlockEntityData(dest);
+        CompoundTag merged = nbts.isEmpty() ? targetData : nbts.get(0).copy();
+        if (merged == null) return null;
+        if (targetData != null && targetData.contains(mekanism.api.NBTConstants.ITEMS, Tag.TAG_LIST)) {
+            merged.put(mekanism.api.NBTConstants.ITEMS, targetData.getList(mekanism.api.NBTConstants.ITEMS, Tag.TAG_COMPOUND).copy());
+        }
 
 		// 合并蜜蜂槽（仅蜂箱）—— 从全部输入重建，结果与 base 来源无关
 		if (isApiary) {
@@ -271,13 +248,6 @@ final class ApiaryCraftingDataTransfer {
 		String pbUpgradeKey = isApiary ? ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS
 				: MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS;
 		mergePbUpgradeCounts(merged, nbts, pbUpgradeKey);
-        for (var nbt : nbts) {
-            if (nbt.contains(com.ayoshiko.productivebeesgenesis.resource.ResourceSidePersistence.KEY)) {
-                merged.put(com.ayoshiko.productivebeesgenesis.resource.ResourceSidePersistence.KEY,
-                        nbt.get(com.ayoshiko.productivebeesgenesis.resource.ResourceSidePersistence.KEY).copy());
-                break;
-            }
-        }
 
 		// 替换为目标方块的 BlockEntityType 注册键（不能 remove：CODEC_WITH_ID 校验顶层 id）
 		if (targetTileId != null) {
@@ -393,24 +363,7 @@ final class ApiaryCraftingDataTransfer {
 	 * 否则第二个及后续输入中的基因小食、能量物品和输出物品会静默丢失。
 	 */
 	static boolean mergeAttachedItemDataIntoFallback(List<ItemStack> inputs, ItemStack fallback) {
-		ComponentBackedItemHandler target = ContainerType.ITEM.createHandler(fallback);
-		if (target == null) return false;
-		for (int inputIndex = 1; inputIndex < inputs.size(); inputIndex++) {
-			ComponentBackedItemHandler source = ContainerType.ITEM.createHandler(inputs.get(inputIndex));
-			if (source == null) continue;
-			for (IInventorySlot slot : source.getInventorySlots(null)) {
-				ItemStack stack = slot.getStack();
-				if (stack.isEmpty()) continue;
-				ItemStack remainder = ItemHandlerHelper.insertItemStacked(target, stack.copy(), false);
-				if (!remainder.isEmpty()) {
-					DevLog.warn(DEV_FEATURE,
-							"合成升级回退路径无法容纳输入物品 {}，拒绝合成",
-							remainder.getHoverName().getString());
-					return false;
-				}
-			}
-		}
-		return true;
+		return LegacyMachineInventory.transferCentrifuge(inputs, fallback);
 	}
 
 	/**

@@ -1,514 +1,74 @@
 plugins {
     id 'java-library'
-    id 'net.neoforged.moddev' version '2.0.107'
+    id 'net.minecraftforge.gradle' version '6.0.54'
+    id 'org.spongepowered.mixin' version '0.7.38'
+    id 'org.parchmentmc.librarian.forgegradle' version '1.+'
 }
-
 version = mod_version
 group = mod_group_id
-
-repositories {
-    mavenLocal()
-    maven { url "https://maven.aliyun.com/repository/public/" }
-    maven { url "https://maven.aliyun.com/repository/google/" }
-    maven { url "https://repo.huaweicloud.com/repository/maven/" }
-    maven { url "https://mirrors.cloud.tencent.com/nexus/repository/maven-public/" }
-    maven {
-        url "https://www.cursemaven.com"
-    }
-    maven {
-        url "https://spongepowered.org/maven/"
-    }
-    maven {
-        url "https://modmaven.dev/mekanism/Mekanism/"
-    }
-    exclusiveContent {
-        forRepository {
-            maven {
-                name = "Modrinth"
-                url "https://api.modrinth.com/maven"
-            }
-        }
-        filter {
-            includeGroup "maven.modrinth"
-        }
-    }
-    flatDir {
-        dir 'libs'
-    }
-    mavenCentral()
-}
-
-base {
-    archivesName = mod_id
-}
-
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
-
-sourceSets {
-    devExamples {
-        // 只挂到开发运行的 mod sourceSet；发布 JAR 不包含这些示例蜂与配方。
-        resources.srcDir 'examples/resource-bees/datapack'
-        resources.srcDir 'examples/resource-bees/resourcepack'
-        resources.include 'data/**', 'assets/**'
-    }
-    datagen {
-        // 数据生成代码只在开发期运行；发布 JAR 仅包含 main 输出。
-        compileClasspath += sourceSets.main.output
-        runtimeClasspath += output + compileClasspath
-    }
-}
-
-configurations {
-    datagenImplementation.extendsFrom implementation
-    datagenCompileOnly.extendsFrom compileOnly
-    datagenRuntimeOnly.extendsFrom runtimeOnly
-}
-
-apply from: 'gradle/resource-bee-examples.gradle'
-apply from: 'gradle/compact-release.gradle'
-
-// run/ 中的本地测试配置仅覆盖客户端启动，常规构建仍使用发布基线。
-if (gradle.startParameter.taskNames.any { it.tokenize(':').last() == 'runClient' }
-        && file('run/client-test.gradle').isFile()) {
-    apply from: 'run/client-test.gradle'
-}
-
-neoForge {
-    version = project.neo_version
-    addModdingDependenciesTo sourceSets.datagen
-    addModdingDependenciesTo sourceSets.test
-
-    runs {
-        client {
-            client()
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-        }
-
-        server {
-            server()
-            programArgument '--nogui'
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-        }
-
-        data {
-            data()
-            programArgument '--mod'
-            programArgument project.mod_id
-            programArgument '--all'
-            programArgument '--output'
-            programArgument file('src/generated/resources').absolutePath
-            programArgument '--existing'
-            programArgument file('src/main/resources').absolutePath
-        }
-
-        configureEach {
-            systemProperty 'forge.logging.markers', 'REGISTRIES'
-            logLevel = org.slf4j.event.Level.DEBUG
-        }
-    }
-
-    mods {
-        "${mod_id}" {
-            sourceSet(sourceSets.main)
-            sourceSet(sourceSets.datagen)
-            sourceSet(sourceSets.devExamples)
-        }
-    }
-
-    // 真实物品组件测试需要 NeoForge 初始化注册表；纯策略测试仍使用轻量 JVM。
-    if (providers.gradleProperty('minecraftTests').isPresent()) {
-        unitTest {
-            enable()
-            testedMod = mods."${mod_id}"
-        }
-    }
-}
-
-// 自动化发配基准（隔离专用服务器，参考网络分支做法）；仅在 -PdispatchBenchmark 下引入，不影响常规构建。
-if (providers.gradleProperty('dispatchBenchmark').isPresent()) {
-    apply from: 'gradle/dispatch-benchmark.gradle'
-}
-
-// 模板文件处理 - 生成模组元数据
-var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
-    var replaceProperties = [
-            minecraft_version      : minecraft_version,
-            minecraft_version_range: minecraft_version_range,
-            neo_version_range      : neo_version_range,
-            loader_version_range   : loader_version_range,
-            mod_id                 : mod_id,
-            mod_name               : mod_name,
-            mod_license            : mod_license,
-            mod_version            : mod_version,
-            mod_authors            : mod_authors,
-            mod_description        : mod_description
-    ]
-    inputs.properties replaceProperties
-    expand replaceProperties
-    from "src/main/templates"
-    into "build/generated/sources/modMetadata"
-}
-
-sourceSets.main.resources.srcDir generateModMetadata
-sourceSets.main.resources.srcDir 'src/generated/resources'
-// datagen 哈希缓存（.cache）仅用于增量生成，不进入运行时 JAR，减小模组体积
-sourceSets.main.resources.exclude '.cache/**'
-// 本地材质备份/预览只用于开发，不允许随资源目录误入发布包
-sourceSets.main.resources.exclude '**/texture_backups/**', '**/tmp_*/**', '**/*backup*'
-neoForge.ideSyncTask generateModMetadata
-
-dependencies {
-    implementation name: 'productivebees-1.21.1-13.14.0'
-    implementation name: 'productivelib-1.21.1-0.2.0'
-
-    // RenderBlender 渲染库：官方仅支持 1.20.1，不兼容 1.21.1
-    // cosmic 渲染特效将采用自研 shader 方案实现，无需外部依赖
-
-    // Mekanism完整类路径（开发时需要访问Mekanism内部类，如GUI基类、槽位等）
-    // implementation 已包含 runtimeOnly，无需重复声明
-    implementation name: 'Mekanism-1.21.1-10.7.19.85'
-
-    // Mekanism Extras（可选依赖，编译时需要访问ME的ExtraFactory等类）
-    // v1.4.1：AdvancedTier.getColor() 对 COSMIC/INFINITE 返回动态变色（TierColor 每客户端tick刷新）
-    // 编译用 1.4.1（API 兼容 1.4.0），运行时用 1.4.0（整合包主流稳定版）验证向后兼容：
-    // 我们引用的 API（ExtraUpgrade/AdvancedTier/ExtraAttributeTier/IMixinMachineEnergyContainer）
-    // 在 1.4.0 中签名一致；变色效果仅在玩家安装 1.4.1+ 时生效，旧版自动降级为静态颜色
-    compileOnly name: 'mekanism_extras-1.21.1-1.4.1'
-    // ME本体（测试环境运行时依赖 — 刻意使用 1.4.0 稳定版，确保多数玩家的旧版环境兼容）
-    runtimeOnly name: 'mekanism_extras-1.21.1-1.4.0'
-
-    // EvolvedMekanism（可选依赖，编译时需要访问EM的FactoryTier等类）
-    compileOnly name: 'Evolved Mekanism-1.21.1-1.2.1-fix3'
-    // EM本体（测试环境运行时依赖）
-    runtimeOnly name: 'Evolved Mekanism-1.21.1-1.2.1-fix3'
-
-    // EvolvedMekanismExtras（可选依赖，编译时需要访问EME的EMExtraFactory等类）
-    compileOnly files('libs/EvolvedMekanismExtras-1.21.1-1.2.1.jar')
-    // EME本体（测试环境运行时依赖）
-    runtimeOnly files('libs/EvolvedMekanismExtras-1.21.1-1.2.1.jar')
-
-    // MekanismEmpowered / MekanismEmpoweredUnleashed：共用反射 API，不加入默认运行依赖。
-    // 两种附属分别在 NeoForge 21.1.234 的隔离原生测试与专服中验证；发行 JAR 要求 21.1.217+。
-    // 原版 Empowered 需同版 Core；合并版已内置 Core/Unleashed，不能与原版附属同时测试。
-
-    // JDTE：编译实际生物工厂接口；旧合并加速仍支持 0.5.5+，资源生产仅对已验证版本启用。
-    compileOnly files('libs/jdte-0.6.1.0.jar', 'libs/justdirethings-1.5.7.jar')
-    // Useless 公开转换 API；运行时还须检查付费保管接口，原始发行版不自动启用资源配方。
-    compileOnly files('libs/useless_mod-1.21.1-2.4.5.13.jar')
-
-    // Mixin 编译时依赖（运行时由 NeoForge 提供）
-    compileOnly files('libs/sponge-mixin.jar')
-
-    // JEI API（仅编译时需要，运行时由JEI提供）
-    compileOnly files('libs/jei-1.21.1-neoforge-19.36.0.360.jar')
-    // LDLib2 2.2.31 要求 JEI 19.39.0.368+；编译仍使用原有 API 基线。
-    runtimeOnly files('libs/jei-1.21.1-neoforge-19.39.0.368.jar')
-
-    // Iris 光影兼容（仅编译时需要，运行时由 Iris 提供）
-    // 用于编译 Iris Mixin 中引用的 net.irisshaders.iris.* 类
-    compileOnly("maven.modrinth:iris:1.8.8+1.21.1-neoforge")
-
-    // Applied Energistics 2（可选依赖，编译时需要访问 AE2 网格 API）
-    // 用于 mek.ae2 包的 IGridNode / StorageHelper.poweredInsert 集成
-    // 运行时通过反射隔离，未安装 AE2 时 mek.ae2 包类永不加载
-    compileOnly files('libs/appliedenergistics2-1.21.1-19.2.17.jar')
-
-    // AppliedFlux（可选依赖，编译时需要访问 FluxKey / EnergyType 类）
-    // 用于 v1.8.0 AE2 网络能量输入集成：从 ME 网络提取存储的 FE 能量
-    // 运行时通过 AppliedFluxIntegrationLoader.isAppliedFluxLoaded() 守卫，
-    // 未安装 AppliedFlux 时 extractAppliedFluxFe 方法入口即返回 0，不触发类加载
-    compileOnly files('libs/AppliedFlux-1.21-2.1.5-neoforge.jar')
-
-    // Ars Nouveau 魔源能力：只编译 API，运行时由独立守卫隔离。
-    compileOnly files('libs/ars_nouveau-1.21.1-5.12.1.jar')
-    // 同质灵魂能力仅在 Industrial Foregoing Souls 存在时加载。
-    compileOnly files('libs/industrial-foregoing-souls-1.21.1-1.10.7.jar')
-    // ProjectE EMC 只编译公共能力，缺失时保留账户原始数据。
-    compileOnly files('libs/ProjectE-1.21.1-PE1.1.0.jar')
-    // 原生经验和分电压闪电能力仅在各自依赖存在时加载。
-    compileOnly files('libs/experiencelib-1.21.1-1.2.1.jar', 'libs/ae2lt-2.1.1.jar')
-    // 原生空气主动输出只编译气动能力；未安装时不加载适配类。
-    compileOnly files('libs/pneumaticcraft-repressurized-8.2.21+mc1.21.1.jar')
-
-    // Jade（可选依赖，编译时需要访问 Jade API 显示 AE2 网络状态）
-    // @WailaPlugin 注解确保仅 Jade 安装时才加载集成类
-    compileOnly name: 'Jade-1.21.1-NeoForge-15.10.5'
-    // GuideME 的热键索引只按物品 ID；客户端适配补充可配置蜂的组件筛选。
-    compileOnly files('run/mods/guideme-21.1.16.jar')
-
-    // KubeJS（可选依赖，编译时需要访问 KubeJSPlugin/EventGroup 等 API）
-    // 运行时通过 kubejs.plugins.txt 声明插件，未安装 KubeJS 时插件类不会被加载
-    compileOnly name: 'kubejs-neoforge-2101.7.2-build.368'
-    // Rhino（KubeJS 的 JS 引擎依赖，编译时 KubeJS API 类签名引用 Rhino 类型）
-    compileOnly name: 'rhino-2101.2.7-build.85'
-
-    // 单元测试依赖（JUnit 5）
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
-    testImplementation 'org.mockito:mockito-core:5.14.2'
-    testCompileOnly files('libs/appliedenergistics2-1.21.1-19.2.17.jar',
-            'libs/jei-1.21.1-neoforge-19.36.0.360.jar',
-            'libs/ProjectE-1.21.1-PE1.1.0.jar')
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    // Minecraft/NeoForge supply these in-game; plain JVM tests need them explicitly.
-    testRuntimeOnly 'com.electronwill.night-config:toml:3.8.3'
-    testRuntimeOnly 'it.unimi.dsi:fastutil:8.5.12'
-    if (providers.gradleProperty('minecraftTests').isPresent()) {
-        // 使用当前 worktree 已有依赖；EM 的运行时前置与指南书配方验证。
-        testRuntimeOnly files('run/mods/igleelib-1.21.1-1.2.7.jar',
-                'run/mods/Patchouli-1.21.1-93-NEOFORGE.jar',
-                'run/mods/guideme-21.1.16.jar',
-                'libs/appliedenergistics2-1.21.1-19.2.17.jar')
-        if (providers.gradleProperty('ecoCompatTests').isPresent()) {
-            def ecoTestMods = files(providers.gradleProperty('ecoCompatJar')
-                    .getOrElse('run/mods/neoecoae-21.2.0.jar'),
-                    'run/mods/ldlib2-neoforge-1.21.1-2.2.31-all.jar',
-                    'run/mods/extendedae_plus-1.6.2.jar',
-                    'run/mods/ExtendedAE-1.21-2.2.35-neoforge.jar',
-                    'run/mods/Glodium-1.21-2.2-neoforge.jar')
-            ecoTestMods.each { jar ->
-                if (!jar.isFile()) throw new GradleException("Missing ECO compatibility test mod: ${jar}")
-            }
-            testRuntimeOnly ecoTestMods
-        }
-        if (providers.gradleProperty('ae2ltCompatTests').isPresent()) {
-            def dispatchTestMods = files('run/mods/ae2lt-2.1.0-beta.5.jar',
-                    'run/mods/thunderbolt-2.0.0-beta.3.jar')
-            dispatchTestMods.each { jar ->
-                if (!jar.isFile()) throw new GradleException("Missing AE2LT test mod: ${jar}")
-            }
-            testRuntimeOnly dispatchTestMods
-        }
-        if (providers.gradleProperty('infiniteStorageModsDir').isPresent()) {
-            def sourceDir = file(providers.gradleProperty('infiniteStorageModsDir').get())
-            def infiniteStorageMods = files(
-                    new File(sourceDir, 'create-1.21.1-6.0.10.jar'),
-                    new File(sourceDir, 'meinfinitycell-1.21.1-2.0.0.jar'),
-                    new File(sourceDir, 'ExtendedAE-1.21-2.2.35-neoforge.jar'),
-                    new File(sourceDir, 'Glodium-1.21-2.2-neoforge.jar'))
-            infiniteStorageMods.each { jar ->
-                if (!jar.isFile()) throw new GradleException("Missing infinite storage test mod: ${jar}")
-            }
-            testRuntimeOnly infiniteStorageMods
-        }
-        if (providers.gradleProperty('mekEnergisticsCompatJar').isPresent()) {
-            def patternTestMods = files(providers.gradleProperty('mekEnergisticsCompatJar').get(),
-                    providers.gradleProperty('appliedMekanisticsCompatJar').get())
-            patternTestMods.each { jar ->
-                if (!jar.isFile()) throw new GradleException("Missing Mek Energistics test mod: ${jar}")
-            }
-            testRuntimeOnly patternTestMods
-        }
-    }
-}
-
+base { archivesName = mod_id }
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+jarJar.enable()
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    // 发布 JAR 不需要调试符号，减少 class 文件体积；源码调试仍可通过本地构建覆盖此选项。
-    options.debug = false
-    // 启用弃用警告详细输出，便于持续监控 API 迁移
-    options.compilerArgs << '-Xlint:deprecation'
+    options.release = 17
+    options.compilerArgs += ['-Xmaxerrs', '1000']
+    // The Mixin annotation processor regenerates the whole refmap only on a full
+    // compile; incremental compilation would shrink it to the last changed files.
+    options.incremental = false
 }
-
-tasks.withType(ProcessResources).configureEach {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-}
-
-// 单元测试配置 — 启用JUnit 5 Platform
-tasks.named('test', Test) {
-    // 辅助夹具只由原生测试调用，避免普通 JUnit 发现阶段反射加载缺失的 AE2 类型。
-    exclude '**/ActualPatternProviderFixture.class'
-    if (providers.gradleProperty('minecraftTests').isPresent()) {
-        include '**/*MinecraftTest.class'
-        systemProperty 'productivebeesgenesis.test.ecoCompat', providers.gradleProperty('ecoCompatTests').isPresent()
-        systemProperty 'productivebeesgenesis.test.ae2ltCompat', providers.gradleProperty('ae2ltCompatTests').isPresent()
-        systemProperty 'productivebeesgenesis.test.infiniteStorage', providers.gradleProperty('infiniteStorageModsDir').isPresent()
-    } else {
-        // 内部夹具同样可能引用仅在 NeoForge 测试环境提供的可选类型。
-        exclude '**/*MinecraftTest.class', '**/*MinecraftTest$*.class'
-    }
-    useJUnitPlatform {
-        if (providers.gradleProperty('minecraftTests').isPresent()) {
-            includeTags 'minecraft'
-        } else {
-            excludeTags 'minecraft'
+minecraft {
+    mappings channel: 'parchment', version: '2023.09.03-1.20.1'
+    copyIdeResources = true
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+            mods { productivebeesgenesis { source sourceSets.main } }
         }
+        client {}
+        server { args '--nogui' }
     }
 }
-
-def releaseModId = mod_id.toString()
-def releaseModVersion = mod_version.toString()
-def releaseCurseForgeVersion = curseforge_release_version.toString()
-
-tasks.named('jar', Jar) {
-    preserveFileTimestamps = false
-    reproducibleFileOrder = true
-    // 防止未来误将备份或临时素材放入资源源目录后进入发布 JAR
-    exclude('**/texture_backups/**', '**/tmp_*/**', '**/*backup*')
-    manifest {
-        attributes(
-                'Implementation-Title': 'Productive Bees Genesis',
-                'Implementation-Version': releaseModVersion,
-                'CurseForge-Release-Version': releaseCurseForgeVersion,
-                'Minecraft-Version': minecraft_version
-        )
-    }
-    from('LICENSE') {
-        rename { "LICENSE_${releaseModId}" }
-    }
-    from('THIRD_PARTY_LICENSES.md') {
-        rename { "THIRD_PARTY_LICENSES_${releaseModId}.md" }
-    }
+repositories {
+    flatDir { dirs 'libs' }
+    if (file('.cached-maven').isDirectory()) { maven { url = uri('.cached-maven') } }
+    mavenCentral()
+    maven { url = 'https://modmaven.dev/' }
+    maven { url = 'https://api.modrinth.com/maven'; content { includeGroup 'maven.modrinth' } }
+    maven { url = 'https://cursemaven.com'; content { includeGroup 'curse.maven' } }
 }
-
-def verifyReleaseArtifact = tasks.register('verifyReleaseArtifact') {
-    group = 'verification'
-    description = 'Verifies the distributable JAR metadata and required release files.'
-    def releaseJar = tasks.named('jar', Jar)
-    dependsOn releaseJar
-    inputs.file(releaseJar.flatMap { it.archiveFile })
-
-    doLast { task ->
-        File artifact = task.inputs.files.singleFile
-        if (!artifact.isFile()) {
-            throw new GradleException("Release artifact was not created: ${artifact}")
-        }
-        def zip = new java.util.zip.ZipFile(artifact)
-        try {
-            def requiredEntries = [
-                    'META-INF/MANIFEST.MF',
-                    'META-INF/neoforge.mods.toml',
-                    'productivebeesgenesis.png',
-                    "LICENSE_${releaseModId}",
-                    "THIRD_PARTY_LICENSES_${releaseModId}.md"
-            ]
-            requiredEntries.each { entryName ->
-                if (zip.getEntry(entryName) == null) {
-                    throw new GradleException("Release artifact is missing ${entryName}")
-                }
-            }
-
-            def iconEntry = zip.getEntry('productivebeesgenesis.png')
-            if (iconEntry.size > 32 * 1024L) {
-                throw new GradleException("Mod icon entry is larger than 32 KiB: ${iconEntry.size}")
-            }
-            def icon = javax.imageio.ImageIO.read(zip.getInputStream(iconEntry))
-            if (icon == null || icon.width > 256 || icon.height > 256) {
-                throw new GradleException('Mod icon must be a readable image no larger than 256x256')
-            }
-
-            def unusedEntries = [
-                    'assets/productivebeesgenesis/textures/item/infinitycreation_comb_block.png',
-                    'assets/productivebeesgenesis/textures/item/infinitycreation_comb_block.png.mcmeta',
-                    'assets/productivebeesgenesis/textures/block/mekanism_centrifuge/mekanism_centrifuge_front.png',
-                    'assets/productivebeesgenesis/textures/block/mekanism_centrifuge/factory_enriching/enriching_factory_front.png',
-                    'assets/productivebeesgenesis/textures/block/mekanism_centrifuge/factory_enriching/enriching_factory_front_active.png',
-                    'assets/productivebeesgenesis/textures/block/mekanism_centrifuge/honey_mixer/honey_mixer_s2.png'
-            ]
-            unusedEntries.each { entryName ->
-                if (zip.getEntry(entryName) != null) {
-                    throw new GradleException("Release artifact contains unused duplicate resource: ${entryName}")
-                }
-            }
-
-            def forbiddenPrefixes = [
-                    'com/ayoshiko/productivebeesgenesis/resource/ResourceOutputBlock',
-                    'assets/productivebeesgenesis/blockstates/resource_output',
-                    'assets/productivebeesgenesis/models/block/resource_output',
-                    'assets/productivebeesgenesis/models/item/resource_output',
-                    'data/productivebeesgenesis/recipe/resource_output',
-                    'data/productivebeesgenesis/loot_table/blocks/resource_output',
-                    'data/example/',
-                    'data/test_resources/',
-                    'data/f4probe/',
-                    'com/ayoshiko/productivebeesgenesis/datagen/',
-                    'assets/productivebeesgenesis/models/block/factory/mek_apiary/front_led/'
-            ]
-            zip.entries().each { entry ->
-                forbiddenPrefixes.each { prefix ->
-                    if (entry.name.startsWith(prefix)) {
-                        throw new GradleException("Release artifact contains development or duplicate entry: ${entry.name}")
-                    }
-                }
-            }
-
-            def manifest = new java.util.jar.Manifest(
-                    zip.getInputStream(zip.getEntry('META-INF/MANIFEST.MF')))
-            def attributes = manifest.mainAttributes
-            if (attributes.getValue('Implementation-Version') != releaseModVersion) {
-                throw new GradleException('Manifest Implementation-Version does not match mod_version')
-            }
-            if (attributes.getValue('CurseForge-Release-Version') != releaseCurseForgeVersion) {
-                throw new GradleException('Manifest CurseForge-Release-Version does not match release metadata')
-            }
-
-            String modsToml = zip.getInputStream(zip.getEntry('META-INF/neoforge.mods.toml'))
-                    .getText('UTF-8')
-            if (!modsToml.contains("version=\"${releaseModVersion}\"")) {
-                throw new GradleException('neoforge.mods.toml does not contain the expected mod version')
-            }
-        } finally {
-            zip.close()
-        }
-    }
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    implementation fg.deobf('mekanism:Mekanism:1.20.1-10.4.16.80')
+    implementation fg.deobf('maven.modrinth:productivebees:mywVOObd')
+    implementation fg.deobf('local:productivelib:1.20.1-0.0.4')
+    jarJar('io.github.llamalad7:mixinextras-forge:0.5.5') { jarJar.ranged(it, '[0.5.5,)') }
+    compileOnly files('libs/mixinextras-common-0.5.5.jar')
+    compileOnly fg.deobf('curse.maven:applied-energistics-2-223794:7148487')
+    compileOnly fg.deobf('curse.maven:applied-flux-965012:7072853')
+    compileOnly fg.deobf('curse.maven:mekanism-extras-1026040:8247562')
+    compileOnly fg.deobf('curse.maven:evolved-mekanism-extras-1268159:8472135')
+    compileOnly fg.deobf('curse.maven:evolved-mekanism-1230085:7117024')
+    compileOnly fg.deobf('maven.modrinth:jade:xJQHCmWJ')
+    compileOnly fg.deobf('maven.modrinth:kubejs:hVR2xUSr')
+    compileOnly fg.deobf('maven.modrinth:rhino:uNALdylI')
+    compileOnly fg.deobf('curse.maven:jei-238222:7037120')
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    annotationProcessor files('libs/mixinextras-common-0.5.5.jar')
 }
-
-def reportReleaseArtifact = tasks.register('reportReleaseArtifact') {
-    group = 'verification'
-    description = 'Writes a size breakdown for the distributable JAR.'
-    def releaseJar = tasks.named('jar', Jar)
-    dependsOn releaseJar
-    def artifactFile = releaseJar.flatMap { it.archiveFile }
-    def reportFile = layout.buildDirectory.file('reports/release-artifact.txt')
-    inputs.file(artifactFile)
-    outputs.file(reportFile)
-
-    doLast {
-        File artifact = artifactFile.get().asFile
-        def entries = []
-        int directories = 0
-        def zip = new java.util.zip.ZipFile(artifact)
-        try {
-            zip.entries().each { entry ->
-                if (entry.isDirectory()) {
-                    directories++
-                } else {
-                    entries << [name: entry.name, size: entry.size, compressed: entry.compressedSize]
-                }
-            }
-        } finally {
-            zip.close()
-        }
-        entries.sort { left, right -> right.compressed <=> left.compressed }
-        def categories = entries.groupBy { entry ->
-            String extension = entry.name.tokenize('.').last().toLowerCase(Locale.ROOT)
-            if (extension in ['otf', 'ttf']) return 'fonts'
-            if (extension in ['json', 'mcmeta']) return 'json'
-            if (extension in ['md', 'txt'] || entry.name.startsWith('LICENSE_')) return 'guides_and_licenses'
-            return extension in ['class', 'png'] ? extension : 'other'
-        }
-        def totals = categories.collect { category, values ->
-            [name: category, count: values.size(), size: values.sum { it.size }, compressed: values.sum { it.compressed }]
-        }.sort { left, right -> right.compressed <=> left.compressed }
-        long payload = entries.sum { it.compressed } as long
-        File destination = reportFile.get().asFile
-        destination.parentFile.mkdirs()
-        destination.setText("artifact=${artifact.name}\n"
-                + "bytes=${artifact.length()}\n"
-                + "entries=${entries.size()}\n"
-                + "directories=${directories}\n"
-                + "compressed_payload=${payload}\n"
-                + "zip_headers_and_directories=${artifact.length() - payload}\n"
-                + "categories (compressed, raw, count, name):\n"
-                + totals.collect { "${it.compressed}\t${it.size}\t${it.count}\t${it.name}" }.join('\n')
-                + "\ntop_entries (compressed, raw, name):\n"
-                + entries.take(25).collect { "${it.compressed}\t${it.size}\t${it.name}" }.join('\n')
-                + '\n', 'UTF-8')
-        logger.lifecycle("Release artifact: ${artifact.length()} bytes; report: ${destination}")
-    }
+sourceSets.main.resources.srcDir 'src/generated/resources'
+// Exact JDTE Forge 1.20.1 API source, compiled for type checking only.
+// Its classes must never be included in our main JAR or runtime classpath.
+sourceSets {
+    jdteApi { java.srcDir 'src/compatApi/jdte' }
 }
-
-tasks.named('check') {
-    dependsOn verifyReleaseArtifact
-    dependsOn reportReleaseArtifact
-    dependsOn tasks.named('compileDatagenJava')
+dependencies { compileOnly sourceSets.jdteApi.output }
+mixin {
+    add sourceSets.main, 'productivebeesgenesis.refmap.json'
+    config 'productivebeesgenesis.mixins.json'
 }
+tasks.named('jar', Jar).configure {
+    manifest.attributes('MixinConfigs': 'productivebeesgenesis.mixins.json')
+    finalizedBy 'reobfJar'
+}
+tasks.matching { it.name in ['reobfJar', 'reobfJarJar'] }.configureEach { useArgsFile() }

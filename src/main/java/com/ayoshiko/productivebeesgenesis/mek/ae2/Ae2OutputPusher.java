@@ -48,8 +48,6 @@ public final class Ae2OutputPusher {
 	 * @param host 输出宿主（离心机/蜂箱方块实体）
 	 */
 	public static void pushOutputs(IAe2OutputHostBase host) {
-		// 非物品资源有独立开关与余额，不受物品槽是否为空或物品输出开关限制。
-		Ae2ResourceOutput.tickMachine(host);
 		// Spark 优化：缓存 holder 和 pushState，消除后续 9 次冗余 getAe2StateHolder() 接口分发
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return;
@@ -186,7 +184,6 @@ public final class Ae2OutputPusher {
 			buffers.directItemPushSession.reset(holder, meStorage, keyBackoff, gameTick,
 					buffers.insertCostTracker);
 		}
-		buffers.directItemPushSession.custody = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(host);
 		return buffers.directItemPushSession;
 	}
 

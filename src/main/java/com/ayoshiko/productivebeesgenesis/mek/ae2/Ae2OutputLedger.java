@@ -49,9 +49,7 @@ public final class Ae2OutputLedger {
 	public void confirm(int process, int slot, int confirmed) {
 		Settlement entry = find(process, slot);
 		if (entry == null || confirmed <= 0) return;
-		int applied = Math.min(entry.remaining, confirmed);
-		entry.remaining -= applied;
-		entry.originalCount -= applied;
+		entry.remaining -= Math.min(entry.remaining, confirmed);
 		if (entry.remaining <= 0) entries.remove(entry);
 	}
 
@@ -123,7 +121,7 @@ public final class Ae2OutputLedger {
 		private final int process;
 		private final int slot;
 		private final String fingerprint;
-		private int originalCount;
+		private final int originalCount;
 		private int remaining;
 
 		private Settlement(int process, int slot, String fingerprint, int originalCount, int remaining) {

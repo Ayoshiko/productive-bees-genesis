@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 	 * 此时静默跳过，后续由 ModConfigEvent.Loading 事件重新触发覆盖。
 	 * 执行 /reload 时两个事件都会触发，保证配置生效。
 	 */
-@Mixin(BeeReloadListener.class)
+@Mixin(value = BeeReloadListener.class, remap = false)
 public abstract class BeeConfigReloadMixin {
 
 	/** 配置重载失败日志限流器（ms 模式，5 秒冷却）— 重载监听器无 Level 访问 */

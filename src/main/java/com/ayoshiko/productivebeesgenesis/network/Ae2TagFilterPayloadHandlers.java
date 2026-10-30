@@ -6,8 +6,8 @@ import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import mekanism.common.tile.base.TileEntityMekanism;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.network.PacketDistributor;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
+import com.ayoshiko.productivebeesgenesis.network.ForgePayloadContext;
 
 /**
  * smelt 输入标签过滤数据包的服务端/客户端处理。
@@ -26,7 +26,7 @@ final class Ae2TagFilterPayloadHandlers {
 	}
 
 	/** 服务端处理：保存标签白/黑名单表达式。 */
-	static void handleSetAeInputTagFilter(SetAeInputTagFilterPayload payload, IPayloadContext context) {
+	static void handleSetAeInputTagFilter(SetAeInputTagFilterPayload payload, ForgePayloadContext context) {
 		if (payload.whitelist() == null || payload.blacklist() == null) return;
 		if (payload.whitelist().length() > NetworkSecurityConstants.MAX_TAG_EXPRESSION_LENGTH
 				|| payload.blacklist().length() > NetworkSecurityConstants.MAX_TAG_EXPRESSION_LENGTH) {
@@ -55,7 +55,7 @@ final class Ae2TagFilterPayloadHandlers {
 	}
 
 	/** 客户端处理：应用服务端推送的表达式与校验结果。 */
-	static void handleSyncAeInputTagFilter(SyncAeInputTagFilterPayload payload, IPayloadContext context) {
+	static void handleSyncAeInputTagFilter(SyncAeInputTagFilterPayload payload, ForgePayloadContext context) {
 		if (context.player().level() == null) return;
 		BlockEntity be = context.player().level().getBlockEntity(payload.pos());
 		if (!(be instanceof IAe2InputHost host)) return;
@@ -74,7 +74,7 @@ final class Ae2TagFilterPayloadHandlers {
 		Ae2TagFilter tagFilter = host.productivebeesgenesis$getAeTagFilter();
 		if (tagFilter == null) return;
 		var spec = tagFilter.getSpec();
-		PacketDistributor.sendToPlayer(player, new SyncAeInputTagFilterPayload(
+		ForgeNetwork.sendToPlayer(player, new SyncAeInputTagFilterPayload(
 				be.getBlockPos(),
 				spec.whitelistSource(),
 				spec.blacklistSource(),

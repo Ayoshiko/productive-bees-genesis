@@ -10,8 +10,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.registries.DeferredItem;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraftforge.registries.RegistryObject;
+import net.minecraftforge.registries.DeferredRegister;
 
 import java.util.function.Supplier;
 
@@ -33,7 +33,8 @@ public final class ModCreativeTabs {
 					.title(Component.translatable("itemGroup.productivebeesgenesis"))
 					.icon(() -> new ItemStack(ModItems.MEK_CENTRIFUGE.get()))
 					.displayItems((parameters, output) -> {
-						output.accept(ModItems.BEE_DESIGNER.get());
+						output.accept(ModItems.TIME_2_UPGRADE.get());
+						output.accept(ModItems.STABILITY_UPGRADE.get());
 						output.accept(ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get());
 						output.accept(ModItems.ESSENCE_CONVERSION_UPGRADE.get());
 						output.accept(ModItems.RAW_ORE_SMELTING_UPGRADE.get());
@@ -95,7 +96,7 @@ public final class ModCreativeTabs {
 	private static void addMEFactoryItemsInOrder(CreativeModeTab.Output output) {
 		// ABSOLUTE → SUPREME → COSMIC → INFINITE
 		for (Object tier : MekCompatHooks.getMEFactoryTiers()) {
-			DeferredItem<?> item = ModItems.ME_FACTORY_ITEMS.get(tier);
+			RegistryObject<?> item = ModItems.ME_FACTORY_ITEMS.get(tier);
 			if (item != null && item.get() != null) {
 				output.accept((Item) item.get());
 			}
@@ -109,7 +110,7 @@ public final class ModCreativeTabs {
 	private static void addEMFactoryItemsInOrder(CreativeModeTab.Output output) {
 		// OVERCLOCKED → QUANTUM → DENSE → MULTIVERSAL → CREATIVE
 		for (FactoryTier tier : MekCompatHooks.getEMFactoryTiers()) {
-			DeferredItem<ItemBlockMekCentrifuge> item = ModItems.EM_FACTORY_ITEMS.get(tier);
+			RegistryObject<ItemBlockMekCentrifuge> item = ModItems.EM_FACTORY_ITEMS.get(tier);
 			if (item != null && item.get() != null) {
 				output.accept(item.get());
 			}
@@ -127,7 +128,7 @@ public final class ModCreativeTabs {
 	private static void addEMEFactoryItemsInOrder(CreativeModeTab.Output output) {
 		// ABSOLUTE_OVERCLOCKED → SUPREME_QUANTUM → COSMIC_DENSE → INFINITE_MULTIVERSAL
 		for (Object tier : MekCompatHooks.getEMEFactoryTiers()) {
-			DeferredItem<?> item = ModItems.EME_FACTORY_ITEMS.get(tier);
+			RegistryObject<?> item = ModItems.EME_FACTORY_ITEMS.get(tier);
 			if (item != null && item.get() != null) {
 				output.accept((Item) item.get());
 			}
@@ -145,7 +146,7 @@ public final class ModCreativeTabs {
 	private static void addMEApiaryFactoryItemsInOrder(CreativeModeTab.Output output) {
 		// ABSOLUTE → SUPREME → COSMIC → INFINITE
 		for (Object tier : MekCompatHooks.getMEFactoryTiers()) {
-			DeferredItem<?> item = ModItems.ME_APIARY_FACTORY_ITEMS.get(tier);
+			RegistryObject<?> item = ModItems.ME_APIARY_FACTORY_ITEMS.get(tier);
 			if (item != null && item.get() != null) {
 				output.accept((Item) item.get());
 			}
@@ -159,7 +160,7 @@ public final class ModCreativeTabs {
 	private static void addEMApiaryFactoryItemsInOrder(CreativeModeTab.Output output) {
 		// OVERCLOCKED → QUANTUM → DENSE → MULTIVERSAL → CREATIVE
 		for (FactoryTier tier : MekCompatHooks.getEMFactoryTiers()) {
-			DeferredItem<ItemBlockMekApiaryFactory> item = ModItems.EM_APIARY_FACTORY_ITEMS.get(tier);
+			RegistryObject<ItemBlockMekApiaryFactory> item = ModItems.EM_APIARY_FACTORY_ITEMS.get(tier);
 			if (item != null && item.get() != null) {
 				output.accept(item.get());
 			}
@@ -177,7 +178,7 @@ public final class ModCreativeTabs {
 	private static void addEMEApiaryFactoryItemsInOrder(CreativeModeTab.Output output) {
 		// ABSOLUTE_OVERCLOCKED → SUPREME_QUANTUM → COSMIC_DENSE → INFINITE_MULTIVERSAL
 		for (Object tier : MekCompatHooks.getEMEFactoryTiers()) {
-			DeferredItem<?> item = ModItems.EME_APIARY_FACTORY_ITEMS.get(tier);
+			RegistryObject<?> item = ModItems.EME_APIARY_FACTORY_ITEMS.get(tier);
 			if (item != null && item.get() != null) {
 				output.accept((Item) item.get());
 			}

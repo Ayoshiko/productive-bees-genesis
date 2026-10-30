@@ -14,7 +14,7 @@ import mekanism.common.inventory.slot.FactoryInputInventorySlot;
 import mekanism.common.inventory.slot.OutputInventorySlot;
 import mekanism.common.inventory.warning.WarningTracker.WarningType;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
+import mekanism.api.providers.IBlockProvider;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -35,7 +35,7 @@ import java.util.function.IntSupplier;
 	 */
 public class TileEntityMekCentrifugeFactory extends AbstractMekCentrifugeFactory {
 
-	public TileEntityMekCentrifugeFactory(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
+	public TileEntityMekCentrifugeFactory(IBlockProvider blockProvider, BlockPos pos, BlockState state) {
 		super(blockProvider, pos, state);
 	}
 

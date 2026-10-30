@@ -21,8 +21,8 @@ import mekanism.common.registration.impl.TileEntityTypeDeferredRegister;
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
 import mekanism.common.tier.FactoryTier;
 import mekanism.common.tile.base.TileEntityMekanism;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.registries.DeferredBlock;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.registries.RegistryObject;
 
 /**
 	 * 方块实体注册类
@@ -45,92 +45,92 @@ public final class ModBlockEntities {
 
 	/** 基础离心机BlockEntityType */
 	public static final TileEntityTypeRegistryObject<TileEntityMekCentrifuge> MEK_CENTRIFUGE =
-			BLOCK_ENTITIES.mekBuilder(ModBlocks.MEK_CENTRIFUGE,
-					(pos, state) -> new TileEntityMekCentrifuge(ModBlocks.MEK_CENTRIFUGE, pos, state))
+			BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.MEK_CENTRIFUGE).get(),
+					(pos, state) -> new TileEntityMekCentrifuge(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.MEK_CENTRIFUGE).get(), pos, state))
 					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-					.withSimple(Capabilities.CONFIG_CARD)
+
 					.build();
 
 	/** MEK通用机械蜂箱BlockEntityType — 生产周期1200 ticks */
 	public static final TileEntityTypeRegistryObject<TileEntityMekApiary> MEK_APIARY =
-			BLOCK_ENTITIES.mekBuilder(ModBlocks.MEK_APIARY,
-					(pos, state) -> new TileEntityMekApiary(ModBlocks.MEK_APIARY, pos, state))
+			BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.MEK_APIARY).get(),
+					(pos, state) -> new TileEntityMekApiary(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.MEK_APIARY).get(), pos, state))
 					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-					.withSimple(Capabilities.CONFIG_CARD)
+
 					.build();
 
 	/** 通用机械蜂箱 — 基础工厂BlockEntityType */
 	public static final TileEntityTypeRegistryObject<TileEntityMekApiaryFactory> BASIC_MEK_APIARY_FACTORY =
-			BLOCK_ENTITIES.mekBuilder(ModBlocks.BASIC_MEK_APIARY_FACTORY,
-					(pos, state) -> new TileEntityMekApiaryFactory(ModBlocks.BASIC_MEK_APIARY_FACTORY, pos, state))
+			BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.BASIC_MEK_APIARY_FACTORY).get(),
+					(pos, state) -> new TileEntityMekApiaryFactory(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.BASIC_MEK_APIARY_FACTORY).get(), pos, state))
 					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-					.withSimple(Capabilities.CONFIG_CARD)
+
 					.build();
 
 	/** 通用机械蜂箱 — 高级工厂BlockEntityType */
 	public static final TileEntityTypeRegistryObject<TileEntityMekApiaryFactory> ADVANCED_MEK_APIARY_FACTORY =
-			BLOCK_ENTITIES.mekBuilder(ModBlocks.ADVANCED_MEK_APIARY_FACTORY,
-					(pos, state) -> new TileEntityMekApiaryFactory(ModBlocks.ADVANCED_MEK_APIARY_FACTORY, pos, state))
+			BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.ADVANCED_MEK_APIARY_FACTORY).get(),
+					(pos, state) -> new TileEntityMekApiaryFactory(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.ADVANCED_MEK_APIARY_FACTORY).get(), pos, state))
 					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-					.withSimple(Capabilities.CONFIG_CARD)
+
 					.build();
 
 	/** 通用机械蜂箱 — 精英工厂BlockEntityType */
 	public static final TileEntityTypeRegistryObject<TileEntityMekApiaryFactory> ELITE_MEK_APIARY_FACTORY =
-			BLOCK_ENTITIES.mekBuilder(ModBlocks.ELITE_MEK_APIARY_FACTORY,
-					(pos, state) -> new TileEntityMekApiaryFactory(ModBlocks.ELITE_MEK_APIARY_FACTORY, pos, state))
+			BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.ELITE_MEK_APIARY_FACTORY).get(),
+					(pos, state) -> new TileEntityMekApiaryFactory(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.ELITE_MEK_APIARY_FACTORY).get(), pos, state))
 					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-					.withSimple(Capabilities.CONFIG_CARD)
+
 					.build();
 
 	/** 通用机械蜂箱 — 终极工厂BlockEntityType */
 	public static final TileEntityTypeRegistryObject<TileEntityMekApiaryFactory> ULTIMATE_MEK_APIARY_FACTORY =
-			BLOCK_ENTITIES.mekBuilder(ModBlocks.ULTIMATE_MEK_APIARY_FACTORY,
-					(pos, state) -> new TileEntityMekApiaryFactory(ModBlocks.ULTIMATE_MEK_APIARY_FACTORY, pos, state))
+			BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.ULTIMATE_MEK_APIARY_FACTORY).get(),
+					(pos, state) -> new TileEntityMekApiaryFactory(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.ULTIMATE_MEK_APIARY_FACTORY).get(), pos, state))
 					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-					.withSimple(Capabilities.CONFIG_CARD)
+
 					.build();
 
 	/** 基础工厂离心机BlockEntityType（3并行） */
 	public static final TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> BASIC_MEK_CENTRIFUGE_FACTORY =
-			BLOCK_ENTITIES.mekBuilder(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY,
-					(pos, state) -> new TileEntityMekCentrifugeFactory(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY, pos, state))
+			BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY).get(),
+					(pos, state) -> new TileEntityMekCentrifugeFactory(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY).get(), pos, state))
 					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-					.withSimple(Capabilities.CONFIG_CARD)
+
 					.build();
 
 	/** 高级工厂离心机BlockEntityType（5并行） */
 	public static final TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> ADVANCED_MEK_CENTRIFUGE_FACTORY =
-			BLOCK_ENTITIES.mekBuilder(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY,
-					(pos, state) -> new TileEntityMekCentrifugeFactory(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY, pos, state))
+			BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY).get(),
+					(pos, state) -> new TileEntityMekCentrifugeFactory(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY).get(), pos, state))
 					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-					.withSimple(Capabilities.CONFIG_CARD)
+
 					.build();
 
 	/** 精英工厂离心机BlockEntityType（7并行） */
 	public static final TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> ELITE_MEK_CENTRIFUGE_FACTORY =
-			BLOCK_ENTITIES.mekBuilder(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY,
-					(pos, state) -> new TileEntityMekCentrifugeFactory(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY, pos, state))
+			BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY).get(),
+					(pos, state) -> new TileEntityMekCentrifugeFactory(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY).get(), pos, state))
 					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-					.withSimple(Capabilities.CONFIG_CARD)
+
 					.build();
 
 	/** 终极工厂离心机BlockEntityType（9并行） */
 	public static final TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> ULTIMATE_MEK_CENTRIFUGE_FACTORY =
-			BLOCK_ENTITIES.mekBuilder(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY,
-					(pos, state) -> new TileEntityMekCentrifugeFactory(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY, pos, state))
+			BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY).get(),
+					(pos, state) -> new TileEntityMekCentrifugeFactory(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY).get(), pos, state))
 					.serverTicker(GenesisMachineTicker::tickServer)
 					.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-					.withSimple(Capabilities.CONFIG_CARD)
+
 					.build();
 
 	static {
@@ -167,7 +167,7 @@ public final class ModBlockEntities {
 			return;
 		}
 		for (FactoryTier tier : MekCompatHooks.getEMFactoryTiers()) {
-			DeferredBlock<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
+			RegistryObject<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
 				Machine.FactoryMachine<TileEntityMekCentrifugeFactory>>> deferredBlock = ModBlocks.getEMFactoryBlock(tier);
 			if (deferredBlock == null) {
 				// 方块未注册（registerEMFactories未调用或失败），跳过并记录警告
@@ -176,11 +176,11 @@ public final class ModBlockEntities {
 			}
 			// 注册EM工厂BlockEntityType，使用与原版相同的配置模式
 			TileEntityTypeRegistryObject<TileEntityMekCentrifugeFactory> tileType =
-					BLOCK_ENTITIES.mekBuilder(deferredBlock,
-							(pos, state) -> new TileEntityMekCentrifugeFactory(deferredBlock, pos, state))
+					BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(deferredBlock).get(),
+							(pos, state) -> new TileEntityMekCentrifugeFactory(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(deferredBlock).get(), pos, state))
 							.serverTicker(GenesisMachineTicker::tickServer)
 							.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-							.withSimple(Capabilities.CONFIG_CARD)
+
 							.build();
 			// 填充EM_FACTORY_TILES Map，供MekCentrifugeBlockType的懒加载Supplier使用
 			MekCentrifugeBlockType.ModBlockEntitiesHolder.EM_FACTORY_TILES.put(tier, tileType);
@@ -241,18 +241,18 @@ public final class ModBlockEntities {
 			return;
 		}
 		for (FactoryTier tier : MekCompatHooks.getEMFactoryTiers()) {
-			DeferredBlock<MekApiaryBlock<TileEntityMekApiaryFactory,
+			RegistryObject<MekApiaryBlock<TileEntityMekApiaryFactory,
 				BlockTypeTile<TileEntityMekApiaryFactory>>> deferredBlock = ModBlocks.getEMApiaryFactoryBlock(tier);
 			if (deferredBlock == null) {
 				ProductiveBeesGenesis.LOGGER.warn("EM 蜂箱工厂方块未注册，跳过 TileEntity 注册: {}", tier.name());
 				continue;
 			}
 			TileEntityTypeRegistryObject<TileEntityMekApiaryFactory> tileType =
-					BLOCK_ENTITIES.mekBuilder(deferredBlock,
-							(pos, state) -> new TileEntityMekApiaryFactory(deferredBlock, pos, state))
+					BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(deferredBlock).get(),
+							(pos, state) -> new TileEntityMekApiaryFactory(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(deferredBlock).get(), pos, state))
 							.serverTicker(GenesisMachineTicker::tickServer)
 							.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-							.withSimple(Capabilities.CONFIG_CARD)
+
 							.build();
 			MekApiaryFactoryBlockType.ModBlockEntitiesHolder.EM_APIARY_FACTORY_TILES.put(tier, tileType);
 		}

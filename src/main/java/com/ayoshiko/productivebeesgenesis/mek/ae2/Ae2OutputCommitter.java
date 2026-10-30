@@ -84,16 +84,7 @@ final class Ae2OutputCommitter {
 							settlement.process(), settlement.slot(), settlement.remaining());
 					continue;
 				}
-                int expectedAfter = settlement.originalCount() - settlement.remaining();
-                if (current.getCount() == expectedAfter) {
-                    ledger.confirm(settlement.process(), settlement.slot(), settlement.remaining());
-                    continue;
-                }
-                if (current.getCount() != settlement.originalCount()) {
-                    LogThrottle.error("ae2_output_ledger_count_conflict", "AE2 source count changed; settlement suspended");
-                    continue;
-                }
-				int remaining = settlement.remaining();
+				int remaining = Math.min(settlement.remaining(), current.getCount());
 				if (remaining <= 0) continue;
 				ItemStack updated = current.copy();
 				updated.shrink(remaining);
@@ -121,15 +112,15 @@ final class Ae2OutputCommitter {
 
 	/** 直接推送单个槽位（少量槽位场景，避免 Map 开销） */
 	static int tryPushSlotDirect(Ae2SlotEntry entry, MEStorage meStorage, IActionSource actionSource,
-			Ae2OutputLedger ledger, com.ayoshiko.productivebeesgenesis.logistics.OutputCustody custody) {
-		if (custody.blocked()) return 0;
+			Ae2OutputLedger ledger) {
 		IInventorySlot slot = entry.slot;
 		int originalCount = entry.count;
 		long inserted = 0;
 		if (!ledger.reserve(entry.process, entry.slotIdx, entry.fingerprint(), originalCount)) return 0;
 		try {
-			inserted = custody.handoffItem(entry.stack, originalCount, "ae2-output-slot", () ->
-					meStorage.insert(entry.key, originalCount, Actionable.MODULATE, actionSource));
+			inserted = SaturatingMath.clampToRequest(
+					meStorage.insert(entry.key, originalCount, Actionable.MODULATE, actionSource),
+					originalCount);
 			if (inserted <= 0) {
 				ledger.cancel(entry.process, entry.slotIdx);
 				return 0;
@@ -167,9 +158,7 @@ final class Ae2OutputCommitter {
 	 * 部分成功时从第一个槽位开始依次清空，直到分配完 inserted 数量。
 	 */
 	static int pushBatchKey(AEItemKey key, long totalCount, List<Ae2SlotEntry> slotEntries,
-			MEStorage meStorage, IActionSource actionSource, Ae2OutputLedger ledger,
-            com.ayoshiko.productivebeesgenesis.logistics.OutputCustody custody) {
-        if (custody.blocked()) return 0;
+			MEStorage meStorage, IActionSource actionSource, Ae2OutputLedger ledger) {
 		int reserved = 0;
 		for (Ae2SlotEntry entry : slotEntries) {
 			if (!ledger.reserve(entry.process, entry.slotIdx, entry.fingerprint(), entry.count)) {
@@ -182,8 +171,8 @@ final class Ae2OutputCommitter {
 			reserved++;
 		}
 		try {
-			long inserted = custody.handoffItem(slotEntries.get(0).stack, totalCount, "ae2-output-merged", () ->
-					meStorage.insert(key, totalCount, Actionable.MODULATE, actionSource));
+			long inserted = SaturatingMath.clampToRequest(
+					meStorage.insert(key, totalCount, Actionable.MODULATE, actionSource), totalCount);
 			if (inserted <= 0) {
 				for (Ae2SlotEntry entry : slotEntries) ledger.cancel(entry.process, entry.slotIdx);
 				return 0;

@@ -4,7 +4,7 @@ import com.ayoshiko.productivebeesgenesis.util.RoundRobinSlotTraversal;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
-import mekanism.common.lib.inventory.HandlerTransitRequest;
+import mekanism.common.lib.inventory.TileTransitRequest;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
@@ -46,7 +46,7 @@ public final class EjectItemMapBuilder {
 	 * @param cursor  轮转游标（调用方持有，用返回值更新）
 	 * @return 下一次调用应使用的轮转游标
 	 */
-	public static int build(HandlerTransitRequest request, List<IInventorySlot> slots, int cursor) {
+	public static int build(TileTransitRequest request, List<IInventorySlot> slots, int cursor) {
 		int size = slots.size();
 		if (size == 0) return 0;
 		int start = RoundRobinSlotTraversal.normalize(cursor, size);

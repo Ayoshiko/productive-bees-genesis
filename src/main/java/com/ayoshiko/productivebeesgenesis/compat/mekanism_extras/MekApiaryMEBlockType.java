@@ -8,9 +8,9 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeUpgradeable;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import com.jerry.mekanism_extras.common.block.attribute.ExtraAttributeTier;
+import com.jerry.mekanism_extras.common.block.attribute.ExtraAttributeUpgradeable;
+import com.jerry.mekanism_extras.common.tier.ExtraFactoryTier;
 import mekanism.api.text.ILangEntry;
 import mekanism.common.block.attribute.Attributes;
 import mekanism.common.content.blocktype.BlockTypeTile;
@@ -20,7 +20,7 @@ import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
-import net.neoforged.neoforge.registries.DeferredHolder;
+import net.minecraftforge.registries.RegistryObject;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -35,7 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 	 * <p>
 	 * 关键设计：
 	 * 1. 蜂箱工厂不继承 ME 的 ExtraFactoryMachine（因为不走 CachedRecipe 管线），使用原版
-	 *    {@link Machine.MachineBuilder#createMachine} 构建，与 {@link MekApiaryFactoryBlockType} 模式一致。
+	 *    {@link com.ayoshiko.productivebeesgenesis.util.ForgeMachineBuilder#createMachine} 构建，与 {@link MekApiaryFactoryBlockType} 模式一致。
 	 * 2. ME 等级通过 {@link ExtraAttributeTier} 标记，{@link ExtraAttributeUpgradeable} 支持升级链。
 	 * 3. 蜜蜂生产逻辑完全复用父类 {@link TileEntityMekApiaryFactory} 的 ApiaryTickHandler。
 	 * 4. 能量配置遵循 ME 模式：storage = max(20000, 50) * tier.processes。
@@ -89,7 +89,7 @@ public final class MekApiaryMEBlockType {
 	/**
 	 * 创建 ME 等级的蜂箱工厂 BlockType
 	 * <br/>
-	 * 使用 {@link Machine.MachineBuilder#createMachine} 构建（非 ExtraFactoryMachine），
+	 * 使用 {@link com.ayoshiko.productivebeesgenesis.util.ForgeMachineBuilder#createMachine} 构建（非 ExtraFactoryMachine），
 	 * 因为蜂箱不走 CachedRecipe 管线，不需要 AttributeFactoryType。
 	 * 手动添加 ME 的 {@link ExtraAttributeTier} 和 {@link ExtraAttributeUpgradeable} 属性。
 	 * <p>
@@ -106,9 +106,9 @@ public final class MekApiaryMEBlockType {
 		long storage = SaturatingMath.saturatingMultiply(
 				Math.max(20_000L, usage), Math.max(tier.processes, beeSlots));
 
-		// 使用原版 Machine.MachineBuilder.createMachine 构建（非 ExtraFactoryMachine），
+		// 使用原版 com.ayoshiko.productivebeesgenesis.util.ForgeMachineBuilder.createMachine 构建（非 ExtraFactoryMachine），
 		// 因为蜂箱不走 CachedRecipe 管线，不需要 AttributeFactoryType
-		var builder = Machine.MachineBuilder
+		var builder = com.ayoshiko.productivebeesgenesis.util.ForgeMachineBuilder
 				.createMachine(() -> ME_APIARY_FACTORY_TILES.get(tier),
 						descriptionLang(tier.getAdvanceTier().getLowerName() + "_extra_mek_apiary_factory"))
 				.withEnergyConfig(() -> MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(usage),
@@ -142,10 +142,9 @@ public final class MekApiaryMEBlockType {
 	 * @param tierName ME 等级小写名（如 "absolute"）
 	 * @return 对应方块的 DeferredHolder
 	 */
-	private static DeferredHolder<Block, ?> getMEApiaryFactoryBlock(String tierName) {
+	private static RegistryObject<?> getMEApiaryFactoryBlock(String tierName) {
 		String registryName = tierName + "_extra_mek_apiary_factory";
-		return DeferredHolder.create(Registries.BLOCK,
-				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, registryName));
+		return RegistryObject.create(new ResourceLocation(ProductiveBeesGenesis.MOD_ID, registryName), Registries.BLOCK, ProductiveBeesGenesis.MOD_ID);
 	}
 
 	/**

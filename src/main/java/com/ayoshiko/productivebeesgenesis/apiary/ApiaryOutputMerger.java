@@ -44,13 +44,13 @@ final class ApiaryOutputMerger {
 	void add(BasicInventorySlot slot) {
 		ItemStack stack = slot.getStack();
 		if (stack.isEmpty()) return;
-		int stackHash = ItemStack.hashItemAndComponents(stack);
+		int stackHash = (31 * System.identityHashCode(stack.getItem()) + com.ayoshiko.productivebeesgenesis.util.StackTags.hash(stack));
 
 		// 查找是否已有同类型虚拟栈
 		int existIdx = -1;
 		for (int i = 0; i < activeGroupCount; i++) {
 			if (virtualHashes[i] == stackHash
-					&& ItemStack.isSameItemSameComponents(virtualStacks.get(i), stack)) {
+					&& ItemStack.isSameItemSameTags(virtualStacks.get(i), stack)) {
 				existIdx = i;
 				break;
 			}

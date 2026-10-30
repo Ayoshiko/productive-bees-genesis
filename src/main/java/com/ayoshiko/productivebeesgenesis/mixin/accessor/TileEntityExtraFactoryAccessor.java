@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mixin.accessor;
 
-import com.jerry.mekextras.common.tile.factory.TileEntityExtraFactory;
+import com.jerry.mekanism_extras.common.tile.factory.TileEntityExtraFactory;
 import mekanism.common.inventory.slot.EnergyInventorySlot;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
@@ -44,7 +44,7 @@ public interface TileEntityExtraFactoryAccessor {
 
 	/** 暴露lastUsage setter — 用于更新包含PB处理的能量消耗 */
 	@Accessor("lastUsage")
-	void productivebeesgenesis$setLastUsage(long value);
+	void productivebeesgenesis$setLastUsage(mekanism.api.math.FloatingLong value);
 
 	/** 暴露energySlot — 用于构造函数中重新配置IO和getUpgradeData */
 	@Accessor("energySlot")

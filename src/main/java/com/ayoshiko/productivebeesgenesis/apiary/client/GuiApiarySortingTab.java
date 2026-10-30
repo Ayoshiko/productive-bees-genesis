@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.network.ApiaryToggleSortingPayload;
 import mekanism.client.SpecialColors;
 import mekanism.client.gui.IGuiWrapper;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.TextAlignment;
 import mekanism.client.gui.element.GuiElement.ButtonBackground;
 import mekanism.client.gui.element.GuiInsetElement;
 import mekanism.client.render.MekanismRenderer;
@@ -13,7 +14,7 @@ import mekanism.common.util.MekanismUtils;
 import mekanism.common.util.text.BooleanStateDisplay.OnOff;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -41,13 +42,13 @@ public class GuiApiarySortingTab extends GuiInsetElement<TileEntityMekApiaryFact
 		super(MekanismUtils.getResource(ResourceType.GUI, "sorting.png"), gui, tile,
 				TAB_X, TAB_Y, TAB_WIDTH, TAB_HEIGHT, true);
 		setButtonBackground(ButtonBackground.DEFAULT);
-		setTooltip(MekanismLang.AUTO_SORT);
+		setTooltip(net.minecraft.client.gui.components.Tooltip.create(MekanismLang.AUTO_SORT.translate()));
 	}
 
 	@Override
 	public void drawBackground(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
 		super.drawBackground(guiGraphics, mouseX, mouseY, partialTicks);
-		drawScrollingString(guiGraphics, OnOff.of(dataSource.isSorting()).getTextComponent(),
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScrollingString(this, guiGraphics, OnOff.of(dataSource.isSorting()).getTextComponent(),
 				0, 24, TextAlignment.CENTER, titleTextColor(), 3, false);
 	}
 
@@ -59,6 +60,6 @@ public class GuiApiarySortingTab extends GuiInsetElement<TileEntityMekApiaryFact
 	@Override
 	public void onClick(double mouseX, double mouseY, int button) {
 		BlockPos pos = dataSource.getBlockPos();
-		PacketDistributor.sendToServer(new ApiaryToggleSortingPayload(pos));
+		ForgeNetwork.sendToServer(new ApiaryToggleSortingPayload(pos));
 	}
 }

@@ -114,7 +114,7 @@ class MekCentrifugeSlotManager {
 	IInventorySlotHolder buildInventory(IContentsListener listener,
 										IContentsListener recipeCacheListener,
 										IContentsListener recipeCacheUnpauseListener) {
-		InventorySlotHelper builder = InventorySlotHelper.forSideWithConfig(tile);
+		InventorySlotHelper builder = InventorySlotHelper.forSideWithConfig(tile::getDirection, tile::getConfig);
 		this.recipeCacheUnpauseListener = recipeCacheUnpauseListener;
 
 		// 输入槽 — 与父类相同位置
@@ -181,7 +181,7 @@ class MekCentrifugeSlotManager {
 	IFluidTankHolder buildFluidTanks(IContentsListener listener,
 			IContentsListener recipeCacheListener,
 			IContentsListener recipeCacheUnpauseListener) {
-		FluidTankHelper helper = FluidTankHelper.forSideWithConfig(tile);
+		FluidTankHelper helper = FluidTankHelper.forSideWithConfig(tile::getDirection, tile::getConfig);
 		fluidOutputTank = BasicFluidTank.output(ModConfig.SERVER.mekCentrifugeFluidTankCapacity.get(), listener);
 		helper.addTank(fluidOutputTank);
 		return helper.build();

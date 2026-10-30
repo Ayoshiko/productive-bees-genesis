@@ -4,9 +4,9 @@ import com.ayoshiko.productivebeesgenesis.util.tagfilter.TagExpressionParser;
 import com.ayoshiko.productivebeesgenesis.util.tagfilter.TagExpressionText;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import mekanism.client.gui.element.text.GuiTextField;
-import mekanism.client.gui.tooltip.TooltipUtils;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.TooltipUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.events.ContainerEventHandler;
@@ -81,7 +81,7 @@ final class TagPickerWidget extends GuiElement {
 	 * @param window 承载文本框焦点的宿主窗口（{@link GuiTextField} 需要它派发焦点）
 	 * @param editor 表达式读写抽象
 	 */
-	TagPickerWidget(IGuiWrapper gui, ContainerEventHandler window, int x, int y, int width,
+	TagPickerWidget(IGuiWrapper gui, GuiElement window, int x, int y, int width,
 			TagExpressionEditor editor) {
 		super(gui, x, y, width, HEIGHT);
 		this.editor = editor;
@@ -90,7 +90,7 @@ final class TagPickerWidget extends GuiElement {
 				Component.literal("|"), this::toggleOperator));
 		sideButton = addChild(new PickerButton(gui, x + SIDE_X, y + 1,
 				Component.literal("W"), this::toggleTarget));
-		GuiTextField searchField = addChild(new GuiTextField(gui, window,
+		GuiTextField searchField = addChild(new GuiTextField(gui,
 				x + SEARCH_X, y + 1, width - SEARCH_X, SEARCH_HEIGHT));
 		searchField.setMaxLength(SEARCH_MAX_LENGTH);
 		searchField.setScale(0.8F);
@@ -205,12 +205,7 @@ final class TagPickerWidget extends GuiElement {
 	 * 键盘输入被排在前面的表达式框吞掉。收到 {@code true} 时同样要还给子控件 ——
 	 * 父级重新聚焦本面板走的是「先 false 再 true」，只清不还会把刚点中的搜索框误清掉。
 	 */
-	@Override
-	public void setFocused(boolean focused) {
-		super.setFocused(focused);
-		GuiElement child = getFocused();
-		if (child != null) child.setFocused(focused);
-	}
+	// GuiTextField 10.4 registers with the GUI-wide focus listener.
 
 	/** 面板自身不画文字：顶行控件与列表各自渲染。 */
 	@Override

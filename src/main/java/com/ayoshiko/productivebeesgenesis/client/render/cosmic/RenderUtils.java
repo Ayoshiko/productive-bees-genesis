@@ -11,7 +11,7 @@ import net.minecraft.client.renderer.block.model.ItemModelGenerator;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.Direction;
 import net.minecraft.world.inventory.InventoryMenu;
-import net.neoforged.neoforge.client.model.SimpleModelState;
+import net.minecraftforge.client.model.SimpleModelState;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -85,7 +85,7 @@ public class RenderUtils {
 				for (Entry<Direction, BlockElementFace> directionBlockElementFaceEntry : element.faces.entrySet()) {
 					quads.add(FACE_BAKERY.bakeQuad(element.from, element.to, directionBlockElementFaceEntry.getValue(), sprite,
 						directionBlockElementFaceEntry.getKey(), new SimpleModelState(state), element.rotation,
-						element.shade));
+						element.shade, sprite.contents().name()));
 				}
 			}
 		}

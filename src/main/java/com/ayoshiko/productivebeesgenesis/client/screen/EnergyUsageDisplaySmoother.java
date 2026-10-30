@@ -9,7 +9,10 @@ import java.util.function.LongSupplier;
  * The value is updated only after a new sample remains stable for the hold window, preventing
  * the tooltip from alternating between two large FE/t values every rendered frame.
  */
-public final class EnergyUsageDisplaySmoother implements LongSupplier {
+public final class EnergyUsageDisplaySmoother implements LongSupplier, mekanism.api.math.FloatingLongSupplier {
+	@Override public mekanism.api.math.FloatingLong get() {
+		return com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.fromFe(getAsLong());
+	}
 
 	static final long DEFAULT_HOLD_NANOS = 750_000_000L;
 

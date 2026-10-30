@@ -134,8 +134,8 @@ public final class ApiaryHoneyTreatFeeder {
 			bee.ageUp((int) ((float) (-bee.getAge() / 20) * 0.1F), true);
 		}
 		// 先初始化属性附件，再施加基因（PB 装入蜜蜂时的同款做法）
-		bee.getData(ProductiveBees.ATTRIBUTE_HANDLER);
-		HoneyTreat.applyGenesToBee(level, singleTreat, bee);
+		// PB 12 stores genes on ProductiveBee, initialized by its constructor.
+		if (bee instanceof cy.jdkdigital.productivebees.common.entity.bee.ProductiveBee productiveBee) HoneyTreat.applyGenesToBee(level, singleTreat, productiveBee);
 		return true;
 	}
 

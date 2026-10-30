@@ -47,7 +47,7 @@ public class SmeltingRecipeCache {
 	 * @return true 如果输入有SMELTING配方
 	 */
 	public boolean hasSmeltingRecipe(int process, ItemStack input, Predicate<ItemStack> containsSmeltingInput) {
-		if (ItemStack.isSameItemSameComponents(input, lastCheckedInputs[process])) {
+		if (ItemStack.isSameItemSameTags(input, lastCheckedInputs[process])) {
 			return lastHasSmeltingRecipes[process];
 		}
 		boolean hasSmeltingRecipe = containsSmeltingInput.test(input);

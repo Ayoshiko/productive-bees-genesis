@@ -7,7 +7,7 @@ import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -107,7 +107,7 @@ final class BeeProduceOutputDispatcher {
 				int i = matchingGroup.slots.get(groupIndex);
 				ItemStack slotStack = reusableSlotStacks[i];
 				if (!slotStack.isEmpty() && slotStack.getItem() == stack.getItem()
-						&& ItemStack.isSameItemSameComponents(slotStack, stack)) {
+						&& ItemStack.isSameItemSameTags(slotStack, stack)) {
 					// Bug 2 修复：同 Item 同 BEE_TYPE 组件才可叠加，防止不同 bee_type 蜜脾互相覆盖
 					int space = reusableSlotLimits[i] - reusableSlotCounts[i];
 					if (space <= 0) continue;
@@ -219,7 +219,7 @@ final class BeeProduceOutputDispatcher {
 		while (remaining > 0) {
 			int chunk = (int) Math.min(remaining, Integer.MAX_VALUE);
 			// 使用 template 的流体类型，覆盖 amount 为当前分段量
-			FluidStack stack = template.copyWithAmount(chunk);
+			FluidStack stack = com.ayoshiko.productivebeesgenesis.util.ForgeFluidStacks.copyWithAmount(template, chunk);
 			// M3-2 修复：读取 tank.insert 返回值，计算实际注入量
 			// 原实现直接 remaining -= chunk，tank 已满时实际注入 0 但 remaining 已扣完，
 			// 导致后续 chunk 不再尝试，但实际注入量为 0，流体产物静默丢失
@@ -253,7 +253,7 @@ final class BeeProduceOutputDispatcher {
 	private OutputGroup findOutputGroup(ItemStack stack, boolean create, int slotCount) {
 		// 混养蜂箱反复索引输出槽时，不必遍历全部派生组件。bee_type 用于分桶，
 		// 其余组件仍由 OutputGroup.matches 精确比较；哈希碰撞不会合并不同产物。
-		var beeType = stack.get(PbDataComponents.beeType());
+		var beeType = PbDataComponents.getBeeType(stack);
 		int hash = 31 * System.identityHashCode(stack.getItem()) + (beeType == null ? 0 : beeType.hashCode());
 		int tableMask = sameTypeGroupTable.length - 1;
 		int bucket = (hash ^ (hash >>> 16)) & tableMask;
@@ -280,13 +280,13 @@ final class BeeProduceOutputDispatcher {
 
 		void reset(ItemStack stack, int hash, int slotCount) {
 			this.item = stack.getItem();
-			this.components = stack.getComponents();
+			this.components = com.ayoshiko.productivebeesgenesis.util.StackTags.snapshot(stack);
 			this.hash = hash;
 			slots.reset(slotCount);
 		}
 
 		boolean matches(ItemStack stack, int hash) {
-			return this.hash == hash && item == stack.getItem() && components.equals(stack.getComponents());
+			return this.hash == hash && item == stack.getItem() && components.equals(com.ayoshiko.productivebeesgenesis.util.StackTags.view(stack));
 		}
 	}
 }

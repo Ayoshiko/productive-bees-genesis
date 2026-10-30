@@ -7,12 +7,12 @@ import mekanism.common.tile.component.config.ConfigInfo;
 import mekanism.common.tile.component.config.DataType;
 import mekanism.common.tile.interfaces.ISideConfiguration;
 import mekanism.api.RelativeSide;
-import mekanism.common.capabilities.Capabilities;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
-import net.neoforged.neoforge.items.IItemHandler;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraftforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -30,9 +30,8 @@ import java.util.Map;
  * <ul>
  *   <li>方向列表按「朝向 + 侧面配置」缓存，只有玩家转动机器或改侧面配置时才重建
  *       （侧面配置变更由 {@link TileComponentConfig#addConfigChangeListener} 主动通知）。</li>
- *   <li>每个方向持有一个 {@link BlockCapabilityCache}，由 NeoForge 负责失效，
- *       避免每刻 {@code getCapability} 走方块实体查找。</li>
- *   <li>坐标固定，因此能力缓存可跨重建复用，只有方向集合会变。</li>
+	 *   <li>能力从已加载的相邻方块实体获取，遵循 Forge LazyOptional 的生命周期，
+	 *       不跨 tick 持有失效或被替换的容器。</li>
  * </ul>
  * <p>
  * 线程安全：仅服务端 tick 线程访问。
@@ -43,10 +42,6 @@ public final class NeighborItemTargets {
 
 	/** 所属机器 */
 	private final TileEntityMekanism tile;
-
-	/** 每个方向的相邻容器能力缓存（坐标固定，可长期持有） */
-	private final Map<Direction, BlockCapabilityCache<IItemHandler, @Nullable Direction>> caches =
-			new EnumMap<>(Direction.class);
 
 	/** 当前输出方向列表（按侧面配置解析） */
 	private final List<Direction> outputSides = new ArrayList<>(6);
@@ -94,13 +89,11 @@ public final class NeighborItemTargets {
 	public IItemHandler handler(Direction side) {
 		Level level = tile.getLevel();
 		if (!(level instanceof ServerLevel serverLevel)) return null;
-		BlockCapabilityCache<IItemHandler, @Nullable Direction> cache = caches.get(side);
-		if (cache == null) {
-			cache = Capabilities.ITEM.createCache(serverLevel,
-					tile.getBlockPos().relative(side), side.getOpposite());
-			caches.put(side, cache);
-		}
-		return cache.getCapability();
+		var neighborPos = tile.getBlockPos().relative(side);
+		if (!serverLevel.hasChunkAt(neighborPos)) return null;
+		BlockEntity neighbor = serverLevel.getBlockEntity(neighborPos);
+		return neighbor == null ? null : neighbor.getCapability(
+				ForgeCapabilities.ITEM_HANDLER, side.getOpposite()).orElse(null);
 	}
 
 	/** 是否存在任何输出方向（快速短路用）。 */
@@ -113,11 +106,12 @@ public final class NeighborItemTargets {
 		cachedFacing = facing;
 		sidesValid = true;
 		if (itemConfig == null) return;
-		for (Map.Entry<RelativeSide, DataType> entry : itemConfig.getSideConfig()) {
-			DataType dataType = entry.getValue();
+		for (RelativeSide side : RelativeSide.values()) {
+			if (!itemConfig.isSideEnabled(side)) continue;
+			DataType dataType = itemConfig.getDataType(side);
 			if (dataType == null || !dataType.canOutput()) continue;
 			if (itemConfig.getSlotInfo(dataType) == null) continue;
-			Direction direction = entry.getKey().getDirection(facing);
+			Direction direction = side.getDirection(facing);
 			if (!outputSides.contains(direction)) outputSides.add(direction);
 		}
 	}

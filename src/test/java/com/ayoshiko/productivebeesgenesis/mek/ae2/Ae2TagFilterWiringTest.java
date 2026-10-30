@@ -64,8 +64,7 @@ class Ae2TagFilterWiringTest {
 		String query = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
 				+ "Ae2InputFilterQuerySupport.java");
 		assertTrue(query.contains("mode, filterMatched, tagFilterActive, hasConfiguredEntries"));
-		assertTrue(query.contains("boolean matched = hitSlots != null && hitSlots.length > 0;"));
-		assertTrue(query.contains("mode, matched, tagFilterActive, hasConfiguredEntries"));
+		assertTrue(query.contains("mode, directFound, tagFilterActive, hasConfiguredEntries"));
 
 		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java")
 				.replaceAll("\\s+", " ");
@@ -226,15 +225,12 @@ class Ae2TagFilterWiringTest {
 				+ "amount, liveExtractable, reserveFloor);"),
 				"抽取前必须用实时可抽取量收口，KeyCounter 到 tick 末才刷新");
 		int extractPoints = normalized.split(
-				"meStorage\\.extract\\(key, transfer\\.offeredAmount\\(\\), Actionable\\.MODULATE", -1).length - 1;
+				"storage\\.extract\\(key, amount, Actionable\\.MODULATE", -1).length - 1;
 		assertTrue(extractPoints == 1,
 				"AE2 输入抽取点必须唯一（当前 " + extractPoints + " 处），否则新路径会绕过保留闸门");
-		int reserveGate = normalized.indexOf("amount = Ae2FilterPullPolicy.reserveSafeRequest(");
-		int custody = normalized.indexOf("transfer.beginExtract(");
-		int gatedExtract = normalized.indexOf("meStorage.extract(key, transfer.offeredAmount(), Actionable.MODULATE");
-		assertTrue(custody > reserveGate && gatedExtract > custody,
-				"唯一提取点必须位于保留线裁剪和交接登记之后");
-		assertTrue(normalized.contains("BulkItemPullScope.extract(slotProbe,"));
+		int gatedExtract = normalized.indexOf("extractFromNetwork(meStorage, key, amount, actionSource)");
+		assertTrue(gatedExtract > normalized.indexOf("amount = Ae2FilterPullPolicy.reserveSafeRequest("));
+		assertTrue(normalized.contains("BulkItemPullScope.extract(key.toStack(1),"));
 
 		// 4) 候选谓词对 reserve 守卫键先按 MAX_VALUE 放行，由第 3 步收口 ——
 		//    这样外部存储（其模拟库存不在 KeyCounter 里）不会被误判为 0 而永不拉取。

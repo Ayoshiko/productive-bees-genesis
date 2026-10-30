@@ -2,13 +2,12 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import cy.jdkdigital.productivebees.common.item.SpawnEgg;
 import cy.jdkdigital.productivebees.init.ModItems;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
+import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -53,11 +52,11 @@ public final class BeeSpawnEggHelper {
 		try {
 			if (!isRegisteredPbSpawnEgg(stack.getItem())) return null;
 			// 始终使用刷怪蛋的默认绑定，不允许 ENTITY_DATA.id 把专用蛋替换为其他实体。
-			EntityType<?> entityType = spawnEgg.getType(ItemStack.EMPTY);
+			EntityType<?> entityType = spawnEgg.getType(null);
 			ResourceLocation entityId = EntityType.getKey(entityType);
 			if (!"productivebees".equals(entityId.getNamespace())) return null;
-			CustomData entityData = stack.get(DataComponents.ENTITY_DATA);
-			CompoundTag tag = entityData == null ? new CompoundTag() : entityData.copyTag();
+			CompoundTag entityData = stack.getTagElement("EntityTag");
+			CompoundTag tag = entityData == null ? new CompoundTag() : entityData.copy();
 			if (tag.contains("id") && !entityId.toString().equals(tag.getString("id"))) return null;
 
 			if (!CONFIGURABLE_ENTITY_ID.equals(entityId.toString())) {

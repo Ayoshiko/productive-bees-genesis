@@ -15,7 +15,6 @@ import com.ayoshiko.productivebeesgenesis.client.screen.CustomConfigScreenFactor
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifugeFactory;
-import com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEMenuTypeRegistration;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.client.gui.GuiEMExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEMenuTypeRegistration;
@@ -29,22 +28,23 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.MenuType;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.neoforge.client.event.ModelEvent;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
-import net.neoforged.neoforge.event.level.LevelEvent;
-import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
-import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
-import net.neoforged.neoforge.client.event.RegisterShadersEvent;
-import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
-import net.neoforged.neoforge.client.event.ScreenEvent;
-import net.neoforged.neoforge.client.event.TextureAtlasStitchedEvent;
-import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.ModContainer;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.client.event.ModelEvent;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.event.level.LevelEvent;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.client.ConfigScreenHandler;
+import net.minecraftforge.fml.ModLoadingContext;
+import net.minecraftforge.client.event.RegisterShadersEvent;
+import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.minecraftforge.client.event.ScreenEvent;
+import net.minecraftforge.client.event.TextureStitchEvent;
+
 
 /**
 	 * 资源蜜蜂：创世模组客户端专用初始化
@@ -52,18 +52,15 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 	 * 注册配置屏幕工厂和MEK离心机Screen映射。
 	 * Screen注册使用RegisterMenuScreensEvent，与Mekanism的注册方式一致。
 	 */
-@Mod(value = ProductiveBeesGenesis.MOD_ID, dist = Dist.CLIENT)
+@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
 public final class ProductiveBeesGenesisClient {
 
-	public ProductiveBeesGenesisClient(IEventBus eventBus, ModContainer container) {
-		BeeDesignerClient.initialize();
-		eventBus.addListener((RegisterClientReloadListenersEvent event) ->
-				event.registerReloadListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener)
-						manager -> BeeEntityCache.clearCache()));
-		// 注册自定义配置屏幕 — 替代 NeoForge 默认 ConfigurationScreen
-		// 原因：默认 ConfigurationScreen 不支持空列表添加项，自定义屏幕提供完整的过滤列表编辑功能
-		// 直接传递实例避免 registerExtensionPoint 重载歧义
-		container.registerExtensionPoint(IConfigScreenFactory.class, new CustomConfigScreenFactory());
+	@SubscribeEvent
+	public static void onClientSetup(FMLClientSetupEvent event) {
+		ModLoadingContext.get().registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class,
+				() -> new ConfigScreenHandler.ConfigScreenFactory((minecraft, parent) ->
+						new CustomConfigScreenFactory().createScreen(null, parent)));
+		event.enqueueWork(ScreenRegistry::registerScreens);
 	}
 
 	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
@@ -88,22 +85,21 @@ public final class ProductiveBeesGenesisClient {
 	 */
 	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 	public static final class ScreenRegistry {
-		@SubscribeEvent
 		@SuppressWarnings({"rawtypes", "unchecked"})
-		public static void registerScreens(RegisterMenuScreensEvent event) {
+		public static void registerScreens() {
 			// 基础MEK离心机Screen
-			event.register(ModMenuTypes.MEK_CENTRIFUGE.get(), GuiMekCentrifuge::new);
+			MenuScreens.register(ModMenuTypes.MEK_CENTRIFUGE.get(), GuiMekCentrifuge::new);
 
 			// MEK通用机械蜂箱Screen
 			// 使用 lambda 而非方法引用：GuiMekApiary 已泛型化，方法引用无法推断类型参数
-			event.register(ModMenuTypes.MEK_APIARY.get(),
+			MenuScreens.register(ModMenuTypes.MEK_APIARY.get(),
 					(MekApiaryContainer menu, Inventory inv, Component title) -> new GuiMekApiary<>(menu, inv, title));
 
 			// 工厂版MEK通用机械蜂箱Screen（4个等级共用，运行时根据 tile.getTier() 区分）
-			event.register(ModMenuTypes.MEK_APIARY_FACTORY.get(), GuiMekApiaryFactory::new);
+			MenuScreens.register(ModMenuTypes.MEK_APIARY_FACTORY.get(), GuiMekApiaryFactory::new);
 
 			// 工厂版MEK离心机Screen  需要类型转换
-			event.register((MenuType) ModMenuTypes.MEK_CENTRIFUGE_FACTORY.get(),
+			MenuScreens.register((MenuType) ModMenuTypes.MEK_CENTRIFUGE_FACTORY.get(),
 					(MenuScreens.ScreenConstructor) (menu, inv, title) ->
 							new GuiMekCentrifugeFactory(
 									(MekanismTileContainer<TileEntityFactory<?>>) (MekanismTileContainer<?>) menu,
@@ -111,12 +107,12 @@ public final class ProductiveBeesGenesisClient {
 
 			// ME扩展版离心机工厂Screen — 仅当 MekanismExtras 加载时注册
 			if (MekCompatHooks.isMekanismExtrasLoaded()) {
-				event.register(MEMenuTypeRegistration.ME_CENTRIFUGE_FACTORY.get(), GuiExtraMekCentrifugeFactory::new);
+				MenuScreens.register(MEMenuTypeRegistration.ME_CENTRIFUGE_FACTORY.get(), GuiExtraMekCentrifugeFactory::new);
 			}
 
 			// EME扩展版离心机工厂Screen — 仅当 EvolvedMekanismExtras 加载时注册
 			if (MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
-				event.register(EMEMenuTypeRegistration.EME_CENTRIFUGE_FACTORY.get(), GuiEMExtraMekCentrifugeFactory::new);
+				MenuScreens.register(EMEMenuTypeRegistration.EME_CENTRIFUGE_FACTORY.get(), GuiEMExtraMekCentrifugeFactory::new);
 			}
 		}
 	}
@@ -129,18 +125,18 @@ public final class ProductiveBeesGenesisClient {
 	 * <ol>
 	 *   <li>cosmic 几何加载器（ModelEvent.RegisterGeometryLoaders）</li>
 	 *   <li>cosmic 着色器（RegisterShadersEvent）</li>
-	 *   <li>cosmic 纹理 UV 采集（TextureAtlasStitchedEvent）</li>
+	 *   <li>cosmic 纹理 UV 采集（TextureStitchEvent.Post）</li>
 	 * </ol>
 	 */
-	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
+	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
 	public static final class CosmicRenderRegistry {
 		@SubscribeEvent
 		public static void onRegisterGeometryLoaders(ModelEvent.RegisterGeometryLoaders event) {
-			event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"),
+			event.register("cosmic",
 				new GeometryLoaderCosmic());
-			event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "halo"),
+			event.register("halo",
 				new GeometryLoaderHalo());
-			event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "hell"),
+			event.register("hell",
 				new GeometryLoaderHell());
 		}
 
@@ -150,7 +146,7 @@ public final class ProductiveBeesGenesisClient {
 		}
 
 		@SubscribeEvent
-		public static void onTextureAtlasStitched(TextureAtlasStitchedEvent event) {
+		public static void onTextureAtlasStitched(TextureStitchEvent.Post event) {
 			CosmicShaders.onTextureAtlasStitched(event);
 			// 失效 halo 四边形缓存：图集重建后 UV 可能变化，旧缓存会导致 halo 渲染错位或采样错误纹理
 			BakedModelHalo.invalidateCache();
@@ -158,6 +154,10 @@ public final class ProductiveBeesGenesisClient {
 			AbstractBakedModelCosmic.invalidateCache();
 		}
 
+	}
+
+	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
+	public static final class CosmicRenderEvents {
 		@SubscribeEvent
 		public static void onRenderLevelAfterLevel(RenderLevelStageEvent event) {
 			if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
@@ -197,7 +197,7 @@ public final class ProductiveBeesGenesisClient {
 	 * {@code ServerLifecycleHooks.getCurrentServer()} 返回 null 导致索引不重建。
 	 * 此方法在客户端从 {@link net.minecraft.client.Minecraft#getLevel()} 获取 RecipeManager 重建索引。
 	 * <p>
-	 * 通过 {@link net.neoforged.fml.loading.FMLEnvironment#dist()} 守卫调用，
+	 * 通过 {@link net.minecraftforge.fml.loading.FMLEnvironment#dist()} 守卫调用，
 	 * 服务端不会加载此方法（DistExecutor 隔离），避免 {@code net.minecraft.client.Minecraft} 类加载。
 	 */
 	public static void rebuildCentrifugeIndex() {

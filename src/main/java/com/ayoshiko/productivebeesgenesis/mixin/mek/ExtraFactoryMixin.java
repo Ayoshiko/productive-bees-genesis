@@ -2,10 +2,10 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeUpgradeable;
-import com.jerry.mekextras.common.content.blocktype.ExtraFactory;
-import com.jerry.mekextras.common.content.blocktype.ExtraMachine;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import com.jerry.mekanism_extras.common.block.attribute.ExtraAttributeUpgradeable;
+import com.jerry.mekanism_extras.common.content.blocktype.ExtraFactory;
+import com.jerry.mekanism_extras.common.content.blocktype.ExtraMachine;
+import com.jerry.mekanism_extras.common.tier.ExtraFactoryTier;
 import mekanism.common.block.attribute.AttributeFactoryType;
 import mekanism.common.content.blocktype.BlockType;
 import mekanism.common.content.blocktype.FactoryType;

@@ -5,8 +5,8 @@ import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.GuiElementHolder;
-import mekanism.client.gui.tooltip.TooltipUtils;
-import mekanism.client.render.IFancyFontRenderer.TextAlignment;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.TooltipUtils;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.TextAlignment;
 import mekanism.client.render.IFancyFontRenderer;
 import mekanism.common.lib.Color;
 import net.minecraft.client.gui.GuiGraphics;
@@ -72,8 +72,8 @@ public class GuiPbSupportedUpgrades extends GuiElement {
 	/** 本实例支持安装的升级类型集合（与 upgradeTypes 一致） */
 	private final List<PbUpgradeType> supportedTypes;
 
-	private static int getFirstRowStart(IFancyFontRenderer fontRenderer) {
-		return Math.min(fontRenderer.font().width(SUPPORTED) + 1, PADDED_ELEMENT_WIDTH);
+	private static int getFirstRowStart(net.minecraft.client.gui.Font font) {
+		return Math.min(font.width(SUPPORTED) + 1, PADDED_ELEMENT_WIDTH);
 	}
 
 	private static int getFirstRowRoom(int firstRowStart) {
@@ -86,8 +86,8 @@ public class GuiPbSupportedUpgrades extends GuiElement {
 	 * 保留静态方法供 {@link GuiPbUpgradeWindow} 计算窗口高度时调用，
 	 * 内部使用蜂箱默认的升级类型集合。
 	 */
-	public static int calculateNeededRows(IFancyFontRenderer fontRenderer) {
-		return calculateNeededRows(fontRenderer, APIARY_UPGRADE_TYPES);
+	public static int calculateNeededRows(net.minecraft.client.gui.Font font) {
+		return calculateNeededRows(font, APIARY_UPGRADE_TYPES);
 	}
 
 	/**
@@ -97,9 +97,9 @@ public class GuiPbSupportedUpgrades extends GuiElement {
 	 * @param types        升级类型数组
 	 * @return 所需行数
 	 */
-	public static int calculateNeededRows(IFancyFontRenderer fontRenderer, PbUpgradeType[] types) {
+	public static int calculateNeededRows(net.minecraft.client.gui.Font font, PbUpgradeType[] types) {
 		int count = types.length;
-		int firstRowRoom = getFirstRowRoom(getFirstRowStart(fontRenderer));
+		int firstRowRoom = getFirstRowRoom(getFirstRowStart(font));
 		if (count <= firstRowRoom) {
 			return 1;
 		}
@@ -132,10 +132,10 @@ public class GuiPbSupportedUpgrades extends GuiElement {
 	 * @param upgradeTypes 显示的升级类型数组
 	 */
 	public GuiPbSupportedUpgrades(IGuiWrapper gui, int x, int y, PbUpgradeType[] upgradeTypes) {
-		super(gui, x, y, ELEMENT_WIDTH, ELEMENT_SIZE * calculateNeededRows(gui, upgradeTypes) + 2);
+		super(gui, x, y, ELEMENT_WIDTH, ELEMENT_SIZE * calculateNeededRows(gui.getFont(), upgradeTypes) + 2);
 		this.upgradeTypes = upgradeTypes;
 		this.supportedTypes = Arrays.asList(upgradeTypes);
-		this.firstRowStart = getFirstRowStart(this);
+		this.firstRowStart = getFirstRowStart(getFont());
 		this.firstRowRoom = getFirstRowRoom(this.firstRowStart);
 	}
 
@@ -168,30 +168,29 @@ public class GuiPbSupportedUpgrades extends GuiElement {
 	@Override
 	public void renderForeground(GuiGraphics guiGraphics, int mouseX, int mouseY) {
 		super.renderForeground(guiGraphics, mouseX, mouseY);
-		drawScrollingString(guiGraphics, SUPPORTED, 0, 3, TextAlignment.LEFT, titleTextColor(), 2, false);
-	}
-
-	@NotNull
-	@Override
-	protected ScreenRectangle getTooltipRectangle(int mouseX, int mouseY) {
-		return cachedTooltipRect == null ? super.getTooltipRectangle(mouseX, mouseY) : cachedTooltipRect;
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScrollingString(this, guiGraphics, SUPPORTED, 0, 3, TextAlignment.LEFT, 0xFFFFFFFF, 2, true);
 	}
 
 	@Override
+	public void renderToolTip(GuiGraphics graphics, int mouseX, int mouseY) {
+		updateTooltip(mouseX, mouseY);
+		super.renderToolTip(graphics, mouseX, mouseY);
+	}
+
 	public void updateTooltip(int mouseX, int mouseY) {
 		for (int i = 0; i < upgradeTypes.length; i++) {
 			UpgradePos pos = getUpgradePos(i);
 			if (mouseX >= getX() + 1 + pos.x && mouseX < getX() + 1 + pos.x + ELEMENT_SIZE &&
 				mouseY >= getY() + 1 + pos.y && mouseY < getY() + 1 + pos.y + ELEMENT_SIZE) {
 				PbUpgradeType upgrade = upgradeTypes[i];
-				Component upgradeName = Component.translatable(upgrade.getNameKey()).withColor(upgrade.getColor());
+				Component upgradeName = Component.translatable(upgrade.getNameKey()).withStyle(style -> style.withColor(upgrade.getColor()));
 				List<Component> info;
 				if (supportedTypes.contains(upgrade)) {
 					info = List.of(upgradeName, PbUpgradeTooltipHelper.descriptionComponent(upgrade));
 				} else {
 					info = List.of(
 							Component.translatable("gui.productivebeesgenesis.pb_upgrade_window.not_supported",
-									upgradeName).withColor(0xFFFF0000),
+									upgradeName).withStyle(style -> style.withColor(0xFF0000)),
 							PbUpgradeTooltipHelper.descriptionComponent(upgrade)
 					);
 				}

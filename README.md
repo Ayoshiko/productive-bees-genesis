@@ -1,3 +1,5 @@
+> **Forge 1.20.1:** [构建说明 / build instructions](README-FORGE.md). 本分支为 Java 17 移植快照；下方为上游 NeoForge 版文档。
+
 # Productive Bees Genesis
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-Download-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)

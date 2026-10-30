@@ -4,7 +4,9 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
 import mekanism.client.gui.IGuiWrapper;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindowCreatorTab;
 import mekanism.client.gui.element.tab.window.GuiWindowCreatorTab;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.client.render.MekanismRenderer;
 import mekanism.common.inventory.container.SelectedWindowData;
@@ -24,15 +26,15 @@ import java.util.function.Supplier;
 	 *
 	 * @param <TILE> 方块实体类型，必须实现 IPbUpgradeProvider
 	 */
-public class GuiPbUpgradeTab<TILE extends IPbUpgradeProvider> extends GuiWindowCreatorTab<TILE, GuiPbUpgradeTab<TILE>> {
+public class GuiPbUpgradeTab<TILE extends IPbUpgradeProvider> extends PinnableGuiWindowCreatorTab<TILE, GuiPbUpgradeTab<TILE>> {
 
 	private static final int TAB_COLOR = 0xFFF57F17;
 
 	private static final ResourceLocation ICON =
-		ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "textures/gui/pb_upgrade_tab.png");
+		new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "textures/gui/pb_upgrade_tab.png");
 
 	public GuiPbUpgradeTab(IGuiWrapper gui, TILE tile, Supplier<GuiPbUpgradeTab<TILE>> elementSupplier) {
-		super(ICON, gui, tile, gui.getXSize(), 98, 26, 18, false, elementSupplier);
+		super(ICON, gui, tile, gui.getWidth(), 98, 26, 18, false, elementSupplier);
 		setTooltip(Tooltip.create(Component.translatable("gui.productivebeesgenesis.pb_upgrade_tab.tooltip")));
 	}
 

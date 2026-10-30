@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import net.minecraft.core.component.DataComponentPatch;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -10,7 +10,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
 
@@ -38,29 +38,25 @@ final class EssenceConversionRecipeIndex {
 	private static final List<TagKey<Item>> STORAGE_BLOCK_TAGS = List.of(
 			itemTag("c", "storage_blocks"), itemTag("forge", "storage_blocks"));
 	private static final ResourceLocation OBSIDIAN_SHARD_ID =
-			ResourceLocation.fromNamespaceAndPath("productivebees", "obsidian_shard");
+			new ResourceLocation("productivebees", "obsidian_shard");
 	private static final ResourceLocation OBSIDIAN_ID =
-			ResourceLocation.fromNamespaceAndPath("minecraft", "obsidian");
-	private static final ResourceLocation WITHER_SKULL_CHIP_ID =
-			ResourceLocation.fromNamespaceAndPath("productivebees", "wither_skull_chip");
-	private static final ResourceLocation WITHER_SKULL_ID =
-			ResourceLocation.fromNamespaceAndPath("minecraft", "wither_skeleton_skull");
+			new ResourceLocation("minecraft", "obsidian");
 	private static final ResourceLocation REDSTONE_ESSENCE_ID =
-			ResourceLocation.fromNamespaceAndPath("mysticalagriculture", "redstone_essence");
+			new ResourceLocation("mysticalagriculture", "redstone_essence");
 	private static final ResourceLocation REDSTONE_ID =
-			ResourceLocation.fromNamespaceAndPath("minecraft", "redstone");
+			new ResourceLocation("minecraft", "redstone");
 	private static final ResourceLocation NETHER_STAR_ESSENCE_ID =
-			ResourceLocation.fromNamespaceAndPath("mysticalagriculture", "nether_star_essence");
+			new ResourceLocation("mysticalagriculture", "nether_star_essence");
 	private static final ResourceLocation NETHER_STAR_SHARD_ID =
-			ResourceLocation.fromNamespaceAndPath("mysticalagradditions", "nether_star_shard");
+			new ResourceLocation("mysticalagradditions", "nether_star_shard");
 	private static final ResourceLocation NETHER_STAR_ID =
-			ResourceLocation.fromNamespaceAndPath("minecraft", "nether_star");
+			new ResourceLocation("minecraft", "nether_star");
 	private static final Set<ResourceLocation> EXCLUDED_RECIPE_IDS = Set.of(
-			ResourceLocation.fromNamespaceAndPath("industrialforegoing", "straw"),
-			ResourceLocation.fromNamespaceAndPath("exdeorum", "bone_crook"),
-			ResourceLocation.fromNamespaceAndPath("minecraft", "music_disc_5"),
+			new ResourceLocation("industrialforegoing", "straw"),
+			new ResourceLocation("exdeorum", "bone_crook"),
+			new ResourceLocation("minecraft", "music_disc_5"),
 			// 整合包会用 KubeJS 重建唱片配方，需同时排除其独立 ID。
-			ResourceLocation.fromNamespaceAndPath("kubejs", "kjs/music_disc_5"));
+			new ResourceLocation("kubejs", "kjs/music_disc_5"));
 	private static final long BUILD_RETRY_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(5);
 	private static volatile ConversionSnapshot conversionSnapshot = ConversionSnapshot.EMPTY;
 	private static volatile boolean conversionSnapshotLoaded;
@@ -111,16 +107,16 @@ final class EssenceConversionRecipeIndex {
 
 	private static ConversionSnapshot buildConversionSnapshot(Level level) {
 		Map<StackKey, Map<RecipeSignature, RecipePattern>> patternsByInput = new HashMap<>();
-		for (RecipeHolder<CraftingRecipe> holder : level.getRecipeManager()
+		for (CraftingRecipe holder : level.getRecipeManager()
 				.getAllRecipesFor(RecipeType.CRAFTING)) {
-			if (isRecipeExcluded(holder.id())) continue;
+			if (isRecipeExcluded(holder.getId())) continue;
 			try {
-				for (RecipePattern pattern : parseRecipes(level, holder.value())) {
+				for (RecipePattern pattern : parseRecipes(level, holder)) {
 					patternsByInput.computeIfAbsent(pattern.inputKey(), ignored -> new HashMap<>())
 							.merge(pattern.signature(), pattern, EssenceConversionRecipeIndex::preferExplicitPattern);
 				}
 			} catch (RuntimeException exception) {
-				LogThrottle.warn("essence_conversion_recipe", "精华转化跳过无法解析的合成配方 {}", holder.id());
+				LogThrottle.warn("essence_conversion_recipe", "精华转化跳过无法解析的合成配方 {}", holder.getId());
 			}
 		}
 
@@ -185,7 +181,7 @@ final class EssenceConversionRecipeIndex {
 
 		List<RecipePattern> patterns = new ArrayList<>(pureInputs.size() * 2);
 		for (ItemStack input : pureInputs.values()) {
-			if (ItemStack.isSameItemSameComponents(result, input)) continue;
+			if (ItemStack.isSameItemSameTags(result, input)) continue;
 			patterns.add(createPattern(input, inputCount, result, false));
 			// 整合包经常只保留“1 锭 -> 9 粒/碎片”的配方，将它作为反向声明。
 			if (isDecompressionShape(inputCount, result.getCount(),
@@ -310,11 +306,11 @@ final class EssenceConversionRecipeIndex {
 	}
 
 	private static StackKey stackKey(ItemStack stack) {
-		return new StackKey(stack.getItem(), stack.getComponentsPatch());
+		return new StackKey(stack.getItem(), stack.hasTag() ? stack.getTag().copy() : new CompoundTag());
 	}
 
 	private static TagKey<Item> itemTag(String namespace, String path) {
-		return TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath(namespace, path));
+		return TagKey.create(Registries.ITEM, new ResourceLocation(namespace, path));
 	}
 
 	private record RecipePattern(StackKey inputKey, int inputCount, ItemStack result, StackKey resultKey,
@@ -326,7 +322,6 @@ final class EssenceConversionRecipeIndex {
 		private boolean isCompression() {
 			return isCompressionShape(inputCount, result.getCount(), inputIsBlock, resultIsBlock, excludedInput)
 					|| isAllowedObsidianShardConversion()
-					|| isAllowedWitherSkullConversion()
 					|| isAllowedRedstoneEssenceConversion()
 					|| isAllowedNetherStarConversion();
 		}
@@ -343,12 +338,6 @@ final class EssenceConversionRecipeIndex {
 					&& hasItemId(resultKey, REDSTONE_ID);
 		}
 
-		private boolean isAllowedWitherSkullConversion() {
-			return inputCount == 9 && result.getCount() == 1
-					&& hasItemId(inputKey, WITHER_SKULL_CHIP_ID)
-					&& hasItemId(resultKey, WITHER_SKULL_ID);
-		}
-
 		private boolean isAllowedNetherStarConversion() {
 			return isNetherStarEssenceStep(inputKey, this) || isNetherStarShardStep(inputKey, this);
 		}
@@ -361,7 +350,7 @@ final class EssenceConversionRecipeIndex {
 	private record RecipeSignature(int inputCount, StackKey resultKey, int resultCount) {
 	}
 
-	record StackKey(Item item, DataComponentPatch components) {
+	record StackKey(Item item, CompoundTag components) {
 	}
 
 	record Conversion(int inputCount, ItemStack result, StackKey resultKey, boolean continueChain) {
@@ -385,7 +374,7 @@ final class EssenceConversionRecipeIndex {
 		}
 
 		Conversion find(ItemStack stack) {
-			if (stack.getComponentsPatch().isEmpty()) return byDefaultItem.get(stack.getItem());
+			if (!stack.hasTag()) return byDefaultItem.get(stack.getItem());
 			return byInput.get(stackKey(stack));
 		}
 

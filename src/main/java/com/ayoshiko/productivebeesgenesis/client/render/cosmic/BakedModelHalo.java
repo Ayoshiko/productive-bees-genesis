@@ -31,9 +31,9 @@ import java.util.List;
 public class BakedModelHalo extends WrappedItemModel {
 
 	private static final ResourceLocation HALO_TEXTURE =
-		ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "item/halo");
+		new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "item/halo");
 	private static final ResourceLocation HALO_NOISE_TEXTURE =
-		ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "item/halo_noise");
+		new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "item/halo_noise");
 
 	private final int type;
 	private final float alpha;
@@ -52,7 +52,7 @@ public class BakedModelHalo extends WrappedItemModel {
 	 * 失效所有 halo 四边形缓存
 	 * <br/>
 	 * 由 {@link com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesisClient}
-	 * 在 {@link net.neoforged.neoforge.client.event.TextureAtlasStitchedEvent} 中调用。
+	 * 在 {@link net.minecraftforge.client.event.TextureStitchEvent} 中调用。
 	 * <br/>
 	 * 原因：图集重新拼接后，缓存中持有的 TextureAtlasSprite 引用对应的 UV 坐标可能已变化，
 	 * 继续使用旧缓存会导致 halo 渲染错位或采样到错误纹理，因此必须在图集重建时清空缓存，

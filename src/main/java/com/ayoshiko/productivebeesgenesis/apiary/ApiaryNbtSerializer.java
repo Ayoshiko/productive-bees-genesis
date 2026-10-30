@@ -13,7 +13,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -134,10 +134,10 @@ class ApiaryNbtSerializer {
 		long pendingAmount = tile.getPendingHoneyFluidAmount();
 		if (!fluid.isEmpty() || pendingAmount > 0 && pendingTemplate != null && !pendingTemplate.isEmpty()) {
 			CompoundTag fluidNbt = new CompoundTag();
-			if (!fluid.isEmpty()) fluidNbt.put("Fluid", fluid.save(provider));
+			if (!fluid.isEmpty()) fluidNbt.put("Fluid", fluid.writeToNBT(new CompoundTag()));
 			if (pendingAmount > 0 && pendingTemplate != null && !pendingTemplate.isEmpty()) {
 				fluidNbt.putLong(NBT_KEY_PENDING_FLUID_AMOUNT, pendingAmount);
-				fluidNbt.put(NBT_KEY_PENDING_FLUID, pendingTemplate.save(provider));
+				fluidNbt.put(NBT_KEY_PENDING_FLUID, pendingTemplate.writeToNBT(new CompoundTag()));
 			}
 			nbt.put(NBT_KEY_APIARY_FLUID, fluidNbt);
 		}
@@ -153,7 +153,8 @@ class ApiaryNbtSerializer {
 	 * <br/>
 	 * 由 {@link TileEntityMekApiary#loadAdditional} 在调用 super 后调用。
 	 * 修复 v14：追加流体罐反序列化，恢复存档/扳手拆卸时保存的流体内容。
-	 * 此处还原同一份库存快照；super 可能已恢复同一个罐，不能再次追加。
+	 * 使用 {@code insert(..., AutomationType.INTERNAL)} 尊重当前罐容量，
+	 * 与 {@link #applyUpgradeData} 中的流体恢复逻辑一致（DRY）。
 	 * PB 升级槽位与数量均从 NBT 恢复；持久化数量不受当前安装上限裁剪。
 	 */
 	void loadApiaryState(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
@@ -195,10 +196,9 @@ class ApiaryNbtSerializer {
 		if (nbt.contains(NBT_KEY_APIARY_FLUID, Tag.TAG_COMPOUND)) {
 			CompoundTag fluidNbt = nbt.getCompound(NBT_KEY_APIARY_FLUID);
 			if (fluidNbt.contains("Fluid", Tag.TAG_COMPOUND)) {
-				FluidStack fluid = FluidStack.parseOptional(provider, fluidNbt.getCompound("Fluid"));
+				FluidStack fluid = FluidStack.loadFluidStackFromNBT(fluidNbt.getCompound("Fluid"));
 				if (!fluid.isEmpty()) {
-					// 自存字段是 Mekanism 库存的兼容快照，不是另一份待入库产物。
-					tile.getFluidTank().setStack(fluid);
+					tile.getFluidTank().insert(fluid, Action.EXECUTE, AutomationType.INTERNAL);
 				}
 			}
 			loadPendingHoneyFluid(fluidNbt, provider);
@@ -206,8 +206,8 @@ class ApiaryNbtSerializer {
 			tile.setPendingHoneyFluid(0L, null);
 		}
 		// F4: 反序列化产物溢出缓冲区（向后兼容：旧存档无此字段时跳过）
-		if (nbt.contains(ApiaryOutputBuffer.nbtKey())) {
-			tile.getOutputBuffer().loadRaw(provider, nbt.get(ApiaryOutputBuffer.nbtKey()));
+		if (nbt.contains(ApiaryOutputBuffer.nbtKey(), Tag.TAG_COMPOUND)) {
+			tile.getOutputBuffer().load(provider, nbt.getCompound(ApiaryOutputBuffer.nbtKey()));
 		}
 		// 模块 3 Bug 1：反序列化镐子破坏/扳手拆卸冗余保存的槽位（向后兼容：旧存档无此键时跳过）
 		// 这些键仅由 saveCustomData 写入，存档加载时通常不存在，由 MEK ITEM_CONTAINER 接管恢复
@@ -220,7 +220,7 @@ class ApiaryNbtSerializer {
 				|| !fluidNbt.contains(NBT_KEY_PENDING_FLUID, Tag.TAG_COMPOUND)) return;
 		long amount = fluidNbt.getLong(NBT_KEY_PENDING_FLUID_AMOUNT);
 		if (amount <= 0L) return;
-		FluidStack template = FluidStack.parseOptional(provider, fluidNbt.getCompound(NBT_KEY_PENDING_FLUID));
+		FluidStack template = FluidStack.loadFluidStackFromNBT(fluidNbt.getCompound(NBT_KEY_PENDING_FLUID));
 		if (!template.isEmpty()) tile.setPendingHoneyFluid(amount, template);
 	}
 
@@ -243,23 +243,23 @@ class ApiaryNbtSerializer {
 			ListTag outputList = nbt.getList(NBT_KEY_DROP_OUTPUT_SLOTS, Tag.TAG_COMPOUND);
 			List<BasicInventorySlot> currentOutputs = tile.getOutputSlots();
 			for (int i = 0; i < outputList.size() && i < currentOutputs.size(); i++) {
-				currentOutputs.get(i).deserializeNBT(provider, outputList.getCompound(i));
+				currentOutputs.get(i).deserializeNBT(outputList.getCompound(i));
 			}
 		}
 		// 蜂笼输入槽
 		if (nbt.contains(NBT_KEY_DROP_CAGE_IN_SLOT, Tag.TAG_COMPOUND)) {
-			tile.getCageInSlot().deserializeNBT(provider, nbt.getCompound(NBT_KEY_DROP_CAGE_IN_SLOT));
+			tile.getCageInSlot().deserializeNBT(nbt.getCompound(NBT_KEY_DROP_CAGE_IN_SLOT));
 		}
 		// 蜂笼输出槽
 		if (nbt.contains(NBT_KEY_DROP_CAGE_OUT_SLOT, Tag.TAG_COMPOUND)) {
-			tile.getCageOutSlot().deserializeNBT(provider, nbt.getCompound(NBT_KEY_DROP_CAGE_OUT_SLOT));
+			tile.getCageOutSlot().deserializeNBT(nbt.getCompound(NBT_KEY_DROP_CAGE_OUT_SLOT));
 		}
 		if (nbt.contains(NBT_KEY_DROP_GENE_TREAT_SLOT, Tag.TAG_COMPOUND)) {
-			tile.getGeneTreatSlot().deserializeNBT(provider, nbt.getCompound(NBT_KEY_DROP_GENE_TREAT_SLOT));
+			tile.getGeneTreatSlot().deserializeNBT(nbt.getCompound(NBT_KEY_DROP_GENE_TREAT_SLOT));
 		}
 		// 能量槽
 		if (nbt.contains(NBT_KEY_DROP_ENERGY_SLOT, Tag.TAG_COMPOUND)) {
-			tile.getEnergySlot().deserializeNBT(provider, nbt.getCompound(NBT_KEY_DROP_ENERGY_SLOT));
+			tile.getEnergySlot().deserializeNBT(nbt.getCompound(NBT_KEY_DROP_ENERGY_SLOT));
 		}
 	}
 
@@ -288,7 +288,6 @@ class ApiaryNbtSerializer {
 		writeApiaryStateTo(nbt, provider);
 		// 保存 AE2 per-tile 输出开关，避免扳手拆卸后丢失用户设置
 		tile.saveAe2PerTileState(nbt);
-		for (var component : tile.getComponents()) component.write(nbt, provider);
 		// 模块 3 Bug 1：冗余序列化 4 类槽位到自定义 NBT，作为 ITEM_CONTAINER 备份
 		writeDropSlotsToNbt(nbt, provider);
 		// Bug 4修复：在NBT顶层添加方块实体类型注册键id字段，通过CODEC_WITH_ID验证
@@ -311,16 +310,16 @@ class ApiaryNbtSerializer {
 		// 产物输出槽列表（ListTag，每个元素为 BasicInventorySlot.serializeNBT 的结果）
 		ListTag outputList = new ListTag();
 		for (BasicInventorySlot slot : tile.getOutputSlots()) {
-			outputList.add(slot.serializeNBT(provider));
+			outputList.add(slot.serializeNBT());
 		}
 		nbt.put(NBT_KEY_DROP_OUTPUT_SLOTS, outputList);
 		// 蜂笼输入槽
-		nbt.put(NBT_KEY_DROP_CAGE_IN_SLOT, tile.getCageInSlot().serializeNBT(provider));
+		nbt.put(NBT_KEY_DROP_CAGE_IN_SLOT, tile.getCageInSlot().serializeNBT());
 		// 蜂笼输出槽
-		nbt.put(NBT_KEY_DROP_CAGE_OUT_SLOT, tile.getCageOutSlot().serializeNBT(provider));
-		nbt.put(NBT_KEY_DROP_GENE_TREAT_SLOT, tile.getGeneTreatSlot().serializeNBT(provider));
+		nbt.put(NBT_KEY_DROP_CAGE_OUT_SLOT, tile.getCageOutSlot().serializeNBT());
+		nbt.put(NBT_KEY_DROP_GENE_TREAT_SLOT, tile.getGeneTreatSlot().serializeNBT());
 		// 能量槽
-		nbt.put(NBT_KEY_DROP_ENERGY_SLOT, tile.getEnergySlot().serializeNBT(provider));
+		nbt.put(NBT_KEY_DROP_ENERGY_SLOT, tile.getEnergySlot().serializeNBT());
 	}
 
 	// ===== ItemTierInstaller 升级数据 =====
@@ -362,27 +361,27 @@ class ApiaryNbtSerializer {
 		CompoundTag pbUpgradeCountsNbt = new CompoundTag();
 		tile.pbUpgradeHandler.savePbUpgradeCounts(pbUpgradeCountsNbt);
 
-		CompoundTag pbUpgradeInputNbt = tile.getPbUpgradeInputSlot().serializeNBT(provider);
-		CompoundTag pbUpgradeOutputNbt = tile.getPbUpgradeOutputSlot().serializeNBT(provider);
+		CompoundTag pbUpgradeInputNbt = tile.getPbUpgradeInputSlot().serializeNBT();
+		CompoundTag pbUpgradeOutputNbt = tile.getPbUpgradeOutputSlot().serializeNBT();
 
 		CompoundTag fluidNbt = new CompoundTag();
 		FluidStack fluid = tile.getFluidTank().getFluid();
-		if (!fluid.isEmpty()) fluidNbt.put("Fluid", fluid.save(provider));
+		if (!fluid.isEmpty()) fluidNbt.put("Fluid", fluid.writeToNBT(new CompoundTag()));
 		FluidStack pendingTemplate = tile.getPendingHoneyFluidTemplate();
 		long pendingAmount = tile.getPendingHoneyFluidAmount();
 		if (pendingAmount > 0 && pendingTemplate != null && !pendingTemplate.isEmpty()) {
 			fluidNbt.putLong(NBT_KEY_PENDING_FLUID_AMOUNT, pendingAmount);
-			fluidNbt.put(NBT_KEY_PENDING_FLUID, pendingTemplate.save(provider));
+			fluidNbt.put(NBT_KEY_PENDING_FLUID, pendingTemplate.writeToNBT(new CompoundTag()));
 		}
 
 		// 蜂笼输出槽序列化（独立于产物输出槽）
-		CompoundTag cageOutSlotNbt = tile.getCageOutSlot().serializeNBT(provider);
+		CompoundTag cageOutSlotNbt = tile.getCageOutSlot().serializeNBT();
 
 		// 修复（升级物品丢失）：蜂笼输入槽/能量槽做 NBT 快照、输出缓冲区做 NBT 快照。
 		// getUpgradeData 之后 saveAllItemsForDrop 会清空旧方块全部槽位与缓冲区，
 		// 父类 inputSlots/energySlot 只是旧槽位引用，恢复时必须从快照读取。
-		CompoundTag cageInSlotNbt = tile.getCageInSlot().serializeNBT(provider);
-		CompoundTag energySlotNbt = tile.getEnergySlot().serializeNBT(provider);
+		CompoundTag cageInSlotNbt = tile.getCageInSlot().serializeNBT();
+		CompoundTag energySlotNbt = tile.getEnergySlot().serializeNBT();
 		CompoundTag outputBufferNbt = tile.getOutputBuffer().save(provider);
 
 		// 读取 AE2 per-tile 输出开关（AE2 未加载时默认 false，避免保留无意义的开关状态）
@@ -391,7 +390,7 @@ class ApiaryNbtSerializer {
 		boolean aeFluidOutputEnabled = Ae2IntegrationLoader.isAe2Loaded()
 				&& tile.productivebeesgenesis$isAeFluidOutputEnabled();
 
-		ApiaryUpgradeData data = new ApiaryUpgradeData(provider, redstone, tile.getControlType(),
+		return new ApiaryUpgradeData(provider, redstone, tile.getControlType(),
 				tile.getEnergyContainer(), new int[]{tile.getOperatingTicks()}, tile.getEnergySlot(),
 				inputSlots, outputSlots, sorting, tile.getComponents(),
 				beeSlotsNbt, feederSlotsNbt, pbUpgradeCountsNbt,
@@ -401,12 +400,7 @@ class ApiaryNbtSerializer {
 				aeItemOutputEnabled, aeFluidOutputEnabled, tile.isDirectEjectEnabled(),
 				tile.isDirectAeOutputEnabled(), tile.isCentrifugePriorityEnabled(),
 				tile.isFeederConversionEnabled(), tile.isDirectContainerOutputEnabled(),
-				tile.getGeneTreatSlot().serializeNBT(provider), tile.getGeneTreatRestock().save(provider));
-		data.aePerTileState = new CompoundTag();
-		tile.ae2HostAdapter().savePerTileState(data.aePerTileState);
-		data.aePendingState = new CompoundTag();
-		tile.ae2HostAdapter().savePendingItems(data.aePendingState);
-		return data;
+				tile.getGeneTreatSlot().serializeNBT(), tile.getGeneTreatRestock().save(provider));
 	}
 
 	/**
@@ -430,12 +424,12 @@ class ApiaryNbtSerializer {
 		if (!(upgradeData instanceof ApiaryUpgradeData data)) return false;
 
 		try {
-			tile.setRedstoneControl(data.redstone);
+			tile.setRedstonePowered(data.redstone);
 			tile.setControlType(data.controlType);
 			tile.getEnergyContainer().setEnergy(data.energyContainer.getEnergy());
 			if (data.energySlotNbt != null) {
 				// 快照恢复（修复：父类 energySlot 引用已被 saveAllItemsForDrop 清空）
-				tile.getEnergySlot().deserializeNBT(provider, data.energySlotNbt);
+				tile.getEnergySlot().deserializeNBT(data.energySlotNbt);
 			} else {
 				// 旧版本升级数据回退
 				tile.getEnergySlot().setStack(data.energySlot.getStack().copy());
@@ -445,10 +439,10 @@ class ApiaryNbtSerializer {
 			}
 			if (data.cageInSlotNbt != null) {
 				// 快照恢复（修复：父类 inputSlots 引用已被 saveAllItemsForDrop 清空）
-				tile.getCageInSlot().deserializeNBT(provider, data.cageInSlotNbt);
+				tile.getCageInSlot().deserializeNBT(data.cageInSlotNbt);
 			} else if (!data.inputSlots.isEmpty()) {
 				// 旧版本升级数据回退
-				tile.getCageInSlot().deserializeNBT(provider, data.inputSlots.get(0).serializeNBT(provider));
+				tile.getCageInSlot().deserializeNBT(data.inputSlots.get(0).serializeNBT());
 			}
 			List<BasicInventorySlot> currentOutputs = tile.getOutputSlots();
 			// 模块 3 Bug 2：优先从 outputItems 深拷贝列表恢复（防止旧方块 setRemoved 后 outputSlots 引用指向空栈）
@@ -465,31 +459,31 @@ class ApiaryNbtSerializer {
 				}
 			}
 			for (ITileComponent component : tile.getComponents()) {
-				component.read(data.components, provider);
+				component.read(data.components);
 			}
 			// 恢复蜂箱特有数据
 			// PB 升级槽位与数量均按快照恢复；当前配置上限仅限制后续安装。
 			tile.getSlotManager().loadBeeSlots(data.beeSlotsNbt);
 			tile.feederSlotManager.loadFeederSlots(data.feederSlotsNbt, provider);
-			tile.getPbUpgradeInputSlot().deserializeNBT(provider, data.pbUpgradeInputNbt);
-			tile.getPbUpgradeOutputSlot().deserializeNBT(provider, data.pbUpgradeOutputNbt);
+			tile.getPbUpgradeInputSlot().deserializeNBT(data.pbUpgradeInputNbt);
+			tile.getPbUpgradeOutputSlot().deserializeNBT(data.pbUpgradeOutputNbt);
 			tile.pbUpgradeHandler.loadPbUpgradeCounts(data.pbUpgradeCountsNbt, provider);
 			// 修复（升级物品丢失）：恢复产物溢出缓冲区（saveAllItemsForDrop 已 clear，必须从快照恢复）
 			if (data.outputBufferNbt != null) {
 				tile.getOutputBuffer().load(provider, data.outputBufferNbt);
 			}
-			// 升级同样还原库存快照，不能把已有恢复结果当作另一份流体追加。
+			// 恢复流体罐（使用 insert 尊重当前罐容量）
 			if (data.fluidNbt.contains("Fluid", Tag.TAG_COMPOUND)) {
-				FluidStack fluid = FluidStack.parseOptional(provider, data.fluidNbt.getCompound("Fluid"));
+				FluidStack fluid = FluidStack.loadFluidStackFromNBT(data.fluidNbt.getCompound("Fluid"));
 				if (!fluid.isEmpty()) {
-					tile.getFluidTank().setStack(fluid);
+					tile.getFluidTank().insert(fluid, Action.EXECUTE, AutomationType.INTERNAL);
 				}
 			}
 			loadPendingHoneyFluid(data.fluidNbt, provider);
 			// 恢复蜂笼输出槽
-			tile.getCageOutSlot().deserializeNBT(provider, data.cageOutSlotNbt);
+			tile.getCageOutSlot().deserializeNBT(data.cageOutSlotNbt);
 			if (data.geneTreatSlotNbt != null) {
-				tile.getGeneTreatSlot().deserializeNBT(provider, data.geneTreatSlotNbt);
+				tile.getGeneTreatSlot().deserializeNBT(data.geneTreatSlotNbt);
 			}
 			if (data.geneTreatRestockNbt != null) {
 				tile.getGeneTreatRestock().load(data.geneTreatRestockNbt, provider);
@@ -501,16 +495,12 @@ class ApiaryNbtSerializer {
 			} else {
 				tile.setSelectedBeeSlot(-1);
 			}
-			if (data.aePerTileState != null) {
-				tile.ae2HostAdapter().loadPerTileState(data.aePerTileState.copy());
-			} else if (Ae2IntegrationLoader.isAe2Loaded()) {
+			// 恢复 AE2 per-tile 输出开关（AE2 未加载时跳过，新方块使用默认值 true）
+			if (Ae2IntegrationLoader.isAe2Loaded()) {
 				tile.productivebeesgenesis$setAeItemOutputEnabled(data.aeItemOutputEnabled);
 				tile.productivebeesgenesis$setAeFluidOutputEnabled(data.aeFluidOutputEnabled);
 			}
 			tile.setDirectEjectEnabled(data.directEjectEnabled);
-			if (data.aePendingState != null) {
-				tile.ae2HostAdapter().loadPendingItems(data.aePendingState.copy());
-			}
 			tile.setDirectAeOutputEnabled(data.directAeOutputEnabled);
 			tile.setCentrifugePriorityEnabled(data.centrifugePriorityEnabled);
 			tile.setFeederConversionEnabled(data.feederConversionEnabled);

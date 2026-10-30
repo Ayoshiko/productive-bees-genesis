@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 import java.util.List;
 
@@ -47,136 +47,135 @@ public final class ServerConfig {
 	public ApiaryConfigSection apiary() { return sections.apiary(); }
 
 	// ========== 万象创世蜜蜂总开关(存档级别)==========
-	public final ModConfigSpec.BooleanValue myriadCreationsEnabled;
-	public final ModConfigSpec.EnumValue<BalancePreset> balancePreset;
-	public final ModConfigSpec.BooleanValue productivityUpgradeTiersExclusive;
-	public final ModConfigSpec.BooleanValue speedUpgradeTiersExclusive;
-	public final ModConfigSpec.BooleanValue centrifugeProductivityAffectsOutput;
-	public final ModConfigSpec.BooleanValue apiaryBeeGenesAffectWork;
-	public final ModConfigSpec.BooleanValue apiaryProduceAllFlowers;
+	public final ForgeConfigSpec.BooleanValue myriadCreationsEnabled;
+	public final ForgeConfigSpec.EnumValue<BalancePreset> balancePreset;
+	public final ForgeConfigSpec.BooleanValue productivityUpgradeTiersExclusive;
+	public final ForgeConfigSpec.BooleanValue speedUpgradeTiersExclusive;
+	public final ForgeConfigSpec.BooleanValue centrifugeProductivityAffectsOutput;
+	public final ForgeConfigSpec.BooleanValue apiaryBeeGenesAffectWork;
+	public final ForgeConfigSpec.BooleanValue apiaryProduceAllFlowers;
 
 	// ========== 万象创世过滤配置(存档级别)==========
 	// 使用枚举类型,ConfigurationScreen自动渲染循环切换按钮
-	public final ModConfigSpec.EnumValue<ModConfig.FilterMode> myriadCreationsFilterMode;
-	public final ModConfigSpec.ConfigValue<List<? extends String>> myriadCreationsFilteredBeeTypes;
+	public final ForgeConfigSpec.EnumValue<ModConfig.FilterMode> myriadCreationsFilterMode;
+	public final ForgeConfigSpec.ConfigValue<List<? extends String>> myriadCreationsFilteredBeeTypes;
 
 	// ========== 万象创世蜜蜂属性(服务端生效)—— 向后兼容委托字段 ==========
-	public final ModConfigSpec.ConfigValue<String> primaryColor;
-	public final ModConfigSpec.ConfigValue<String> secondaryColor;
-	public final ModConfigSpec.ConfigValue<String> particleColor;
-	public final ModConfigSpec.ConfigValue<String> glowColor;
-	public final ModConfigSpec.ConfigValue<String> flowerItem;
-	public final ModConfigSpec.ConfigValue<String> weatherTolerance;
-	public final ModConfigSpec.ConfigValue<String> temper;
-	public final ModConfigSpec.ConfigValue<String> behavior;
-	public final ModConfigSpec.ConfigValue<String> endurance;
-	public final ModConfigSpec.ConfigValue<String> productivity;
-	public final ModConfigSpec.BooleanValue createComb;
-	public final ModConfigSpec.DoubleValue size;
-	public final ModConfigSpec.DoubleValue speed;
-	public final ModConfigSpec.DoubleValue attack;
-	public final ModConfigSpec.ConfigValue<String> breedingItem;
-	public final ModConfigSpec.IntValue breedingItemCount;
-	public final ModConfigSpec.BooleanValue selfbreed;
-	public final ModConfigSpec.BooleanValue waterproof;
-	public final ModConfigSpec.BooleanValue fireproof;
+	public final ForgeConfigSpec.ConfigValue<String> primaryColor;
+	public final ForgeConfigSpec.ConfigValue<String> secondaryColor;
+	public final ForgeConfigSpec.ConfigValue<String> particleColor;
+	public final ForgeConfigSpec.ConfigValue<String> glowColor;
+	public final ForgeConfigSpec.ConfigValue<String> flowerItem;
+	public final ForgeConfigSpec.ConfigValue<String> weatherTolerance;
+	public final ForgeConfigSpec.ConfigValue<String> temper;
+	public final ForgeConfigSpec.ConfigValue<String> behavior;
+	public final ForgeConfigSpec.ConfigValue<String> endurance;
+	public final ForgeConfigSpec.ConfigValue<String> productivity;
+	public final ForgeConfigSpec.BooleanValue createComb;
+	public final ForgeConfigSpec.DoubleValue size;
+	public final ForgeConfigSpec.DoubleValue speed;
+	public final ForgeConfigSpec.DoubleValue attack;
+	public final ForgeConfigSpec.ConfigValue<String> breedingItem;
+	public final ForgeConfigSpec.IntValue breedingItemCount;
+	public final ForgeConfigSpec.BooleanValue selfbreed;
+	public final ForgeConfigSpec.BooleanValue waterproof;
+	public final ForgeConfigSpec.BooleanValue fireproof;
 
 	// ========== 蜜蜂获得方式配置 ==========
-	public final ModConfigSpec.BooleanValue fishingEnabled;
-	public final ModConfigSpec.DoubleValue fishingChance;
-	public final ModConfigSpec.ConfigValue<List<? extends String>> fishingBiomes;
-	public final ModConfigSpec.BooleanValue breedingEnabled;
-	public final ModConfigSpec.ConfigValue<String> breedingParent1;
-	public final ModConfigSpec.ConfigValue<String> breedingParent2;
-	public final ModConfigSpec.BooleanValue spawningEnabled;
-	public final ModConfigSpec.ConfigValue<String> spawningNest;
-	public final ModConfigSpec.ConfigValue<String> spawningBiomes;
+	public final ForgeConfigSpec.BooleanValue fishingEnabled;
+	public final ForgeConfigSpec.DoubleValue fishingChance;
+	public final ForgeConfigSpec.ConfigValue<List<? extends String>> fishingBiomes;
+	public final ForgeConfigSpec.BooleanValue breedingEnabled;
+	public final ForgeConfigSpec.ConfigValue<String> breedingParent1;
+	public final ForgeConfigSpec.ConfigValue<String> breedingParent2;
+	public final ForgeConfigSpec.BooleanValue spawningEnabled;
+	public final ForgeConfigSpec.ConfigValue<String> spawningNest;
+	public final ForgeConfigSpec.ConfigValue<String> spawningBiomes;
 
 	// ========== 蜜蜂转化与产出配置 ==========
-	public final ModConfigSpec.BooleanValue conversionEnabled;
-	public final ModConfigSpec.ConfigValue<String> conversionSource;
-	public final ModConfigSpec.ConfigValue<String> conversionResult;
-	public final ModConfigSpec.ConfigValue<String> conversionItem;
-	public final ModConfigSpec.DoubleValue conversionChance;
-	public final ModConfigSpec.BooleanValue apiaryItemConversionEnabled;
-	public final ModConfigSpec.BooleanValue apiaryBlockConversionEnabled;
-	public final ModConfigSpec.BooleanValue produceEnabled;
-	public final ModConfigSpec.ConfigValue<String> produceOutputItem;
-	public final ModConfigSpec.IntValue produceOutputMin;
-	public final ModConfigSpec.IntValue produceOutputMax;
-	public final ModConfigSpec.DoubleValue produceOutputChance;
-	public final ModConfigSpec.IntValue myriadProduceThrottlePerTick;
+	public final ForgeConfigSpec.BooleanValue conversionEnabled;
+	public final ForgeConfigSpec.ConfigValue<String> conversionSource;
+	public final ForgeConfigSpec.ConfigValue<String> conversionResult;
+	public final ForgeConfigSpec.ConfigValue<String> conversionItem;
+	public final ForgeConfigSpec.DoubleValue conversionChance;
+	public final ForgeConfigSpec.BooleanValue apiaryItemConversionEnabled;
+	public final ForgeConfigSpec.BooleanValue apiaryBlockConversionEnabled;
+	public final ForgeConfigSpec.BooleanValue produceEnabled;
+	public final ForgeConfigSpec.ConfigValue<String> produceOutputItem;
+	public final ForgeConfigSpec.IntValue produceOutputMin;
+	public final ForgeConfigSpec.IntValue produceOutputMax;
+	public final ForgeConfigSpec.DoubleValue produceOutputChance;
+	public final ForgeConfigSpec.IntValue myriadProduceThrottlePerTick;
 
 	// ========== 高倍加速批处理配置 ==========
-	public final ModConfigSpec.IntValue maxBatchTicksPerTick;
-	public final ModConfigSpec.IntValue virtualTickBankCapacity;
+	public final ForgeConfigSpec.IntValue maxBatchTicksPerTick;
 
 	// ========== MEK离心机配置 —— 向后兼容委托字段(基础参数,堆叠/流体倍率已迁移至子段)==========
-	public final ModConfigSpec.LongValue mekCentrifugeEnergyPerTick;
+	public final ForgeConfigSpec.LongValue mekCentrifugeEnergyPerTick;
 	/** 能量存储容量(FE),工厂版按并行数倍增。Task 3 从硬编码 20000L 改为 config */
-	public final ModConfigSpec.LongValue mekCentrifugeEnergyStorage;
-	public final ModConfigSpec.IntValue mekCentrifugeProcessingTime;
-	public final ModConfigSpec.IntValue mekCentrifugeFluidTankCapacity;
+	public final ForgeConfigSpec.LongValue mekCentrifugeEnergyStorage;
+	public final ForgeConfigSpec.IntValue mekCentrifugeProcessingTime;
+	public final ForgeConfigSpec.IntValue mekCentrifugeFluidTankCapacity;
 	/** 多流体槽模式开关:false=单槽共享(默认),true=按流体类型动态分配独立槽位 */
-	public final ModConfigSpec.BooleanValue mekCentrifugeMultiFluidTank;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeMultiFluidTank;
 	/**
 	 * v2.0.9: 每种流体类型最大占用槽位数(委托自 CentrifugeConfigSection)
 	 * <br/>
 	 * 0=自动计算 maxTanks/2,>0=手动指定配额,防止高产出流体占用所有槽位
 	 */
-	public final ModConfigSpec.IntValue mekCentrifugeMaxTanksPerFluid;
-	public final ModConfigSpec.IntValue mekCentrifugeCombBlockMultiplier;
+	public final ForgeConfigSpec.IntValue mekCentrifugeMaxTanksPerFluid;
+	public final ForgeConfigSpec.IntValue mekCentrifugeCombBlockMultiplier;
 	// Task 2: 单 tick 最大 PB 配方操作数上限(0=无限制),防止 256× 加速下 CPU 过载
-	public final ModConfigSpec.IntValue mekCentrifugeMaxOpsPerTick;
+	public final ForgeConfigSpec.IntValue mekCentrifugeMaxOpsPerTick;
 	// AE2 直接输出集成开关
-	public final ModConfigSpec.BooleanValue mekCentrifugeAeOutputEnabled;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeAeOutputEnabled;
 	// AE2 流体输出集成开关（独立于物品输出）
-	public final ModConfigSpec.BooleanValue mekCentrifugeAeFluidOutputEnabled;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeAeFluidOutputEnabled;
 	// AE 网络能量输入集成
-	public final ModConfigSpec.BooleanValue mekCentrifugeAeEnergyInputEnabled;
-	public final ModConfigSpec.BooleanValue mekCentrifugePreferAppliedFluxOverAeEnergy;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeAeEnergyInputEnabled;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugePreferAppliedFluxOverAeEnergy;
 	// 允许提取 AE2 原生能量
-	public final ModConfigSpec.BooleanValue mekCentrifugeAeNativeEnergyInputEnabled;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeAeNativeEnergyInputEnabled;
 	// AE2 输入拉取集成
-	public final ModConfigSpec.BooleanValue mekCentrifugeAeInputEnabled;
-	public final ModConfigSpec.IntValue mekCentrifugeAeInputRatePerTick;
-	public final ModConfigSpec.IntValue mekCentrifugeAeInputIntervalTicks;
-	public final ModConfigSpec.IntValue mekCentrifugeAeInputMinPages;
-	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeProductivityMaxCount;
-	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeTimeMaxCount;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeAeInputEnabled;
+	public final ForgeConfigSpec.IntValue mekCentrifugeAeInputRatePerTick;
+	public final ForgeConfigSpec.IntValue mekCentrifugeAeInputIntervalTicks;
+	public final ForgeConfigSpec.IntValue mekCentrifugeAeInputMinPages;
+	public final ForgeConfigSpec.IntValue mekCentrifugePbUpgradeProductivityMaxCount;
+	public final ForgeConfigSpec.IntValue mekCentrifugePbUpgradeTimeMaxCount;
 	/** 稳定性升级最大安装数量(委托自 CentrifugeConfigSection,仅离心机生效,对齐 PB 原版上限 7) */
-	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeStabilityMaxCount;
+	public final ForgeConfigSpec.IntValue mekCentrifugePbUpgradeStabilityMaxCount;
 	/** 通用机械:扩展 堆叠升级最大数量(委托自 CentrifugeConfigSection,由 ExtraUpgradeStackMixin 读取) */
-	public final ModConfigSpec.IntValue mekCentrifugeMaxStackUpgrades;
+	public final ForgeConfigSpec.IntValue mekCentrifugeMaxStackUpgrades;
 	/** 离心机电力熔炼炉配方兼容总开关（委托自 CentrifugeConfigSection） */
-	public final ModConfigSpec.BooleanValue mekCentrifugeSmeltingCompatEnabled;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeSmeltingCompatEnabled;
 
 	// ========== MEK通用机械蜂箱配置 —— 向后兼容委托字段 ==========
-	public final ModConfigSpec.LongValue apiaryEnergyPerTick;
-	public final ModConfigSpec.IntValue apiaryProcessingTime;
-	public final ModConfigSpec.IntValue apiaryFluidTankCapacity;
+	public final ForgeConfigSpec.LongValue apiaryEnergyPerTick;
+	public final ForgeConfigSpec.IntValue apiaryProcessingTime;
+	public final ForgeConfigSpec.IntValue apiaryFluidTankCapacity;
 	// AE2 集成
-	public final ModConfigSpec.BooleanValue apiaryAeOutputEnabled;
-	public final ModConfigSpec.BooleanValue apiaryAeFluidOutputEnabled;
-	public final ModConfigSpec.BooleanValue apiaryAeEnergyInputEnabled;
+	public final ForgeConfigSpec.BooleanValue apiaryAeOutputEnabled;
+	public final ForgeConfigSpec.BooleanValue apiaryAeFluidOutputEnabled;
+	public final ForgeConfigSpec.BooleanValue apiaryAeEnergyInputEnabled;
 	// AE 网络能量优先级
-	public final ModConfigSpec.BooleanValue apiaryPreferAppliedFluxOverAeEnergy;
+	public final ForgeConfigSpec.BooleanValue apiaryPreferAppliedFluxOverAeEnergy;
 	// 允许提取 AE2 原生能量
-	public final ModConfigSpec.BooleanValue apiaryAeNativeEnergyInputEnabled;
+	public final ForgeConfigSpec.BooleanValue apiaryAeNativeEnergyInputEnabled;
 	// PB升级上限
-	public final ModConfigSpec.IntValue apiaryPbUpgradeProductivityMaxCount;
-	public final ModConfigSpec.IntValue apiaryPbUpgradeTimeMaxCount;
-	public final ModConfigSpec.IntValue apiaryPbUpgradeGeneSamplerMaxCount;
-	public final ModConfigSpec.IntValue apiaryPbUpgradeBlockMaxCount;
+	public final ForgeConfigSpec.IntValue apiaryPbUpgradeProductivityMaxCount;
+	public final ForgeConfigSpec.IntValue apiaryPbUpgradeTimeMaxCount;
+	public final ForgeConfigSpec.IntValue apiaryPbUpgradeGeneSamplerMaxCount;
+	public final ForgeConfigSpec.IntValue apiaryPbUpgradeBlockMaxCount;
 
 	// ========== 外部物流互操作 —— 向后兼容委托字段（离心机与蜂箱通用）==========
 	/** 产物直通相邻容器（跳过输出槽缓存） */
-	public final ModConfigSpec.BooleanValue externalDirectContainerOutput;
+	public final ForgeConfigSpec.BooleanValue externalDirectContainerOutput;
 
 	ServerConfig(
-			ModConfigSpec.Builder builder,
-			ModConfigSpec.Builder machineBuilder,
-			ModConfigSpec.Builder capacityBuilder) {
+			ForgeConfigSpec.Builder builder,
+			ForgeConfigSpec.Builder machineBuilder,
+			ForgeConfigSpec.Builder capacityBuilder) {
 		this.sections = new ConfigSectionRegistry();
 
 		// 万象创世蜜蜂总开关
@@ -228,7 +227,7 @@ public final class ServerConfig {
 
 		myriadCreationsFilteredBeeTypes = builder
 				.comment("过滤的蜜蜂类型列表", "格式: modID:beeType")
-				.defineList("filteredBeeTypes", List.of(), () -> "productivebees:iron", ModConfig::validateResourceLocationElement);
+				.defineListAllowEmpty("filteredBeeTypes", List.of(), ModConfig::validateResourceLocationElement);
 
 		builder.pop();
 
@@ -279,7 +278,7 @@ public final class ServerConfig {
 						"minecraft:warm_ocean",
 						"minecraft:lukewarm_ocean",
 						"minecraft:deep_lukewarm_ocean"
-				), () -> "minecraft:plains", ModConfig::validateResourceLocationElement);
+				), ModConfig::validateResourceLocationElement);
 		builder.pop(); // fishing
 
 		builder.push("breeding").comment("繁殖获得万象创世蜜蜂");
@@ -377,13 +376,9 @@ public final class ServerConfig {
 
 		maxBatchTicksPerTick = builder
 				.comment("批量加速每个真实游戏刻的虚拟 tick 上限",
-						"默认 2048，范围 1–4096；为 1024 倍加速保留积压消化余量，实际预算按 MSPT 降级")
+						"默认 1024；实际预算会根据当前 MSPT 自动降级，超出部分进入短期挂账")
 				.translation("productivebeesgenesis.configuration.advanced_beehive.maxBatchTicksPerTick")
-				.defineInRange("maxBatchTicksPerTick", 2048, 1, 4096);
-		virtualTickBankCapacity = builder
-				.comment("每台机器可暂存的虚拟 tick 数量", "默认 8192，范围 1024–32768；只缓冲积压，不提高每刻兑现预算")
-				.translation("productivebeesgenesis.configuration.advanced_beehive.virtualTickBankCapacity")
-				.defineInRange("virtualTickBankCapacity", 8192, 1024, 32768);
+				.defineInRange("maxBatchTicksPerTick", 1024, 1, 1024);
 
 		builder.pop(); // advanced_beehive
 

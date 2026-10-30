@@ -2,7 +2,7 @@ package com.ayoshiko.productivebeesgenesis.config;
 
 import com.electronwill.nightconfig.core.Config;
 import com.electronwill.nightconfig.core.UnmodifiableConfig;
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -13,7 +13,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * 配置树遍历工具：叶子路径、叶子值以及规格内的 {@link ModConfigSpec.ConfigValue} 收集。
+ * 配置树遍历工具：叶子路径、叶子值以及规格内的 {@link ForgeConfigSpec.ConfigValue} 收集。
  * <p>
  * 迁移服务与迁移资格判定都需要这些只读遍历，集中在此避免重复实现（SRP）。
  */
@@ -37,17 +37,17 @@ final class ConfigTraversal {
 	}
 
 	/** 展平规格中的全部 ConfigValue（含嵌套段）。 */
-	static List<ModConfigSpec.ConfigValue<?>> configValues(ModConfigSpec spec) {
-		List<ModConfigSpec.ConfigValue<?>> result = new ArrayList<>();
+	static List<ForgeConfigSpec.ConfigValue<?>> configValues(ForgeConfigSpec spec) {
+		List<ForgeConfigSpec.ConfigValue<?>> result = new ArrayList<>();
 		collectConfigValues(spec.getValues(), result);
 		return result;
 	}
 
 	/** 读取配置中某个 ConfigValue 的原始值，缺失时回退到默认值。 */
 	@SuppressWarnings({"rawtypes", "unchecked"})
-	static Object readValue(ModConfigSpec.ConfigValue<?> value, Config config) {
-		ModConfigSpec.ConfigValue raw = value;
-		return raw.getRaw(config, value.getPath(), value::getDefault);
+	static Object readValue(ForgeConfigSpec.ConfigValue<?> value, Config config) {
+		ForgeConfigSpec.ConfigValue raw = value;
+		return config.getOrElse(value.getPath(), value::getDefault);
 	}
 
 	static String path(List<String> path) {
@@ -99,10 +99,10 @@ final class ConfigTraversal {
 	}
 
 	private static void collectConfigValues(
-			UnmodifiableConfig config, List<ModConfigSpec.ConfigValue<?>> output) {
+			UnmodifiableConfig config, List<ForgeConfigSpec.ConfigValue<?>> output) {
 		for (UnmodifiableConfig.Entry entry : config.entrySet()) {
 			Object value = entry.getValue();
-			if (value instanceof ModConfigSpec.ConfigValue<?> configValue) output.add(configValue);
+			if (value instanceof ForgeConfigSpec.ConfigValue<?> configValue) output.add(configValue);
 			else if (value instanceof UnmodifiableConfig child) collectConfigValues(child, output);
 		}
 	}

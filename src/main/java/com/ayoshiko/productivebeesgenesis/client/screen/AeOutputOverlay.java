@@ -6,9 +6,11 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload;
-import com.ayoshiko.productivebeesgenesis.client.resource.GuiResourceSideConfig;
 import mekanism.client.gui.GuiMekanism;
+import mekanism.client.gui.element.GuiElement;
+import mekanism.client.gui.element.tab.GuiConfigTypeTab;
 import mekanism.client.gui.element.window.GuiSideConfiguration;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.lib.transmitter.TransmissionType;
@@ -17,12 +19,12 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.ScreenEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.TickEvent.ClientTickEvent;
+import net.minecraftforge.client.event.ScreenEvent;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 import org.lwjgl.glfw.GLFW;
 
 import java.lang.ref.WeakReference;
@@ -91,7 +93,8 @@ public final class AeOutputOverlay {
 	 * 屏幕关闭时 tick 不触发，元素随 WeakHashMap 自动回收。
 	 */
 	@SubscribeEvent
-	public static void onClientTick(ClientTickEvent.Pre event) {
+	public static void onClientTick(ClientTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.START) return;
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		// tick 阶段可能无屏幕打开（如游戏世界内未打开 GUI）
 		Screen screen = Minecraft.getInstance().screen;
@@ -210,7 +213,7 @@ public final class AeOutputOverlay {
 		if (screenTarget == null) return null;
 		for (GuiWindow window : screenTarget.gui().getWindows()) {
 			if (window instanceof GuiSideConfiguration<?> sideConfig) {
-				TransmissionType type = GuiResourceSideConfig.nativeType(sideConfig);
+				TransmissionType type = getCurrentType(sideConfig);
 				return new OverlayTarget(screenTarget.gui(), sideConfig, screenTarget.tile(), type);
 			}
 		}
@@ -228,6 +231,26 @@ public final class AeOutputOverlay {
 		if (!(gui.getMenu() instanceof MekanismTileContainer<?> container)) return null;
 		if (!(container.getTileEntity() instanceof IAe2OutputHostBase)) return null;
 		return new ScreenTarget(gui, container.getTileEntity());
+	}
+
+	/**
+	 * 获取侧面配置窗口当前激活的 TransmissionType
+	 * <br/>
+	 * Mekanism 的 GuiConfigTypeTab 中，激活的 Tab 其 visible=false（按钮隐藏表示当前选中）。
+	 * 优先查找不可见的 Tab，其次回退到第一个可见 Tab，最终回退到 ITEM。
+	 */
+	private static TransmissionType getCurrentType(GuiSideConfiguration<?> sideConfig) {
+		for (GuiElement child : sideConfig.children()) {
+			if (child instanceof GuiConfigTypeTab tab && !tab.visible) {
+				return tab.getTransmissionType();
+			}
+		}
+		for (GuiElement child : sideConfig.children()) {
+			if (child instanceof GuiConfigTypeTab tab) {
+				return tab.getTransmissionType();
+			}
+		}
+		return TransmissionType.ITEM;
 	}
 
 	/**
@@ -297,7 +320,7 @@ public final class AeOutputOverlay {
 		CycleAeOutputPayload.OutputType outputType = target.type() == TransmissionType.FLUID
 				? CycleAeOutputPayload.OutputType.FLUID
 				: CycleAeOutputPayload.OutputType.ITEM;
-		PacketDistributor.sendToServer(new CycleAeOutputPayload(target.tile().getBlockPos(), outputType));
+		ForgeNetwork.sendToServer(new CycleAeOutputPayload(target.tile().getBlockPos(), outputType));
 	}
 
 	/**

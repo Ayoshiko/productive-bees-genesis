@@ -4,7 +4,7 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.mek.IFactoryPbDelegateAccess;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
-import com.jerry.mekextras.api.ExtraUpgrade;
+import com.jerry.mekanism_extras.api.ExtraUpgrade;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import mekanism.api.Upgrade;

@@ -4,10 +4,10 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ModelEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.client.event.ModelEvent;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -25,14 +25,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 	 * 使用 {@link ModelEvent.ModifyBakingResult} 而非 {@link ModelEvent.BakingCompleted}，
 	 * 因为后者的 getModels() 返回不可修改的 Map（NeoForge 设计行为）。
 	 */
-@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
+@EventBusSubscriber(bus = EventBusSubscriber.Bus.MOD, modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 public final class MyriadCombModelRegistry {
 
 	/** 方块模型包装注册日志仅输出一次 */
 	private static final AtomicBoolean BLOCK_WRAPPER_LOGGED = new AtomicBoolean(false);
 	private static final AtomicBoolean SPAWN_EGG_WRAPPER_LOGGED = new AtomicBoolean(false);
-	private static final ModelResourceLocation MYRIAD_SPAWN_EGG_MODEL = ModelResourceLocation.standalone(
-			ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "item/myriadcreations_spawn_egg"));
+	private static final ResourceLocation MYRIAD_SPAWN_EGG_MODEL = ForgeModelLocations.standalone(
+			new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "item/myriadcreations_spawn_egg"));
 
 	private MyriadCombModelRegistry() {
 	}
@@ -44,15 +44,15 @@ public final class MyriadCombModelRegistry {
 
 	@SubscribeEvent
 	public static void onModifyBakingResult(ModelEvent.ModifyBakingResult event) {
-		Map<ModelResourceLocation, BakedModel> models = event.getModels();
+		Map<ResourceLocation, BakedModel> models = event.getModels();
 
 		// PB 的 configurable_honeycomb 物品模型
-		ModelResourceLocation pbHoneycombKey = ModelResourceLocation.inventory(
-				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("productivebees", "configurable_honeycomb"));
+		ModelResourceLocation pbHoneycombKey = ForgeModelLocations.inventory(
+				new net.minecraft.resources.ResourceLocation("productivebees", "configurable_honeycomb"));
 		BakedModel pbHoneycomb = models.get(pbHoneycombKey);
 		// 无尽创世蜜脾物品模型（已使用 cosmic loader 烘焙为 BakedModelCosmic）
-		ModelResourceLocation infinityCombKey = ModelResourceLocation.inventory(
-				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
+		ModelResourceLocation infinityCombKey = ForgeModelLocations.inventory(
+				new net.minecraft.resources.ResourceLocation(ProductiveBeesGenesis.MOD_ID,
 					"infinitycreation_comb"));
 		BakedModel infinityComb = models.get(infinityCombKey);
 		if (pbHoneycomb != null && infinityComb != null) {
@@ -60,12 +60,12 @@ public final class MyriadCombModelRegistry {
 		}
 
 		// PB 的 configurable_comb 物品模型（BlockItem）
-		ModelResourceLocation pbCombItemKey = ModelResourceLocation.inventory(
-				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("productivebees", "configurable_comb"));
+		ModelResourceLocation pbCombItemKey = ForgeModelLocations.inventory(
+				new net.minecraft.resources.ResourceLocation("productivebees", "configurable_comb"));
 		BakedModel pbCombItem = models.get(pbCombItemKey);
 		// 无尽创世蜜脾块物品模型
-		ModelResourceLocation infinityCombBlockItemKey = ModelResourceLocation.inventory(
-				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
+		ModelResourceLocation infinityCombBlockItemKey = ForgeModelLocations.inventory(
+				new net.minecraft.resources.ResourceLocation(ProductiveBeesGenesis.MOD_ID,
 					"infinitycreation_comb_block"));
 		BakedModel infinityCombBlockItem = models.get(infinityCombBlockItemKey);
 		if (pbCombItem != null && infinityCombBlockItem != null) {
@@ -74,8 +74,8 @@ public final class MyriadCombModelRegistry {
 
 		// PB uses one configurable spawn-egg item for every data-driven bee. Select
 		// the animated rainbow model only when the stack contains the Myriad type.
-		ModelResourceLocation pbSpawnEggKey = ModelResourceLocation.inventory(
-				ResourceLocation.fromNamespaceAndPath("productivebees", "spawn_egg_configurable_bee"));
+		ModelResourceLocation pbSpawnEggKey = ForgeModelLocations.inventory(
+				new ResourceLocation("productivebees", "spawn_egg_configurable_bee"));
 		BakedModel pbSpawnEgg = models.get(pbSpawnEggKey);
 		BakedModel myriadSpawnEgg = models.get(MYRIAD_SPAWN_EGG_MODEL);
 		if (pbSpawnEgg != null && myriadSpawnEgg != null) {
@@ -91,10 +91,10 @@ public final class MyriadCombModelRegistry {
 		// 方块模型在 Map 中的键是 blockstate id + variant，而不是 model JSON 路径
 		// 无属性方块的 variant 为空字符串，因此直接构造 ModelResourceLocation 查询
 		ModelResourceLocation pbCombBlockKey = new ModelResourceLocation(
-				ResourceLocation.fromNamespaceAndPath("productivebees", "configurable_comb"), "");
+				new ResourceLocation("productivebees", "configurable_comb"), "");
 		BakedModel pbCombBlock = models.get(pbCombBlockKey);
 		ModelResourceLocation infinityCombBlockKey = new ModelResourceLocation(
-				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "infinitycreation_comb_block"), "");
+				new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "infinitycreation_comb_block"), "");
 		BakedModel infinityCombBlock = models.get(infinityCombBlockKey);
 		if (pbCombBlock != null && infinityCombBlock != null) {
 			models.put(pbCombBlockKey, new BakedModelMyriadCombBlockBlock(pbCombBlock, infinityCombBlock));

@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 /**
 	 * 客户端配置 — 仅影响本地渲染/显示
@@ -11,19 +11,19 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 public final class ClientConfig {
 
 	// ========== 彩虹特效（纯客户端渲染）==========
-	public final ModConfigSpec.BooleanValue rainbowMode;
-	public final ModConfigSpec.BooleanValue particleEffectEnabled;
-	public final ModConfigSpec.BooleanValue glowEnabled;
-	public final ModConfigSpec.IntValue particleCount;
+	public final ForgeConfigSpec.BooleanValue rainbowMode;
+	public final ForgeConfigSpec.BooleanValue particleEffectEnabled;
+	public final ForgeConfigSpec.BooleanValue glowEnabled;
+	public final ForgeConfigSpec.IntValue particleCount;
 
 	// ========== MEK离心机端口可视化（纯客户端渲染）==========
-	public final ModConfigSpec.BooleanValue showPortColors;
-	public final ModConfigSpec.IntValue portColorRenderRange;
+	public final ForgeConfigSpec.BooleanValue showPortColors;
+	public final ForgeConfigSpec.IntValue portColorRenderRange;
 
 	// ========== 窗口位置持久化（独立于 MEK 配置系统）==========
 	public final WindowPositionConfigSection windowPositions = new WindowPositionConfigSection();
 
-	ClientConfig(ModConfigSpec.Builder builder) {
+	ClientConfig(ForgeConfigSpec.Builder builder) {
 		// 彩虹特效配置（仅客户端可见的粒子/光晕开关）
 		builder.push("rainbow_effects").comment("万象创世蜜蜂彩虹特效配置（仅客户端生效）");
 

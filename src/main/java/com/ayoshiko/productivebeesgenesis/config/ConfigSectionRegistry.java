@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 /**
 	 * 配置段注册表 — 聚合 {@link ServerConfig} 的全部子配置段并提供统一查找入口（Task 12 抽取）。
@@ -52,13 +52,13 @@ public final class ConfigSectionRegistry {
 	/**
 	 * 注册万象创世蜜蜂属性配置段。
 	 * <p>
-	 * 委托至 {@link BeeAttributeConfigSection#create(ModConfigSpec.Builder)}，
+	 * 委托至 {@link BeeAttributeConfigSection#create(ForgeConfigSpec.Builder)}，
 	 * 执行 {@code builder.push("bee_attributes")} ... {@code builder.pop()}。
 	 *
 	 * @param builder NeoForge 配置构建器
 	 * @return 已注册的蜜蜂属性配置段实例
 	 */
-	public BeeAttributeConfigSection registerBeeAttributes(ModConfigSpec.Builder builder) {
+	public BeeAttributeConfigSection registerBeeAttributes(ForgeConfigSpec.Builder builder) {
 		this.beeAttributes = BeeAttributeConfigSection.create(builder);
 		return this.beeAttributes;
 	}
@@ -66,15 +66,15 @@ public final class ConfigSectionRegistry {
 	/**
 	 * 注册 MEK 离心机配置段。
 	 * <p>
-	 * 委托至 {@link CentrifugeConfigSection#create(ModConfigSpec.Builder)}，
+	 * 委托至 {@link CentrifugeConfigSection#create(ForgeConfigSpec.Builder)}，
 	 * 执行 {@code builder.push("mek_centrifuge")} ... {@code builder.pop()}。
 	 *
 	 * @param builder NeoForge 配置构建器
 	 * @return 已注册的离心机配置段实例
 	 */
 	public CentrifugeConfigSection registerCentrifuge(
-			ModConfigSpec.Builder builder,
-			ModConfigSpec.Builder capacityBuilder) {
+			ForgeConfigSpec.Builder builder,
+			ForgeConfigSpec.Builder capacityBuilder) {
 		this.centrifuge = CentrifugeConfigSection.create(builder, capacityBuilder);
 		return this.centrifuge;
 	}
@@ -82,15 +82,15 @@ public final class ConfigSectionRegistry {
 	/**
 	 * 注册 MEK 通用机械蜂箱配置段。
 	 * <p>
-	 * 委托至 {@link ApiaryConfigSection#create(ModConfigSpec.Builder)}，
+	 * 委托至 {@link ApiaryConfigSection#create(ForgeConfigSpec.Builder)}，
 	 * 执行 {@code builder.push("mek_apiary")} ... {@code builder.pop()}。
 	 *
 	 * @param builder NeoForge 配置构建器
 	 * @return 已注册的蜂箱配置段实例
 	 */
 	public ApiaryConfigSection registerApiary(
-			ModConfigSpec.Builder builder,
-			ModConfigSpec.Builder capacityBuilder) {
+			ForgeConfigSpec.Builder builder,
+			ForgeConfigSpec.Builder capacityBuilder) {
 		this.apiary = ApiaryConfigSection.create(builder, capacityBuilder);
 		return this.apiary;
 	}
@@ -98,13 +98,13 @@ public final class ConfigSectionRegistry {
 	/**
 	 * 注册外部物流互操作配置段。
 	 * <p>
-	 * 委托至 {@link ExternalLogisticsConfigSection#create(ModConfigSpec.Builder)}，
+	 * 委托至 {@link ExternalLogisticsConfigSection#create(ForgeConfigSpec.Builder)}，
 	 * 执行 {@code builder.push("external_logistics")} ... {@code builder.pop()}。
 	 *
 	 * @param builder 机器参数配置构建器
 	 * @return 已注册的外部物流配置段实例
 	 */
-	public ExternalLogisticsConfigSection registerExternalLogistics(ModConfigSpec.Builder builder) {
+	public ExternalLogisticsConfigSection registerExternalLogistics(ForgeConfigSpec.Builder builder) {
 		this.externalLogistics = ExternalLogisticsConfigSection.create(builder);
 		return this.externalLogistics;
 	}

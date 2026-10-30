@@ -1,0 +1,30 @@
+{
+  "type": "productivebees:centrifuge",
+  "ingredient": {
+    "type": "forge:nbt",
+    "nbt": {
+      "EntityTag": {
+        "type": "productivebees:myriadcreations"
+      }
+    },
+    "item": "productivebees:configurable_honeycomb"
+  },
+  "outputs": [
+    {
+      "item": {
+        "tag": "productivebees:configurable_honeycomb_blocks"
+      },
+      "chance": 1.0
+    },
+    {
+      "item": {
+        "item": "productivebees:wax"
+      }
+    }
+  ],
+  "fluid": {
+    "amount": 100,
+    "fluid": "productivebees:honey"
+  },
+  "processingTime": 200
+}

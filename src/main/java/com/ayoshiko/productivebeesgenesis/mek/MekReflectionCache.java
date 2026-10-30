@@ -21,7 +21,7 @@ final class MekReflectionCache {
 	private static final String EM_FACTORY_TIER_CLASS = "fr.iglee42.evolvedmekanism.tiers.EMFactoryTier";
 
 	/** ME的ExtraFactoryTier全限定类名（可选依赖，反射访问） */
-	private static final String ME_FACTORY_TIER_CLASS = "com.jerry.mekextras.common.tier.ExtraFactoryTier";
+	private static final String ME_FACTORY_TIER_CLASS = "com.jerry.mekanism_extras.common.tier.ExtraFactoryTier";
 
 	/** EME的EMExtraFactoryTier全限定类名（可选依赖，反射访问） */
 	private static final String EME_FACTORY_TIER_CLASS = "io.github.masyumero.emextras.common.tier.EMExtraFactoryTier";
@@ -149,7 +149,7 @@ final class MekReflectionCache {
 				method = cachedAttributeGetMethod;
 				if (method == null) {
 					try {
-						method = Attribute.class.getMethod("get", Object.class, Class.class);
+						method = Attribute.class.getMethod("get", net.minecraft.world.level.block.Block.class, Class.class);
 						cachedAttributeGetMethod = method;
 					} catch (NoSuchMethodException e) {
 						// Mekanism API 变更导致方法签名变化，返回 null

@@ -4,11 +4,11 @@ import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
-import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
+import com.ayoshiko.productivebeesgenesis.util.ChancedOutput;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.util.InventoryUtils;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -118,7 +118,7 @@ final class PbRecipeOutputChecker {
 	 */
 	public static boolean hasFluidOutput(PbRecipeContext context, CentrifugeRecipe recipe) {
 		try {
-			FluidStack fluid = recipe.getFluidOutputs();
+			FluidStack fluid = com.ayoshiko.productivebeesgenesis.util.PbRecipeOutputs.fluid(recipe);
 			return !fluid.isEmpty() && !(context.suppressesUselessByproducts()
 					&& UselessByproductUpgradeHelper.isHoney(fluid));
 		} catch (RuntimeException e) {
@@ -185,7 +185,7 @@ final class PbRecipeOutputChecker {
 	private static boolean isFluidTankTypeMismatch(PbRecipeContext context, int process, CentrifugeRecipe recipe) {
 		// 检查始终启用:移除原 fluidTypeMismatchPause 配置开关,避免关闭检查导致 TPS 退化
 		try {
-			FluidStack recipeFluid = recipe.getFluidOutputs();
+			FluidStack recipeFluid = com.ayoshiko.productivebeesgenesis.util.PbRecipeOutputs.fluid(recipe);
 			if (recipeFluid.isEmpty()) {
 				return false;
 			}

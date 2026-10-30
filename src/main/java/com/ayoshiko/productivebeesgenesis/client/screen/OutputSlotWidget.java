@@ -11,7 +11,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -80,19 +80,19 @@ public final class OutputSlotWidget extends GuiElement {
 	 * 绘制槽位数量数字，复用 AE2 蜜脾拉取窗口的固定字号样式。
 	 */
 	private void drawAmount(GuiGraphics guiGraphics, Font font, long amount) {
-		LargeStackCountRenderer.renderCountAt(guiGraphics, font, relativeX + 1, relativeY + 1, amount);
+		LargeStackCountRenderer.renderCountAt(guiGraphics, font, relativeX, relativeY, amount);
 	}
 
 	@Override
-	public boolean mouseClicked(double mouseX, double mouseY, int button) {
+	public mekanism.client.gui.element.GuiElement mouseClickedNested(double mouseX, double mouseY, int button) {
 		if (!visible || !hasEntry || !isMouseOver(mouseX, mouseY)) {
-			return false;
+			return null;
 		}
-		if (button != 0 && button != 1) return false;
+		if (button != 0 && button != 1) return null;
 		boolean shift = Screen.hasShiftDown();
 		boolean rightClick = button == 1;
-		PacketDistributor.sendToServer(new AeInputOutputSlotPayload(pos, globalSlotIndex, shift, rightClick));
-		return true;
+		ForgeNetwork.sendToServer(new AeInputOutputSlotPayload(pos, globalSlotIndex, shift, rightClick));
+		return this;
 	}
 
 	@Override

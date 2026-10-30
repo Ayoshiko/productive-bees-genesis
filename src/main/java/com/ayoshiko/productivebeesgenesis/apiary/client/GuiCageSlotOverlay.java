@@ -24,11 +24,11 @@ import java.util.function.Supplier;
 public class GuiCageSlotOverlay extends GuiTextureOnlyElement {
 
 	/** modularbees 输入蜂笼槽位纹理（16×16，含灰色边框和向下箭头图案） */
-	private static final ResourceLocation INPUT_TEXTURE = ResourceLocation.fromNamespaceAndPath(
+	private static final ResourceLocation INPUT_TEXTURE = new ResourceLocation(
 			ProductiveBeesGenesis.MOD_ID, "textures/gui/slot/cage_slot_input.png");
 
 	/** modularbees 输出蜂笼槽位纹理（16×16，含灰色边框和向上箭头图案） */
-	private static final ResourceLocation OUTPUT_TEXTURE = ResourceLocation.fromNamespaceAndPath(
+	private static final ResourceLocation OUTPUT_TEXTURE = new ResourceLocation(
 			ProductiveBeesGenesis.MOD_ID, "textures/gui/slot/cage_slot_output.png");
 
 	/** 纹理尺寸（16×16） */

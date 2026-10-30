@@ -1,11 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -31,7 +27,7 @@ public record ApiaryCageOperationPayload(
 		BlockPos pos,
 		int slotIndex,
 		OperationType operation
-) implements CustomPacketPayload {
+)  {
 
 	/** 操作类型枚举 */
 	public enum OperationType {
@@ -51,22 +47,15 @@ public record ApiaryCageOperationPayload(
 	}
 
 	/** 数据包类型标识 */
-	public static final CustomPacketPayload.Type<ApiaryCageOperationPayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "apiary_cage_operation"));
 
 	/** 流编解码器 — 编解码 BlockPos + int + OperationType */
-	public static final StreamCodec<ByteBuf, ApiaryCageOperationPayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, ApiaryCageOperationPayload::pos,
-					ByteBufCodecs.INT, ApiaryCageOperationPayload::slotIndex,
-					ByteBufCodecs.idMapper(OperationType::fromOrdinal, OperationType::ordinal),
-					ApiaryCageOperationPayload::operation,
-					ApiaryCageOperationPayload::new
-			);
 
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static ApiaryCageOperationPayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new ApiaryCageOperationPayload(buf.readBlockPos(), buf.readVarInt(), buf.readEnum(OperationType.class));
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+        buf.writeVarInt(slotIndex);
+        buf.writeEnum(operation);
+    }
 }

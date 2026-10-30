@@ -73,7 +73,7 @@ final class Ae2SmeltingInputCache {
 		refreshRecipeVersion();
 		// getReadOnlyStack 不拷贝，仅用于读取组件补丁与 Item
 		ItemStack input = key.getReadOnlyStack();
-		if (input.getComponentsPatch().isEmpty()) {
+		if (!input.hasTag()) {
 			Item item = input.getItem();
 			int state = plainItems.state(item);
 			if (state != BoundedBooleanMemo.STATE_UNKNOWN) {

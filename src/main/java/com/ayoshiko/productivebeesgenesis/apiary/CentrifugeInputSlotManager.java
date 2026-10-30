@@ -106,7 +106,7 @@ class CentrifugeInputSlotManager {
 	/**
 	 * 查找同类型非空输入槽的索引列表(用于第一轮同类型合并)
 	 * <br/>
-	 * 使用 ItemStack.isSameItemSameComponents 比较(与 MEK insertItem 内部比较一致),
+	 * 使用 ItemStack.isSameItemSameTags 比较(与 MEK insertItem 内部比较一致),
 	 * 正确处理 BEE_TYPE 数据组件不同的蜜脾。
 	 * <p>
 	 * 19 槽场景下最多 19 次 isSameItemSameComponents 比较,开销 < 1μs。
@@ -121,7 +121,7 @@ class CentrifugeInputSlotManager {
 		for (int i = 0; i < scanCount; i++) {
 			ItemStack inputStack = reusableInputStacks[i];
 			if (!inputStack.isEmpty() && reusableInputRemaining[i] > 0
-					&& ItemStack.isSameItemSameComponents(inputStack, stack)) {
+					&& ItemStack.isSameItemSameTags(inputStack, stack)) {
 				reusableSameTypeIndices[count++] = i;
 			}
 		}

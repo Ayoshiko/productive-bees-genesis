@@ -12,7 +12,7 @@ import mekanism.common.inventory.container.type.MekanismContainerType;
 import mekanism.common.registration.impl.ContainerTypeDeferredRegister;
 import mekanism.common.registration.impl.ContainerTypeRegistryObject;
 import mekanism.common.tile.factory.TileEntityFactory;
-import net.neoforged.bus.api.IEventBus;
+import net.minecraftforge.eventbus.api.IEventBus;
 
 /**
 	 * MenuType注册类
@@ -64,9 +64,9 @@ public final class ModMenuTypes {
 	private static <TILE extends TileEntityMekCentrifuge> ContainerTypeRegistryObject<MekanismTileContainer<TILE>>
 			registerMachineContainer(String name, Class<TILE> tileClass) {
 		ContainerTypeRegistryObject<MekanismTileContainer<TILE>> holder = new ContainerTypeRegistryObject<>(
-				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, name));
-		MENU_TYPES.registerMenu(name, () -> MekanismContainerType.tile(tileClass,
-				(id, inv, tile) -> new MekCentrifugeContainer<>(holder, id, inv, tile)));
+				net.minecraftforge.registries.RegistryObject.create(new net.minecraft.resources.ResourceLocation(ProductiveBeesGenesis.MOD_ID, name), net.minecraft.core.registries.Registries.MENU, ProductiveBeesGenesis.MOD_ID));
+		MENU_TYPES.register(name, tileClass,
+				(id, inv, tile) -> new MekCentrifugeContainer<>(holder, id, inv, tile));
 		return holder;
 	}
 
@@ -79,9 +79,9 @@ public final class ModMenuTypes {
 	private static ContainerTypeRegistryObject<MekApiaryContainer> registerApiaryContainer(
 			String name, Class<TileEntityMekApiary> tileClass) {
 		ContainerTypeRegistryObject<MekApiaryContainer> holder = new ContainerTypeRegistryObject<>(
-				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, name));
-		MENU_TYPES.registerMenu(name, () -> MekanismContainerType.tile(tileClass,
-				(id, inv, tile) -> new MekApiaryContainer(holder, id, inv, tile)));
+				net.minecraftforge.registries.RegistryObject.create(new net.minecraft.resources.ResourceLocation(ProductiveBeesGenesis.MOD_ID, name), net.minecraft.core.registries.Registries.MENU, ProductiveBeesGenesis.MOD_ID));
+		MENU_TYPES.register(name, tileClass,
+				(id, inv, tile) -> new MekApiaryContainer(holder, id, inv, tile));
 		return holder;
 	}
 
@@ -94,9 +94,9 @@ public final class ModMenuTypes {
 	private static ContainerTypeRegistryObject<MekApiaryFactoryContainer> registerApiaryFactoryContainer(
 			String name, Class<TileEntityMekApiaryFactory> tileClass) {
 		ContainerTypeRegistryObject<MekApiaryFactoryContainer> holder = new ContainerTypeRegistryObject<>(
-				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, name));
-		MENU_TYPES.registerMenu(name, () -> MekanismContainerType.tile(tileClass,
-				(id, inv, tile) -> new MekApiaryFactoryContainer(holder, id, inv, tile)));
+				net.minecraftforge.registries.RegistryObject.create(new net.minecraft.resources.ResourceLocation(ProductiveBeesGenesis.MOD_ID, name), net.minecraft.core.registries.Registries.MENU, ProductiveBeesGenesis.MOD_ID));
+		MENU_TYPES.register(name, tileClass,
+				(id, inv, tile) -> new MekApiaryFactoryContainer(holder, id, inv, tile));
 		return holder;
 	}
 
@@ -104,9 +104,9 @@ public final class ModMenuTypes {
 	private static ContainerTypeRegistryObject<MekanismTileContainer<TileEntityFactory<?>>> registerFactoryContainer() {
 		String name = "mek_centrifuge_factory";
 		ContainerTypeRegistryObject<MekanismTileContainer<TileEntityFactory<?>>> holder = new ContainerTypeRegistryObject<>(
-				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, name));
-		MENU_TYPES.registerMenu(name, () -> MekanismContainerType.tile(TileEntityFactory.class,
-				(id, inv, tile) -> new MekCentrifugeContainer<>(holder, id, inv, tile)));
+				net.minecraftforge.registries.RegistryObject.create(new net.minecraft.resources.ResourceLocation(ProductiveBeesGenesis.MOD_ID, name), net.minecraft.core.registries.Registries.MENU, ProductiveBeesGenesis.MOD_ID));
+		MENU_TYPES.register(name, TileEntityFactory.class,
+				(id, inv, tile) -> new MekCentrifugeContainer<>(holder, id, inv, tile));
 		return holder;
 	}
 

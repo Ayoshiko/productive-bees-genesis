@@ -6,7 +6,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.items.IItemHandlerModifiable;
+import net.minecraftforge.items.IItemHandlerModifiable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -341,7 +341,7 @@ public class ApiaryPbUpgradeHandler {
 		ItemStack template = PbUpgradeInventorySlot.getRepresentativeStack(type);
 		if (template.isEmpty()) return false;
 		if (!output.isEmpty()) {
-			if (!ItemStack.isSameItemSameComponents(output, template)) return false;
+			if (!ItemStack.isSameItemSameTags(output, template)) return false;
 			if (output.getCount() >= output.getMaxStackSize()) return false;
 		}
 		List<ItemStack> removed = removePbUpgrade(type, false);
@@ -448,17 +448,17 @@ public class ApiaryPbUpgradeHandler {
 
 	/** 保存PB升级输入/输出槽到NBT */
 	void saveSlots(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
-		nbt.put(NBT_KEY_PB_UPGRADE_INPUT, pbUpgradeInputSlot.serializeNBT(provider));
-		nbt.put(NBT_KEY_PB_UPGRADE_OUTPUT, pbUpgradeOutputSlot.serializeNBT(provider));
+		nbt.put(NBT_KEY_PB_UPGRADE_INPUT, pbUpgradeInputSlot.serializeNBT());
+		nbt.put(NBT_KEY_PB_UPGRADE_OUTPUT, pbUpgradeOutputSlot.serializeNBT());
 	}
 
 	/** 从 NBT 加载 PB 升级输入/输出槽。 */
 	void loadSlots(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		if (nbt.contains(NBT_KEY_PB_UPGRADE_INPUT, Tag.TAG_COMPOUND)) {
-			pbUpgradeInputSlot.deserializeNBT(provider, nbt.getCompound(NBT_KEY_PB_UPGRADE_INPUT));
+			pbUpgradeInputSlot.deserializeNBT(nbt.getCompound(NBT_KEY_PB_UPGRADE_INPUT));
 		}
 		if (nbt.contains(NBT_KEY_PB_UPGRADE_OUTPUT, Tag.TAG_COMPOUND)) {
-			pbUpgradeOutputSlot.deserializeNBT(provider, nbt.getCompound(NBT_KEY_PB_UPGRADE_OUTPUT));
+			pbUpgradeOutputSlot.deserializeNBT(nbt.getCompound(NBT_KEY_PB_UPGRADE_OUTPUT));
 		}
 	}
 

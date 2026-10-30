@@ -11,7 +11,7 @@ import net.minecraft.client.resources.model.Material;
 import net.minecraft.client.resources.model.ModelBaker;
 import net.minecraft.client.resources.model.ModelState;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
+import net.minecraftforge.client.model.geometry.IGeometryBakingContext;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -52,8 +52,8 @@ public class GeometryLoaderCosmic
 		@Override
 		public BakedModel bake(@NotNull IGeometryBakingContext context, @NotNull ModelBaker baker,
 				@NotNull Function<Material, TextureAtlasSprite> spriteGetter,
-				@NotNull ModelState modelState, @NotNull ItemOverrides overrides) {
-			BakedModel baseBakedModel = bakeBaseModel(baker, modelState, spriteGetter);
+				@NotNull ModelState modelState, @NotNull ItemOverrides overrides, @NotNull ResourceLocation modelLocation) {
+			BakedModel baseBakedModel = bakeBaseModel(baker, modelState, spriteGetter, modelLocation);
 			return new BakedModelCosmic(baseBakedModel, this.maskTextures);
 		}
 	}

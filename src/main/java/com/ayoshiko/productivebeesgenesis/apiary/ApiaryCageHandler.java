@@ -9,7 +9,6 @@ import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
@@ -17,7 +16,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.animal.Bee;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
+import net.minecraft.nbt.CompoundTag;
 
 /**
 	 * 蜂笼操作处理器
@@ -63,7 +62,7 @@ class ApiaryCageHandler {
 	 *   <li>批量装入：cageInSlot 有资源蜂刷怪蛋 → 按空槽数量直接写入 BeeSlot</li>
 	 * </ol>
 	 * <p>
-	 * 先区分含蜂蜂笼与空蜂笼；满箱时仍允许空蜂笼取出蜜蜂。
+	 * 优先执行装入操作（含蜜蜂的蜂笼优先处理），装入失败时尝试取出操作。
 	 * <p>
 	 * 异常捕获：单只蜂笼处理失败不影响整体运行，记录错误日志。
 	 */
@@ -75,22 +74,20 @@ class ApiaryCageHandler {
 		if (cageStack.isEmpty()) return;
 
 		try {
-			if (isCageItem(cageStack)) {
-				if (isFilledCage(cageStack)) {
-					tryInsertBeeFromCage(cageStack);
-				} else {
-					tryExtractBeeToCage(cageStack);
-				}
-				return;
-			}
-			// 满箱无需解析蛋组件、查询蜂种或构造临时蜜蜂；空槽出现后本刻立即恢复。
-			if (countEmptyBeeSlots(manager.getBeeSlots()) == 0) return;
 			// 刷怪蛋不走蜂笼输出逻辑，按空槽数量批量直接写入蜜蜂数据。
 			BeeSpawnEggHelper.BeeSpawnEggData spawnEgg = BeeSpawnEggHelper.resolve(cageStack);
 			if (spawnEgg != null) {
 				tryInsertBeesFromSpawnEggInput(cageStack, spawnEgg);
 				return;
 			}
+			if (!isCageItem(cageStack)) return;
+
+			// 优先尝试装入蜜蜂（蜂笼含蜜蜂时）
+			if (tryInsertBeeFromCage(cageStack)) {
+				return;
+			}
+			// 装入失败（蜂笼为空或无空槽）时，尝试取出蜜蜂到空蜂笼
+			tryExtractBeeToCage(cageStack);
 		} catch (Exception e) {
 			CAGE_ERROR_THROTTLE.tryLog(manager.getLevel().getGameTime(), suppressed ->
 					ProductiveBeesGenesis.LOGGER.error("处理蜂笼输入时异常（已抑制 {} 次类似警告）", suppressed, e));
@@ -105,12 +102,13 @@ class ApiaryCageHandler {
 	 */
 	private void tryInsertBeesFromSpawnEggInput(
 			ItemStack eggStack, BeeSpawnEggHelper.BeeSpawnEggData spawnEgg) {
-		BeeSlot[] beeSlots = manager.getBeeSlots();
-		int toInsert = Math.min(eggStack.getCount(), countEmptyBeeSlots(beeSlots));
-		if (toInsert <= 0) return;
 		if (!isKnownConfigurableBee(spawnEgg)) return;
 		CompoundTag beeData = buildBeeDataFromSpawnEgg(spawnEgg);
 		if (beeData == null) return;
+
+		BeeSlot[] beeSlots = manager.getBeeSlots();
+		int toInsert = Math.min(eggStack.getCount(), countEmptyBeeSlots(beeSlots));
+		if (toInsert <= 0) return;
 
 		int inserted = 0;
 		int selected = manager.getTile().getSelectedBeeSlot();
@@ -148,9 +146,10 @@ class ApiaryCageHandler {
 	 */
 	private boolean tryInsertBeeFromCage(ItemStack cageStack) {
 		// PB蜂笼使用 CUSTOM_DATA 组件存储蜜蜂数据（key="entity"），非 ENTITY_DATA
-		var customData = cageStack.get(DataComponents.CUSTOM_DATA);
+		var customData = cageStack.getTag();
 		if (customData == null) return false;
-		if (!customData.contains("entity")) return false;
+		CompoundTag beeData = customData.copy();
+		if (beeData == null || !beeData.contains("entity")) return false;
 
 		BeeSlot[] beeSlots = manager.getBeeSlots();
 		// Bug 4：优先放入选中的空槽位，未选择时按顺序查找第一个空槽位（与 tryExtractBeeToCage 对称设计）
@@ -172,25 +171,25 @@ class ApiaryCageHandler {
 		}
 		if (emptySlot == null) return false;
 
+		// 将蜜蜂数据填充到空槽位（防御性 copy + 重置运行时状态）
+		populateBeeSlotFromData(emptySlot, beeData);
+
 		// 模块 4 修复：区分普通蜂笼和加固蜂笼
 		// PB 原版 BeeCage.postItemUse（普通蜂笼）：shrink(1) 不返还空蜂笼（一次性消耗）
 		// PB 原版 SturdyBeeCage.postItemUse（加固蜂笼）：shrink(1) + 给玩家一个新空蜂笼（可反复使用）
 		boolean isSturdyCage = cageStack.is(ModItems.STURDY_BEE_CAGE.get());
-		ItemStack emptyCage = ItemStack.EMPTY;
 		if (isSturdyCage) {
-			var outputSlot = manager.getCageOutSlot();
-			ItemStack output = outputSlot.getStack();
-			if (!output.isEmpty() && (output.getItem() != cageStack.getItem()
-					|| output.getCount() >= outputSlot.getLimit(output))) return false;
-			emptyCage = cageStack.copyWithCount(1);
-			emptyCage.remove(DataComponents.CUSTOM_DATA);
-			if (!outputSlot.insertItem(emptyCage, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()) return false;
-		}
-		populateBeeSlotFromData(emptySlot, customData.copyTag());
-		if (!emptyCage.isEmpty() && !manager.getCageOutSlot()
-				.insertItem(emptyCage, Action.EXECUTE, AutomationType.INTERNAL).isEmpty()) {
-			emptySlot.clear();
-			return false;
+			// 加固蜂笼：创建空蜂笼副本（移除 CUSTOM_DATA 中的蜜蜂数据）并插入 cageOutSlot
+			ItemStack emptyCage = cageStack.copy();
+			emptyCage.setCount(1);
+			emptyCage.setTag(null);
+
+			ItemStack remainder = manager.getCageOutSlot().insertItem(emptyCage, Action.EXECUTE, AutomationType.INTERNAL);
+			if (!remainder.isEmpty()) {
+				// 输出槽已满，无法放入空蜂笼，回滚蜜蜂槽数据
+				emptySlot.clear();
+				return false;
+			}
 		}
 
 		// 转移成功：从输入槽移除一个蜂笼（普通/加固蜂笼都消耗）
@@ -210,12 +209,14 @@ class ApiaryCageHandler {
 	 */
 	private boolean tryExtractBeeToCage(ItemStack cageStack) {
 		// 蜂笼必须为空（无 CUSTOM_DATA 或 CUSTOM_DATA 无 "entity" 字段）
-		var existingData = cageStack.get(DataComponents.CUSTOM_DATA);
-		if (existingData != null && existingData.contains("entity")) return false;
-		var outputSlot = manager.getCageOutSlot();
-		ItemStack output = outputSlot.getStack();
-		if (!output.isEmpty() && (output.getItem() != cageStack.getItem()
-				|| output.getCount() >= outputSlot.getLimit(output))) return false;
+		var existingData = cageStack.getTag();
+		if (existingData != null) {
+			CompoundTag existing = existingData.copy();
+			if (existing != null && existing.contains("entity")) {
+				// 蜂笼已有蜜蜂，不应执行取出操作
+				return false;
+			}
+		}
 
 		BeeSlot[] beeSlots = manager.getBeeSlots();
 		// Bug 9：优先取出选中的蜜蜂槽位，未选择时按顺序查找第一个非空槽位
@@ -244,7 +245,7 @@ class ApiaryCageHandler {
 		ItemStack filledCage = cageStack.copy();
 		filledCage.setCount(1);
 		// 防御性 copy，避免共享 BeeSlot 内部引用（与 tryInsertBeeFromCage 一致）
-		filledCage.set(DataComponents.CUSTOM_DATA, CustomData.of(beeData));
+		filledCage.setTag(beeData.copy());
 
 		// 尝试将含蜜蜂的蜂笼插入输出槽
 		ItemStack remainder = manager.getCageOutSlot().insertItem(filledCage, Action.EXECUTE, AutomationType.INTERNAL);
@@ -286,7 +287,7 @@ class ApiaryCageHandler {
 
 		// 创建含蜜蜂的蜂笼：将 beeData 写入 CUSTOM_DATA（防御性 copy，避免共享 BeeSlot 内部引用）
 		ItemStack filledCage = cursorCage.copyWithCount(1);
-		filledCage.set(DataComponents.CUSTOM_DATA, CustomData.of(beeData));
+		filledCage.setTag(beeData.copy());
 		return filledCage;
 	}
 
@@ -322,9 +323,9 @@ class ApiaryCageHandler {
 		if (!targetSlot.isEmpty()) return false;
 
 		// 读取蜂笼 CUSTOM_DATA 中的蜜蜂 entity 数据
-		CustomData customData = cursorCage.get(DataComponents.CUSTOM_DATA);
+		CompoundTag customData = cursorCage.getTag();
 		if (customData == null) return false;
-		CompoundTag beeData = customData.copyTag();
+		CompoundTag beeData = customData.copy();
 		if (beeData == null || !beeData.contains("entity")) return false;
 
 		// 将蜜蜂数据填充到空槽位（防御性 copy + 重置运行时状态）
@@ -337,7 +338,7 @@ class ApiaryCageHandler {
 		if (isSturdyCage) {
 			// 加固蜂笼：创建空蜂笼并输出到 cageOutSlot
 			ItemStack emptyCage = cursorCage.copyWithCount(1);
-			emptyCage.remove(DataComponents.CUSTOM_DATA);
+			emptyCage.setTag(null);
 			ItemStack remainder = manager.getCageOutSlot().insertItem(emptyCage, Action.EXECUTE, AutomationType.INTERNAL);
 			if (!remainder.isEmpty()) {
 				// 输出槽已满，回滚蜜蜂槽数据
@@ -384,7 +385,7 @@ class ApiaryCageHandler {
 
 		// 成功：消耗刷怪蛋1个（刷怪蛋为一次性消耗品，无容器返还）
 		// 对齐原版刷怪蛋：生存模式消耗，创造模式保留无限材料。
-		cursorEgg.consume(1, player);
+		if (!player.getAbilities().instabuild) cursorEgg.shrink(1);
 		manager.getTile().setChanged();
 		return true;
 	}
@@ -414,8 +415,8 @@ class ApiaryCageHandler {
 			// 避免手工拼接遗漏字段导致客户端属性 Tooltip 为空。
 			ItemStack cage = new ItemStack(ModItems.BEE_CAGE.get());
 			BeeCage.captureEntity(bee, cage);
-			CustomData customData = cage.get(DataComponents.CUSTOM_DATA);
-			return customData == null ? null : customData.copyTag();
+			CompoundTag customData = cage.getTag();
+			return customData == null ? null : customData.copy();
 		} catch (RuntimeException e) {
 			CAGE_ERROR_THROTTLE.tryLog(manager.getLevel().getGameTime(), suppressed ->
 					ProductiveBeesGenesis.LOGGER.warn("构造刷怪蛋蜜蜂数据失败（已抑制 {} 次类似警告）: {}", suppressed, e.toString()));
@@ -426,7 +427,7 @@ class ApiaryCageHandler {
 	/** 专用实体蜂无需数据包定义；只有 configurable_bee 必须验证具体蜂种存在。 */
 	private static boolean isKnownConfigurableBee(BeeSpawnEggHelper.BeeSpawnEggData spawnEgg) {
 		ResourceLocation configurableType = spawnEgg.configurableBeeType();
-		return configurableType == null || BeeReloadListener.INSTANCE.getData(configurableType) != null;
+		return configurableType == null || BeeReloadListener.INSTANCE.getData(configurableType.toString()) != null;
 	}
 
 	// ===== 槽位填充工具方法 =====
@@ -472,8 +473,8 @@ class ApiaryCageHandler {
 			}
 			ItemStack cage = new ItemStack(ModItems.BEE_CAGE.get());
 			BeeCage.captureEntity(bee, cage);
-			CustomData customData = cage.get(DataComponents.CUSTOM_DATA);
-			return customData == null ? copy : customData.copyTag();
+			CompoundTag customData = cage.getTag();
+			return customData == null ? copy : customData.copy();
 		} catch (RuntimeException e) {
 			CAGE_ERROR_THROTTLE.tryLog(manager.getLevel().getGameTime(), suppressed ->
 					ProductiveBeesGenesis.LOGGER.warn("迁移简化蜜蜂数据失败（已抑制 {} 次类似警告）: {}", suppressed, e.toString()));
@@ -496,7 +497,9 @@ class ApiaryCageHandler {
 
 	/** 检查蜂笼是否装有蜜蜂（CUSTOM_DATA 含 entity 字段） */
 	private static boolean isFilledCage(ItemStack stack) {
-		CustomData data = stack.get(DataComponents.CUSTOM_DATA);
-		return data != null && data.contains("entity");
+		CompoundTag data = stack.getTag();
+		if (data == null) return false;
+		CompoundTag nbt = data.copy();
+		return nbt != null && nbt.contains("entity");
 	}
 }

@@ -31,7 +31,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 	 * </ul>
 	 * <p>
 	 * <b>防抖机制</b>：窗口拖拽时 updateLastPosition 每像素移动触发一次，
-	 * 直接调用 {@code ModConfigSpec.save()} 会导致高频磁盘 IO。
+	 * 直接调用 {@code ForgeConfigSpec.save()} 会导致高频磁盘 IO。
 	 * 采用 dirty 标记 + 500ms 防抖：拖拽中每 500ms 最多 save 一次，
 	 * 拖拽结束后下次 getLastPosition 调用时（窗口重新打开）flush 未保存变更。
 	 * <p>
@@ -97,9 +97,9 @@ public abstract class SelectedWindowDataMixin implements CustomWindowData {
 	 * 配置未加载或 saveName 未注册时安全跳过（不保存）。
 	 */
 	@Inject(method = "updateLastPosition", at = @At("HEAD"), cancellable = true, require = 1)
-	private void productivebeesgenesis$updateCustomLastPosition(int x, int y, boolean pinned, CallbackInfo ci) {
+	private void productivebeesgenesis$updateCustomLastPosition(int x, int y, CallbackInfo ci) {
 		if (productivebeesgenesis$customSaveName == null) return;
-		productivebeesgenesis$writeToConfig(productivebeesgenesis$customSaveName, x, y, pinned);
+		productivebeesgenesis$writeToConfig(productivebeesgenesis$customSaveName, x, y, false);
 		ci.cancel();
 	}
 
@@ -117,7 +117,7 @@ public abstract class SelectedWindowDataMixin implements CustomWindowData {
 			if (ModConfig.CLIENT == null) return productivebeesgenesis$defaultPosition();
 			WindowPositionConfigSection.Entry entry = ModConfig.CLIENT.windowPositions.getEntry(saveName);
 			if (entry == null) return productivebeesgenesis$defaultPosition();
-			return new WindowPosition(entry.x.get(), entry.y.get(), entry.pinned.get());
+			return new WindowPosition(entry.x.get(), entry.y.get());
 		} catch (Exception e) {
 			return productivebeesgenesis$defaultPosition();
 		}
@@ -129,7 +129,7 @@ public abstract class SelectedWindowDataMixin implements CustomWindowData {
 	 * null 守卫：配置未加载时安全跳过。
 	 * <p>
 	 * <b>防抖</b>：设置 dirty=true，仅距上次 save 超过 {@link #productivebeesgenesis$SAVE_DEBOUNCE_MS}
-	 * 时才真正调用 {@code ModConfigSpec.save()}。未保存的变更由下次 {@link #productivebeesgenesis$flushIfDirty}
+	 * 时才真正调用 {@code ForgeConfigSpec.save()}。未保存的变更由下次 {@link #productivebeesgenesis$flushIfDirty}
 	 * （getLastPosition 调用前）flush。
 	 *
 	 * @param saveName 窗口持久化键名
@@ -185,6 +185,6 @@ public abstract class SelectedWindowDataMixin implements CustomWindowData {
 
 	@Unique
 	private static WindowPosition productivebeesgenesis$defaultPosition() {
-		return new WindowPosition(Integer.MAX_VALUE, Integer.MAX_VALUE, false);
+		return new WindowPosition(Integer.MAX_VALUE, Integer.MAX_VALUE);
 	}
 }

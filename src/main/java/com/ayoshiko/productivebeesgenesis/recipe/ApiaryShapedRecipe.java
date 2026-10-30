@@ -3,14 +3,12 @@ package com.ayoshiko.productivebeesgenesis.recipe;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
-import com.mojang.serialization.MapCodec;
 import mekanism.common.recipe.upgrade.MekanismShapedRecipe;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.CraftingInput;
+import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.ShapedRecipe;
 import net.minecraft.world.level.block.Block;
@@ -112,7 +110,7 @@ public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 	 * @return 合成结果物品（已转移自定义 NBT）；无法完整转移时返回 EMPTY，拒绝消耗输入
 	 */
 	@Override
-	public ItemStack assemble(CraftingInput inv, HolderLookup.Provider provider) {
+	public ItemStack assemble(CraftingContainer inv, net.minecraft.core.RegistryAccess provider) {
 		// 0. 预取输出模板，确定输出方块类型（super 可能因输出槽有物品返回 EMPTY，需先确定类型）
 		ItemStack template = getResultItem(provider);
 		if (template.isEmpty()) {
@@ -144,7 +142,7 @@ public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 			//    再覆盖 BLOCK_ENTITY_DATA（含蜜蜂/PB升级/输出槽物品），
 			//    保证输出槽有物品时仍可合成且 MEK 升级与自定义数据均不丢失。
 			ItemStack fallback = template.copy();
-			fallback.applyComponents(machineInputs.get(0).getComponents());
+			if (machineInputs.get(0).hasTag()) fallback.setTag(machineInputs.get(0).getTag().copy());
 			if (isApiary) {
 				if (!ApiaryCraftingInventoryTransfer.transfer(machineInputs, fallback)) return ItemStack.EMPTY;
 			} else {
@@ -162,7 +160,9 @@ public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 		}
 
 		// 覆盖 MEK 按可插入顺序重排的库存；源组件始终只读，不从错误结果反推槽位。
-		if (isApiary && !ApiaryCraftingInventoryTransfer.transfer(machineInputs, result)) return ItemStack.EMPTY;
+		if (isApiary) {
+            if (!ApiaryCraftingInventoryTransfer.transfer(machineInputs, result)) return ItemStack.EMPTY;
+        } else if (!LegacyMachineInventory.transferCentrifuge(machineInputs, result)) return ItemStack.EMPTY;
 
 		// 3. 转移/合并自定义 BLOCK_ENTITY_DATA（蜜蜂槽/PB升级等）
 		try {
@@ -193,25 +193,16 @@ public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 	 */
 	public static final class ApiaryShapedRecipeSerializer implements RecipeSerializer<ApiaryShapedRecipe> {
 
-		/** JSON 解码 Codec — 委托 vanilla CODEC，解码后包装为 ApiaryShapedRecipe */
-		private static final MapCodec<ApiaryShapedRecipe> CODEC = ShapedRecipe.Serializer.CODEC.xmap(
-				ApiaryShapedRecipe::new,
-				mekanism.common.recipe.WrappedShapedRecipe::getInternal);
-
-		/** 网络同步 StreamCodec — 委托 vanilla STREAM_CODEC，解码后包装为 ApiaryShapedRecipe */
-		private static final StreamCodec<RegistryFriendlyByteBuf, ApiaryShapedRecipe> STREAM_CODEC =
-				ShapedRecipe.Serializer.STREAM_CODEC.map(
-						ApiaryShapedRecipe::new,
-						mekanism.common.recipe.WrappedShapedRecipe::getInternal);
-
-		@Override
-		public MapCodec<ApiaryShapedRecipe> codec() {
-			return CODEC;
-		}
-
-		@Override
-		public StreamCodec<RegistryFriendlyByteBuf, ApiaryShapedRecipe> streamCodec() {
-			return STREAM_CODEC;
-		}
-	}
+        private final ShapedRecipe.Serializer vanilla = new ShapedRecipe.Serializer();
+        @Override public ApiaryShapedRecipe fromJson(net.minecraft.resources.ResourceLocation id, com.google.gson.JsonObject json) {
+            return new ApiaryShapedRecipe(vanilla.fromJson(id, json));
+        }
+        @Override public ApiaryShapedRecipe fromNetwork(net.minecraft.resources.ResourceLocation id, FriendlyByteBuf buffer) {
+            ShapedRecipe recipe = vanilla.fromNetwork(id, buffer);
+            return recipe == null ? null : new ApiaryShapedRecipe(recipe);
+        }
+        @Override public void toNetwork(FriendlyByteBuf buffer, ApiaryShapedRecipe recipe) {
+            vanilla.toNetwork(buffer, recipe.getInternal());
+        }
+    }
 }

@@ -155,8 +155,6 @@ public interface IFactoryPbDelegateAccess extends IAe2OutputHostBase, IMekCentri
 	 */
 	@Override
 	default boolean productivebeesgenesis$isValidInput(net.minecraft.world.item.ItemStack stack) {
-		var resourceProcessor = productivebeesgenesis$getPbProcessor();
-		if (resourceProcessor != null && resourceProcessor.acceptsResourceInput(stack)) return resourceProcessor.allowsNewResourceInput(stack);
 		// 万象创世蜜脾/蜜脾块由动态特殊路径处理，没有静态 PB 配方，
 		// 不能按普通 PB 输入的 findPbRecipe 结果判无效。
 		if (MyriadCreationsEventHandler.isMyriadCreationsItem(stack)) return true;

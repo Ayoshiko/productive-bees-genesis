@@ -3,9 +3,10 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElementHolder;
-import mekanism.client.gui.element.button.GuiPinButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.GuiPinButton;
 import mekanism.client.gui.element.gauge.GaugeType;
 import mekanism.client.gui.element.gauge.GuiFluidGauge;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.SelectedWindowData;
 import net.minecraft.client.gui.GuiGraphics;
@@ -37,7 +38,7 @@ import java.util.List;
 	 *
 	 * @since Task 8
 	 */
-public class GuiMultiFluidTanksWindow extends GuiWindow {
+public class GuiMultiFluidTanksWindow extends PinnableGuiWindow {
 
 	/** PinButton X 偏移(标题栏左侧) */
 	private static final int PIN_X_OFFSET = 16;

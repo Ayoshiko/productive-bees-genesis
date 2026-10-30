@@ -5,10 +5,11 @@ import com.ayoshiko.productivebeesgenesis.network.ToggleFeederSlotDisabledPayloa
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.slot.GuiVirtualSlot;
 import mekanism.client.gui.element.slot.SlotType;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.slot.VirtualInventoryContainerSlot;
 import net.minecraft.client.gui.screens.Screen;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 
 import java.util.function.BooleanSupplier;
 
@@ -64,14 +65,14 @@ final class FeederDisableToggleSlot extends GuiVirtualSlot {
 	}
 
 	@Override
-	public boolean mouseClicked(double mouseX, double mouseY, int button) {
+	public mekanism.client.gui.element.GuiElement mouseClickedNested(double mouseX, double mouseY, int button) {
 		if (button == 0 && isToggleGesture() && isOverSlot(mouseX, mouseY)
 				&& !containerSlot.getItem().isEmpty()) {
-			PacketDistributor.sendToServer(new ToggleFeederSlotDisabledPayload(tile.getBlockPos(), slotIndex));
-			playClickSound(BUTTON_CLICK_SOUND);
-			return true;
+			ForgeNetwork.sendToServer(new ToggleFeederSlotDisabledPayload(tile.getBlockPos(), slotIndex));
+			playClickSound(clickSound);
+			return this;
 		}
-		return super.mouseClicked(mouseX, mouseY, button);
+		return super.mouseClickedNested(mouseX, mouseY, button);
 	}
 
 	/** 切换手势判定：禁用编辑模式已开启，或临时按住 Alt */
@@ -81,6 +82,6 @@ final class FeederDisableToggleSlot extends GuiVirtualSlot {
 
 	/** 与父类 {@code GuiVirtualSlot.mouseClicked} 相同的命中判定，避免坐标语义分叉 */
 	private boolean isOverSlot(double mouseX, double mouseY) {
-		return mouseX >= getX() && mouseY >= getY() && mouseX < getRight() && mouseY < getBottom();
+		return mouseX >= getX() && mouseY >= getY() && mouseX < (getX() + getWidth()) && mouseY < (getY() + getHeight());
 	}
 }

@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -17,11 +17,11 @@ import java.util.function.ToIntFunction;
  */
 public final class FactoryTierConfigValues {
 
-	private final Map<String, ModConfigSpec.ConfigValue<List<? extends Integer>>> values;
+	private final Map<String, ForgeConfigSpec.ConfigValue<List<? extends Integer>>> values;
 	private final ToIntFunction<FactoryTierKey> defaults;
 
 	private FactoryTierConfigValues(
-			Map<String, ModConfigSpec.ConfigValue<List<? extends Integer>>> values,
+			Map<String, ForgeConfigSpec.ConfigValue<List<? extends Integer>>> values,
 			ToIntFunction<FactoryTierKey> defaults) {
 		this.values = Collections.unmodifiableMap(values);
 		this.defaults = defaults;
@@ -36,10 +36,10 @@ public final class FactoryTierConfigValues {
 	 * @return 已注册的等级配置集合
 	 */
 	public static FactoryTierConfigValues register(
-			ModConfigSpec.Builder builder,
+			ForgeConfigSpec.Builder builder,
 			String translationPrefix,
 			ToIntFunction<FactoryTierKey> defaults) {
-		Map<String, ModConfigSpec.ConfigValue<List<? extends Integer>>> values =
+		Map<String, ForgeConfigSpec.ConfigValue<List<? extends Integer>>> values =
 				new LinkedHashMap<>();
 		for (String group : FactoryTierKey.configGroups()) {
 			List<FactoryTierKey> tiers = FactoryTierKey.groupTiers(group);
@@ -48,12 +48,11 @@ public final class FactoryTierConfigValues {
 					.toList();
 			values.put(group, builder
 					.translation(translationPrefix + "." + group)
-					.defineList(
+					.<List<? extends Integer>>define(
 							List.of(group),
-							() -> groupDefaults,
-							() -> 1,
-							FactoryTierConfigValues::isValidMultiplier,
-							ModConfigSpec.Range.of(tiers.size(), tiers.size())));
+							groupDefaults,
+							value -> value instanceof List<?> list && list.size() == tiers.size()
+									&& list.stream().allMatch(FactoryTierConfigValues::isValidMultiplier)));
 		}
 		return new FactoryTierConfigValues(values, defaults);
 	}
@@ -69,7 +68,7 @@ public final class FactoryTierConfigValues {
 	 * @return 当前配置值或默认值
 	 */
 	public int get(FactoryTierKey tier) {
-		ModConfigSpec.ConfigValue<List<? extends Integer>> value = values.get(tier.configGroup());
+		ForgeConfigSpec.ConfigValue<List<? extends Integer>> value = values.get(tier.configGroup());
 		if (value == null) return defaults.applyAsInt(tier);
 		List<? extends Integer> groupValues = value.get();
 		if (groupValues == null || tier.groupIndex() >= groupValues.size()) {

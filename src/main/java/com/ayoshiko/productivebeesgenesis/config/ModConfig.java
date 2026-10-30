@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,7 +15,7 @@ import java.util.Set;
 	 * 世界加载时自动生效，无需执行 /reload。
 	 * <p>
 	 * <b>职责拆分（Task 21）</b>：原文件 551 行，已将三类配置抽取为独立顶级类，
-	 * 本类作为聚合入口持有三个 {@link ModConfigSpec} 与配置实例：
+	 * 本类作为聚合入口持有三个 {@link ForgeConfigSpec} 与配置实例：
 	 * <ul>
 	 *   <li>{@link ClientConfig} — 客户端渲染/显示配置</li>
 	 *   <li>{@link CommonConfig} — 跨端同步配置</li>
@@ -110,10 +110,10 @@ public final class ModConfig {
 
 	// ========== 配置实例聚合入口 ==========
 
-	public static final ModConfigSpec CLIENT_SPEC;
+	public static final ForgeConfigSpec CLIENT_SPEC;
 	public static final ClientConfig CLIENT;
 
-	public static final ModConfigSpec COMMON_SPEC;
+	public static final ForgeConfigSpec COMMON_SPEC;
 	public static final CommonConfig COMMON;
 
 	public static final String LEGACY_SERVER_FILE_NAME = "productivebeesgenesis-server.toml";
@@ -124,30 +124,30 @@ public final class ModConfig {
 	public static final String CAPACITIES_SERVER_FILE_NAME =
 			"productivebeesgenesis-capacities-server.toml";
 
-	public static final ModConfigSpec GAMEPLAY_SERVER_SPEC;
-	public static final ModConfigSpec MACHINES_SERVER_SPEC;
-	public static final ModConfigSpec CAPACITIES_SERVER_SPEC;
+	public static final ForgeConfigSpec GAMEPLAY_SERVER_SPEC;
+	public static final ForgeConfigSpec MACHINES_SERVER_SPEC;
+	public static final ForgeConfigSpec CAPACITIES_SERVER_SPEC;
 
 	/**
 	 * 旧代码兼容别名，仅代表玩法配置规格。
 	 * 新代码应使用 {@link #areServerSpecsLoaded()} 或三个具名规格。
 	 */
 	@Deprecated(forRemoval = false)
-	public static final ModConfigSpec SERVER_SPEC;
+	public static final ForgeConfigSpec SERVER_SPEC;
 	public static final ServerConfig SERVER;
 
 	static {
-		var clientPair = new ModConfigSpec.Builder().configure(ClientConfig::new);
+		var clientPair = new ForgeConfigSpec.Builder().configure(ClientConfig::new);
 		CLIENT = clientPair.getKey();
 		CLIENT_SPEC = clientPair.getValue();
 
-		var commonPair = new ModConfigSpec.Builder().configure(CommonConfig::new);
+		var commonPair = new ForgeConfigSpec.Builder().configure(CommonConfig::new);
 		COMMON = commonPair.getKey();
 		COMMON_SPEC = commonPair.getValue();
 
-		var gameplayBuilder = new ModConfigSpec.Builder();
-		var machinesBuilder = new ModConfigSpec.Builder();
-		var capacitiesBuilder = new ModConfigSpec.Builder();
+		var gameplayBuilder = new ForgeConfigSpec.Builder();
+		var machinesBuilder = new ForgeConfigSpec.Builder();
+		var capacitiesBuilder = new ForgeConfigSpec.Builder();
 		SERVER = new ServerConfig(gameplayBuilder, machinesBuilder, capacitiesBuilder);
 		GAMEPLAY_SERVER_SPEC = gameplayBuilder.build();
 		MACHINES_SERVER_SPEC = machinesBuilder.build();
@@ -193,7 +193,7 @@ public final class ModConfig {
 	/**
 	 * 跨字段联合校验与自动修正。
 	 * <p>
-	 * NeoForge {@link ModConfigSpec} 仅支持单字段 validator（如 {@code defineInRange}），
+	 * NeoForge {@link ForgeConfigSpec} 仅支持单字段 validator（如 {@code defineInRange}），
 	 * 无法表达跨字段约束（如 min <= max）。此方法在配置加载/重载事件中调用，
 	 * 主动检查并修正逻辑冲突的配置值，避免运行时反复触发被动防御逻辑
 	 * （{@code BeeRecipeReloader} 的 min/max 交换）。

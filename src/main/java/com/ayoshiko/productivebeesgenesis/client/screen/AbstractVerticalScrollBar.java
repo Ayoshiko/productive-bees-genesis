@@ -9,7 +9,8 @@ import javax.annotation.ParametersAreNonnullByDefault;
 /**
 	 * 垂直滚动条基类，封装滚动条几何计算、命中测试、渲染与鼠标交互。
 	 * <p>
-	 * 供 {@link BeeSelectionScrollBar} 复用滚动条逻辑，遵循下述设计原则：
+	 * 将 {@link FilterListDragHandler} 与 {@link BeeSelectionScrollBar} 中约 90 行
+	 * 重复度 80%-100% 的滚动条逻辑抽取为公共基类，遵循下述设计原则：
 	 * <ul>
 	 *   <li>SRP — 仅负责滚动条几何、渲染与交互，不涉及列表数据语义或条目拖拽</li>
 	 *   <li>OCP/DIP — 通过抽象方法获取屏幕数据，子类只需提供数据源即可扩展</li>

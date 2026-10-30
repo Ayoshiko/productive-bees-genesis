@@ -34,8 +34,8 @@ class FeederInventorySlot extends BasicInventorySlot {
 
 	private FeederInventorySlot(@Nullable IContentsListener listener) {
 		super(
-				ConstantPredicates.manualOnly(),
-				ConstantPredicates.manualOnly(),
+				(stack, automation) -> automation == mekanism.api.AutomationType.MANUAL,
+				(stack, automation) -> automation == mekanism.api.AutomationType.MANUAL,
 				(Predicate<ItemStack>) stack -> !PbUpgradeInventorySlot.isValidUpgradeItem(stack),
 				listener, 0, 0
 		);

@@ -1,10 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -23,20 +20,12 @@ import net.minecraft.resources.ResourceLocation;
 	 */
 public record CycleAeInputFilterModePayload(
 		BlockPos pos
-) implements CustomPacketPayload {
+)  {
 
-	public static final CustomPacketPayload.Type<CycleAeInputFilterModePayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "cycle_ae_input_filter_mode"));
-
-	public static final StreamCodec<ByteBuf, CycleAeInputFilterModePayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, CycleAeInputFilterModePayload::pos,
-					CycleAeInputFilterModePayload::new
-			);
-
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static CycleAeInputFilterModePayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new CycleAeInputFilterModePayload(buf.readBlockPos());
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+    }
 }

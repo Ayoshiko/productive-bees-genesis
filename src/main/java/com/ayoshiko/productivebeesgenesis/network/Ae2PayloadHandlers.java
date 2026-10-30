@@ -18,11 +18,9 @@ import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.tile.base.TileEntityMekanism;
-import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import com.ayoshiko.productivebeesgenesis.network.ForgePayloadContext;
 
 /**
 	 * AE2 相关数据包的服务端与客户端处理集合
@@ -81,17 +79,6 @@ final class Ae2PayloadHandlers {
 		return true;
 	}
 
-	static boolean validateInputFilterAvailable(ServerPlayer player,
-			BlockPos pos, String logKey) {
-		if (!validateContainerMatch(player, pos, logKey)) return false;
-		if (player.level().getBlockEntity(pos) instanceof IAe2InputHost host
-				&& host.productivebeesgenesis$getAe2StateHolder().hasDeferredInputFilter()) {
-			player.displayClientMessage(Component.translatable("command.productivebeesgenesis.output.input_filter"), true);
-			return false;
-		}
-		return true;
-	}
-
 	/**
 	 * 服务端处理：切换 per-tile AE2 物品/流体输出开关
 	 * <br/>
@@ -100,7 +87,7 @@ final class Ae2PayloadHandlers {
 	 * 通过接口多态统一调用 toggle 方法，避免引用 ME/EME 可选依赖的具体子类（依赖倒置原则）。
 	 * 切换后通过 SyncableBoolean tracker 自动同步到客户端，markForSave 持久化到 NBT。
 	 */
-	static void handleCycleAeOutput(CycleAeOutputPayload payload, IPayloadContext context) {
+	static void handleCycleAeOutput(CycleAeOutputPayload payload, ForgePayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}
@@ -153,7 +140,7 @@ final class Ae2PayloadHandlers {
 	 * IAe2InputHost 由 Mixin 运行时注入到 ME/EME 工厂类，编译时不可见，
 	 * 但 instanceof 在运行时有效（基础离心机和 AbstractMekCentrifugeFactory 直接 implements）。
 	 */
-	static void handleToggleAeInput(ToggleAeInputPayload payload, IPayloadContext context) {
+	static void handleToggleAeInput(ToggleAeInputPayload payload, ForgePayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}
@@ -186,7 +173,7 @@ final class Ae2PayloadHandlers {
 	 * 校验玩家身份、容器匹配、8 格交互距离与全局总开关
 	 * （{@code mekCentrifugeSmeltingCompatEnabled} 关闭时拒绝切换）。
 	 */
-	static void handleToggleSmeltingCompat(ToggleSmeltingCompatPayload payload, IPayloadContext context) {
+	static void handleToggleSmeltingCompat(ToggleSmeltingCompatPayload payload, ForgePayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}
@@ -228,7 +215,7 @@ final class Ae2PayloadHandlers {
 	 * 校验玩家身份、8 格交互距离后，通过 instanceof 检查 IAe2InputHost 接口。
 	 * NBT 忽略开关决定拉取时是否区分蜜脾的 NBT 数据。
 	 */
-	static void handleToggleAeInputNbtIgnore(ToggleAeInputNbtIgnorePayload payload, IPayloadContext context) {
+	static void handleToggleAeInputNbtIgnore(ToggleAeInputNbtIgnorePayload payload, ForgePayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}
@@ -261,7 +248,7 @@ final class Ae2PayloadHandlers {
 	 * DISABLED → WHITELIST → BLACKLIST → DISABLED。
 	 * 过滤器为 null 时（基础离心机未启用过滤）安全返回，不执行切换。
 	 */
-	static void handleCycleAeInputFilterMode(CycleAeInputFilterModePayload payload, IPayloadContext context) {
+	static void handleCycleAeInputFilterMode(CycleAeInputFilterModePayload payload, ForgePayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}
@@ -269,7 +256,7 @@ final class Ae2PayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击
-		if (!validateInputFilterAvailable(serverPlayer, payload.pos(), "ae2_input_filter_mode_pos_mismatch")) {
+		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_input_filter_mode_pos_mismatch")) {
 			return;
 		}
 		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）
@@ -312,7 +299,7 @@ final class Ae2PayloadHandlers {
 	 * player cursor/inventory or insert the carried stack into the ME network.
 	 * Mirrors OverloadedInterfaceMenu#handlePickup / handleQuickMove.
 	 */
-	static void handleAeInputOutputSlot(AeInputOutputSlotPayload payload, IPayloadContext context) {
+	static void handleAeInputOutputSlot(AeInputOutputSlotPayload payload, ForgePayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) return;
 		if (serverPlayer.level() == null) return;
 		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_output_slot_pos_mismatch")) return;
@@ -443,7 +430,7 @@ final class Ae2PayloadHandlers {
 			net.minecraft.world.item.ItemStack slotStack = inventory.getItem(i);
 			if (slotStack.isEmpty()) {
 				capacity += probe.getMaxStackSize();
-			} else if (net.minecraft.world.item.ItemStack.isSameItemSameComponents(slotStack, probe)) {
+			} else if (net.minecraft.world.item.ItemStack.isSameItemSameTags(slotStack, probe)) {
 				capacity += Math.max(0, slotStack.getMaxStackSize() - slotStack.getCount());
 			}
 			if (capacity >= probe.getMaxStackSize()) {

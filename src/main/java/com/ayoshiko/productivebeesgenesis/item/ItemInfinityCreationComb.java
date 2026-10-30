@@ -19,7 +19,7 @@ public class ItemInfinityCreationComb extends Item {
 	}
 
 	@Override
-	public void appendHoverText(ItemStack stack, TooltipContext context,
+	public void appendHoverText(ItemStack stack, net.minecraft.world.level.Level context,
 			List<Component> tooltipComponents, TooltipFlag tooltipFlag) {
 		super.appendHoverText(stack, context, tooltipComponents, tooltipFlag);
 		tooltipComponents.add(Component.translatable("tooltip.productivebeesgenesis.infinitycreation_comb_item"));

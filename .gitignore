@@ -1,4 +1,6 @@
 # Gradle
+.cached-maven/
+dist/
 .gradle/
 build/
 !gradle-wrapper.jar

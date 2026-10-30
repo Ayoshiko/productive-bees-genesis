@@ -9,8 +9,8 @@ import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraftforge.event.RegisterCommandsEvent;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 
 import java.util.Map;
 import java.util.Set;
@@ -175,6 +175,6 @@ public final class DevModeCommand {
 				DevModeManager.isEnabled(),
 				DevModeManager.getFeatureStates()
 		);
-		PacketDistributor.sendToAllPlayers(packet);
+		ForgeNetwork.sendToAllPlayers(packet);
 	}
 }

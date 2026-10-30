@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import net.neoforged.fml.ModList;
+import net.minecraftforge.fml.ModList;
 
 /**
 	 * AppliedFlux 集成加载器

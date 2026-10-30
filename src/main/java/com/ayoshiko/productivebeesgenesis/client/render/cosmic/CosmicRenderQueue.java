@@ -117,7 +117,7 @@ public final class CosmicRenderQueue {
 		try {
 			for (CosmicRenderCall call : snapshot) {
 				RenderSystem.setProjectionMatrix(call.projection, RenderSystem.getVertexSorting());
-				RenderSystem.getModelViewStack().set((Matrix4fc) call.modelView);
+				RenderSystem.getModelViewStack().last().pose().set((Matrix4fc) call.modelView);
 				RenderSystem.applyModelViewMatrix();
 				// 复用 ThreadLocal PoseStack 避免每次循环分配；push/pop 隔离状态，try/finally 保证异常时栈平衡
 				localPoseStack.pushPose();
@@ -141,7 +141,7 @@ public final class CosmicRenderQueue {
 			}
 			// 无条件恢复矩阵与渲染状态，防止状态泄漏到后续渲染阶段
 			RenderSystem.setProjectionMatrix(savedProjection, RenderSystem.getVertexSorting());
-			RenderSystem.getModelViewStack().set((Matrix4fc) savedModelView);
+			RenderSystem.getModelViewStack().last().pose().set((Matrix4fc) savedModelView);
 			RenderSystem.applyModelViewMatrix();
 			// 重置可能被 cosmic 层修改的全局渲染状态（默认 shader color/blend/depth）
 			RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);

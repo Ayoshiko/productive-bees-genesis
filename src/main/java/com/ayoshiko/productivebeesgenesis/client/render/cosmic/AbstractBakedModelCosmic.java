@@ -76,7 +76,7 @@ public abstract class AbstractBakedModelCosmic extends WrappedItemModel implemen
 	 * 失效所有实例的 atlasSprites 缓存
 	 * <br/>
 	 * 由 {@link com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesisClient} 在
-	 * {@link net.neoforged.neoforge.client.event.TextureAtlasStitchedEvent} 中调用。
+	 * {@link net.minecraftforge.client.event.TextureStitchEvent} 中调用。
 	 * <br/>
 	 * 原因：图集重新拼接后，maskSprites 对应的 TextureAtlasSprite 的 UV 坐标可能已变化，
 	 * 继续使用旧缓存会导致 cosmic 渲染采样到错误纹理，因此必须通过自增代数使所有实例缓存失效，

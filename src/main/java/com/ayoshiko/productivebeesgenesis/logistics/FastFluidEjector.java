@@ -12,8 +12,8 @@ import mekanism.common.tile.component.config.DataType;
 import mekanism.common.tile.component.config.slot.FluidSlotInfo;
 import mekanism.common.tile.component.config.slot.ISlotInfo;
 import net.minecraft.core.Direction;
-import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fluids.capability.IFluidHandler;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -30,7 +30,6 @@ public final class FastFluidEjector {
 	private static final int IDLE_BACKOFF_TICKS = 10;
 
 	private final NeighborFluidTargets targets;
-	private final TileEntityMekanism owner;
 	private int tankCursor;
 	private int sideCursor;
 	private int consecutiveIdleTicks;
@@ -41,7 +40,6 @@ public final class FastFluidEjector {
 
 	public FastFluidEjector(TileEntityMekanism tile) {
 		this.targets = new NeighborFluidTargets(tile);
-		this.owner = tile;
 	}
 
 	public void onConfigChanged() {
@@ -51,7 +49,7 @@ public final class FastFluidEjector {
 
 	/** 批量弹出所有可提取流体；调用方应在本模组机器上用本方法替代原版 FLUID eject。 */
 	public void tick(TileEntityMekanism tile, @Nullable ConfigInfo fluidConfig, long gameTime) {
-		if (OutputCustody.of(owner).blocked() || fluidConfig == null || lastAttemptGameTime == gameTime) return;
+		if (fluidConfig == null || lastAttemptGameTime == gameTime) return;
 		lastAttemptGameTime = gameTime;
 		if (gameTime < backoffUntilTick) {
 			long fingerprint = sampleContents(fluidConfig);
@@ -95,7 +93,7 @@ public final class FastFluidEjector {
 		for (DataType dataType : fluidConfig.getSupportedDataTypes()) {
 			if (!dataType.canOutput()) continue;
 			ISlotInfo slotInfo = fluidConfig.getSlotInfo(dataType);
-			if (!(slotInfo instanceof FluidSlotInfo fluidSlotInfo) || slotInfo.isEmpty()) continue;
+			if (!(slotInfo instanceof FluidSlotInfo fluidSlotInfo)) continue;
 			List<IExtendedFluidTank> tanks = fluidSlotInfo.getTanks();
 			int tankCount = tanks.size();
 			int tankStart = RoundRobinSlotTraversal.normalize(tankCursor, tankCount);
@@ -122,36 +120,51 @@ public final class FastFluidEjector {
 			RelativeSide relativeSide = RelativeSide.fromDirections(tile.getDirection(), side);
 			if (fluidConfig.getDataType(relativeSide) != dataType) continue;
 			IFluidHandler target = targets.handler(side);
-			if (target != null && !OutputCustody.of(owner).blocked()) moved += transfer(tank, target, OutputCustody.of(owner));
+			if (target != null) moved += transfer(tank, target);
 		}
 		return moved;
 	}
 
 	/** 先模拟目标接收量，再精确抽取；异常目标少收时把余量原样放回源槽。 */
-	static int transfer(IExtendedFluidTank source, IFluidHandler target, OutputCustody custody) {
-		if (custody.blocked()) return 0;
+	private static int transfer(IExtendedFluidTank source, IFluidHandler target) {
 		FluidStack available = source.extract(Integer.MAX_VALUE, Action.SIMULATE, AutomationType.EXTERNAL);
 		if (available.isEmpty()) return 0;
 		int accepted;
-		try { accepted = Math.max(0, Math.min(available.getAmount(), target.fill(available.copy(), IFluidHandler.FluidAction.SIMULATE))); }
-		catch (RuntimeException e) { return 0; }
-		if (accepted == 0) return 0;
+		try {
+			accepted = Math.max(0, Math.min(available.getAmount(),
+					target.fill(available, IFluidHandler.FluidAction.SIMULATE)));
+		} catch (Exception exception) {
+			LogThrottle.warn("fast_fluid_eject_simulate",
+					"相邻流体处理器模拟接收异常，已跳过本目标: {}", exception.toString());
+			return 0;
+		}
+		if (accepted <= 0) return 0;
+
 		FluidStack extracted = source.extract(accepted, Action.EXECUTE, AutomationType.EXTERNAL);
 		if (extracted.isEmpty()) return 0;
-		int handed = (int) custody.handoffFluid(extracted, extracted.getAmount(), "neighbor-fluid",
-				() -> target.fill(extracted.copy(), IFluidHandler.FluidAction.EXECUTE));
-		int remaining = extracted.getAmount() - handed;
-		if (remaining > 0) {
-			FluidStack rest = extracted.copyWithAmount(remaining);
-			int returned = (int) custody.handoffFluid(rest, remaining, "return-fluid", () -> {
-				FluidStack rejected = source.insert(rest.copy(), Action.EXECUTE, AutomationType.INTERNAL);
-				if (!rejected.isEmpty() && !FluidStack.isSameFluidSameComponents(rest, rejected))
-					throw new IllegalStateException("Invalid fluid return");
-				return rest.getAmount() - rejected.getAmount();
-			});
-			if (returned < remaining) custody.retainFluid(rest, remaining - returned, "return-fluid-full");
+		int inserted;
+		try {
+			inserted = Math.max(0, Math.min(extracted.getAmount(),
+					target.fill(extracted, IFluidHandler.FluidAction.EXECUTE)));
+		} catch (Exception exception) {
+			returnToSource(source, extracted);
+			LogThrottle.warn("fast_fluid_eject_execute",
+					"相邻流体处理器实际接收异常，流体已退回源槽: {}", exception.toString());
+			return 0;
 		}
-		return handed;
+		if (inserted < extracted.getAmount()) {
+			FluidStack rejected = com.ayoshiko.productivebeesgenesis.util.ForgeFluidStacks.copyWithAmount(extracted, extracted.getAmount() - inserted);
+			returnToSource(source, rejected);
+		}
+		return inserted;
+	}
+
+	private static void returnToSource(IExtendedFluidTank source, FluidStack rejected) {
+		FluidStack notReturned = source.insert(rejected, Action.EXECUTE, AutomationType.INTERNAL);
+		if (!notReturned.isEmpty()) {
+			LogThrottle.warn("fast_fluid_eject_return",
+					"流体目标拒收后有 {} mB 无法放回源槽", notReturned.getAmount());
+		}
 	}
 
 	/** 计算无分配内容指纹；退避期间仍能在产出变化的下一刻立即恢复。 */
@@ -161,7 +174,7 @@ public final class FastFluidEjector {
 		for (DataType dataType : fluidConfig.getSupportedDataTypes()) {
 			if (!dataType.canOutput()) continue;
 			ISlotInfo slotInfo = fluidConfig.getSlotInfo(dataType);
-			if (!(slotInfo instanceof FluidSlotInfo fluidSlotInfo) || slotInfo.isEmpty()) continue;
+			if (!(slotInfo instanceof FluidSlotInfo fluidSlotInfo)) continue;
 			List<IExtendedFluidTank> tanks = fluidSlotInfo.getTanks();
 			for (int i = 0; i < tanks.size(); i++) {
 				IExtendedFluidTank tank = tanks.get(i);
@@ -171,8 +184,8 @@ public final class FastFluidEjector {
 				total += amount;
 				fingerprint = 31L * fingerprint + System.identityHashCode(stack.getFluid());
 				fingerprint = 31L * fingerprint + amount;
-				if (!stack.isComponentsPatchEmpty()) {
-					fingerprint = 31L * fingerprint + stack.getComponents().hashCode();
+				if (!!stack.hasTag()) {
+					fingerprint = 31L * fingerprint + com.ayoshiko.productivebeesgenesis.util.StackTags.hash(stack);
 				}
 			}
 		}

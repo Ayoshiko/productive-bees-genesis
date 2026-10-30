@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.logistics;
 
 import mekanism.api.RelativeSide;
-import mekanism.common.capabilities.Capabilities;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tile.component.TileComponentConfig;
@@ -11,8 +11,8 @@ import mekanism.common.tile.interfaces.ISideConfiguration;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
-import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraftforge.fluids.capability.IFluidHandler;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -24,8 +24,6 @@ import java.util.Map;
 public final class NeighborFluidTargets {
 
 	private final TileEntityMekanism tile;
-	private final Map<Direction, BlockCapabilityCache<IFluidHandler, @Nullable Direction>> caches =
-			new EnumMap<>(Direction.class);
 	private final List<Direction> outputSides = new ArrayList<>(6);
 	private boolean sidesValid;
 	@Nullable
@@ -50,13 +48,11 @@ public final class NeighborFluidTargets {
 	public IFluidHandler handler(Direction side) {
 		Level level = tile.getLevel();
 		if (!(level instanceof ServerLevel serverLevel)) return null;
-		BlockCapabilityCache<IFluidHandler, @Nullable Direction> cache = caches.get(side);
-		if (cache == null) {
-			cache = Capabilities.FLUID.createCache(serverLevel,
-					tile.getBlockPos().relative(side), side.getOpposite());
-			caches.put(side, cache);
-		}
-		return cache.getCapability();
+		var neighborPos = tile.getBlockPos().relative(side);
+		if (!serverLevel.hasChunkAt(neighborPos)) return null;
+		BlockEntity neighbor = serverLevel.getBlockEntity(neighborPos);
+		return neighbor == null ? null : neighbor.getCapability(
+				ForgeCapabilities.FLUID_HANDLER, side.getOpposite()).orElse(null);
 	}
 
 	private void rebuild(@Nullable ConfigInfo fluidConfig, Direction facing) {
@@ -64,11 +60,12 @@ public final class NeighborFluidTargets {
 		cachedFacing = facing;
 		sidesValid = true;
 		if (fluidConfig == null) return;
-		for (Map.Entry<RelativeSide, DataType> entry : fluidConfig.getSideConfig()) {
-			DataType dataType = entry.getValue();
+		for (RelativeSide side : RelativeSide.values()) {
+			if (!fluidConfig.isSideEnabled(side)) continue;
+			DataType dataType = fluidConfig.getDataType(side);
 			if (dataType == null || !dataType.canOutput()) continue;
 			if (fluidConfig.getSlotInfo(dataType) == null) continue;
-			Direction direction = entry.getKey().getDirection(facing);
+			Direction direction = side.getDirection(facing);
 			if (!outputSides.contains(direction)) outputSides.add(direction);
 		}
 	}

@@ -6,20 +6,19 @@ import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper.BlockEntityItemStackHandler;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
 import mekanism.common.recipe.MekanismRecipeType;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeType;
-import net.minecraft.world.item.crafting.SingleRecipeInput;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.crafting.SmeltingRecipe;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.items.IItemHandler;
-import net.neoforged.neoforge.items.IItemHandlerModifiable;
+import net.minecraftforge.items.IItemHandler;
+import net.minecraftforge.items.IItemHandlerModifiable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,8 +29,8 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 粗矿熔炼升级的判定、配方缓存和输出转换工具。
  * <p>
- * 只有带 raw_materials/raw_ores 标签且拥有 Mekanism 或原版熔炼配方的物品才会转换；普通产物仍要求
- * ingots 输出标签，Powah 粗品质铀矿的非锭产物仅对其精确配方配对开放。
+ * 只有同时满足 raw_materials/raw_ores 标签、Mekanism 或原版熔炼配方以及 ingots 输出标签的物品才会转换。
+ * 这样不会把食物、木炭或其他普通可熔炼物误当作粗矿；整合包缺少标签时仍可通过补充 common/forge 标签兼容。
  * <p>
  * 服务端 tick 只访问本类的不可变快照和并发缓存；配方重载时由主类调用 {@link #invalidateCache()}。
  */
@@ -43,8 +42,6 @@ public final class RawOreSmeltingUpgradeHelper {
 	private static final TagKey<Item> FORGE_RAW_ORES = itemTag("forge", "raw_ores");
 	private static final TagKey<Item> COMMON_INGOTS = itemTag("c", "ingots");
 	private static final TagKey<Item> FORGE_INGOTS = itemTag("forge", "ingots");
-	private static final ResourceLocation POWAH_RAW_URANINITE = ResourceLocation.fromNamespaceAndPath("powah", "uraninite_raw");
-	private static final ResourceLocation POWAH_URANINITE = ResourceLocation.fromNamespaceAndPath("powah", "uraninite");
 
 	private static final List<TagKey<Item>> RAW_TAGS = List.of(
 			COMMON_RAW_MATERIALS, COMMON_RAW_ORES, FORGE_RAW_MATERIALS, FORGE_RAW_ORES);
@@ -61,21 +58,12 @@ public final class RawOreSmeltingUpgradeHelper {
 		if (blockEntity instanceof IPbUpgradeProvider provider) {
 			return provider.getPbUpgradeInstalledCount(PbUpgradeType.RAW_ORE_SMELTING) > 0;
 		}
-		return blockEntity instanceof cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity upgradeable
+		return blockEntity instanceof cy.jdkdigital.productivelib.common.block.entity.UpgradeableBlockEntity upgradeable
 				&& upgradeable.getUpgradeCount(ModItems.RAW_ORE_SMELTING_UPGRADE.get()) > 0;
 	}
 
 	/** 将 pending 输出按熔炼配方转换；无变化时返回 false。 */
 	public static boolean convertPendingOutputs(Level level, Map<ItemStack, Integer> outputs) {
-		return convertPendingOutputs(level, outputs, false);
-	}
-
-	/** 转换上界包含零到最大输入之间可能留下的粗矿余料。 */
-	public static boolean maximumPendingOutputs(Level level, Map<ItemStack, Integer> outputs) {
-		return convertPendingOutputs(level, outputs, true);
-	}
-
-	private static boolean convertPendingOutputs(Level level, Map<ItemStack, Integer> outputs, boolean maximum) {
 		if (level == null || outputs == null || outputs.isEmpty()) return false;
 		boolean hasConversion = false;
 		for (Map.Entry<ItemStack, Integer> entry : outputs.entrySet()) {
@@ -99,8 +87,7 @@ public final class RawOreSmeltingUpgradeHelper {
 			} else {
 				long crafts = count / (long) conversion.inputCount();
 				addAmount(converted, conversion.result(), crafts * conversion.result().getCount());
-				addAmount(converted, template, maximum ? Math.min(count, conversion.inputCount() - 1L)
-						: count % conversion.inputCount());
+				addAmount(converted, template, count % conversion.inputCount());
 			}
 		}
 		// 所有转换与合并完成后才提交；异常时原 pending 仍完整持有资产。
@@ -194,27 +181,18 @@ public final class RawOreSmeltingUpgradeHelper {
 		}
 
 		// 原版金/铁/铜粗矿通常只有 Furnace/Blast Furnace 配方，作为 Mekanism 配方的兼容回退。
-		Optional<RecipeHolder<SmeltingRecipe>> vanilla = level.getRecipeManager().getRecipeFor(
-				RecipeType.SMELTING, new SingleRecipeInput(input), level);
+		Optional<SmeltingRecipe> vanilla = level.getRecipeManager().getRecipeFor(
+				RecipeType.SMELTING, new SimpleContainer(input), level);
 		if (vanilla.isEmpty()) return Optional.empty();
-		ItemStack output = vanilla.get().value().getResultItem(level.registryAccess());
+		ItemStack output = vanilla.get().getResultItem(level.registryAccess());
 		return isValidOutput(input, output)
 				? Optional.of(new Conversion(1, output.copy())) : Optional.empty();
 	}
 
 	private static boolean isValidOutput(ItemStack input, ItemStack output) {
 		return output != null && !output.isEmpty()
-				&& !ItemStack.isSameItemSameComponents(input, output)
-				&& (isIngot(output) || isPowahUraniniteSmelting(input, output));
-	}
-
-	private static boolean isPowahUraniniteSmelting(ItemStack input, ItemStack output) {
-		return isPowahUraniniteSmelting(
-				BuiltInRegistries.ITEM.getKey(input.getItem()), BuiltInRegistries.ITEM.getKey(output.getItem()));
-	}
-
-	static boolean isPowahUraniniteSmelting(ResourceLocation input, ResourceLocation output) {
-		return POWAH_RAW_URANINITE.equals(input) && POWAH_URANINITE.equals(output);
+				&& !ItemStack.isSameItemSameTags(input, output)
+				&& isIngot(output);
 	}
 
 	private static boolean isRawMaterial(ItemStack stack) {
@@ -250,7 +228,7 @@ public final class RawOreSmeltingUpgradeHelper {
 			int remaining = stack.getCount();
 			for (int i = 0; i < simulated.length && remaining > 0; i++) {
 				ItemStack current = simulated[i];
-				if (current.isEmpty() || !ItemStack.isSameItemSameComponents(current, stack)) continue;
+				if (current.isEmpty() || !ItemStack.isSameItemSameTags(current, stack)) continue;
 				int capacity = Math.min(Math.max(1, handler.getSlotLimit(slots[i])), current.getMaxStackSize());
 				int accepted = Math.min(remaining, Math.max(0, capacity - current.getCount()));
 				current.grow(accepted);
@@ -274,7 +252,7 @@ public final class RawOreSmeltingUpgradeHelper {
 			for (int slot : slots) {
 				if (remaining <= 0) break;
 				ItemStack current = handler.getStackInSlot(slot);
-				if (current.isEmpty() || !ItemStack.isSameItemSameComponents(current, stack)) continue;
+				if (current.isEmpty() || !ItemStack.isSameItemSameTags(current, stack)) continue;
 				int offered = Math.min(remaining,
 						Math.min(Math.max(1, handler.getSlotLimit(slot)), stack.getMaxStackSize()));
 				ItemStack remainder = handler.insertItem(slot, stack.copyWithCount(offered), false);
@@ -295,7 +273,7 @@ public final class RawOreSmeltingUpgradeHelper {
 	private static boolean sameStacks(List<ItemStack> left, List<ItemStack> right) {
 		if (left.size() != right.size()) return false;
 		for (int i = 0; i < left.size(); i++) {
-			if (!ItemStack.isSameItemSameComponents(left.get(i), right.get(i))
+			if (!ItemStack.isSameItemSameTags(left.get(i), right.get(i))
 					|| left.get(i).getCount() != right.get(i).getCount()) return false;
 		}
 		return true;
@@ -304,7 +282,7 @@ public final class RawOreSmeltingUpgradeHelper {
 	private static void addAmount(List<ItemStack> stacks, ItemStack template, long amount) {
 		if (template == null || template.isEmpty() || amount <= 0) return;
 		for (ItemStack existing : stacks) {
-			if (!ItemStack.isSameItemSameComponents(existing, template)) continue;
+			if (!ItemStack.isSameItemSameTags(existing, template)) continue;
 			int accepted = (int) Math.min(amount, Integer.MAX_VALUE - (long) existing.getCount());
 			existing.grow(accepted);
 			amount -= accepted;
@@ -318,7 +296,7 @@ public final class RawOreSmeltingUpgradeHelper {
 	}
 
 	private static TagKey<Item> itemTag(String namespace, String path) {
-		return TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath(namespace, path));
+		return TagKey.create(Registries.ITEM, new ResourceLocation(namespace, path));
 	}
 
 	private record Conversion(int inputCount, ItemStack result) {

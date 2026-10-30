@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import appeng.client.gui.Icon;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -43,10 +43,9 @@ final class GlobalGearButton extends MekanismButton {
 	public void renderWidget(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
 		if (!visible) return;
 		super.renderWidget(guiGraphics, mouseX, mouseY, partialTicks);
-		Icon icon = unlimitedAllFallback || isMouseOver(mouseX, mouseY) ? Icon.COG : Icon.COG_DISABLED;
+		Icon icon = unlimitedAllFallback || isMouseOver(mouseX, mouseY) ? Icon.WRENCH : Icon.WRENCH_DISABLED;
 		icon.getBlitter()
 				.dest(relativeX + 1, relativeY + 1, width - 2, height - 2)
-				.zOffset(4)
 				.blit(guiGraphics);
 		if (unlimitedAllFallback) {
 			guiGraphics.drawString(Minecraft.getInstance().font, "\u221E",

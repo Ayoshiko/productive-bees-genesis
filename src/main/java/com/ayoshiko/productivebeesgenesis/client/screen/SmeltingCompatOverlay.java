@@ -5,9 +5,11 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.network.ToggleSmeltingCompatPayload;
-import com.ayoshiko.productivebeesgenesis.client.resource.GuiResourceSideConfig;
 import mekanism.client.gui.GuiMekanism;
+import mekanism.client.gui.element.GuiElement;
+import mekanism.client.gui.element.tab.GuiConfigTypeTab;
 import mekanism.client.gui.element.window.GuiSideConfiguration;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.lib.transmitter.TransmissionType;
@@ -16,12 +18,12 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.ScreenEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.TickEvent.ClientTickEvent;
+import net.minecraftforge.client.event.ScreenEvent;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 import org.lwjgl.glfw.GLFW;
 
 import java.lang.ref.WeakReference;
@@ -57,7 +59,8 @@ public final class SmeltingCompatOverlay {
 	}
 
 	@SubscribeEvent
-	public static void onClientTick(ClientTickEvent.Pre event) {
+	public static void onClientTick(ClientTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.START) return;
 		Screen screen = Minecraft.getInstance().screen;
 		if (screen == null) return;
 		AeInputOverlay.OverlayTarget target = findTarget(screen);
@@ -81,7 +84,7 @@ public final class SmeltingCompatOverlay {
 		if (!bounds.contains(event.getMouseX(), event.getMouseY())) return;
 		// 总开关关闭时按钮灰显，不响应点击
 		if (!isGlobalEnabled()) return;
-		PacketDistributor.sendToServer(new ToggleSmeltingCompatPayload(target.tile().getBlockPos()));
+		ForgeNetwork.sendToServer(new ToggleSmeltingCompatPayload(target.tile().getBlockPos()));
 		event.setCanceled(true);
 	}
 
@@ -94,7 +97,7 @@ public final class SmeltingCompatOverlay {
 				sideConfig.getRelativeX() + BUTTON_X_OFFSET,
 				sideConfig.getRelativeY() + BUTTON_Y_OFFSET,
 				Component.literal("F"),
-				t -> PacketDistributor.sendToServer(new ToggleSmeltingCompatPayload(t.tile().getBlockPos())),
+				t -> ForgeNetwork.sendToServer(new ToggleSmeltingCompatPayload(t.tile().getBlockPos())),
 				target);
 		sideConfig.children().add(button);
 		BUTTONS.put(sideConfig, new WeakReference<>(button));
@@ -132,7 +135,7 @@ public final class SmeltingCompatOverlay {
 		for (GuiWindow window : screenTarget.gui().getWindows()) {
 			if (window instanceof GuiSideConfiguration<?> sideConfig) {
 				return new AeInputOverlay.OverlayTarget(screenTarget.gui(), sideConfig, screenTarget.tile(),
-					GuiResourceSideConfig.nativeType(sideConfig));
+					getCurrentType(sideConfig));
 			}
 		}
 		return null;
@@ -145,6 +148,19 @@ public final class SmeltingCompatOverlay {
 		return new ScreenTarget(gui, container.getTileEntity());
 	}
 
+	private static TransmissionType getCurrentType(GuiSideConfiguration<?> sideConfig) {
+		for (GuiElement child : sideConfig.children()) {
+			if (child instanceof GuiConfigTypeTab tab && !tab.visible) {
+				return tab.getTransmissionType();
+			}
+		}
+		for (GuiElement child : sideConfig.children()) {
+			if (child instanceof GuiConfigTypeTab tab) {
+				return tab.getTransmissionType();
+			}
+		}
+		return TransmissionType.ITEM;
+	}
 
 	/** 仅 ITEM 页显示（熔炉配方为物品输入） */
 	private static boolean shouldRender(TransmissionType type) {

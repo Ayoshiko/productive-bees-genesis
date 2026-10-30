@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,7 +41,7 @@ public final class WindowPositionConfigSection {
 	 * 多流体槽 GUI 窗口（GuiMultiFluidTanksWindow）的位置持久化 saveName。
 	 */
 	private static final String[] WINDOW_NAMES =
-		{"window_pb_upgrade", "window_ae_input", "window_feeder", "window_multi_fluid_tanks", "window_resource_outputs", "window_resource_sides"};
+		{"window_pb_upgrade", "window_ae_input", "window_feeder", "window_multi_fluid_tanks"};
 
 	/** saveName → 配置条目映射（private 封装，外部通过 {@link #getEntry} 查询；线程安全） */
 	private final Map<String, Entry> positions = new ConcurrentHashMap<>();
@@ -51,7 +51,7 @@ public final class WindowPositionConfigSection {
 	 *
 	 * @param builder NeoForge 配置构建器
 	 */
-	void registerAll(ModConfigSpec.Builder builder) {
+	void registerAll(ForgeConfigSpec.Builder builder) {
 		builder.comment("PB 自定义窗口位置持久化（独立于 通用机械 配置系统）").push("window_positions");
 		for (String name : WINDOW_NAMES) {
 			builder.push(name);
@@ -80,11 +80,11 @@ public final class WindowPositionConfigSection {
 	 * 窗口位置配置条目
 	 */
 	public static final class Entry {
-		public final ModConfigSpec.IntValue x;
-		public final ModConfigSpec.IntValue y;
-		public final ModConfigSpec.BooleanValue pinned;
+		public final ForgeConfigSpec.IntValue x;
+		public final ForgeConfigSpec.IntValue y;
+		public final ForgeConfigSpec.BooleanValue pinned;
 
-		Entry(ModConfigSpec.IntValue x, ModConfigSpec.IntValue y, ModConfigSpec.BooleanValue pinned) {
+		Entry(ForgeConfigSpec.IntValue x, ForgeConfigSpec.IntValue y, ForgeConfigSpec.BooleanValue pinned) {
 			this.x = x;
 			this.y = y;
 			this.pinned = pinned;

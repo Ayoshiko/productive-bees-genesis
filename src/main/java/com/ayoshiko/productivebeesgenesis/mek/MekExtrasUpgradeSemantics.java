@@ -13,6 +13,9 @@ final class MekExtrasUpgradeSemantics {
 	static long energyPerTick(boolean creativeInstalled, long normalEnergyPerTick) {
 		return creativeInstalled ? 0L : Math.max(0L, normalEnergyPerTick);
 	}
+	static mekanism.api.math.FloatingLong energyPerTick(boolean creativeInstalled, mekanism.api.math.FloatingLong normalEnergyPerTick) {
+		return creativeInstalled ? mekanism.api.math.FloatingLong.ZERO : normalEnergyPerTick;
+	}
 
 	static int operationsPerTick(boolean creativeInstalled, int stackOperations,
 			int speedAdjustedOperations) {

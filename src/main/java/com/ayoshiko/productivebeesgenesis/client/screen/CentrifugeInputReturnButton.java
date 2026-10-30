@@ -3,11 +3,11 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import com.ayoshiko.productivebeesgenesis.network.ReturnCentrifugeInputPayload;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 
 /**
  * 离心机输入槽返还按钮。
@@ -26,7 +26,7 @@ public final class CentrifugeInputReturnButton extends MekanismButton {
 	private CentrifugeInputReturnButton(IGuiWrapper gui, int x, int y, BlockPos pos) {
 		super(gui, x, y, SIZE, SIZE, LABEL, (element, mouseX, mouseY) -> {
 			if (element instanceof CentrifugeInputReturnButton) {
-				PacketDistributor.sendToServer(new ReturnCentrifugeInputPayload(pos));
+				ForgeNetwork.sendToServer(new ReturnCentrifugeInputPayload(pos));
 				return true;
 			}
 			return false;

@@ -108,8 +108,8 @@ public final class Ae2EnergyInjector {
 		MachineEnergyContainer<?> container = host.productivebeesgenesis$getAe2EnergySource();
 		if (container == null) return 0;
 
-		long currentEnergy = container.getEnergy();
-		long maxEnergy = container.getMaxEnergy();
+		long currentEnergy = com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(container.getEnergy());
+		long maxEnergy = com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(container.getMaxEnergy());
 		// 创意升级（无限容量）无需外部供能。有限升级在极高倍率下也可能被
 		// Mekanism 夹到 Long.MAX_VALUE，不能仅凭容量数值把这两种情况混为一谈。
 		if (maxEnergy == Long.MAX_VALUE && host.hasCreativeUpgrade()) return 0;
@@ -169,7 +169,7 @@ public final class Ae2EnergyInjector {
 		Ae2EnergyMath.InjectionResult result = Ae2EnergyMath.apply(
 				currentEnergy, maxEnergy, firstExtracted, secondExtracted);
 		if (result.injected() > 0L) {
-			container.setEnergy(result.energy());
+			container.setEnergy(container.getEnergy().add(com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.fromFe(result.injected())).min(container.getMaxEnergy()));
 		}
 		// 退避记账：完全失败（网络无能量或 grid 断开）时进入短退避跳过后续探测；
 		// 任意部分成功立即重置。holder 为 null 的边缘场景跳过记账（行为同旧版）。

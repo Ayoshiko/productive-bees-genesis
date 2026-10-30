@@ -13,6 +13,7 @@ import mekanism.client.gui.element.tab.GuiEnergyTab;
 import mekanism.client.gui.element.tab.GuiRedstoneControlTab;
 import mekanism.client.gui.element.tab.GuiSortingTab;
 import mekanism.client.gui.element.tab.GuiWarningTab;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.slot.ContainerSlotType;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
@@ -239,7 +240,7 @@ public class GuiMekCentrifugeFactory
 	protected void addWarningTab(IWarningTracker warningTracker) {
 		// 警告 Tab 上移 Δ=-8(y=109→101),位于 GuiSortingTab(y=62,h=35,底部97)下方(间距4px)
 		// y 坐标链审计修复:原 move(-11)→y=98 与 GuiSortingTab 间距仅1px,改为 move(-8)→y=101 间距4px
-		GuiWarningTab tab = addRenderableWidget(new GuiWarningTab(this, warningTracker, true));
+		GuiWarningTab tab = addRenderableWidget(new GuiWarningTab(this, warningTracker, 109));
 		tab.move(0, -8);
 	}
 
@@ -259,7 +260,7 @@ public class GuiMekCentrifugeFactory
 	@Override
 	protected void drawForegroundText(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY) {
 		renderTitleText(guiGraphics);
-		renderInventoryText(guiGraphics);
+		guiGraphics.drawString(getFont(), playerInventoryTitle, inventoryLabelX, inventoryLabelY, screenTextColor(), false);
 		super.drawForegroundText(guiGraphics, mouseX, mouseY);
 	}
 }

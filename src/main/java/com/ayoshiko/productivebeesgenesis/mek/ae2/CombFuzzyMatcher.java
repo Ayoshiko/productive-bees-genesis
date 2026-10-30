@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 import appeng.api.stacks.AEItemKey;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModBlocks;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -29,13 +29,13 @@ import net.minecraft.world.item.Items;
 public final class CombFuzzyMatcher {
 
 	/** 原版蜜脾固定保留键（无 BEE_TYPE 组件，使用此常量作为过滤键） */
-	public static final ResourceLocation VANILLA_HONEYCOMB_TYPE = ResourceLocation.parse("minecraft:honeycomb");
+	public static final ResourceLocation VANILLA_HONEYCOMB_TYPE = new ResourceLocation("minecraft:honeycomb");
 	/** Feywild 蜜脾由 PB 自带离心配方直接处理，物品 ID 同时作为无 BEE_TYPE 组件的过滤键。 */
-	public static final ResourceLocation FEYWILD_HONEYCOMB_TYPE = ResourceLocation.fromNamespaceAndPath(
+	public static final ResourceLocation FEYWILD_HONEYCOMB_TYPE = new ResourceLocation(
 			ExternalCentrifugeCombIds.FEYWILD_NAMESPACE, ExternalCentrifugeCombIds.FEYWILD_HONEYCOMB_PATH);
-	private static final ResourceLocation GHOSTLY_TYPE = ResourceLocation.parse("productivebees:ghostly");
-	private static final ResourceLocation MILKY_TYPE = ResourceLocation.parse("productivebees:milky");
-	private static final ResourceLocation POWDERY_TYPE = ResourceLocation.parse("productivebees:powdery");
+	private static final ResourceLocation GHOSTLY_TYPE = new ResourceLocation("productivebees:ghostly");
+	private static final ResourceLocation MILKY_TYPE = new ResourceLocation("productivebees:milky");
+	private static final ResourceLocation POWDERY_TYPE = new ResourceLocation("productivebees:powdery");
 
 	/**
 	 * Registered item references are stable for the lifetime of a server. Resolve
@@ -140,7 +140,7 @@ public final class CombFuzzyMatcher {
 		if (fixed != null) return fixed;
 		if (item == ItemRefs.CONFIGURABLE_HONEYCOMB
 				|| item == ItemRefs.CONFIGURABLE_COMB_BLOCK) {
-			return stack.get(PbDataComponents.beeType());
+			return PbDataComponents.getBeeType(stack);
 		}
 		return null;
 	}
@@ -187,7 +187,7 @@ public final class CombFuzzyMatcher {
 		Item item = isBlock ? ItemRefs.CONFIGURABLE_COMB_BLOCK : ItemRefs.CONFIGURABLE_HONEYCOMB;
 		if (item == null) return ItemStack.EMPTY;
 		ItemStack stack = new ItemStack(item);
-		stack.set(PbDataComponents.beeType(), beeType);
+		PbDataComponents.setBeeType(stack, beeType);
 		return stack;
 	}
 
@@ -250,7 +250,7 @@ public final class CombFuzzyMatcher {
 		if (fixed != null) return fixed;
 		if (item == ItemRefs.CONFIGURABLE_HONEYCOMB || item == ItemRefs.CONFIGURABLE_COMB_BLOCK) {
 			// AEItemKey.get 直读内部只读栈的组件表，无 ItemStack 拷贝
-			return key.get(PbDataComponents.beeType());
+			return PbDataComponents.getBeeType(key.toStack());
 		}
 		return null;
 	}

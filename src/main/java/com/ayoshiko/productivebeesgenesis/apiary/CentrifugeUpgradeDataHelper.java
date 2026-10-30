@@ -22,7 +22,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -65,7 +65,7 @@ public final class CentrifugeUpgradeDataHelper {
 	 * {@link mekanism.common.upgrade.MachineUpgradeData} 承载，
 	 * 额外字段（PB 升级/AE2 设置）由 {@link CentrifugeUpgradeData} 扩展。
 	 * <p>
-	 * 当前安装器无条件保存统一配置快照，旧字段仅供没有快照的历史数据回退。
+	 * AE2 未加载时使用默认值 false/0/空，与 ApiaryUpgradeData 模式一致。
 	 *
 	 * @param provider           注册表访问器
 	 * @param redstone           红石控制状态
@@ -102,8 +102,8 @@ public final class CentrifugeUpgradeDataHelper {
 		}
 
 		// PB 升级输入/输出槽内容（保存槽内待安装/已卸载的升级物品，防止升级时丢失）
-		CompoundTag pbUpgradeInputNbt = pbUpgradeAccess.getPbUpgradeInputSlot().serializeNBT(provider);
-		CompoundTag pbUpgradeOutputNbt = pbUpgradeAccess.getPbUpgradeOutputSlot().serializeNBT(provider);
+		CompoundTag pbUpgradeInputNbt = pbUpgradeAccess.getPbUpgradeInputSlot().serializeNBT();
+		CompoundTag pbUpgradeOutputNbt = pbUpgradeAccess.getPbUpgradeOutputSlot().serializeNBT();
 
 		// AE2 per-tile 设置（AE2 未加载时使用默认值 false/0/空，与 ApiaryUpgradeData 模式一致）
 		boolean aeLoaded = Ae2IntegrationLoader.isAe2Loaded();
@@ -177,7 +177,7 @@ public final class CentrifugeUpgradeDataHelper {
 		ae2StateHolder.getAeTagFilter().save(aeTagFilterNbt);
 		if (aeTagFilterNbt.isEmpty()) aeTagFilterNbt = null;
 
-		CentrifugeUpgradeData data = new CentrifugeUpgradeData(provider, redstone, controlType,
+		return new CentrifugeUpgradeData(provider, redstone, controlType,
 				energyContainer, progress, energySlot, inputSlots, outputSlots,
 				sorting, components,
 				pbUpgrades,
@@ -193,11 +193,6 @@ public final class CentrifugeUpgradeDataHelper {
 				energyItem,
 				aeInputFilterNbt,
 				aeTagFilterNbt);
-		data.aePerTileState = new CompoundTag();
-		ae2StateHolder.savePerTileState(data.aePerTileState);
-		data.aePendingState = new CompoundTag();
-		ae2StateHolder.savePendingItems(data.aePendingState);
-		return data;
 	}
 
 	/**
@@ -221,7 +216,7 @@ public final class CentrifugeUpgradeDataHelper {
 		CompoundTag multiRoot = new CompoundTag();
 		ListTag tanksList = new ListTag();
 		CompoundTag entry = new CompoundTag();
-		entry.put("fluidStack", fluid.save(provider));
+		entry.put("fluidStack", fluid.writeToNBT(new CompoundTag()));
 		tanksList.add(entry);
 		multiRoot.put("tanks", tanksList);
 		root.put(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, multiRoot);
@@ -268,10 +263,10 @@ public final class CentrifugeUpgradeDataHelper {
 		// 恢复 PB 升级输入/输出槽内容（防止升级时槽内物品丢失，null 守卫）。
 		// PB 升级数量按 NBT 原样恢复；当前配置上限仅限制后续安装。
 		if (data.pbUpgradeInputNbt != null) {
-			pbUpgradeAccess.getPbUpgradeInputSlot().deserializeNBT(provider, data.pbUpgradeInputNbt);
+			pbUpgradeAccess.getPbUpgradeInputSlot().deserializeNBT(data.pbUpgradeInputNbt);
 		}
 		if (data.pbUpgradeOutputNbt != null) {
-			pbUpgradeAccess.getPbUpgradeOutputSlot().deserializeNBT(provider, data.pbUpgradeOutputNbt);
+			pbUpgradeAccess.getPbUpgradeOutputSlot().deserializeNBT(data.pbUpgradeOutputNbt);
 		}
 
 		// 恢复 PB 升级数量（null/空守卫）
@@ -305,9 +300,7 @@ public final class CentrifugeUpgradeDataHelper {
 		} else {
 			ae2StateHolder.getAeTagFilter().reset();
 		}
-		if (data.aePerTileState != null) {
-			ae2StateHolder.loadPerTileState(data.aePerTileState.copy());
-		} else if (Ae2IntegrationLoader.isAe2Loaded()) {
+		if (Ae2IntegrationLoader.isAe2Loaded()) {
 			ae2StateHolder.setCentrifugeDirectAeOutputEnabled(data.centrifugeDirectAeOutputEnabled);
 			ae2StateHolder.setAeItemInputEnabled(data.aeItemInputEnabled);
 			ae2StateHolder.setAeInputNbtIgnore(data.aeInputNbtIgnore);
@@ -320,10 +313,6 @@ public final class CentrifugeUpgradeDataHelper {
 			} else {
 				restoreLegacyFilterData(data, filter);
 			}
-		}
-
-		if (data.aePendingState != null) {
-			ae2StateHolder.loadPendingItems(data.aePendingState.copy());
 		}
 
 		// Task 5: 恢复多流体槽 — 等级升级持久化与扳手拆卸/区块存档一致
@@ -465,7 +454,7 @@ public final class CentrifugeUpgradeDataHelper {
 		int processedCount = 0;
 		for (int i = 0; i < list.size(); i++) {
 			CompoundTag entry = list.getCompound(i);
-			FluidStack stack = FluidStack.parseOptional(provider, entry.getCompound("fluidStack"));
+			FluidStack stack = FluidStack.loadFluidStackFromNBT(entry.getCompound("fluidStack"));
 			if (stack.isEmpty()) {
 				continue; // 解析失败跳过,不影响其他槽位
 			}

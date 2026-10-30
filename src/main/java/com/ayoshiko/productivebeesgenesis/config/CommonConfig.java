@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 /**
 	 * 通用配置 — 跨端同步且在世界加载前就需要读取的字段
@@ -13,9 +13,9 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 public final class CommonConfig {
 
 	/** 是否启用 K/M/G/T 大数字缩写显示（false 时使用千分位分隔） */
-	public final ModConfigSpec.BooleanValue enableLargeNumberAbbreviation;
+	public final ForgeConfigSpec.BooleanValue enableLargeNumberAbbreviation;
 
-	CommonConfig(ModConfigSpec.Builder builder) {
+	CommonConfig(ForgeConfigSpec.Builder builder) {
 		builder.comment("通用配置 — 跨端同步且无需按存档区分的参数").push("common");
 
 		enableLargeNumberAbbreviation = builder

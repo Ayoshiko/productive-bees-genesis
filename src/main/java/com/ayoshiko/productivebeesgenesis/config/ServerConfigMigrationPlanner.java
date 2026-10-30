@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
 import com.electronwill.nightconfig.core.CommentedConfig;
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,7 +91,7 @@ final class ServerConfigMigrationPlanner {
 
 		for (ServerConfigMigrationService.MigrationTarget target : targets) {
 			CommentedConfig migrated = CommentedConfig.copy(target.current());
-			for (ModConfigSpec.ConfigValue<?> value : ConfigTraversal.configValues(target.spec())) {
+			for (ForgeConfigSpec.ConfigValue<?> value : ConfigTraversal.configValues(target.spec())) {
 				String targetPath = ConfigTraversal.path(value.getPath());
 				String matrixPrefix = matrixPrefix(targetPath);
 				if (matrixPrefix != null) {
@@ -106,7 +106,7 @@ final class ServerConfigMigrationPlanner {
 					continue;
 				}
 				Object raw = legacy.get(targetPath);
-				if (value.getSpec().test(raw)) {
+				if (((ForgeConfigSpec.ValueSpec) target.spec().getSpec().get(value.getPath())).test(raw)) {
 					migrated.set(value.getPath(), copyValue(raw));
 					counters.copied++;
 				} else {
@@ -148,12 +148,12 @@ final class ServerConfigMigrationPlanner {
 	private static void copyLegacyMatrixGroup(
 			CommentedConfig legacy,
 			CommentedConfig migrated,
-			ModConfigSpec.ConfigValue<?> targetValue,
+			ForgeConfigSpec.ConfigValue<?> targetValue,
 			String matrixPrefix,
 			Set<String> recognizedPaths,
 			boolean allowOverwrite,
 			Counters counters) {
-		String group = targetValue.getPath().getLast();
+		String group = targetValue.getPath().get(targetValue.getPath().size() - 1);
 		List<FactoryTierKey> tiers = FactoryTierKey.groupTiers(group);
 		List<Integer> defaults = integerDefaults(targetValue.getDefault(), tiers.size());
 		List<Integer> migratedValues = new ArrayList<>(defaults);

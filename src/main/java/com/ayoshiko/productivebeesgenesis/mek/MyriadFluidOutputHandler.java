@@ -11,12 +11,10 @@ import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
-import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
+import net.minecraftforge.fluids.FluidStack;
 
 /**
 	 * 万象创世流体输出处理器 — 封装配方定义流体（蜂蜜）的输出逻辑
@@ -184,7 +182,7 @@ public class MyriadFluidOutputHandler {
 		IExtendedFluidTank tank = context.fluidOutputTankForInsert(fluidOutput);
 		if (tank == null) return Integer.MAX_VALUE;
 		FluidStack current = tank.getFluid();
-		if (!current.isEmpty() && !FluidStack.isSameFluidSameComponents(current, fluidOutput)) {
+		if (!current.isEmpty() && !com.ayoshiko.productivebeesgenesis.util.ForgeFluidStacks.isSameFluid(current, fluidOutput)) {
 			return 0; // 类型不匹配，无法插入任何流体
 		}
 		long perBatch = SaturatingMath.saturatingMultiply(fluidOutput.getAmount(), productivityMod);
@@ -258,7 +256,7 @@ public class MyriadFluidOutputHandler {
 	private long availableLocalCapacity(IExtendedFluidTank tank, FluidStack fluid) {
 		if (tank == null) return 0L;
 		FluidStack current = tank.getFluid();
-		if (!current.isEmpty() && !FluidStack.isSameFluidSameComponents(current, fluid)) return 0L;
+		if (!current.isEmpty() && !com.ayoshiko.productivebeesgenesis.util.ForgeFluidStacks.isSameFluid(current, fluid)) return 0L;
 		return Math.max(0L, (long) tank.getCapacity() - tank.getFluidAmount());
 	}
 
@@ -266,7 +264,7 @@ public class MyriadFluidOutputHandler {
 		long localAmount = Math.min(amount, availableLocalCapacity(tank, fluid));
 		int offeredAmount = SaturatingMath.saturatingToInt(localAmount);
 		if (offeredAmount <= 0) return 0L;
-		FluidStack scaledFluid = fluid.copyWithAmount(offeredAmount);
+		FluidStack scaledFluid = com.ayoshiko.productivebeesgenesis.util.ForgeFluidStacks.copyWithAmount(fluid, offeredAmount);
 		FluidStack remainder = tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
 		long inserted = scaledFluid.getAmount() - (remainder.isEmpty() ? 0L : remainder.getAmount());
 		if (inserted > 0L && LocalFluidDrainPolicy.shouldDrainAfterCommit(
@@ -364,11 +362,11 @@ public class MyriadFluidOutputHandler {
 		}
 
 		// 路径 2：普通 PB 蜜脾 — 查找 CentrifugeRecipe 获取配方定义的流体
-		RecipeHolder<CentrifugeRecipe> recipeHolder = recipeFinder.findPbRecipe(input);
+		CentrifugeRecipe recipeHolder = recipeFinder.findPbRecipe(input);
 		if (recipeHolder != null) {
 			try {
-				CentrifugeRecipe recipe = recipeHolder.value();
-				FluidStack fluidOutput = recipe.getFluidOutputs();
+				CentrifugeRecipe recipe = recipeHolder;
+				FluidStack fluidOutput = com.ayoshiko.productivebeesgenesis.util.PbRecipeOutputs.fluid(recipe);
 				if (fluidOutput.isEmpty()) {
 					// getFluidOutputs() 返回 EMPTY 时（plib 的 getPreferredFluidStackByMod 无匹配 mod），
 					// 直接访问 fluidOutput 字段构造 FluidStack 作为 fallback
@@ -377,7 +375,7 @@ public class MyriadFluidOutputHandler {
 				if (!fluidOutput.isEmpty()) return fluidOutput;
 			} catch (RuntimeException e) {
 				LogThrottle.warn("fluid_output_lookup",
-						"PB 配方流体输出查询异常，不生成流体：recipe={}, error={}", recipeHolder.id(), e.toString());
+						"PB 配方流体输出查询异常，不生成流体：recipe={}, error={}", recipeHolder.getId(), e.toString());
 			}
 		} else {
 			// 普通 PB 蜜脾查找失败 — 真正异常（非万象创世场景），保留 WARN 日志。
@@ -394,22 +392,14 @@ public class MyriadFluidOutputHandler {
 	/**
 	 * 从 CentrifugeRecipe.fluidOutput 字段直接构造 FluidStack（fallback）
 	 * <br/>
-	 * 当 {@link CentrifugeRecipe#getFluidOutputs()}（内部调用 plib 的 getPreferredFluidStackByMod）
-	 * 返回 EMPTY 时使用此方法。直接访问 fluidOutput 字段（public final SizedFluidIngredient），
-	 * 通过 getFluids() 获取流体类型，并用 amount() 覆盖数量，确保构造的 FluidStack 携带正确的流体量。
+	 * PB 12 将流体名称和数量保存为 Pair，由共享适配器解析标签和流体 ID。
 	 *
 	 * @param recipe PB离心配方
 	 * @return 构造的 FluidStack，若 ingredient 无匹配流体则返回 EMPTY
 	 */
 	private FluidStack extractFluidFromIngredient(CentrifugeRecipe recipe) {
 		try {
-			SizedFluidIngredient sized = recipe.fluidOutput;
-			if (sized == null) return FluidStack.EMPTY;
-			// getFluids() 返回的栈可能 amount=0（仅表示流体类型），用 sized.amount() 保证正确数量
-			for (FluidStack stack : sized.getFluids()) {
-				return stack.copyWithAmount(sized.amount());
-			}
-			return FluidStack.EMPTY;
+			return com.ayoshiko.productivebeesgenesis.util.PbRecipeOutputs.fluid(recipe.fluidOutput);
 		} catch (Exception e) {
 			LogThrottle.warn("fluid_extract", "extractFluidFromIngredient 异常: {}", e.getMessage());
 			return FluidStack.EMPTY;

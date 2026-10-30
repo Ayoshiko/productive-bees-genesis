@@ -13,9 +13,9 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.client.event.RenderLivingEvent;
-import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
-import net.neoforged.neoforge.event.tick.LevelTickEvent;
+import net.minecraftforge.client.event.RenderLivingEvent;
+import net.minecraftforge.event.entity.EntityJoinLevelEvent;
+import net.minecraftforge.event.TickEvent.LevelTickEvent;
 import org.joml.Vector3f;
 
 import java.util.concurrent.ThreadLocalRandom;
@@ -102,10 +102,11 @@ public abstract class AbstractClientCombEventHandler {
 	 *
 	 * @param event LevelTick.Post 事件
 	 */
-	protected void handleClientTick(LevelTickEvent.Post event) {
+	protected void handleClientTick(LevelTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
 		// 前置客户端守卫：集成服务器中本事件也在 Server thread 触发（每维度每 tick），
 		// 任何配置读取（尤其 CLIENT 配置的跨线程访问）必须位于 isClientSide 判定之后
-		Level level = event.getLevel();
+		Level level = event.level;
 		if (!level.isClientSide()) return;
 		// 服务端配置禁用万象创世时，客户端不渲染特效
 		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
@@ -206,7 +207,7 @@ public abstract class AbstractClientCombEventHandler {
 			float alpha = getGlowAlpha();
 			RenderSystem.setShaderColor(color[0], color[1], color[2], alpha);
 			try {
-				model.renderToBuffer(poseStack, vertexConsumer, event.getPackedLight(), overlay);
+				model.renderToBuffer(poseStack, vertexConsumer, event.getPackedLight(), overlay, color[0], color[1], color[2], alpha);
 			} finally {
 				// 无论 renderToBuffer 是否抛异常都重置 RenderSystem 状态，避免污染后续渲染
 				RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);

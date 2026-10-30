@@ -4,7 +4,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
-import cy.jdkdigital.productivelib.registry.LibItems;
+
 import mekanism.api.AutomationType;
 import mekanism.api.IContentsListener;
 import mekanism.api.functions.ConstantPredicates;
@@ -85,8 +85,8 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 	public static PbUpgradeInventorySlot createInput(Predicate<@NotNull ItemStack> validator,
 													@Nullable IContentsListener listener) {
 		return new PbUpgradeInventorySlot(
-				ConstantPredicates.manualOnly(),
-				ConstantPredicates.manualOnly(),
+				(stack, automation) -> automation == mekanism.api.AutomationType.MANUAL,
+				(stack, automation) -> automation == mekanism.api.AutomationType.MANUAL,
 				validator,
 				listener
 		);
@@ -101,13 +101,13 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 	public static boolean isCentrifugeSupportedUpgradeItem(ItemStack stack) {
 		if (stack.isEmpty()) return false;
 		Item item = stack.getItem();
-		return item == LibItems.UPGRADE_PRODUCTIVITY.get()
-				|| item == LibItems.UPGRADE_PRODUCTIVITY_2.get()
-				|| item == LibItems.UPGRADE_PRODUCTIVITY_3.get()
-				|| item == LibItems.UPGRADE_PRODUCTIVITY_4.get()
-				|| item == LibItems.UPGRADE_TIME.get()
-				|| item == LibItems.UPGRADE_TIME_2.get()
-				|| item == LibItems.UPGRADE_STABILITY.get()
+		return item == PbUpgradeItems.UPGRADE_PRODUCTIVITY.get()
+				|| item == PbUpgradeItems.UPGRADE_PRODUCTIVITY_2.get()
+				|| item == PbUpgradeItems.UPGRADE_PRODUCTIVITY_3.get()
+				|| item == PbUpgradeItems.UPGRADE_PRODUCTIVITY_4.get()
+				|| item == PbUpgradeItems.UPGRADE_TIME.get()
+				|| item == PbUpgradeItems.UPGRADE_TIME_2.get()
+				|| item == PbUpgradeItems.UPGRADE_STABILITY.get()
 				|| item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get()
 				|| item == ModItems.ESSENCE_CONVERSION_UPGRADE.get()
 				|| item == ModItems.RAW_ORE_SMELTING_UPGRADE.get();
@@ -150,14 +150,14 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 	static boolean isValidUpgradeItem(ItemStack stack) {
 		if (stack.isEmpty()) return false;
 		Item item = stack.getItem();
-		return item == LibItems.UPGRADE_PRODUCTIVITY.get()
-				|| item == LibItems.UPGRADE_PRODUCTIVITY_2.get()
-				|| item == LibItems.UPGRADE_PRODUCTIVITY_3.get()
-				|| item == LibItems.UPGRADE_PRODUCTIVITY_4.get()
-				|| item == LibItems.UPGRADE_TIME.get()
-				|| item == LibItems.UPGRADE_TIME_2.get()
-				|| item == LibItems.UPGRADE_GENE_SAMPLER.get()
-				|| item == LibItems.UPGRADE_BLOCK.get()
+		return item == PbUpgradeItems.UPGRADE_PRODUCTIVITY.get()
+				|| item == PbUpgradeItems.UPGRADE_PRODUCTIVITY_2.get()
+				|| item == PbUpgradeItems.UPGRADE_PRODUCTIVITY_3.get()
+				|| item == PbUpgradeItems.UPGRADE_PRODUCTIVITY_4.get()
+				|| item == PbUpgradeItems.UPGRADE_TIME.get()
+				|| item == PbUpgradeItems.UPGRADE_TIME_2.get()
+				|| item == PbUpgradeItems.UPGRADE_GENE_SAMPLER.get()
+				|| item == PbUpgradeItems.UPGRADE_BLOCK.get()
 				|| item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get()
 				|| item == ModItems.ESSENCE_CONVERSION_UPGRADE.get()
 				|| item == ModItems.GENE_TYPE_ONLY_UPGRADE.get()
@@ -177,30 +177,30 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 	public static PbUpgradeType getUpgradeType(ItemStack stack) {
 		if (stack.isEmpty()) return null;
 		Item item = stack.getItem();
-		if (item == LibItems.UPGRADE_PRODUCTIVITY.get()) {
+		if (item == PbUpgradeItems.UPGRADE_PRODUCTIVITY.get()) {
 			return PbUpgradeType.PRODUCTIVITY;
 		}
-		if (item == LibItems.UPGRADE_PRODUCTIVITY_2.get()) {
+		if (item == PbUpgradeItems.UPGRADE_PRODUCTIVITY_2.get()) {
 			return PbUpgradeType.PRODUCTIVITY_2;
 		}
-		if (item == LibItems.UPGRADE_PRODUCTIVITY_3.get()) {
+		if (item == PbUpgradeItems.UPGRADE_PRODUCTIVITY_3.get()) {
 			return PbUpgradeType.PRODUCTIVITY_3;
 		}
-		if (item == LibItems.UPGRADE_PRODUCTIVITY_4.get()) {
+		if (item == PbUpgradeItems.UPGRADE_PRODUCTIVITY_4.get()) {
 			return PbUpgradeType.PRODUCTIVITY_4;
 		}
 		// UPGRADE_BLOCK 独立为 BLOCK 升级类型
-		if (item == LibItems.UPGRADE_BLOCK.get()) {
+		if (item == PbUpgradeItems.UPGRADE_BLOCK.get()) {
 			return PbUpgradeType.BLOCK;
 		}
-		if (item == LibItems.UPGRADE_TIME.get()) {
+		if (item == PbUpgradeItems.UPGRADE_TIME.get()) {
 			return PbUpgradeType.TIME;
 		}
 		// Bug 3：time_2 独立映射，双倍效果
-		if (item == LibItems.UPGRADE_TIME_2.get()) {
+		if (item == PbUpgradeItems.UPGRADE_TIME_2.get()) {
 			return PbUpgradeType.TIME_2;
 		}
-		if (item == LibItems.UPGRADE_GENE_SAMPLER.get()) {
+		if (item == PbUpgradeItems.UPGRADE_GENE_SAMPLER.get()) {
 			return PbUpgradeType.GENE_SAMPLER;
 		}
 		if (item == ModItems.GENE_TYPE_ONLY_UPGRADE.get()) {
@@ -210,7 +210,7 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 			return PbUpgradeType.GENE_FULL_PURITY;
 		}
 		// STABILITY 升级 — 仅离心机支持（蜂箱不接受）
-		if (item == LibItems.UPGRADE_STABILITY.get()) {
+		if (item == PbUpgradeItems.UPGRADE_STABILITY.get()) {
 			return PbUpgradeType.STABILITY;
 		}
 		if (item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get()) {
@@ -236,18 +236,18 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 	@NotNull
 	public static ItemStack getRepresentativeStack(PbUpgradeType type) {
 		return switch (type) {
-			case PRODUCTIVITY -> new ItemStack(LibItems.UPGRADE_PRODUCTIVITY.get());
-			case PRODUCTIVITY_2 -> new ItemStack(LibItems.UPGRADE_PRODUCTIVITY_2.get());
-			case PRODUCTIVITY_3 -> new ItemStack(LibItems.UPGRADE_PRODUCTIVITY_3.get());
-			case PRODUCTIVITY_4 -> new ItemStack(LibItems.UPGRADE_PRODUCTIVITY_4.get());
-			case TIME -> new ItemStack(LibItems.UPGRADE_TIME.get());
-			case TIME_2 -> new ItemStack(LibItems.UPGRADE_TIME_2.get());
-			case GENE_SAMPLER -> new ItemStack(LibItems.UPGRADE_GENE_SAMPLER.get());
+			case PRODUCTIVITY -> new ItemStack(PbUpgradeItems.UPGRADE_PRODUCTIVITY.get());
+			case PRODUCTIVITY_2 -> new ItemStack(PbUpgradeItems.UPGRADE_PRODUCTIVITY_2.get());
+			case PRODUCTIVITY_3 -> new ItemStack(PbUpgradeItems.UPGRADE_PRODUCTIVITY_3.get());
+			case PRODUCTIVITY_4 -> new ItemStack(PbUpgradeItems.UPGRADE_PRODUCTIVITY_4.get());
+			case TIME -> new ItemStack(PbUpgradeItems.UPGRADE_TIME.get());
+			case TIME_2 -> new ItemStack(PbUpgradeItems.UPGRADE_TIME_2.get());
+			case GENE_SAMPLER -> new ItemStack(PbUpgradeItems.UPGRADE_GENE_SAMPLER.get());
 			case GENE_TYPE_ONLY -> new ItemStack(ModItems.GENE_TYPE_ONLY_UPGRADE.get());
 			case GENE_FULL_PURITY -> new ItemStack(ModItems.GENE_FULL_PURITY_UPGRADE.get());
-			case BLOCK -> new ItemStack(LibItems.UPGRADE_BLOCK.get());
-			case SIMULATION -> new ItemStack(LibItems.UPGRADE_SIMULATOR.get());
-			case STABILITY -> new ItemStack(LibItems.UPGRADE_STABILITY.get());
+			case BLOCK -> new ItemStack(PbUpgradeItems.UPGRADE_BLOCK.get());
+			case SIMULATION -> new ItemStack(PbUpgradeItems.UPGRADE_SIMULATOR.get());
+			case STABILITY -> new ItemStack(PbUpgradeItems.UPGRADE_STABILITY.get());
 			case USELESS_BYPRODUCT -> new ItemStack(ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get());
 			case ESSENCE_CONVERSION -> new ItemStack(ModItems.ESSENCE_CONVERSION_UPGRADE.get());
 			case RAW_ORE_SMELTING -> new ItemStack(ModItems.RAW_ORE_SMELTING_UPGRADE.get());
@@ -269,18 +269,18 @@ public class PbUpgradeInventorySlot extends BasicInventorySlot {
 		if (stack.isEmpty() || type == null) return false;
 		Item item = stack.getItem();
 		return switch (type) {
-			case PRODUCTIVITY -> item == LibItems.UPGRADE_PRODUCTIVITY.get();
-			case PRODUCTIVITY_2 -> item == LibItems.UPGRADE_PRODUCTIVITY_2.get();
-			case PRODUCTIVITY_3 -> item == LibItems.UPGRADE_PRODUCTIVITY_3.get();
-			case PRODUCTIVITY_4 -> item == LibItems.UPGRADE_PRODUCTIVITY_4.get();
-			case TIME -> item == LibItems.UPGRADE_TIME.get();
-			case TIME_2 -> item == LibItems.UPGRADE_TIME_2.get();
-			case GENE_SAMPLER -> item == LibItems.UPGRADE_GENE_SAMPLER.get();
+			case PRODUCTIVITY -> item == PbUpgradeItems.UPGRADE_PRODUCTIVITY.get();
+			case PRODUCTIVITY_2 -> item == PbUpgradeItems.UPGRADE_PRODUCTIVITY_2.get();
+			case PRODUCTIVITY_3 -> item == PbUpgradeItems.UPGRADE_PRODUCTIVITY_3.get();
+			case PRODUCTIVITY_4 -> item == PbUpgradeItems.UPGRADE_PRODUCTIVITY_4.get();
+			case TIME -> item == PbUpgradeItems.UPGRADE_TIME.get();
+			case TIME_2 -> item == PbUpgradeItems.UPGRADE_TIME_2.get();
+			case GENE_SAMPLER -> item == PbUpgradeItems.UPGRADE_GENE_SAMPLER.get();
 			case GENE_TYPE_ONLY -> item == ModItems.GENE_TYPE_ONLY_UPGRADE.get();
 			case GENE_FULL_PURITY -> item == ModItems.GENE_FULL_PURITY_UPGRADE.get();
-			case BLOCK -> item == LibItems.UPGRADE_BLOCK.get();
-			case SIMULATION -> item == LibItems.UPGRADE_SIMULATOR.get();
-			case STABILITY -> item == LibItems.UPGRADE_STABILITY.get();
+			case BLOCK -> item == PbUpgradeItems.UPGRADE_BLOCK.get();
+			case SIMULATION -> item == PbUpgradeItems.UPGRADE_SIMULATOR.get();
+			case STABILITY -> item == PbUpgradeItems.UPGRADE_STABILITY.get();
 			case USELESS_BYPRODUCT -> item == ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get();
 			case ESSENCE_CONVERSION -> item == ModItems.ESSENCE_CONVERSION_UPGRADE.get();
 			case RAW_ORE_SMELTING -> item == ModItems.RAW_ORE_SMELTING_UPGRADE.get();

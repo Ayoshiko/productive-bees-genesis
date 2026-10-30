@@ -7,7 +7,7 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-import com.jerry.mekextras.common.content.blocktype.ExtraMachine;
+import com.jerry.mekanism_extras.common.content.blocktype.ExtraMachine;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeUpgradeable;
 import io.github.masyumero.emextras.common.content.blocktype.EMExtraFactoryType;
@@ -19,6 +19,7 @@ import mekanism.common.content.blocktype.FactoryType;
 import mekanism.common.content.blocktype.Machine;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
+import mekanism.common.registries.MekanismSounds;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -131,7 +132,7 @@ public final class MekCentrifugeEMEBlockType {
 		// 能耗应用 1/5、容量应用 1/2 内置平衡系数，再按 EME 模式乘以 tier.processes。
 		// 使用离心机专属description key替代通用DESCRIPTION_FACTORY
 		// key格式：description.productivebeesgenesis.{tier小写}_emextra_mek_centrifuge_factory
-		var builder = EMExtraMachine.EMExtraMachineBuilder
+		var builder = EMEForgeMachineBuilder
 				.createEMExtraFactoryMachine(() -> EME_FACTORY_TILES.get(tier),
 				MekCentrifugeBlockType.descriptionLang(tier.getEMExtraTier().getLowerName() + "_emextra_mek_centrifuge_factory"),
 							EMExtraFactoryType.SMELTING)
@@ -145,7 +146,7 @@ public final class MekCentrifugeEMEBlockType {
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
 				.withGui(() -> EMEMenuTypeRegistration.EME_CENTRIFUGE_FACTORY)
-				// 不添加 withSound：工作声改由 MekCentrifugeSoundHandler 服务端播放（降噪 + 破坏后不残留满音量循环）
+				.withSound(MekanismSounds.ENERGIZED_SMELTER)
 				// 添加原版AttributeFactoryType(SMELTING)，使EME方块能被MekanismUtils.isSameTypeFactory()
 				// 识别，从而支持配置卡在EME工厂与原版/EM/ME工厂之间跨等级粘贴
 				.with(new AttributeFactoryType(FactoryType.SMELTING))

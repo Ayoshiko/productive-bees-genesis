@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 
 import java.util.Collections;
 import java.util.List;
@@ -189,7 +189,7 @@ public final class MultiFluidTankHostHelper {
 			return false;
 		}
 		FluidStack existing = primary.getFluid();
-		return !existing.isEmpty() && !FluidStack.isSameFluidSameComponents(existing, stack);
+		return !existing.isEmpty() && !com.ayoshiko.productivebeesgenesis.util.ForgeFluidStacks.isSameFluid(existing, stack);
 	}
 
 	/**

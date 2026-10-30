@@ -3,17 +3,19 @@ package com.ayoshiko.productivebeesgenesis.util;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
+import cy.jdkdigital.productivebees.compat.jei.ingredients.BeeIngredient;
 import cy.jdkdigital.productivebees.common.recipe.AdvancedBeehiveRecipe;
 import cy.jdkdigital.productivebees.common.recipe.BeeBreedingRecipe;
 import cy.jdkdigital.productivebees.common.recipe.BeeConversionRecipe;
 import cy.jdkdigital.productivebees.common.recipe.BeeFishingRecipe;
 import cy.jdkdigital.productivebees.common.recipe.BeeSpawningRecipe;
-import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe;
+import net.minecraft.nbt.IntArrayTag;
+import java.util.Map;
+import net.minecraftforge.common.util.Lazy;
 import net.minecraft.core.HolderSet;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.level.biome.Biome;
 
 import java.util.List;
@@ -54,8 +56,8 @@ public final class MyriadRecipeProcessor {
 	 * 处理单个配方，返回 null 表示移除，返回原 holder 表示保留，返回新 holder 表示替换
 	 */
 	@SuppressWarnings("unchecked")
-	public RecipeHolder<?> processRecipe(RecipeHolder<?> holder) {
-		Recipe<?> recipe = holder.value();
+	public Recipe<?> processRecipe(Recipe<?> holder) {
+		Recipe<?> recipe = holder;
 
 		// 钓鱼配方：修改概率与群系，或禁用
 		if (recipe instanceof BeeFishingRecipe fishing) {
@@ -85,15 +87,8 @@ public final class MyriadRecipeProcessor {
 		return holder;
 	}
 
-	RecipeHolder<?> processRecipe(RecipeHolder<?> holder, java.util.Set<net.minecraft.resources.ResourceLocation> custom) {
-		if (custom.contains(holder.id())) {
-			return MyriadCreationsEventHandler.isMyriadCreationsEnabled() ? holder : null;
-		}
-		return processRecipe(holder);
-	}
-
 	/** 处理钓鱼配方 */
-	private RecipeHolder<?> processFishingRecipe(RecipeHolder<?> holder, BeeFishingRecipe fishing) {
+	private Recipe<?> processFishingRecipe(Recipe<?> holder, BeeFishingRecipe fishing) {
 		if (!isMyriadcreations(fishing.output)) {
 			return holder;
 		}
@@ -104,18 +99,17 @@ public final class MyriadRecipeProcessor {
 		if (!ModConfig.SERVER.fishingEnabled.get()) {
 			return null;
 		}
-		HolderSet<Biome> biomes = ingredientFactory.createBiomeHolderSet(ModConfig.SERVER.fishingBiomes.get());
+		List<String> biomes = List.copyOf(ModConfig.SERVER.fishingBiomes.get());
 		float chance = ModConfig.SERVER.fishingChance.get().floatValue();
-		BeeFishingRecipe newRecipe = new BeeFishingRecipe(fishing.output, biomes, chance);
-		return new RecipeHolder<>(holder.id(), newRecipe);
+		BeeFishingRecipe newRecipe = new BeeFishingRecipe(holder.getId(), fishing.output, biomes, chance);
+		return newRecipe;
 	}
 
 	/** 处理繁殖配方 */
-	private RecipeHolder<?> processBreedingRecipe(RecipeHolder<?> holder, BeeBreedingRecipe breeding) {
+	private Recipe<?> processBreedingRecipe(Recipe<?> holder, BeeBreedingRecipe breeding) {
 		// 检查 offspring、parent1 或 parent2 是否涉及万象创世蜜蜂
 		boolean involvesMyriadCreations = isMyriadcreations(breeding.offspring)
-				|| isMyriadcreations(breeding.parent1)
-				|| isMyriadcreations(breeding.parent2);
+				|| breeding.ingredients.stream().anyMatch(MyriadRecipeProcessor::isMyriadcreations);
 		if (!involvesMyriadCreations) {
 			return holder;
 		}
@@ -130,14 +124,14 @@ public final class MyriadRecipeProcessor {
 		if (!ModConfig.SERVER.breedingEnabled.get()) {
 			return null;
 		}
-		Supplier<BeeIngredient> parent1 = RecipeIngredientFactory.getBeeIngredient(ModConfig.SERVER.breedingParent1.get());
-		Supplier<BeeIngredient> parent2 = RecipeIngredientFactory.getBeeIngredient(ModConfig.SERVER.breedingParent2.get());
-		BeeBreedingRecipe newRecipe = new BeeBreedingRecipe(parent1, parent2, breeding.offspring, breeding.parentDeathChance);
-		return new RecipeHolder<>(holder.id(), newRecipe);
+		Lazy<BeeIngredient> parent1 = RecipeIngredientFactory.getBeeIngredient(ModConfig.SERVER.breedingParent1.get());
+		Lazy<BeeIngredient> parent2 = RecipeIngredientFactory.getBeeIngredient(ModConfig.SERVER.breedingParent2.get());
+		BeeBreedingRecipe newRecipe = new BeeBreedingRecipe(holder.getId(), List.of(parent1, parent2), breeding.offspring);
+		return newRecipe;
 	}
 
 	/** 处理蜂巢生成配方 */
-	private RecipeHolder<?> processSpawningRecipe(RecipeHolder<?> holder, BeeSpawningRecipe spawning) {
+	private Recipe<?> processSpawningRecipe(Recipe<?> holder, BeeSpawningRecipe spawning) {
 		if (!containsMyriadcreations(spawning.output)) {
 			return holder;
 		}
@@ -149,13 +143,13 @@ public final class MyriadRecipeProcessor {
 			return null;
 		}
 		Ingredient ingredient = RecipeIngredientFactory.createIngredient(ModConfig.SERVER.spawningNest.get());
-		HolderSet<Biome> biomes = ingredientFactory.createBiomeHolderSetFromString(ModConfig.SERVER.spawningBiomes.get());
-		BeeSpawningRecipe newRecipe = new BeeSpawningRecipe(ingredient, spawning.spawnItem, spawning.output, biomes);
-		return new RecipeHolder<>(holder.id(), newRecipe);
+		String biomes = ModConfig.SERVER.spawningBiomes.get();
+		BeeSpawningRecipe newRecipe = new BeeSpawningRecipe(holder.getId(), ingredient, spawning.spawnItem, spawning.output, biomes);
+		return newRecipe;
 	}
 
 	/** 处理蜜蜂转化配方 */
-	private RecipeHolder<?> processConversionRecipe(RecipeHolder<?> holder, BeeConversionRecipe conversion) {
+	private Recipe<?> processConversionRecipe(Recipe<?> holder, BeeConversionRecipe conversion) {
 		if (!isMyriadcreations(conversion.result)) {
 			return holder;
 		}
@@ -166,16 +160,16 @@ public final class MyriadRecipeProcessor {
 		if (!ModConfig.SERVER.conversionEnabled.get()) {
 			return null;
 		}
-		Supplier<BeeIngredient> source = RecipeIngredientFactory.getBeeIngredient(ModConfig.SERVER.conversionSource.get());
-		Supplier<BeeIngredient> result = RecipeIngredientFactory.getBeeIngredient(ModConfig.SERVER.conversionResult.get());
+		Lazy<BeeIngredient> source = RecipeIngredientFactory.getBeeIngredient(ModConfig.SERVER.conversionSource.get());
+		Lazy<BeeIngredient> result = RecipeIngredientFactory.getBeeIngredient(ModConfig.SERVER.conversionResult.get());
 		Ingredient item = RecipeIngredientFactory.createIngredient(ModConfig.SERVER.conversionItem.get());
 		float chance = ModConfig.SERVER.conversionChance.get().floatValue();
-		BeeConversionRecipe newRecipe = new BeeConversionRecipe(source, result, item, chance);
-		return new RecipeHolder<>(holder.id(), newRecipe);
+		BeeConversionRecipe newRecipe = new BeeConversionRecipe(holder.getId(), source, result, item, Math.round(chance * 100));
+		return newRecipe;
 	}
 
 	/** 处理蜜蜂产出配方 */
-	private RecipeHolder<?> processProduceRecipe(RecipeHolder<?> holder, AdvancedBeehiveRecipe produce) {
+	private Recipe<?> processProduceRecipe(Recipe<?> holder, AdvancedBeehiveRecipe produce) {
 		if (!isMyriadcreations(produce.ingredient)) {
 			return holder;
 		}
@@ -186,9 +180,9 @@ public final class MyriadRecipeProcessor {
 		if (!ModConfig.SERVER.produceEnabled.get()) {
 			return null;
 		}
-		List<TagOutputRecipe.ChancedOutput> outputs = RecipeIngredientFactory.createProduceOutputs();
-		AdvancedBeehiveRecipe newRecipe = new AdvancedBeehiveRecipe(produce.ingredient, outputs);
-		return new RecipeHolder<>(holder.id(), newRecipe);
+		Map<net.minecraft.world.item.crafting.Ingredient, IntArrayTag> outputs = RecipeIngredientFactory.createProduceOutputs();
+		AdvancedBeehiveRecipe newRecipe = new AdvancedBeehiveRecipe(holder.getId(), produce.ingredient, outputs);
+		return newRecipe;
 	}
 
 	/**
@@ -211,7 +205,7 @@ public final class MyriadRecipeProcessor {
 	/**
 	 * 判断 BeeIngredient 供应商列表中是否包含万象创世蜜蜂
 	 */
-	private static boolean containsMyriadcreations(List<Supplier<BeeIngredient>> outputs) {
+	private static boolean containsMyriadcreations(List<? extends Supplier<BeeIngredient>> outputs) {
 		if (outputs == null || outputs.isEmpty()) {
 			return false;
 		}

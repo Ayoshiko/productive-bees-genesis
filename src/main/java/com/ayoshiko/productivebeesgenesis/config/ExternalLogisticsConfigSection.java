@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 /**
  * 外部物流互操作配置段（{@code external_logistics.*}）。
@@ -17,9 +17,9 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 public final class ExternalLogisticsConfigSection {
 
 	/** 产物直通相邻容器：配方完成时直接写入目标容器，跳过输出槽缓存 */
-	public final ModConfigSpec.BooleanValue externalDirectContainerOutput;
+	public final ForgeConfigSpec.BooleanValue externalDirectContainerOutput;
 
-	private ExternalLogisticsConfigSection(ModConfigSpec.Builder builder) {
+	private ExternalLogisticsConfigSection(ForgeConfigSpec.Builder builder) {
 		builder.comment("外部物流互操作（离心机与机械蜂箱通用）").push("external_logistics");
 		externalDirectContainerOutput = builder
 				.comment("产物直通：配方完成时先模拟再直接写入已配置输出面的相邻容器，跳过输出槽中转",
@@ -38,7 +38,7 @@ public final class ExternalLogisticsConfigSection {
 	 * @param builder 机器参数配置构建器
 	 * @return 已注册配置项的实例
 	 */
-	public static ExternalLogisticsConfigSection create(ModConfigSpec.Builder builder) {
+	public static ExternalLogisticsConfigSection create(ForgeConfigSpec.Builder builder) {
 		return new ExternalLogisticsConfigSection(builder);
 	}
 }

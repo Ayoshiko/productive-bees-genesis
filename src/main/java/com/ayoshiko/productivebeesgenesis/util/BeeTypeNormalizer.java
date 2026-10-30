@@ -27,7 +27,7 @@ public final class BeeTypeNormalizer {
 		try {
 			String trimmed = id.trim();
 			if (trimmed.isEmpty()) return null;
-			return ResourceLocation.parse(trimmed);
+			return new ResourceLocation(trimmed);
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("parseBeeType 解析异常: {}", id, e);
 			return null;
@@ -49,15 +49,15 @@ public final class BeeTypeNormalizer {
 	 * @return 规范化后的蜜蜂类型 ID；未注册时返回原始 ID（保持 miss 语义）
 	 */
 	public static ResourceLocation resolveLoadedBeeType(ResourceLocation beeType) {
-		if (BeeReloadListener.INSTANCE.getData(beeType) != null) {
+		if (BeeReloadListener.INSTANCE.getData(beeType.toString()) != null) {
 			return beeType;
 		}
 		String path = beeType.getPath();
 		int slash = path.lastIndexOf('/');
 		if (slash > 0) {
-			ResourceLocation simple = ResourceLocation.fromNamespaceAndPath(
+			ResourceLocation simple = new ResourceLocation(
 					beeType.getNamespace(), path.substring(slash + 1));
-			if (BeeReloadListener.INSTANCE.getData(simple) != null) {
+			if (BeeReloadListener.INSTANCE.getData(simple.toString()) != null) {
 				return simple;
 			}
 		}

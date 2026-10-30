@@ -53,9 +53,9 @@ class EjectorIsolationTest {
 		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/logistics/FastItemEjector.java");
 		assertTrue(source.contains("request.eject("));
 		assertTrue(source.contains("ignored -> ejector.getOutputColor()"));
-        assertTrue(source.contains("TransitRequest.simple(taken.copy())"));
-        assertFalse(source.contains("response.useAll()"), "源槽已在交接前扣除，简单请求不能再次扣源");
-        assertTrue(source.contains("custody.handoffItem(taken"));
+		assertTrue(source.indexOf("response.getSendingAmount()") < source.indexOf("response.useAll()"),
+				"发送量必须在 useAll 改写请求状态前读取");
+		assertTrue(source.contains("response.useAll()"));
 		assertFalse(source.contains("needsVanillaFallback"));
 		assertFalse(source.contains("setTickDelay"));
 	}

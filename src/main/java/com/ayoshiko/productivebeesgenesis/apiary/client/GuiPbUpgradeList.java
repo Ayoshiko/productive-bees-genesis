@@ -7,8 +7,8 @@ import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.GuiElementHolder;
 import mekanism.client.gui.element.GuiTexturedElement;
-import mekanism.client.gui.tooltip.TooltipUtils;
-import mekanism.client.render.IFancyFontRenderer.TextAlignment;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.TooltipUtils;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.TextAlignment;
 import mekanism.client.render.MekanismRenderer;
 import mekanism.common.util.MekanismUtils.ResourceType;
 import mekanism.common.util.MekanismUtils;
@@ -229,8 +229,8 @@ public class GuiPbUpgradeList extends GuiTexturedElement {
 		// 元素渲染：启用裁剪防止超出边界
 		int clipLeft = getX() + 1;
 		int clipTop = getY() + 1;
-		int clipRight = getRight() - 1;
-		int clipBottom = getBottom() - 1;
+		int clipRight = (getX() + getWidth()) - 1;
+		int clipBottom = (getY() + getHeight()) - 1;
 		guiGraphics.enableScissor(clipLeft, clipTop, clipRight, clipBottom);
 
 		List<PbUpgradeType> installed = getInstalledTypes();
@@ -280,8 +280,8 @@ public class GuiPbUpgradeList extends GuiTexturedElement {
 		// 1:1对齐MEK原版GuiInstallableScrollList.renderForeground — 文字渲染
 		int clipLeft = getX() + 1;
 		int clipTop = getY() + 1;
-		int clipRight = getRight() - 1;
-		int clipBottom = getBottom() - 1;
+		int clipRight = (getX() + getWidth()) - 1;
+		int clipBottom = (getY() + getHeight()) - 1;
 		guiGraphics.enableScissor(clipLeft, clipTop, clipRight, clipBottom);
 
 		List<PbUpgradeType> installed = getInstalledTypes();
@@ -296,8 +296,8 @@ public class GuiPbUpgradeList extends GuiTexturedElement {
 				Component name = Component.translatable(type.getNameKey());
 				// 1:1对齐MEK原版GuiUpgradeScrollList.drawName：缩放1.0F，颜色titleTextColor()
 				// 最大宽度 = barXShift - 16 = (width - 6) - 16 = width - 22
-				drawScaledScrollingString(guiGraphics, name, TEXT_X_OFFSET, textY, TextAlignment.LEFT,
-						titleTextColor(), width - BAR_X_SHIFT - 16, 0, false, 1.0F);
+				com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, name, TEXT_X_OFFSET, textY, TextAlignment.LEFT,
+						0xFFFFFFFF, width - BAR_X_SHIFT - 16, 0, true, 1.0F);
 			}
 		} finally {
 			guiGraphics.disableScissor();
@@ -325,7 +325,7 @@ public class GuiPbUpgradeList extends GuiTexturedElement {
 		}
 		// 1:1对齐MEK原版GuiScrollList.onClick — 元素点击选择
 		if (mouseX >= getX() + 1 && mouseX < getX() + width - BAR_X_SHIFT - 1
-				&& mouseY >= getY() + 1 && mouseY < getBottom() - 1) {
+				&& mouseY >= getY() + 1 && mouseY < (getY() + getHeight()) - 1) {
 			int index = getCurrentSelection();
 			int focused = getFocusedElements();
 			int maxElements = getMaxElements();
@@ -357,14 +357,15 @@ public class GuiPbUpgradeList extends GuiTexturedElement {
 	@Override
 	public void onRelease(double mouseX, double mouseY) {
 		super.onRelease(mouseX, mouseY);
+		setDragging(false);
 		// 1:1对齐MEK原版GuiScrollableElement.onRelease
 		dragOffset = 0;
 	}
 
 	@Override
-	public boolean mouseScrolled(double mouseX, double mouseY, double xDelta, double yDelta) {
+	public boolean mouseScrolled(double mouseX, double mouseY, double yDelta) {
 		// 1:1对齐MEK原版GuiScrollList.mouseScrolled — 使用adjustScroll逻辑
-		return isMouseOver(mouseX, mouseY) && adjustScroll(yDelta) || super.mouseScrolled(mouseX, mouseY, xDelta, yDelta);
+		return isMouseOver(mouseX, mouseY) && adjustScroll(yDelta) || super.mouseScrolled(mouseX, mouseY, yDelta);
 	}
 
 	/** 1:1对齐MEK原版GuiScrollableElement.adjustScroll */
@@ -385,6 +386,11 @@ public class GuiPbUpgradeList extends GuiTexturedElement {
 	}
 
 	@Override
+	public void renderToolTip(GuiGraphics graphics, int mouseX, int mouseY) {
+		updateTooltip(mouseX, mouseY);
+		super.renderToolTip(graphics, mouseX, mouseY);
+	}
+
 	public void updateTooltip(int mouseX, int mouseY) {
 		List<PbUpgradeType> installed = getInstalledTypes();
 		int currentSelection = getCurrentSelection();
@@ -395,7 +401,7 @@ public class GuiPbUpgradeList extends GuiTexturedElement {
 					mouseY >= y && mouseY < y + ELEMENT_HEIGHT) {
 				PbUpgradeType type = installed.get(currentSelection + i);
 			List<Component> info = List.of(
-					Component.translatable(type.getNameKey()).withColor(type.getColor()),
+					Component.translatable(type.getNameKey()).withStyle(style -> style.withColor(type.getColor())),
 					PbUpgradeTooltipHelper.descriptionComponent(type)
 			);
 				if (!info.equals(lastInfo)) {
@@ -412,11 +418,9 @@ public class GuiPbUpgradeList extends GuiTexturedElement {
 		setTooltip(lastTooltip = null);
 	}
 
-	@NotNull
-	@Override
-	protected ScreenRectangle getTooltipRectangle(int mouseX, int mouseY) {
-		return cachedTooltipRect == null ? super.getTooltipRectangle(mouseX, mouseY) : cachedTooltipRect;
-	}
+	private boolean draggingScroll;
+	private void setDragging(boolean dragging) { draggingScroll = dragging; }
+	private boolean isDragging() { return draggingScroll; }
 
 	// ===== 滚动条渲染（1:1复刻MEK原版GuiScrollableElement.drawScrollBar） =====
 

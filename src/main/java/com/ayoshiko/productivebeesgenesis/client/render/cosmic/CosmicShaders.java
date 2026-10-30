@@ -7,9 +7,9 @@ import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.InventoryMenu;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.neoforge.client.event.RegisterShadersEvent;
-import net.neoforged.neoforge.client.event.TextureAtlasStitchedEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.client.event.RegisterShadersEvent;
+import net.minecraftforge.client.event.TextureStitchEvent;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -17,10 +17,10 @@ import java.util.concurrent.atomic.AtomicReference;
 	 * Cosmic 渲染着色器管理
 	 * <br/>
 	 * 注册 cosmic 物品与护甲两套着色器，缓存 uniform 句柄；
-	 * 在 TextureAtlasStitchedEvent 中采集 misc/cosmic/cosmic_0..9 的 UV 坐标。
+	 * 在 TextureStitchEvent.Post 中采集 misc/cosmic/cosmic_0..9 的 UV 坐标。
 	 * <p>
 	 * 线程安全：UV/Sprite 数组通过 {@link AtomicReference} 整体替换保证可见性。
-	 * 资源加载线程（TextureAtlasStitchedEvent）写入，渲染线程读取。原数组元素修改无 happens-before 保证，
+	 * 资源加载线程（TextureStitchEvent.Post）写入，渲染线程读取。原数组元素修改无 happens-before 保证，
 	 * 可能导致渲染线程读到部分更新的 UV 坐标。改为构建完整快照后原子替换引用，渲染线程要么看到旧快照，
 	 * 要么看到新快照，不会看到中间状态。
 	 */
@@ -83,7 +83,7 @@ public class CosmicShaders {
 		// （两者的 shader 文件与 uniform 完全相同，仅 RenderType 的纹理/混合状态不同）。
 		try {
 			event.registerShader(new ShaderInstance(event.getResourceProvider(),
-				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"),
+				new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "cosmic"),
 				DefaultVertexFormat.NEW_ENTITY),
 				shader -> {
 				COSMIC_SHADER = shader;
@@ -107,7 +107,7 @@ public class CosmicShaders {
 		}
 		try {
 			event.registerShader(new ShaderInstance(event.getResourceProvider(),
-				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "hell"),
+				new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "hell"),
 				DefaultVertexFormat.NEW_ENTITY),
 				shader -> {
 				HELL_SHADER = shader;
@@ -125,13 +125,13 @@ public class CosmicShaders {
 	}
 
 	@SubscribeEvent
-	public static void onTextureAtlasStitched(TextureAtlasStitchedEvent event) {
+	public static void onTextureAtlasStitched(TextureStitchEvent.Post event) {
 		if (event.getAtlas().location().equals(InventoryMenu.BLOCK_ATLAS)) {
 			// 构建完整快照后原子替换：避免渲染线程读到部分更新的数组元素
 			float[] newUvs = new float[40];
 			TextureAtlasSprite[] newSprites = new TextureAtlasSprite[10];
 			for (int i = 0; i < newSprites.length; i++) {
-				newSprites[i] = event.getAtlas().getSprite(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
+				newSprites[i] = event.getAtlas().getSprite(new ResourceLocation(ProductiveBeesGenesis.MOD_ID,
 					"misc/cosmic/cosmic_" + i));
 				newUvs[i * 4 + 0] = newSprites[i].getU0();
 				newUvs[i * 4 + 1] = newSprites[i].getV0();

@@ -4,7 +4,9 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
 import mekanism.client.gui.IGuiWrapper;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindowCreatorTab;
 import mekanism.client.gui.element.tab.window.GuiWindowCreatorTab;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.client.render.MekanismRenderer;
 import mekanism.common.inventory.container.SelectedWindowData.WindowType;
@@ -28,14 +30,14 @@ import java.util.function.Supplier;
 	 *   <li>单一职责：仅负责创建窗口，不处理窗口内部逻辑</li>
 	 * </ul>
 	 */
-public class GuiFeederTab extends GuiWindowCreatorTab<TileEntityMekApiary, GuiFeederTab> {
+public class GuiFeederTab extends PinnableGuiWindowCreatorTab<TileEntityMekApiary, GuiFeederTab> {
 
 	/** Tab 颜色 — 深青绿 #00695c（ARGB 格式） */
 	private static final int TAB_COLOR = 0xFF00695C;
 
 	/** 花朵图标资源 */
 	private static final ResourceLocation ICON =
-		ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "textures/gui/feeder_tab.png");
+		new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "textures/gui/feeder_tab.png");
 
 	/**
 	 * 窗口数据 — 使用 UNSPECIFIED 类型（自定义窗口，不与 MEK 内置窗口冲突）

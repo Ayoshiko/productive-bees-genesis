@@ -120,6 +120,5 @@ final class ApiaryBeeVisualsRenderer {
 	/** 释放名称渲染缓存 — GUI 关闭时调用，避免跨界面持有过期组件 */
 	void clearCaches() {
 		nameRenderer.clearCache();
-		entityRenderer.close();
 	}
 }

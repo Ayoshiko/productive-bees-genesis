@@ -4,12 +4,12 @@ import com.ayoshiko.productivebeesgenesis.apiary.ApiarySlotManager;
 import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
 import com.ayoshiko.productivebeesgenesis.apiary.FeederSlotManager;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
-import com.jerry.mekextras.common.block.attribute.ExtraAttribute;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import com.jerry.mekanism_extras.common.block.attribute.ExtraAttribute;
+import com.jerry.mekanism_extras.common.tier.ExtraFactoryTier;
 import mekanism.api.tier.BaseTier;
 import mekanism.common.tier.FactoryTier;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
+import mekanism.api.providers.IBlockProvider;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -34,7 +34,7 @@ public class TileEntityExtraMekApiaryFactory extends TileEntityMekApiaryFactory 
 	/** ME 工厂等级 — 在 presetVariables() 中从 BlockType 的 ExtraAttributeTier 读取 */
 	protected ExtraFactoryTier meTier;
 
-	public TileEntityExtraMekApiaryFactory(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
+	public TileEntityExtraMekApiaryFactory(IBlockProvider blockProvider, BlockPos pos, BlockState state) {
 		super(blockProvider, pos, state);
 	}
 
@@ -52,7 +52,7 @@ public class TileEntityExtraMekApiaryFactory extends TileEntityMekApiaryFactory 
 	protected void presetVariables() {
 		super.presetVariables();
 		// 从 BlockType 的 ExtraAttributeTier 读取 ME 工厂等级
-		meTier = ExtraAttribute.getAdvancedTier(getBlockHolder(), ExtraFactoryTier.class);
+		meTier = ExtraAttribute.getTier(getBlockState().getBlock(), ExtraFactoryTier.class);
 	}
 
 	/**

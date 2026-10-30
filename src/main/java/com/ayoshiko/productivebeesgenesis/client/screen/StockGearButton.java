@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import appeng.client.gui.Icon;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -40,9 +40,9 @@ final class StockGearButton extends MekanismButton {
 	private final IntConsumer configureReserveCallback;
 
 	@Override
-	public boolean mouseClicked(double mouseX, double mouseY, int button) {
-		if (!visible || !active || !isMouseOver(mouseX, mouseY)) return false;
-		if (button != 0 && button != 1) return false;
+	public mekanism.client.gui.element.GuiElement mouseClickedNested(double mouseX, double mouseY, int button) {
+		if (!visible || !active || !isMouseOver(mouseX, mouseY)) return null;
+		if (button != 0 && button != 1) return null;
 		if (Screen.hasShiftDown() && button == 1) {
 			configureReserveCallback.accept(slotIndex);
 		} else if (Screen.hasShiftDown()) {
@@ -52,7 +52,7 @@ final class StockGearButton extends MekanismButton {
 		} else {
 			configureCallback.accept(slotIndex);
 		}
-		return true;
+		return this;
 	}
 
 	void setNetworkStock(boolean networkStock) {
@@ -68,10 +68,9 @@ final class StockGearButton extends MekanismButton {
 		if (!visible) return;
 		super.renderWidget(guiGraphics, mouseX, mouseY, partialTicks);
 		Icon icon = networkStock || unlimited || isMouseOver(mouseX, mouseY)
-				? Icon.COG : Icon.COG_DISABLED;
+				? Icon.WRENCH : Icon.WRENCH_DISABLED;
 		icon.getBlitter()
 				.dest(relativeX + 1, relativeY + 1, width - 2, height - 2)
-				.zOffset(4)
 				.blit(guiGraphics);
 		if (unlimited) {
 			guiGraphics.drawString(Minecraft.getInstance().font, "∞",

@@ -3,7 +3,6 @@ package com.ayoshiko.productivebeesgenesis.apiary.client;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeNbtHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeSlot;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeState;
-import com.ayoshiko.productivebeesgenesis.client.resource.ResourceBeeTooltip;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper.FlowerPreference;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
@@ -114,9 +113,6 @@ public class BeeTooltipRenderer {
 		int nameColor = ALPHA_OPAQUE | beeSlot.getState().getColor();
 		// copy() 将 Component 转为 MutableComponent 以使用 withStyle(UnaryOperator) 重载
 		lines.add(name.copy().withStyle(s -> s.withColor(nameColor)).getVisualOrderText());
-		for (Component message : ResourceBeeTooltip.lines(beeType)) {
-			lines.addAll(font.split(message, 300));
-		}
 
 		CompoundTag beeData = beeSlot.getBeeData();
 		if (Screen.hasShiftDown()) {
@@ -132,16 +128,6 @@ public class BeeTooltipRenderer {
 					.withStyle(ChatFormatting.WHITE).getVisualOrderText());
 		}
 
-		var resourceRecipe = com.ayoshiko.productivebeesgenesis.client.resource.ResourceClientCatalog.production(beeType);
-		if (resourceRecipe != null) {
-			lines.add(Component.translatable("resource.productivebeesgenesis.bee_output").withStyle(ChatFormatting.AQUA).getVisualOrderText());
-			for (var output : resourceRecipe.outputs()) {
-				var text = com.ayoshiko.productivebeesgenesis.client.resource.ResourceVisuals.name(output.key()).copy().append(" ");
-				text.append(com.ayoshiko.productivebeesgenesis.client.resource.ResourceVisuals.quantity(output.key(), output.exactAmount(), 1));
-				if (output.chance() < 1) text.append(" (" + Math.round(output.chance() * 100) + "%)");
-				lines.add(text.getVisualOrderText());
-			}
-		}
 		guiGraphics.renderTooltip(font, lines, mouseX, mouseY);
 	}
 
@@ -310,7 +296,6 @@ public class BeeTooltipRenderer {
 	 * @return 可读的花朵组件
 	 */
 	private Component resolveFlowerComponent(FlowerPreference pref) {
-		if (pref != null && pref.container() != null && pref.container().custom()) return pref.container().description();
 		if (pref == null || !pref.hasFlowerDefinition()) {
 			return Component.translatable(KEY_FLOWER_ANY);
 		}
@@ -322,7 +307,7 @@ public class BeeTooltipRenderer {
 		// flowerItem — 解析注册表获取本地化名
 		if (!pref.flowerItem().isEmpty()) {
 			try {
-				ResourceLocation itemId = ResourceLocation.parse(pref.flowerItem());
+				ResourceLocation itemId = new ResourceLocation(pref.flowerItem());
 				Item item = BuiltInRegistries.ITEM.get(itemId);
 				// BuiltInRegistries.ITEM.get() 对无效 ID 返回 Items.AIR 而非 null，
 				// 故用 != Items.AIR 判断物品是否有效，避免无效 ID 显示为"空气"
@@ -341,7 +326,7 @@ public class BeeTooltipRenderer {
 		// 直接用 "block.<namespace>.<path>" 翻译键，与方块的 getDescriptionId() 等价
 		if (!pref.flowerBlock().isEmpty()) {
 			try {
-				ResourceLocation blockId = ResourceLocation.parse(pref.flowerBlock());
+				ResourceLocation blockId = new ResourceLocation(pref.flowerBlock());
 				return Component.translatable("block." + blockId.getNamespace() + "." + blockId.getPath())
 						.withStyle(ChatFormatting.YELLOW);
 			} catch (RuntimeException e) {
@@ -351,14 +336,13 @@ public class BeeTooltipRenderer {
 						.withStyle(ChatFormatting.GRAY);
 			}
 		}
-		// 保留旧字段优先级；流体容器提示使用资源本身的本地化名称。
+		// flowerFluid — 解析注册表获取流体桶物品名
 		if (!pref.flowerFluid().isEmpty()) {
-			if (pref.container() != null) return pref.container().description();
 			try {
 				String fluidId = pref.flowerFluid().startsWith("#")
 						? pref.flowerFluid().substring(1)
 						: pref.flowerFluid();
-				ResourceLocation rl = ResourceLocation.parse(fluidId);
+				ResourceLocation rl = new ResourceLocation(fluidId);
 				// 流体本身无本地化名，显示ID
 				return Component.literal(fluidId)
 						.withStyle(ChatFormatting.AQUA);
@@ -432,7 +416,16 @@ public class BeeTooltipRenderer {
 	 * 获取状态的本地化组件
 	 */
 	private Component getStateComponent(BeeState state) {
-		String key = state.translationKey();
+		String key = switch (state) {
+			case IDLE -> "gui.productivebeesgenesis.bee_state.idle";
+			case WORKING -> "gui.productivebeesgenesis.bee_state.working";
+			case WAITING_FLOWER -> "gui.productivebeesgenesis.bee_state.waiting_flower";
+			case WAITING_ENERGY -> "gui.productivebeesgenesis.bee_state.waiting_energy";
+			case WAITING_OUTPUT -> "gui.productivebeesgenesis.bee_state.waiting_output";
+			case WAITING_DAY_CYCLE -> "gui.productivebeesgenesis.bee_state.waiting_day_cycle";
+			case WAITING_RAIN -> "gui.productivebeesgenesis.bee_state.waiting_rain";
+			case WAITING_THUNDER -> "gui.productivebeesgenesis.bee_state.waiting_thunder";
+		};
 		int color = ALPHA_OPAQUE | state.getColor();
 		return Component.translatable(key).withStyle(s -> s.withColor(color));
 	}

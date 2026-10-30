@@ -8,7 +8,7 @@ import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import com.ayoshiko.productivebeesgenesis.network.ForgePayloadContext;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,7 +19,7 @@ final class CentrifugeInputReturnPayloadHandler {
 	private CentrifugeInputReturnPayloadHandler() {
 	}
 
-	static void handle(ReturnCentrifugeInputPayload payload, IPayloadContext context) {
+	static void handle(ReturnCentrifugeInputPayload payload, ForgePayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer player) || player.level() == null) return;
 		if (!(player.containerMenu instanceof MekanismTileContainer<?> tileContainer)
 				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) return;

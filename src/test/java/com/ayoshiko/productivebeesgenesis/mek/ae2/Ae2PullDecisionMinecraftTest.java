@@ -185,37 +185,4 @@ class Ae2PullDecisionMinecraftTest {
 		filter.toggleDirectNetworkStockAt(slot);
 		if (unlimited) filter.toggleDirectUnlimitedAt(slot);
 	}
-
-	@Test
-	void cachedMatchingKeepsModesComponentsAndLiveAmountsIndependent() {
-		var comb = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
-		comb.set(ModDataComponents.BEE_TYPE, ResourceLocation.parse("productivebees:iron"));
-		AEItemKey iron = AEItemKey.of(comb);
-		comb.set(DataComponents.CUSTOM_NAME, Component.literal("named"));
-		AEItemKey named = AEItemKey.of(comb);
-		var filter = new Ae2InputFilter();
-		filter.setFilterMode(Ae2InputFilter.FilterMode.WHITELIST);
-		filter.setPreciseMode(true);
-		add(filter, 0, iron, 100, 20, false);
-		add(filter, 1, iron, 200, 30, false);
-		assertEquals(300, filter.getPullLimitIfAllowed(iron, 500, false));
-		assertEquals(50, filter.getPullLimitIfAllowed(iron, 100, false));
-		assertEquals(Ae2InputFilter.PULL_DISALLOWED, filter.getPullLimitIfAllowed(named, 500, false));
-		assertEquals(300, filter.getPullLimitIfAllowed(named, 500, true));
-		filter.setDirectReserveAmountAt(1, 70);
-		assertEquals(110, filter.getPullLimitIfAllowed(iron, 200, false));
-		filter.setFilterMode(Ae2InputFilter.FilterMode.BLACKLIST);
-		assertEquals(Ae2InputFilter.PULL_DISALLOWED, filter.getPullLimitIfAllowed(iron, 500, false));
-		assertNotEquals(Ae2InputFilter.PULL_DISALLOWED, filter.getPullLimitIfAllowed(named, 500, false));
-		filter.setPreciseMode(false);
-		assertEquals(Ae2InputFilter.PULL_DISALLOWED, filter.getPullLimitIfAllowed(named, 500, false));
-		filter.removeEntryAt(0);
-		filter.resolveDirectKey(1, AEItemKey.of(Items.GOLD_INGOT));
-		assertNotEquals(Ae2InputFilter.PULL_DISALLOWED, filter.getPullLimitIfAllowed(named, 500, false));
-		filter.setEntryAt(2, ResourceLocation.parse("productivebees:iron"), false);
-		assertEquals(Ae2InputFilter.PULL_DISALLOWED, filter.getPullLimitIfAllowed(named, 500, false));
-		filter.clearEntries();
-		assertNotEquals(Ae2InputFilter.PULL_DISALLOWED, filter.getPullLimitIfAllowed(named, 500, false));
-	}
-
 }

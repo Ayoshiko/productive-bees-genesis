@@ -4,9 +4,9 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeFactoryType;
 import mekanism.common.tier.FactoryTier;
-import net.minecraft.core.Holder;
+import mekanism.api.providers.IBlockProvider;
 import net.minecraft.world.level.block.Block;
-import net.neoforged.fml.ModList;
+import net.minecraftforge.fml.ModList;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -73,8 +73,7 @@ public final class MekCompatHooks {
 			evolvedMekanismLoaded = modList.isLoaded("evolvedmekanism");
 			mekanismExtrasLoaded = modList.isLoaded("mekanism_extras");
 			evolvedMekanismExtrasLoaded = modList.isLoaded("emextras");
-			mekanismEmpoweredLoaded = modList.isLoaded("mekanism_empowered")
-					|| modList.isLoaded("mekanism_empowered_unleashed");
+			mekanismEmpoweredLoaded = modList.isLoaded("mekanism_empowered");
 		}
 	}
 
@@ -103,7 +102,7 @@ public final class MekCompatHooks {
 		return Holder.INSTANCE.evolvedMekanismExtrasLoaded;
 	}
 
-	/** 检测 MekanismEmpowered 或其合并版 MekanismEmpoweredUnleashed 是否加载。 */
+	/** 检测MekanismEmpowered是否加载 */
 	public static boolean isMekanismEmpoweredLoaded() {
 		return Holder.INSTANCE.mekanismEmpoweredLoaded;
 	}
@@ -302,14 +301,14 @@ public final class MekCompatHooks {
 	 * 两者通过短路或合并：
 	 * <pre>{@code
 	 * return super.isConfigurationDataCompatible(blockType)
-	 *     || MekCompatHooks.isConfigurationDataCompatible(getBlockHolder(), blockType);
+	 *     || MekCompatHooks.isConfigurationDataCompatible(getBlockState().getBlock(), blockType);
 	 * }</pre>
 	 *
 	 * @param selfHolder 当前工厂方块的 Holder
 	 * @param blockType  待比较的目标方块
 	 * @return true 如果两个方块有相同类型的 AttributeFactoryType 或 EMExtraAttributeFactoryType
 	 */
-	public static boolean isConfigurationDataCompatible(net.minecraft.core.Holder<Block> selfHolder, Block blockType) {
+	public static boolean isConfigurationDataCompatible(Block selfHolder, Block blockType) {
 		// 原版/EM工厂同类型检查（有AttributeFactoryType属性）
 		AttributeFactoryType meType = Attribute.get(selfHolder, AttributeFactoryType.class);
 		if (meType != null) {

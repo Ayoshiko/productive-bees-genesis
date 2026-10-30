@@ -15,7 +15,7 @@ import java.util.function.BooleanSupplier;
 /** 小食槽为空时显示灰色物品轮廓，槽框继续由 MEK 绘制。 */
 final class GuiGeneTreatSlotOverlay extends GuiTextureOnlyElement {
 
-	private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(
+	private static final ResourceLocation TEXTURE = new ResourceLocation(
 			ProductiveBeesGenesis.MOD_ID, "textures/gui/slot/gene_treat.png");
 	private final BooleanSupplier empty;
 

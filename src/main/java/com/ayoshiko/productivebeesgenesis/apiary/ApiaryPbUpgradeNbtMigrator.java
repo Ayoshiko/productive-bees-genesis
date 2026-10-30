@@ -34,7 +34,7 @@ class ApiaryPbUpgradeNbtMigrator {
 		if (!handlerTag.contains("Items", Tag.TAG_LIST)) return;
 		var items = handlerTag.getList("Items", Tag.TAG_COMPOUND);
 		for (int i = 0; i < items.size(); i++) {
-			ItemStack stack = ItemStack.parseOptional(provider, items.getCompound(i));
+			ItemStack stack = ItemStack.of(items.getCompound(i));
 			if (stack.isEmpty()) continue;
 			PbUpgradeType type = PbUpgradeInventorySlot.getUpgradeType(stack);
 			if (type == null || type.isBuiltin()) continue;

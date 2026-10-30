@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 import java.util.Map;
 
@@ -217,7 +217,7 @@ public final class BalanceConfig {
 		}
 	}
 
-	private static boolean readBoolean(ModConfigSpec.BooleanValue value, boolean fallback) {
+	private static boolean readBoolean(ForgeConfigSpec.BooleanValue value, boolean fallback) {
 		if (value == null) return fallback;
 		try {
 			return value.get();
@@ -226,7 +226,7 @@ public final class BalanceConfig {
 		}
 	}
 
-	private static int readInt(ModConfigSpec.IntValue value, int fallback) {
+	private static int readInt(ForgeConfigSpec.IntValue value, int fallback) {
 		if (value == null) return fallback;
 		try {
 			return value.get();
@@ -283,13 +283,13 @@ public final class BalanceConfig {
 		return changed;
 	}
 
-	private static boolean setBoolean(ModConfigSpec.BooleanValue value, boolean target) {
+	private static boolean setBoolean(ForgeConfigSpec.BooleanValue value, boolean target) {
 		if (value == null || readBoolean(value, target) == target) return false;
 		value.set(target);
 		return true;
 	}
 
-	private static boolean setInt(ModConfigSpec.IntValue value, int target) {
+	private static boolean setInt(ForgeConfigSpec.IntValue value, int target) {
 		if (value == null || readInt(value, target) == target) return false;
 		value.set(target);
 		return true;

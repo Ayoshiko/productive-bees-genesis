@@ -48,7 +48,7 @@ final class MekCentrifugeUpgradeOps {
 			// Saturate instead of int-shifting: CUSTOM profiles may allow 32 levels.
 			maxOps = SaturatingMath.saturatingPowerOfTwo(stackUpgrades);
 		}
-		int speedAdjustedOps = MekanismUtils.getOperationsPerTick(tile, tile.baseTicksRequired(), maxOps);
+		int speedAdjustedOps = com.ayoshiko.productivebeesgenesis.util.ForgeMachineOperations.getOperationsPerTick(tile, tile.baseTicksRequired(), maxOps);
 		return MekExtrasUpgradeSemantics.operationsPerTick(
 				MekUpgradeSupport.hasCreativeUpgrade(tile), maxOps, speedAdjustedOps);
 	}

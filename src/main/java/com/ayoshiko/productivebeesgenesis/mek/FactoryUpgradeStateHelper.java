@@ -52,14 +52,8 @@ public final class FactoryUpgradeStateHelper {
 		if (upgrade == Upgrade.SPEED) {
 			accessor.productivebeesgenesis$setTicksRequired(MekanismUtils.getTicks(factory, factory.baseTicksRequired()));
 		}
-		int maxOps = getUpgradeMaxOperations(factory);
-		int speedAdjustedOps = MekanismUtils.getOperationsPerTick(
-				factory, factory.baseTicksRequired(), maxOps);
-		accessor.productivebeesgenesis$setOperationsPerTick(
-				MekExtrasUpgradeSemantics.operationsPerTick(
-						MekUpgradeSupport.hasCreativeUpgrade(factory), maxOps, speedAdjustedOps));
+		// The 10.4 cache receives the dynamic Genesis operations supplier directly.
 		MekCentrifugeEnergyScaling.normalizeCapacity(factory);
-		MekUpgradeSupport.refreshEmpoweredEnergy(factory, upgrade);
 	}
 
 	/**
@@ -200,7 +194,7 @@ public final class FactoryUpgradeStateHelper {
 		int batchMultiplier = skipState.getBatchMultiplier();
 		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 		TileEntityFactoryAccessor accessor = (TileEntityFactoryAccessor) factory;
-		long energyBeforeSuper = factory.energyContainer().getEnergy();
+		long energyBeforeSuper = com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(factory.energyContainer().getEnergy());
 		boolean sendUpdatePacket = batchMultiplier > 1
 				? factory.productivebeesgenesis$runSmeltingBatch(batchMultiplier, superCall)
 				: superCall.getAsBoolean();
@@ -220,7 +214,7 @@ public final class FactoryUpgradeStateHelper {
 			result = MekCentrifugeFactoryHelper.processPbRecipesAndUpdate(
 				sendUpdatePacket, energyBeforeSuper, factory.energyContainer(), factory.processes(),
 				inputSlots, factory.pbProcessor, factory, factory.getActive(), factory::setActive,
-				v -> accessor.productivebeesgenesis$setLastUsage(v));
+				v -> accessor.productivebeesgenesis$setLastUsage(com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.fromFe(v)));
 			// AE2 推送/拉取与 PB 一致批处理：仅首个完整入口执行，
 			// 后续 ticker 已由 decideAction 完全跳过
 			CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(factory, batchMultiplier);
@@ -255,7 +249,7 @@ public final class FactoryUpgradeStateHelper {
 		// 与 onUpdateServer 的 !skipPb 分支对齐：tryConnectNode 与能量注入在 super 前执行
 		factory.productivebeesgenesis$getAe2LifecycleHandler().tryConnectNode(factory);
 		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
-		long energyBeforeSuper = factory.energyContainer().getEnergy();
+		long energyBeforeSuper = com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(factory.energyContainer().getEnergy());
 		boolean sendUpdatePacket = batchMultiplier > 1
 				? factory.productivebeesgenesis$runSmeltingBatch(batchMultiplier, superCall)
 				: superCall.getAsBoolean();
@@ -266,7 +260,7 @@ public final class FactoryUpgradeStateHelper {
 		MekCentrifugeFactoryHelper.processPbRecipesAndUpdate(
 				sendUpdatePacket, energyBeforeSuper, factory.energyContainer(), factory.processes(),
 				inputSlots, factory.pbProcessor, factory, factory.getActive(), factory::setActive,
-				v -> accessor.productivebeesgenesis$setLastUsage(v));
+				v -> accessor.productivebeesgenesis$setLastUsage(com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.fromFe(v)));
 		// AE2 推送/拉取与 PB 同批处理（与 onUpdateServer 的 !skipPb 分支一致）
 		CentrifugeFactoryCommonLogic.pushAe2OutputsAndPullInputs(factory, batchMultiplier);
 		// Coalesced flush 同样补回当前批次容量而不缩容。

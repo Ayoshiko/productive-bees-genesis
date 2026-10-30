@@ -5,10 +5,10 @@ import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-import com.jerry.mekextras.common.content.blocktype.ExtraMachine;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import com.jerry.mekanism_extras.common.content.blocktype.ExtraMachine;
+import com.jerry.mekanism_extras.common.tier.ExtraFactoryTier;
 import mekanism.common.content.blocktype.BlockTypeTile;
-import net.neoforged.neoforge.registries.DeferredBlock;
+import net.minecraftforge.registries.RegistryObject;
 
 /**
 	 * Mekanism Extras (ME) 方块注册隔离类
@@ -46,7 +46,7 @@ public final class MEBlockRegistration {
 				ProductiveBeesGenesis.LOGGER.warn("ME工厂BlockType未初始化，跳过方块注册: {}", tier.name());
 				continue;
 			}
-			DeferredBlock<MekCentrifugeBlock<TileEntityExtraMekCentrifugeFactory,
+			RegistryObject<MekCentrifugeBlock<TileEntityExtraMekCentrifugeFactory,
 				ExtraMachine.ExtraFactoryMachine<TileEntityExtraMekCentrifugeFactory>>> deferredBlock =
 					ModBlocks.BLOCKS.register(registryName, () -> new MekCentrifugeBlock<>(blockType));
 			ModBlocks.ME_FACTORIES.put(tier, deferredBlock);
@@ -72,7 +72,7 @@ public final class MEBlockRegistration {
 				ProductiveBeesGenesis.LOGGER.warn("ME 蜂箱工厂 BlockType 未初始化，跳过方块注册: {}", tier.name());
 				continue;
 			}
-			DeferredBlock<MekApiaryBlock<TileEntityExtraMekApiaryFactory,
+			RegistryObject<MekApiaryBlock<TileEntityExtraMekApiaryFactory,
 				BlockTypeTile<TileEntityExtraMekApiaryFactory>>> deferredBlock =
 					ModBlocks.BLOCKS.register(registryName, () -> new MekApiaryBlock<>(blockType));
 			ModBlocks.ME_APIARY_FACTORIES.put(tier, deferredBlock);

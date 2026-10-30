@@ -35,8 +35,6 @@ public final class JadePlugin implements IWailaPlugin {
 
 	@Override
 	public void register(IWailaCommonRegistration registration) {
-		registration.registerBlockDataProvider(JadeResourceOutputProvider.INSTANCE,
-				net.minecraft.world.level.block.entity.BlockEntity.class);
 		JadeAe2StatusProvider ae2Provider = JadeAe2StatusProvider.INSTANCE;
 		// 基础离心机 + 原版工厂离心机 — AE2 状态同步
 		registration.registerBlockDataProvider(ae2Provider, TileEntityMekCentrifuge.class);
@@ -61,8 +59,6 @@ public final class JadePlugin implements IWailaPlugin {
 
 	@Override
 	public void registerClient(IWailaClientRegistration registration) {
-		registration.registerBlockComponent(JadeResourceOutputProvider.INSTANCE,
-				net.minecraft.world.level.block.Block.class);
 		// 离心机 AE2 网络状态显示 — 所有继承 MekCentrifugeBlock 的方块
 		registration.registerBlockComponent(JadeAe2StatusProvider.INSTANCE, MekCentrifugeBlock.class);
 
