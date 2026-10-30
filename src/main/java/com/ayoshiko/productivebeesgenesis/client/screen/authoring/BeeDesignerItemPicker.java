@@ -100,7 +100,7 @@ final class BeeDesignerItemPicker extends DesignerFormScreen {
         addRenderableWidget(pageInput);
         next = button(left + 112, footerY(), 22, Component.literal("›"), () -> changePage(1));
         button(left + contentWidth - 80, footerY(), 80, Component.translatable("gui.cancel"), this::onClose);
-        ghost(left, gridTop, columns * cellWidth, Math.max(0, editorBottom() - gridTop), this::accepts, this::chooseCopy);
+		ghost(left, gridTop, columns * cellWidth, Math.max(0, editorBottom() - gridTop), false, this::accepts, this::chooseCopy);
         lastFrame = 0;
     }
 
@@ -185,6 +185,12 @@ final class BeeDesignerItemPicker extends DesignerFormScreen {
                             && mouseY >= gridTop && mouseY < editorBottom() && mouseY >= y && mouseY < y + 20;
                     boolean focused = index == highlighted && !(getFocused() instanceof EditBox);
                     DesignerTheme.panel(graphics, over || focused ? "button_hover" : "slot", x, y, cellWidth - 2, 20);
+					if (focused) {
+						DesignerTheme.stroke(graphics, x, y, cellWidth - 2, 20, ACCENT);
+					} else if (!query.isBlank()) {
+						graphics.fill(x + 3, y + 1, x + cellWidth - 5, y + 2,
+								DesignerPalette.mix(DesignerTheme.colors().border(), ACCENT, 0.5F));
+					}
                     var entry = matches.get(index);
                     entry.draw(graphics, x + 2, y + 2);
                     if (!kind.equals("item") && !kind.equals("block")) {

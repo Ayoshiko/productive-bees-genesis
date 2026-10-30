@@ -45,9 +45,9 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 
 	DesignerCodeEditor(Font font, int x, int y, int width, int height, Component hint, boolean readOnly) {
 		super(x + GUTTER, y, width - GUTTER - 8, height, hint);
-		this.font = font;
+		this.font = DesignerFonts.code();
 		this.readOnly = readOnly;
-		model = new Model(font, this.width - totalInnerPadding());
+		model = new Model(this.font, this.width - totalInnerPadding());
 		model.setCursorListener(this::scrollToCursor);
 		model.setValueListener(value -> {
 			reflow(value);
@@ -239,7 +239,7 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 			lines.add(new Line(start, end, line[0], start == 0 || text.charAt(start - 1) == '\n'));
 			consumed[0] = start;
 		});
-		if (text.isEmpty() || text.endsWith("\n")) {
+		if ((text.isEmpty() || text.endsWith("\n")) && (lines.isEmpty() || lines.getLast().start != text.length())) {
 			lines.add(new Line(text.length(), text.length(), (int) text.chars().filter(value -> value == '\n').count() + 1, true));
 		}
 		var matcher = TOKENS.matcher(text);
@@ -319,14 +319,14 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 			if (model.hasSelection() && model.start() < line.end && model.end() > line.start) {
 				int start = Math.max(line.start, model.start());
 				int end = Math.min(line.end, model.end());
-				graphics.fill(origin + font.width(text.substring(line.start, start)), y,
-						origin + font.width(text.substring(line.start, end)), y + 9, 0x6049A9D9);
+				DesignerFonts.selection(graphics, font, text.substring(line.start, line.end),
+						start - line.start, end - line.start, origin, y, 0x6049A9D9);
 			}
 			while (tokenIndex < tokens.size() && tokens.get(tokenIndex).end <= line.start) {
 				tokenIndex++;
 			}
 			int position = line.start;
-			int x = origin;
+			float x = origin;
 			for (int token = tokenIndex; token < tokens.size() && tokens.get(token).start < line.end; token++) {
 				Token current = tokens.get(token);
 				int start = Math.max(position, current.start);
@@ -344,15 +344,15 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 			}
 			if (isFocused() && index == model.getLineAtCursor() && net.minecraft.Util.getMillis() / 500 % 2 == 0) {
 				int cursor = Math.max(line.start, Math.min(line.end, model.cursor()));
-				int cursorX = origin + font.width(text.substring(line.start, cursor));
+				int cursorX = origin + Math.round(DesignerFonts.caret(font, text.substring(line.start, line.end), cursor - line.start));
 				graphics.fill(cursorX, y - 1, cursorX + 1, y + 9, DesignerFormScreen.ACCENT);
 			}
 		}
 	}
 
-	private int draw(GuiGraphics graphics, String text, int x, int y, int color) {
-		graphics.drawString(font, text, x, y, color, false);
-		return x + font.width(text);
+	private float draw(GuiGraphics graphics, String text, float x, int y, int color) {
+		DesignerFonts.drawPlain(graphics, font, text, x, y, color);
+		return x + font.getSplitter().stringWidth(text);
 	}
 
 	@Override
@@ -435,7 +435,10 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 	}
 
 	private void seek(double x, double y) {
-		model.seekCursorToPoint(x - getX() - innerPadding(), y - getY() - innerPadding() + scrollAmount());
+		int index = Math.max(0, Math.min(lines.size() - 1, (int) ((y - getY() - innerPadding() + scrollAmount()) / 9)));
+		Line line = lines.get(index);
+		int hit = DesignerFonts.hit(font, getValue().substring(line.start, line.end), (float) (x - getX() - innerPadding()));
+		model.seekCursor(Whence.ABSOLUTE, line.start + hit);
 	}
 
 	@Override
@@ -562,7 +565,27 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 				return false;
 			}
 		}
-		return model.keyPressed(key);
+		if (!control && (key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_RIGHT)) {
+			int direction = key == GLFW.GLFW_KEY_LEFT ? -1 : 1;
+			int position = DesignerTextLayout.moveBoundary(DesignerTextLayout.boundaries(getValue()), model.cursor(), direction);
+			model.setSelecting(shift);
+			model.seekCursor(Whence.ABSOLUTE, position);
+			return true;
+		}
+		if (!readOnly && !control && (key == GLFW.GLFW_KEY_BACKSPACE || key == GLFW.GLFW_KEY_DELETE)) {
+			int direction = key == GLFW.GLFW_KEY_BACKSPACE ? -1 : 1;
+			int position = DesignerTextLayout.moveBoundary(DesignerTextLayout.boundaries(getValue()), model.cursor(), direction);
+			model.deleteText(position - model.cursor());
+			return true;
+		}
+		boolean handled = model.keyPressed(key);
+		int[] boundaries = DesignerTextLayout.boundaries(getValue());
+		int position = DesignerTextLayout.floorBoundary(boundaries, model.cursor());
+		if (position != model.cursor()) {
+			model.setSelecting(shift);
+			model.seekCursor(Whence.ABSOLUTE, position);
+		}
+		return handled;
 	}
 
 	private void scrollToCursor() {

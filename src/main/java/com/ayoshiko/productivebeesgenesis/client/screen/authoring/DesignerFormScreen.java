@@ -88,6 +88,9 @@ public abstract class DesignerFormScreen extends Screen {
 	private final Map<String, DesignerMotionValue> tabIndicators = new LinkedHashMap<>();
 	private DesignerOutputList.Transfer outputTransfer;
 	private Component draggedOutput = Component.empty();
+	private final java.util.NavigableSet<Integer> groupStarts = new java.util.TreeSet<>();
+	private List<GroupSurface> groupSurfaces = List.of();
+	private final DesignerFeedback feedback = new DesignerFeedback();
 
 	protected DesignerFormScreen(Component title) {
 		super(title);
@@ -100,6 +103,7 @@ public abstract class DesignerFormScreen extends Screen {
 	protected void begin() {
 		DesignerPreferences.load();
 		DesignerTheme.apply();
+		font = DesignerFonts.body();
 		if (!rebuilding) {
 			transition.enter();
 		}
@@ -110,6 +114,8 @@ public abstract class DesignerFormScreen extends Screen {
 		markedStatus = "";
 		lastScrollFrame = 0;
 		rows.clear();
+		groupStarts.clear();
+		groupSurfaces = List.of();
 		locations.clear();
 		locationGroups.clear();
 		buildingGroup = "";
@@ -693,6 +699,18 @@ public abstract class DesignerFormScreen extends Screen {
 		for (int index = 0; index < bands.size(); index++) {
 			bandOffsets[index + 1] = bandOffsets[index] + bands.get(index).height();
 		}
+		List<GroupSurface> surfaces = new ArrayList<>();
+		int first = 0;
+		for (int index = 1; index < bands.size(); index++) {
+			if (groupStarts.contains(bands.get(index).source())) {
+				surfaces.add(new GroupSurface(bandOffsets[first], bandOffsets[index]));
+				first = index;
+			}
+		}
+		if (!bands.isEmpty()) {
+			surfaces.add(new GroupSurface(bandOffsets[first], bandOffsets[bands.size()]));
+		}
+		groupSurfaces = List.copyOf(surfaces);
 		scroll.extent(bandOffsets[bands.size()], editorBottom() - contentTop);
 		if (restoredSource >= 0 && restoredWidth != contentWidth) {
 			page = bandAt(restoredSource);
@@ -876,7 +894,7 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	private void updateStatusHeight() {
-		if (status.isBlank()) {
+		if (status.isBlank() || DesignerFeedback.transientStatus(status)) {
 			reservedStatusHeight = idleStatus().getString().isBlank() ? 0 : 14;
 		} else {
 			reservedStatusHeight = frameHeight >= 200 ? 24 : 14;
@@ -900,6 +918,7 @@ public abstract class DesignerFormScreen extends Screen {
 		Component message = focused == null ? Component.empty() : focused.getMessage();
 		String value = focused == null ? "" : focused.getValue();
 		int cursor = focused == null ? 0 : focused.getCursorPosition();
+		DesignerTheme.Input.State inputState = focused instanceof DesignerTheme.Input prior ? prior.state() : null;
 		restoredSource = page < bands.size() ? bands.get(page).source() : -1;
 		restoredWidth = contentWidth;
 		setFocused(null);
@@ -917,6 +936,11 @@ public abstract class DesignerFormScreen extends Screen {
 				if (child instanceof EditBox input && sameField) {
 					setFocused(input);
 					input.setCursorPosition(Math.min(cursor, input.getValue().length()));
+					if (input instanceof DesignerTheme.Input target && inputState != null) {
+						target.restore(inputState);
+					} else {
+						input.setHighlightPos(input.getCursorPosition());
+					}
 					break;
 				}
 			}
@@ -932,6 +956,9 @@ public abstract class DesignerFormScreen extends Screen {
 	@Override
 	public final void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		long now = System.nanoTime();
+		if (feedback.observe(status, net.minecraft.Util.getMillis())) {
+			status = "";
+		}
 		updateStatusHeight();
 		scroll.extent(bandOffsets[bandOffsets.length - 1], Math.max(1, editorBottom() - contentTop));
 		if (outputTransfer != null && lastScrollFrame != 0 && mouseX / uiScale >= left && mouseX / uiScale < left + contentWidth) {
@@ -966,8 +993,9 @@ public abstract class DesignerFormScreen extends Screen {
 
 	protected void renderContent(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		super.render(graphics, mouseX, mouseY, partialTick);
-		graphics.drawString(font, font.plainSubstrByWidth(title.getString(), Math.max(1, titleWidth)),
-				frameLeft + (returnButton ? 54 : 28), frameTop + 11, FOREGROUND, false);
+		var titleFont = DesignerFonts.title();
+		graphics.drawString(titleFont, titleFont.plainSubstrByWidth(title.getString(), Math.max(1, titleWidth)),
+				frameLeft + (returnButton ? 54 : 28), frameTop + 9, FOREGROUND, false);
 		for (Label label : labels) {
 			if (label.scrolling) {
 				continue;
@@ -1000,16 +1028,23 @@ public abstract class DesignerFormScreen extends Screen {
 		Component message = status.isBlank() ? idleStatus() : statusMessage(status);
 		if (!message.getString().isBlank()) {
 			int statusY = footerY() - statusHeight() - 3;
-			DesignerTheme.panel(graphics, "card", frameLeft + 6, statusY, frameWidth - 12, statusHeight());
-			boolean error = status.startsWith("designer.error.") || status.startsWith("Invalid") || status.startsWith("Unsupported");
-			int color = error ? DesignerTheme.colors().error() : FOREGROUND;
-			if (error) {
-				DesignerTheme.errorFrame(graphics, frameLeft + 6, statusY, frameWidth - 12, statusHeight());
-			}
-			markInvalidFields(error);
-			var lines = font.split(message, frameWidth - 28);
-			for (int index = 0; index < Math.min(statusHeight() >= 24 ? 2 : 1, lines.size()); index++) {
-				graphics.drawString(font, lines.get(index), frameLeft + 14, statusY + 3 + index * 9, color, false);
+			if (status.isBlank()) {
+				DesignerTheme.badge(graphics, message, frameLeft + 8, statusY,
+						Math.min(frameWidth - 16, font.width(message) + 26), false);
+			} else {
+				DesignerTheme.panel(graphics, "card", frameLeft + 6, statusY, frameWidth - 12, statusHeight());
+				boolean error = DesignerFeedback.error(status);
+				int color = error ? DesignerTheme.colors().error() : FOREGROUND;
+				if (error) {
+					DesignerTheme.errorFrame(graphics, frameLeft + 6, statusY, frameWidth - 12, statusHeight());
+				}
+				markInvalidFields(error);
+				DesignerTheme.statusIcon(graphics, frameLeft + 13, statusY + 4,
+						error ? DesignerTheme.Symbol.WARNING : DesignerTheme.Symbol.DOT, error ? color : ACCENT);
+				var lines = font.split(message, frameWidth - 42);
+				for (int index = 0; index < Math.min(statusHeight() >= 24 ? 2 : 1, lines.size()); index++) {
+					graphics.drawString(font, lines.get(index), frameLeft + 28, statusY + 3 + index * 9, color, false);
+				}
 			}
 			if (mouseX >= frameLeft + 6 && mouseX < frameLeft + frameWidth - 6 && mouseY >= statusY && mouseY < statusY + statusHeight()) {
 				graphics.renderTooltip(font, font.split(message, Math.min(400, width - 20)), mouseX, mouseY);
@@ -1023,9 +1058,14 @@ public abstract class DesignerFormScreen extends Screen {
 			for (GhostTarget target : targets) {
 				Rect2i area = visibleTargetArea(target);
 				boolean accepted = target.accepts.test(inventory.dragged());
-				graphics.renderOutline(area.getX(), area.getY(), area.getWidth(), area.getHeight(), accepted ? ACCENT : DesignerTheme.colors().error());
+				DesignerTheme.dropTarget(graphics, area.getX(), area.getY(), area.getWidth(), area.getHeight(), accepted,
+						target.replacing, area.contains(mouseX, mouseY));
 				if (DesignerPreferences.enabled("context_hints") && area.contains(mouseX, mouseY)) {
-					graphics.renderTooltip(font, tr(accepted ? "drag_accept" : "drag_reject"), mouseX, mouseY);
+					String hint = "drag_reject";
+					if (accepted) {
+						hint = target.replacing ? "drag_replace" : "drag_add";
+					}
+					graphics.renderTooltip(font, tr(hint), mouseX, mouseY);
 				}
 			}
 		}
@@ -1059,6 +1099,7 @@ public abstract class DesignerFormScreen extends Screen {
 				graphics.renderTooltip(font, font.split(tr("window_move_help"), Math.min(300, layoutWidth - 30)), mouseX, mouseY);
 			}
 		}
+		feedback.render(graphics, left, editorBottom(), contentWidth, net.minecraft.Util.getMillis());
 	}
 
 	private void renderRows(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -1074,12 +1115,19 @@ public abstract class DesignerFormScreen extends Screen {
 		graphics.pose().pushPose();
 		graphics.pose().translate(animatedX, Math.floor(scroll.position()) - scroll.position(), 0);
 		try {
+			for (GroupSurface group : groupSurfaces) {
+				int top = contentTop + group.top - offset;
+				int bottom = contentTop + group.bottom - offset - DesignerPreferences.rowGap();
+				if (bottom >= contentTop && top < editorBottom()) {
+					DesignerTheme.panel(graphics, "card", left, top, contentWidth, bottom - top);
+				}
+			}
 			for (var entry : rowViews.entrySet()) {
 				RowView view = entry.getValue();
 				int y = view.y - offset;
 				if (DesignerPreferences.enabled("alternating_rows") && entry.getKey() % 2 == 0) {
-					graphics.fill(left, y, left + contentWidth, y + view.height,
-							DesignerPalette.mix(DesignerTheme.colors().panel(), DesignerTheme.colors().card(), 0.4F));
+					graphics.fill(left + 3, y + 2, left + contentWidth - 3, y + view.height - 2,
+							DesignerPalette.mix(DesignerTheme.colors().card(), DesignerTheme.colors().panel(), 0.08F));
 				}
 				for (Rect2i section : view.sections) {
 					graphics.fill(section.getX(), section.getY() + section.getHeight() - offset - 1,
@@ -1089,9 +1137,9 @@ public abstract class DesignerFormScreen extends Screen {
 					if (header.y == view.y) {
 						boolean removing = header.remove != null && inside && header.remove.isMouseOver(contentMouseX, mouseY);
 						int color = removing ? DesignerTheme.colors().error() : DesignerTheme.colors().accent();
-						graphics.fill(left, y, left + contentWidth, y + 26,
+						graphics.fill(left + 3, y + 2, left + contentWidth - 3, y + 24,
 								DesignerPalette.mix(DesignerTheme.colors().card(), color, removing ? 0.14F : 0.05F));
-						graphics.fill(left, y + 3, left + 2, y + 23, color);
+						graphics.fill(left + 3, y + 3, left + 5, y + 23, color);
 					}
 				}
 				var band = bands.get(entry.getKey());
@@ -1245,7 +1293,6 @@ public abstract class DesignerFormScreen extends Screen {
 	@Override
 	public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		graphics.fill(0, 0, layoutWidth, layoutHeight, ((int) (DesignerPreferences.number("backdrop") * 255) << 24) | 0x080D15);
-		graphics.fill(frameLeft + 2, frameTop + 3, frameLeft + frameWidth + 2, frameTop + frameHeight + 3, 0x28000000);
 		DesignerTheme.panel(graphics, "panel", frameLeft, frameTop, frameWidth, frameHeight);
 		DesignerTheme.panel(graphics, "card", frameLeft + 4, frameTop + 4, frameWidth - 8, 23);
 		graphics.renderItem(new ItemStack(ModItems.BEE_DESIGNER.get()), frameLeft + (returnButton ? 32 : 8), frameTop + 8);
@@ -1267,6 +1314,7 @@ public abstract class DesignerFormScreen extends Screen {
 		buildingGroup = key;
 		anchor(key);
 		int rowHeight = compactHeight() ? 14 : 24;
+		groupStarts.add(rows.size());
 		rows.add(new Row("", (x, y, w) -> {
 			sections.add(new Rect2i(x, y, w, rowHeight - 2));
 			labels.add(new Label(option(key).copy().withColor(FOREGROUND & 0xFFFFFF), x + 4, y + (compactHeight() ? 1 : 6), w - 8, 1, true));
@@ -1290,6 +1338,7 @@ public abstract class DesignerFormScreen extends Screen {
 			collapsedGroups.add(identity);
 		}
 		int heading = rows.size();
+		groupStarts.add(heading);
 		rows.add(new Row("", (x, y, w) -> {
 			sections.add(new Rect2i(x, y, w, 22));
 			Component title = Component.literal(collapsedGroups.contains(identity) ? "›  " : "⌄  ").append(option(key));
@@ -1303,6 +1352,7 @@ public abstract class DesignerFormScreen extends Screen {
 		fields.run();
 		if (collapsedGroups.contains(identity)) {
 			rows.subList(heading + 1, rows.size()).clear();
+			groupStarts.tailSet(heading + 1, true).clear();
 			locationGroups.forEach((path, group) -> {
 				if (group.equals(identity)) {
 					locations.put(path, heading);
@@ -1313,17 +1363,19 @@ public abstract class DesignerFormScreen extends Screen {
 
 	void recipeHeading(Component title, String id, Runnable edit, Runnable remove) {
 		anchor(id);
+		groupStarts.add(rows.size());
 		rows.add(new Row("", (x, y, w) -> {
 			sections.add(new Rect2i(x, y, w, 24));
 			labels.add(new Label(title.copy().withColor(FOREGROUND & 0xFFFFFF), x + 4, y + 6, Math.max(40, w - 110), 1, true));
 			button(x + w - 100, y + 1, 68, tr("edit_entry"), edit).setTooltip(Tooltip.create(Component.literal(id)));
-			Button delete = button(x + w - 26, y + 1, 24, Component.literal("×"), remove);
+			Button delete = addRenderableWidget(new DesignerTheme.Icon(x + w - 26, y + 1, DesignerTheme.Symbol.DELETE, remove));
 			delete.setTooltip(Tooltip.create(Component.translatable("designer.remove_named_recipe", title.getString()).append("\n" + id)));
 			recipeHeaders.add(new RecipeHeader(y, delete));
 		}, 26));
 	}
 
 	void overviewHeading(Component title, Runnable edit) {
+		groupStarts.add(rows.size());
 		rows.add(new Row("", (x, y, w) -> {
 			sections.add(new Rect2i(x, y, w, 22));
 			labels.add(new Label(title.copy().withColor(FOREGROUND & 0xFFFFFF), x + 7, y + 6, Math.max(40, w - 84), 1, true));
@@ -1332,6 +1384,7 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	void outputHeading(Component title, JsonArray outputs, JsonObject output) {
+		groupStarts.add(rows.size());
 		int deleteWidth = Math.max(68, Math.min(120, font.width(tr("remove_output")) + 16));
 		int actionsWidth = deleteWidth + 62;
 		boolean twoRows = contentWidth < actionsWidth + 180;
@@ -1487,7 +1540,8 @@ public abstract class DesignerFormScreen extends Screen {
 	protected void virtualItem(int x, int y, int w, ItemStack stack, String fallback, Consumer<ItemStack> chosen, boolean nestsFirst) {
 		DesignerStackButton button = addRenderableWidget(new DesignerStackButton(x, y, w, stack, fallback,
 				() -> minecraft.setScreen(new BeeDesignerItemPicker(this, chosen, nestsFirst))).fitted());
-		ghost(x, y, button.getWidth(), value -> value instanceof ItemStack, value -> chosen.accept(((ItemStack) value).copyWithCount(1)));
+		ghost(x, y, button.getWidth(), 20, !stack.isEmpty(), value -> value instanceof ItemStack,
+				value -> chosen.accept(((ItemStack) value).copyWithCount(1)));
 	}
 
 	void resourceView(JsonObject output, boolean fluid) {
@@ -1499,6 +1553,10 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	protected void ghost(int x, int y, int w, int h, Predicate<Object> accepts, Consumer<Object> chosen) {
+		ghost(x, y, w, h, true, accepts, chosen);
+	}
+
+	protected void ghost(int x, int y, int w, int h, boolean replacing, Predicate<Object> accepts, Consumer<Object> chosen) {
 		targets.add(new GhostTarget(new Rect2i(x, y, w, h), accepts, value -> {
 			try {
 				chosen.accept(value);
@@ -1508,14 +1566,17 @@ public abstract class DesignerFormScreen extends Screen {
 			} catch (RuntimeException exception) {
 				status = exception.getMessage();
 			}
-		}));
+		}, replacing));
 	}
 
-	public record GhostTarget(Rect2i area, Predicate<Object> accepts, Consumer<Object> chosen) {
+	public record GhostTarget(Rect2i area, Predicate<Object> accepts, Consumer<Object> chosen, boolean replacing) {
+		public GhostTarget(Rect2i area, Predicate<Object> accepts, Consumer<Object> chosen) {
+			this(area, accepts, chosen, true);
+		}
 	}
 
 	public List<GhostTarget> ghostTargets() {
-		return popup == null && !transition.leaving() ? targets.stream().map(target -> new GhostTarget(screenArea(visibleTargetArea(target)), target.accepts, target.chosen))
+		return popup == null && !transition.leaving() ? targets.stream().map(target -> new GhostTarget(screenArea(visibleTargetArea(target)), target.accepts, target.chosen, target.replacing))
 				.filter(target -> target.area.getWidth() > 0 && target.area.getHeight() > 0).toList() : List.of();
 	}
 
@@ -1918,7 +1979,7 @@ public abstract class DesignerFormScreen extends Screen {
 			this.maxLines = maxLines;
 			this.scrolling = scrolling;
 			this.help = help;
-			lines = List.copyOf(Minecraft.getInstance().font.split(this.text, Math.max(1, width)));
+			lines = List.copyOf(DesignerFonts.body().split(this.text, Math.max(1, width)));
 		}
 		private Label(Component text, int x, int y, int width, int maxLines, boolean scrolling) {
 			this(text, x, y, width, maxLines, scrolling, null);
@@ -1937,6 +1998,8 @@ public abstract class DesignerFormScreen extends Screen {
 
 	private record RecipeHeader(int y, Button remove) {
 	}
+
+	private record GroupSurface(int top, int bottom) {}
 
 	private record RowView(int y, int height, List<PositionedWidget> widgets, List<Label> labels,
 			List<Rect2i> sections, List<GhostTarget> targets, List<RecipeHeader> headers) {

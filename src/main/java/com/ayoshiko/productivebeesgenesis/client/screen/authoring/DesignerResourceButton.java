@@ -37,7 +37,7 @@ final class DesignerResourceButton extends DesignerTheme.Action {
 
 	DesignerResourceButton fitted() {
 		refreshDisplay();
-		setWidth(Math.min(getWidth(), Math.max(104, Math.min(260, Minecraft.getInstance().font.width(label) + 38))));
+		setWidth(Math.min(getWidth(), Math.max(104, Math.min(260, DesignerFonts.body().width(label) + 38))));
 		return this;
 	}
 
@@ -54,7 +54,7 @@ final class DesignerResourceButton extends DesignerTheme.Action {
 			ResourceVisuals.draw(graphics, resource.key());
 			graphics.pose().popPose();
 		}
-		graphics.drawString(Minecraft.getInstance().font, Minecraft.getInstance().font.plainSubstrByWidth(label.getString(), getWidth() - 28),
+		graphics.drawString(DesignerFonts.body(), DesignerFonts.body().plainSubstrByWidth(label.getString(), getWidth() - 28),
 				getX() + 24, getY() + 6, DesignerFormScreen.FOREGROUND, false);
 	}
 

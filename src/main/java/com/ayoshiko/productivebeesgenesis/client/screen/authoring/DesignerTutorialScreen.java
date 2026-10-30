@@ -79,7 +79,7 @@ final class DesignerTutorialScreen {
 	}
 
 	void render(DesignerFormScreen screen, GuiGraphics graphics, int mouseX, int mouseY) {
-		var font = Minecraft.getInstance().font;
+		var font = DesignerFonts.body();
 		var colors = DesignerTheme.colors();
 		boolean subpage = screen != root;
 		String key = awaitingBee ? "select" : STEPS[step];
@@ -245,7 +245,7 @@ final class DesignerTutorialScreen {
 			background = colors.accent();
 		}
 		DesignerGuideOverlay.box(graphics, x, buttonY, width, 21, 6, background);
-		var font = Minecraft.getInstance().font;
+		var font = DesignerFonts.body();
 		String text = font.plainSubstrByWidth(DesignerFormScreen.tr(label).getString(), width - 8);
 		int foreground = enabled ? colors.text() : colors.muted();
 		if (primary && enabled) {

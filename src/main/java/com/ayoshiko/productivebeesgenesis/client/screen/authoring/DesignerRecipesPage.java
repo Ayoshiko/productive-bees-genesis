@@ -59,7 +59,7 @@ final class DesignerRecipesPage {
 				int used = 0;
 				while (first < ACQUISITION.length) {
 					String type = ACQUISITION[first];
-					int width = mc.font.width(DesignerFormScreen.option(type)) + 36;
+					int width = DesignerFonts.body().width(DesignerFormScreen.option(type)) + 36;
 					if (!types.isEmpty() && used + width + 6 > screen.contentWidth) {
 						break;
 					}
@@ -71,7 +71,7 @@ final class DesignerRecipesPage {
 					int offset = 0;
 					for (String type : types) {
 						Component label = Component.literal("+ ").append(DesignerFormScreen.option(type));
-						int width = Math.min(w - offset, mc.font.width(label) + 24);
+						int width = Math.min(w - offset, DesignerFonts.body().width(label) + 24);
 						screen.button(x + offset, y, width, label, () -> open.accept(BeeDesignerDocument.addRecipe(document, type)));
 						offset += width + 6;
 					}

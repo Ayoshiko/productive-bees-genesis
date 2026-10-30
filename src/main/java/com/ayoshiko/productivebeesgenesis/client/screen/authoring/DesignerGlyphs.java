@@ -109,7 +109,28 @@ final class DesignerGlyphs {
                     || line(x, y, 7, 7, 8, 20, 0.9) || line(x, y, 17, 7, 16, 20, 0.9)
                     || line(x, y, 8, 20, 16, 20, 0.9) || line(x, y, 10, 10, 10.5, 16, 0.75)
                     || line(x, y, 14, 10, 13.5, 16, 0.75);
+            case ADD -> line(x, y, 5, 12, 19, 12, 1) || line(x, y, 12, 5, 12, 19, 1);
+            case MINUS -> line(x, y, 5, 12, 19, 12, 1);
+            case DOT -> Math.hypot(x - 12, y - 12) <= 3.4;
+            case CHECK -> line(x, y, 4, 12, 10, 18, 1) || line(x, y, 10, 18, 20, 6, 1);
+            case WARNING -> Math.abs(radius - 9) < 0.9 || line(x, y, 12, 6, 12, 13, 1) || Math.hypot(x - 12, y - 17) < 1.1;
+            case SEARCH -> Math.abs(Math.hypot(x - 10, y - 10) - 6) < 0.9 || line(x, y, 14, 14, 20, 20, 1);
+            case REPLACE -> line(x, y, 4, 8, 19, 8, 0.9) || line(x, y, 19, 8, 15, 4, 0.9)
+                    || line(x, y, 5, 16, 20, 16, 0.9) || line(x, y, 5, 16, 9, 20, 0.9);
+            case UP -> line(x, y, 12, 20, 12, 4, 1) || line(x, y, 12, 4, 6, 10, 1) || line(x, y, 12, 4, 18, 10, 1);
+            case DOWN -> line(x, y, 12, 4, 12, 20, 1) || line(x, y, 12, 20, 6, 14, 1) || line(x, y, 12, 20, 18, 14, 1);
+            case PREVIOUS -> line(x, y, 15, 5, 8, 12, 1) || line(x, y, 8, 12, 15, 19, 1);
+            case NEXT -> line(x, y, 9, 5, 16, 12, 1) || line(x, y, 16, 12, 9, 19, 1);
+            case UNDO -> returnArrow(x, y);
+            case REDO -> returnArrow(24 - x, y);
+            case GRIP -> (Math.abs(x - 8) < 1.2 || Math.abs(x - 16) < 1.2)
+                    && (Math.abs(y - 6) < 1.2 || Math.abs(y - 12) < 1.2 || Math.abs(y - 18) < 1.2);
         };
+    }
+
+    private static boolean returnArrow(double x, double y) {
+        boolean curve = Math.abs(Math.hypot(x - 12, y - 13) - 7) < 1 && (x >= 12 || y <= 13);
+        return curve || line(x, y, 5, 8, 5, 13, 1) || line(x, y, 5, 13, 10, 13, 1);
     }
 
     private static boolean gear(double x, double y, double radius) {

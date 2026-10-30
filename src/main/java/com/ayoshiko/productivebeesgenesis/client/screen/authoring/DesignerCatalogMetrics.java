@@ -25,7 +25,7 @@ final class DesignerCatalogMetrics {
 			return nameWidth;
 		}
 		ArrayList<Integer> widths = new ArrayList<>();
-		var font = Minecraft.getInstance().font;
+		var font = DesignerFonts.body();
 		for (var id : BeeReloadListener.INSTANCE.getData().keySet()) {
 			var name = DesignerDraftIndex.name(id.toString());
 			widths.add(font.width(name == null ? BeeDesignerClient.beeName(id.toString()) : name));

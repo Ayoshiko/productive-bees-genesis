@@ -64,14 +64,24 @@ final class DesignerInventoryTray {
 	void render(GuiGraphics graphics, int mouseX, int mouseY) {
 		Minecraft mc = Minecraft.getInstance();
 		DesignerTheme.panel(graphics, "panel", x - 7, y - 14, 176, 96);
-		graphics.drawString(mc.font, Component.translatable("container.inventory"), x + 1, y - 10, DesignerFormScreen.MUTED, false);
+		var font = DesignerFonts.body();
+		graphics.drawString(font, Component.translatable("container.inventory"), x + 1, y - 10, DesignerFormScreen.MUTED, false);
 		ItemStack hovered = ItemStack.EMPTY;
 		for (int index = 0; index < 36; index++) {
 			Rect2i slot = slotBounds(index);
 			DesignerTheme.panel(graphics, "slot", slot.getX(), slot.getY(), 18, 18);
 			ItemStack stack = mc.player == null ? ItemStack.EMPTY : mc.player.getInventory().items.get(index);
 			graphics.renderItem(stack, slot.getX() + 1, slot.getY() + 1);
-			graphics.renderItemDecorations(mc.font, stack, slot.getX() + 1, slot.getY() + 1);
+			graphics.renderItemDecorations(font, stack, slot.getX() + 1, slot.getY() + 1, "");
+			if (stack.getCount() > 1) {
+				graphics.pose().pushPose();
+				graphics.pose().translate(0, 0, 220);
+				String count = Integer.toString(stack.getCount());
+				int countX = slot.getX() + 17 - font.width(count);
+				DesignerMaterials.mask(graphics, countX - 1, slot.getY() + 10, font.width(count) + 2, 8, 3, 0xC0000000);
+				graphics.drawString(font, count, countX, slot.getY() + 10, 0xFFFFFFFF, false);
+				graphics.pose().popPose();
+			}
 			if (slot.contains(mouseX, mouseY)) {
 				hovered = stack;
 				graphics.fill(slot.getX() + 1, slot.getY() + 1, slot.getX() + 17, slot.getY() + 17, 0x30FFFFFF);
@@ -84,7 +94,7 @@ final class DesignerInventoryTray {
 			graphics.renderItem(dragging, mouseX - 8, mouseY - 8);
 			graphics.pose().popPose();
 		} else if (!hovered.isEmpty()) {
-			graphics.renderTooltip(mc.font, hovered, mouseX, mouseY);
+			graphics.renderTooltip(font, hovered, mouseX, mouseY);
 		}
 	}
 }

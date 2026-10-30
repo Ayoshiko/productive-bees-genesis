@@ -63,7 +63,7 @@ final class DesignerColorCanvas extends AbstractWidget {
 		int previewX = getX() + planeWidth + 26;
 		graphics.fill(previewX, getY(), getX() + width, getY() + planeHeight / 2, 0xFF000000 | original);
 		graphics.fill(previewX, getY() + planeHeight / 2, getX() + width, getY() + planeHeight, 0xFF000000 | color.getAsInt());
-		var font = Minecraft.getInstance().font;
+		var font = DesignerFonts.body();
 		graphics.drawString(font, DesignerFormScreen.tr("color_original"), previewX + 3, getY() + 4, contrast(original), false);
 		graphics.drawString(font, DesignerFormScreen.tr("color_current"), previewX + 3, getY() + planeHeight / 2 + 4, contrast(color.getAsInt()), false);
 	}

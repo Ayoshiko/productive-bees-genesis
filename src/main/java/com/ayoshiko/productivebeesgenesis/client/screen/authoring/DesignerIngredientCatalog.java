@@ -306,7 +306,7 @@ final class DesignerIngredientCatalog {
 			if (ingredient instanceof JsonObject) {
 				if (preview.isEmpty()) {
 					graphics.renderOutline(x + 2, y + 2, 12, 12, DesignerFormScreen.MUTED);
-					graphics.drawString(Minecraft.getInstance().font, kindLabel(), x + 5, y + 4, DesignerFormScreen.ACCENT, false);
+					graphics.drawString(DesignerFonts.body(), kindLabel(), x + 5, y + 4, DesignerFormScreen.ACCENT, false);
 				} else {
 					graphics.renderItem(preview, x, y);
 				}

@@ -35,7 +35,8 @@ final class DesignerTabIndicator extends AbstractWidget {
 		if (DesignerAeSkin.enabled()) {
 			DesignerAeSkin.frame(graphics, getX(), getY(), width, 20, colors.input(), true);
 		} else {
-			DesignerGlyphs.rounded(graphics, getX(), getY(), width, 20, 5, colors.input());
+			DesignerMaterials.surface(graphics, getX(), getY(), width, 20, DesignerMaterials.CONTROL_RADIUS,
+					colors.input(), DesignerPalette.mix(colors.input(), colors.border(), 0.5F));
 		}
         double value = Math.max(0, Math.min(cells.length - 1, position.position()));
         int first = (int) Math.floor(value);
@@ -47,7 +48,8 @@ final class DesignerTabIndicator extends AbstractWidget {
 			DesignerAeSkin.frame(graphics, getX() + offset, getY(), selectedWidth, 20, colors.panel(), false);
 			graphics.fill(getX() + offset + 3, getY() + 17, getX() + offset + selectedWidth - 3, getY() + 19, colors.accent());
 		} else {
-			DesignerGlyphs.rounded(graphics, getX() + offset, getY(), selectedWidth, 20, 5, colors.selected());
+			DesignerMaterials.surface(graphics, getX() + offset + 1, getY() + 1, selectedWidth - 2, 18,
+					DesignerMaterials.CONTROL_RADIUS, colors.selected(), DesignerPalette.mix(colors.border(), colors.accent(), 0.25F));
 		}
     }
 

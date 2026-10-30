@@ -8,6 +8,9 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.contents.TranslatableContents;
 
 import java.util.function.Supplier;
 
@@ -42,7 +45,24 @@ final class DesignerTheme {
 			}
 			return;
 		}
-		surface(graphics, x, y, width, height, fill, bordered ? palette.border() : fill);
+		int radius = DesignerMaterials.CONTROL_RADIUS;
+		if (name.equals("panel")) {
+			radius = DesignerMaterials.WINDOW_RADIUS;
+		} else if (name.equals("card")) {
+			radius = DesignerMaterials.CARD_RADIUS;
+		}
+		if (name.equals("panel") || name.equals("card") && height > 24) {
+			DesignerMaterials.shadow(graphics, x, y, width, height, name.equals("panel"));
+		}
+		if (name.equals("panel") && DesignerPreferences.text("surface_material").equals("glass")) {
+			fill = fill & 0xFFFFFF | 0xE8000000;
+		}
+		int border = bordered ? palette.border() : DesignerPalette.mix(fill, palette.border(), 0.25F);
+		DesignerMaterials.surface(graphics, x, y, width, height, radius, fill, border);
+		if (name.equals("panel")) {
+			graphics.fill(x + radius, y + 1, x + width - radius, y + 2,
+					light ? 0x70FFFFFF : 0x183C526F);
+		}
 		if (!name.equals("panel") && !name.equals("card")) {
 			texture(graphics, x, y, width, height, name.equals("input") || name.equals("slot"));
 		}
@@ -80,9 +100,47 @@ final class DesignerTheme {
 		if (width < 4 || height < 4) {
 			return;
 		}
-		int radius = height <= 20 ? 4 : 6;
-		DesignerGlyphs.rounded(graphics, x, y, width, height, radius, border);
-		DesignerGlyphs.rounded(graphics, x + 1, y + 1, width - 2, height - 2, radius - 1, fill);
+		DesignerMaterials.surface(graphics, x, y, width, height, DesignerMaterials.CONTROL_RADIUS, fill, border);
+	}
+
+	static void statusIcon(GuiGraphics graphics, int x, int y, boolean error, int color) {
+		statusIcon(graphics, x, y, error ? Symbol.WARNING : Symbol.CHECK, color);
+	}
+
+	static void statusIcon(GuiGraphics graphics, int x, int y, Symbol symbol, int color) {
+		graphics.pose().pushPose();
+		graphics.pose().translate(x + 4, y + 4, 0);
+		graphics.pose().scale(0.75F, 0.75F, 1);
+		DesignerGlyphs.draw(graphics, symbol, color);
+		graphics.pose().popPose();
+	}
+
+	static void badge(GuiGraphics graphics, Component text, int x, int y, int width, boolean error) {
+		int color = error ? palette.error() : palette.accent();
+		surface(graphics, x, y, width, 14, DesignerPalette.mix(palette.card(), color, 0.06F),
+				DesignerPalette.mix(palette.border(), color, 0.25F));
+		statusIcon(graphics, x + 4, y + 3, error ? Symbol.WARNING : Symbol.DOT, color);
+		var font = DesignerFonts.body();
+		graphics.drawString(font, font.plainSubstrByWidth(text.getString(), width - 23), x + 18, y + 3, palette.text(), false);
+	}
+
+	static void dropTarget(GuiGraphics graphics, int x, int y, int width, int height, boolean accepted, boolean replacing, boolean hovered) {
+		int color = accepted ? palette.accent() : palette.error();
+		if (hovered) {
+			DesignerMaterials.mask(graphics, x, y, width, height, DesignerMaterials.CONTROL_RADIUS, color & 0xFFFFFF | 0x28000000);
+		}
+		stroke(graphics, x, y, width, height, color);
+		if (width >= 26 && height >= 14) {
+			graphics.pose().pushPose();
+			graphics.pose().translate(x + width - 8, y + height / 2F, 0);
+			graphics.pose().scale(0.65F, 0.65F, 1);
+			Symbol symbol = replacing ? Symbol.REPLACE : Symbol.ADD;
+			if (!accepted) {
+				symbol = Symbol.WARNING;
+			}
+			DesignerGlyphs.draw(graphics, symbol, color);
+			graphics.pose().popPose();
+		}
 	}
 
 	static void selected(GuiGraphics graphics, int x, int y, int width, int height) {
@@ -158,6 +216,7 @@ final class DesignerTheme {
 
 	static class Action extends Button {
 		private boolean primary;
+		private boolean danger;
 		protected boolean selected;
 		private final DesignerMotionValue hover = new DesignerMotionValue();
 		private final DesignerMotionValue press = new DesignerMotionValue();
@@ -176,13 +235,25 @@ final class DesignerTheme {
 		Action(int x, int y, int width, Component message, Button.OnPress action) {
 			super(x, y, width, 20, message, action, DEFAULT_NARRATION);
 			setTooltipDelay(java.time.Duration.ofMillis((long) DesignerPreferences.number("tooltip_ms")));
-			if (Minecraft.getInstance().font.width(message) > width - 10) {
+			if (message.getContents() instanceof TranslatableContents translated) {
+				String key = translated.getKey();
+				danger = key.startsWith("designer.remove_") || key.equals("designer.confirm_remove")
+						|| key.equals("designer.delete_stage") || key.equals("designer.recycle_purge_world")
+						|| key.equals("designer.recycle_delete_local") || key.equals("designer.discard_edit_close")
+						|| key.equals("designer.recycle_discard_pending") || key.equals("designer.discard_recovery");
+			}
+			if (DesignerFonts.body().width(message) > width - 10) {
 				setTooltip(Tooltip.create(message));
 			}
 		}
 
 		Action primary() {
 			primary = true;
+			return this;
+		}
+
+		Action danger() {
+			danger = true;
 			return this;
 		}
 
@@ -195,7 +266,10 @@ final class DesignerTheme {
 			if (!active) {
 				return palette.muted();
 			}
-			return primary && !DesignerAeSkin.enabled() ? DesignerPalette.contrast(palette.accent()) : palette.text();
+			if (primary && !DesignerAeSkin.enabled()) {
+				return DesignerPalette.contrast(danger ? palette.error() : palette.accent());
+			}
+			return danger ? palette.error() : palette.text();
 		}
 
 		@Override
@@ -213,7 +287,15 @@ final class DesignerTheme {
 		@Override
 		protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 			int offset = renderSurface(graphics);
-			var font = Minecraft.getInstance().font;
+			Symbol glyph = Symbol.control(getMessage().getString());
+			if (glyph != null && width <= 36) {
+				graphics.pose().pushPose();
+				graphics.pose().translate(getX() + width / 2F, getY() + height / 2F, 0);
+				DesignerGlyphs.draw(graphics, glyph, textColor());
+				graphics.pose().popPose();
+				return;
+			}
+			var font = DesignerFonts.body();
 			String text = getMessage().getString();
 			if (font.width(text) > width - 10) {
 				text = font.plainSubstrByWidth(text, Math.max(0, width - 10 - font.width("…"))) + "…";
@@ -232,16 +314,20 @@ final class DesignerTheme {
 			float amount = (float) Math.min(1, DesignerPreferences.number("motion_amount") / 8);
 			int inset = (int) Math.round(press.position() * amount);
 			int offset = 0;
-			int fill = primary && active ? palette.accent() : selected && active ? palette.selected() : palette.button();
+			int accent = danger ? palette.error() : palette.accent();
+			int fill = primary && active ? accent : selected && active ? palette.selected() : palette.button();
+			if (danger && !primary && active) {
+				fill = DesignerPalette.mix(fill, accent, 0.045F);
+			}
 			if (DesignerAeSkin.enabled() && primary) {
 				fill = palette.button();
 			}
-			int border = primary && active ? palette.accent() : selected && active
+			int border = primary && active ? accent : selected && active
 					? DesignerPalette.mix(palette.border(), palette.accent(), 0.45F) : palette.border();
 			if (!active) {
 				fill = DesignerPalette.mix(palette.panel(), palette.button(), 0.35F);
 			} else {
-				fill = DesignerPalette.mix(fill, primary ? palette.accent() : palette.hover(), (float) hover.position() * 0.75F);
+				fill = DesignerPalette.mix(fill, primary ? accent : palette.hover(), (float) hover.position() * 0.75F);
 			}
 			if (now < hintUntil) {
 				int color = hintError ? palette.error() : palette.accent();
@@ -251,7 +337,7 @@ final class DesignerTheme {
 			if (DesignerAeSkin.enabled()) {
 				DesignerAeSkin.button(graphics, getX(), getY(), width, height, fill, active && isHovered(), isFocused(), now < pressedUntil);
 				if (primary && active) {
-					graphics.fill(getX() + 3, getY() + 3, getX() + 5, getY() + height - 3, palette.accent());
+					graphics.fill(getX() + 3, getY() + 3, getX() + 5, getY() + height - 3, accent);
 				}
 			} else {
 				surface(graphics, getX() + inset, getY() + inset, width - inset * 2, height - inset * 2, fill, border);
@@ -289,7 +375,7 @@ final class DesignerTheme {
 			if (isFocused() && active) {
 				stroke(graphics, getX(), getY(), width, height, palette.accent());
 			}
-			var font = Minecraft.getInstance().font;
+			var font = DesignerFonts.body();
 			String text = font.plainSubstrByWidth(getMessage().getString(), Math.max(0, width - 10));
 			int color = !active ? palette.muted() : selected ? palette.text() : palette.muted();
 			graphics.drawString(font, text, getX() + (width - font.width(text)) / 2, getY() + (height - 8) / 2, color, false);
@@ -309,9 +395,24 @@ final class DesignerTheme {
 				DesignerGlyphs.rounded(graphics, getX(), getY(), width, height, 4,
 						DesignerPalette.mix(palette.panel(), palette.hover(), 0.55F));
 			}
-			var font = Minecraft.getInstance().font;
-			graphics.drawString(font, font.plainSubstrByWidth(getMessage().getString(), width - 12),
-					getX() + 6, getY() + (height - 8) / 2, palette.text(), false);
+			var font = DesignerFonts.body();
+			String title = getMessage().getString();
+			int inset = 6;
+			if (title.startsWith("⌄  ") || title.startsWith("›  ")) {
+				boolean expanded = title.startsWith("⌄");
+				graphics.pose().pushPose();
+				graphics.pose().translate(getX() + 7, getY() + height / 2F, 0);
+				if (expanded) {
+					graphics.pose().mulPose(com.mojang.math.Axis.ZP.rotationDegrees(90));
+				}
+				graphics.pose().scale(0.65F, 0.65F, 1);
+				DesignerGlyphs.draw(graphics, Symbol.NEXT, palette.muted());
+				graphics.pose().popPose();
+				title = title.substring(3);
+				inset = 16;
+			}
+			graphics.drawString(font, font.plainSubstrByWidth(title, width - inset - 6),
+					getX() + inset, getY() + (height - 8) / 2, palette.text(), false);
 			if (isFocused()) {
 				stroke(graphics, getX(), getY(), width, height, palette.accent());
 			}
@@ -319,12 +420,30 @@ final class DesignerTheme {
 	}
 
 	enum Symbol {
-		THEME("toggle_theme"), PIN("window_pin"), SETTINGS("settings"), CLOSE("close_editor"), BACK("back"), COPY("copy"), DELETE("delete_bee");
+		THEME("toggle_theme"), PIN("window_pin"), SETTINGS("settings"), CLOSE("close_editor"), BACK("back"), COPY("copy"), DELETE("delete_bee"),
+		ADD("add"), MINUS("remove"), CHECK("valid"), WARNING("error"), REPLACE("drag_replace"), SEARCH("search"),
+		UP("output_move_up"), DOWN("output_move_down"), PREVIOUS("previous"), NEXT("next"), UNDO("undo"), REDO("redo"), GRIP("output_drag_help"), DOT("status");
 
 		private final String label;
 
 		Symbol(String label) {
 			this.label = label;
+		}
+
+		static Symbol control(String text) {
+			return switch (text) {
+				case "+" -> ADD;
+				case "−", "-" -> MINUS;
+				case "×" -> CLOSE;
+				case "↑" -> UP;
+				case "↓" -> DOWN;
+				case "‹", "<", "←" -> PREVIOUS;
+				case "›", ">", "→" -> NEXT;
+				case "↶" -> UNDO;
+				case "↷" -> REDO;
+				case "⋮⋮" -> GRIP;
+				default -> null;
+			};
 		}
 	}
 
@@ -416,7 +535,7 @@ final class DesignerTheme {
 				panel(graphics, isHoveredOrFocused() ? "button_hover" : "card", getX(), getY(), width, height);
 			}
 			int color = active ? DesignerFormScreen.FOREGROUND : DesignerFormScreen.MUTED;
-			var font = Minecraft.getInstance().font;
+			var font = DesignerFonts.body();
 			graphics.drawString(font, String.format(java.util.Locale.ROOT, "%02d", index + 1), getX() + 9, getY() + 6,
 					selected ? DesignerFormScreen.ACCENT : DesignerFormScreen.MUTED, false);
 			graphics.drawString(font, font.plainSubstrByWidth(getMessage().getString(), width - 35), getX() + 28, getY() + 6, color, false);
@@ -439,7 +558,7 @@ final class DesignerTheme {
 				graphics.fill(getX() + 5, getY() + 4, getX() + width - 5, getY() + height - 4,
 						0xFF000000 | Integer.parseInt(value.substring(1), 16));
 			} else {
-				graphics.drawString(Minecraft.getInstance().font, "?", getX() + width / 2 - 2, getY() + 6, 0xFFFF8B83, false);
+				graphics.drawString(DesignerFonts.body(), "?", getX() + width / 2 - 2, getY() + 6, 0xFFFF8B83, false);
 			}
 		}
 	}
@@ -490,8 +609,8 @@ final class DesignerTheme {
 			surface(graphics, trackX + 2 - stretch / 2, trackY + 2, 8 + stretch, 7,
 					palette.light() ? 0xFFFFFFFF : 0xFFE6ECF7, palette.light() ? 0xFFE5E9EF : 0xFFCCD6E8);
 			graphics.pose().popPose();
-			String text = Minecraft.getInstance().font.plainSubstrByWidth(getMessage().getString(), width - 39);
-			graphics.drawString(Minecraft.getInstance().font, text, getX() + 6, getY() + (height - 8) / 2, DesignerFormScreen.FOREGROUND, false);
+			String text = DesignerFonts.body().plainSubstrByWidth(getMessage().getString(), width - 39);
+			graphics.drawString(DesignerFonts.body(), text, getX() + 6, getY() + (height - 8) / 2, DesignerFormScreen.FOREGROUND, false);
 		}
 	}
 
@@ -499,6 +618,15 @@ final class DesignerTheme {
 		private boolean invalid;
 		private Object fieldOwner;
 		private String fieldKey;
+		private final Font editorFont;
+		private int anchor;
+		private float scrollX;
+		private long focusedAt;
+		private int editableColor = DesignerFormScreen.FOREGROUND;
+		private int disabledColor = DesignerFormScreen.MUTED;
+		private boolean editable = true;
+		private Component hint;
+		private String suggestion;
 
 		void bind(Object owner, String key) {
 			fieldOwner = owner;
@@ -512,6 +640,19 @@ final class DesignerTheme {
 		boolean sameField(Input other) {
 			return fieldOwner != null && fieldOwner == other.fieldOwner && fieldKey.equals(other.fieldKey);
 		}
+
+		State state() {
+			return new State(getCursorPosition(), anchor, scrollX);
+		}
+
+		void restore(State state) {
+			setCursorPosition(Math.min(getValue().length(), state.cursor()));
+			setHighlightPos(Math.min(getValue().length(), state.anchor()));
+			scrollX = state.scroll();
+			ensureCursorVisible();
+		}
+
+		record State(int cursor, int anchor, float scroll) {}
 
 		void invalid(boolean value) {
 			invalid = value;
@@ -527,6 +668,7 @@ final class DesignerTheme {
 		}
 		Input(Font font, int x, int y, int width, int height, Component label) {
 			super(font, x, y - 2, width, Math.max(9, height - 9), label);
+			editorFont = font;
 			setBordered(false);
 			setTextColor(DesignerFormScreen.FOREGROUND);
 			setTextColorUneditable(DesignerFormScreen.MUTED);
@@ -535,7 +677,108 @@ final class DesignerTheme {
 		}
 
 		@Override
+		public void setHighlightPos(int position) {
+			super.setHighlightPos(position);
+			anchor = Math.max(0, Math.min(getValue().length(), position));
+		}
+
+		@Override
+		public void setFocused(boolean focused) {
+			boolean previous = isFocused();
+			super.setFocused(focused);
+			if (isFocused() && !previous) {
+				focusedAt = net.minecraft.Util.getMillis();
+			}
+		}
+
+		@Override
+		public void setTextColor(int color) {
+			super.setTextColor(color);
+			editableColor = color;
+		}
+
+		@Override
+		public void setTextColorUneditable(int color) {
+			super.setTextColorUneditable(color);
+			disabledColor = color;
+		}
+
+		@Override
+		public void setEditable(boolean value) {
+			super.setEditable(value);
+			editable = value;
+		}
+
+		@Override
+		public void setHint(Component value) {
+			super.setHint(value);
+			hint = value;
+		}
+
+		@Override
+		public void setSuggestion(String value) {
+			super.setSuggestion(value);
+			suggestion = value;
+		}
+
+		@Override
+		public void moveCursor(int amount, boolean selecting) {
+			int position = getCursorPosition();
+			int[] boundaries = DesignerTextLayout.boundaries(getValue());
+			for (int step = 0; step < Math.abs(amount); step++) {
+				position = DesignerTextLayout.moveBoundary(boundaries, position, Integer.signum(amount));
+			}
+			moveCursorTo(position, selecting);
+		}
+
+		@Override
+		public void deleteChars(int amount) {
+			int position = getCursorPosition();
+			int[] boundaries = DesignerTextLayout.boundaries(getValue());
+			for (int step = 0; step < Math.abs(amount); step++) {
+				position = DesignerTextLayout.moveBoundary(boundaries, position, Integer.signum(amount));
+			}
+			deleteCharsToPos(position);
+			if (getHighlighted().isEmpty()) {
+				anchor = getCursorPosition();
+			}
+		}
+
+		private void ensureCursorVisible() {
+			float cursor = DesignerFonts.caret(editorFont, getValue(), getCursorPosition());
+			float available = Math.max(1, getWidth() - (invalid ? 12 : 2));
+			if (cursor < scrollX) {
+				scrollX = cursor;
+			} else if (cursor > scrollX + available) {
+				scrollX = cursor - available;
+			}
+			float width = editorFont.getSplitter().stringWidth(DesignerTextLayout.plainSequence(getValue(), Style.EMPTY));
+			scrollX = Math.max(0, Math.min(scrollX, Math.max(0, width - available)));
+		}
+
+		@Override
+		public int getScreenX(int position) {
+			return getX() + Math.round(DesignerFonts.caret(editorFont, getValue(), position) - scrollX);
+		}
+
+		@Override
+		public void onClick(double x, double y) {
+			ensureCursorVisible();
+			moveCursorTo(DesignerFonts.hit(editorFont, getValue(), (float) (x - getX() + scrollX)), Screen.hasShiftDown());
+			focusedAt = net.minecraft.Util.getMillis();
+		}
+
+		@Override
+		protected void onDrag(double x, double y, double dx, double dy) {
+			moveCursorTo(DesignerFonts.hit(editorFont, getValue(), (float) (x - getX() + scrollX)), true);
+			ensureCursorVisible();
+		}
+
+		@Override
 		public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+			if (!isVisible()) {
+				return;
+			}
 			int border = invalid ? DesignerPalette.mix(palette.border(), palette.error(), 0.6F)
 					: isFocused() ? DesignerPalette.mix(palette.border(), palette.accent(), 0.65F) : palette.border();
 			int fill = invalid ? DesignerPalette.mix(palette.input(), palette.error(), 0.04F) : palette.input();
@@ -550,9 +793,30 @@ final class DesignerTheme {
 			}
 			DesignerTheme.scissor(graphics, getX(), getY() - 1, getX() + getWidth(), getY() + getHeight() + 1);
 			try {
-				super.renderWidget(graphics, mouseX, mouseY, partialTick);
+				ensureCursorVisible();
+				int origin = getX() - Math.round(scrollX);
+				int color = editable ? editableColor : disabledColor;
+				if (anchor != getCursorPosition()) {
+					DesignerFonts.selection(graphics, editorFont, getValue(), Math.min(anchor, getCursorPosition()),
+							Math.max(anchor, getCursorPosition()), origin, getY(), palette.accent() & 0xFFFFFF | 0x40000000);
+				}
+				DesignerFonts.drawPlain(graphics, editorFont, getValue(), origin, getY(), color);
+				if (getValue().isEmpty() && hint != null && !isFocused()) {
+					graphics.drawString(editorFont, hint, getX(), getY(), palette.muted(), false);
+				}
+				if (suggestion != null && getCursorPosition() == getValue().length()) {
+					DesignerFonts.drawPlain(graphics, editorFont, suggestion,
+							origin + DesignerFonts.caret(editorFont, getValue(), getValue().length()), getY(), palette.muted());
+				}
+				if (isFocused() && (net.minecraft.Util.getMillis() - focusedAt) / 500 % 2 == 0) {
+					int caret = getScreenX(getCursorPosition());
+					graphics.fill(caret, getY() - 1, caret + 1, getY() + 9, invalid ? palette.error() : palette.accent());
+				}
 			} finally {
 				graphics.disableScissor();
+			}
+			if (invalid) {
+				DesignerTheme.statusIcon(graphics, getRight() - 8, getY() + 1, true, palette.error());
 			}
 		}
 	}

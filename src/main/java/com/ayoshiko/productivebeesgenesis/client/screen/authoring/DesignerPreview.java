@@ -83,11 +83,11 @@ final class DesignerPreview {
 		DesignerTheme.panel(graphics, "card", x, y, width, height);
 		boolean compact = height < 145;
 		if (!compact) {
-			graphics.drawString(mc.font, DesignerFormScreen.tr("preview"), x + 10, y + 10, DesignerFormScreen.ACCENT, false);
+			graphics.drawString(DesignerFonts.body(), DesignerFormScreen.tr("preview"), x + 10, y + 10, DesignerFormScreen.ACCENT, false);
 		}
 		if (bee == null || !problem.isBlank()) {
 			if (!problem.isBlank()) {
-				graphics.drawWordWrap(mc.font, DesignerFormScreen.statusMessage(problem), x + 8, y + 8, width - 16, DesignerTheme.colors().error());
+				graphics.drawWordWrap(DesignerFonts.body(), DesignerFormScreen.statusMessage(problem), x + 8, y + 8, width - 16, DesignerTheme.colors().error());
 			}
 			return;
 		}
@@ -127,20 +127,20 @@ final class DesignerPreview {
 		}
 		int textY = y + 30 + displayHeight;
 		if (!problem.isBlank()) {
-			graphics.drawString(mc.font, mc.font.plainSubstrByWidth(problem, width - 16), x + 8, textY, 0xFFFF8B83, false);
+			graphics.drawString(DesignerFonts.body(), DesignerFonts.body().plainSubstrByWidth(problem, width - 16), x + 8, textY, 0xFFFF8B83, false);
 			return;
 		}
 		JsonObject names = document.getAsJsonObject("names");
 		String locale = mc.options.languageCode;
 		String name = BeeDesignerDocument.text(names, locale, BeeDesignerDocument.text(names, "en_us", document.get("id").getAsString()));
-		graphics.drawString(mc.font, mc.font.plainSubstrByWidth(name, width - 16), x + 8, textY, DesignerFormScreen.FOREGROUND, false);
-		graphics.drawString(mc.font, mc.font.plainSubstrByWidth(document.get("id").getAsString(), width - 16), x + 8, textY + 14, DesignerFormScreen.MUTED, false);
+		graphics.drawString(DesignerFonts.body(), DesignerFonts.body().plainSubstrByWidth(name, width - 16), x + 8, textY, DesignerFormScreen.FOREGROUND, false);
+		graphics.drawString(DesignerFonts.body(), DesignerFonts.body().plainSubstrByWidth(document.get("id").getAsString(), width - 16), x + 8, textY + 14, DesignerFormScreen.MUTED, false);
 		if (textY + 47 < y + height) {
 			Component help = DesignerFormScreen.tr("preview_drag");
-			graphics.drawString(mc.font, mc.font.plainSubstrByWidth(help.getString(), width - 16), x + 8, textY + 32,
+			graphics.drawString(DesignerFonts.body(), DesignerFonts.body().plainSubstrByWidth(help.getString(), width - 16), x + 8, textY + 32,
 					DesignerFormScreen.MUTED, false);
 			if (mouseX >= x + 8 && mouseX < x + width - 8 && mouseY >= textY + 30 && mouseY < textY + 44) {
-				graphics.renderTooltip(mc.font, help, mouseX, mouseY);
+				graphics.renderTooltip(DesignerFonts.body(), help, mouseX, mouseY);
 			}
 		}
 	}

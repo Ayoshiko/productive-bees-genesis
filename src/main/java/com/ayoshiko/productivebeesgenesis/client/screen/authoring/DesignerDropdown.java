@@ -38,7 +38,7 @@ final class DesignerDropdown {
 		visible = Math.max(1, Math.min(values.size(), Math.min(10, (screenHeight - 12) / 18)));
 		int popupHeight = visible * 18 + 4;
 		int popupWidth = Math.min(screenWidth - 12, Math.max(width, values.stream()
-				.mapToInt(value -> Minecraft.getInstance().font.width(DesignerFormScreen.option(value)) + 28).max().orElse(width)));
+				.mapToInt(value -> DesignerFonts.body().width(DesignerFormScreen.option(value)) + 28).max().orElse(width)));
 		int top = y + 18 + popupHeight <= screenHeight - 4 ? y + 18 : Math.max(4, y - popupHeight - 2);
 		bounds = new Rect2i(Math.max(4, Math.min(x, screenWidth - popupWidth - 4)), top, popupWidth, popupHeight);
 		upward = top < y;
@@ -48,7 +48,7 @@ final class DesignerDropdown {
 	}
 
 	void render(GuiGraphics graphics, int mouseX, int mouseY) {
-		var font = Minecraft.getInstance().font;
+		var font = DesignerFonts.body();
 		long now = net.minecraft.Util.getMillis();
 		double progress = DesignerPreferences.animate() && DesignerPreferences.enabled("motion_menus")
 				? DesignerMotionValue.easeOut((now - openedAt) / 130.0) : 1;
@@ -61,10 +61,14 @@ final class DesignerDropdown {
 		frameAt = now;
 		graphics.pose().pushPose();
 		graphics.pose().translate(0, 0, 700);
+		if (!DesignerAeSkin.enabled()) {
+			DesignerMaterials.shadow(graphics, bounds.getX(), bounds.getY(), bounds.getWidth(), bounds.getHeight(), true);
+		}
 		DesignerTheme.scissor(graphics, bounds.getX(), visibleTop, bounds.getX() + bounds.getWidth(), visibleTop + visibleHeight);
-		DesignerTheme.panel(graphics, "panel", bounds.getX(), bounds.getY(), bounds.getWidth(), bounds.getHeight());
+		DesignerTheme.surface(graphics, bounds.getX(), bounds.getY(), bounds.getWidth(), bounds.getHeight(),
+				DesignerTheme.colors().panel(), DesignerTheme.colors().border());
 		int selectedY = bounds.getY() + 2 + (int) Math.round(highlightPosition.position() * 18);
-		DesignerGlyphs.rounded(graphics, bounds.getX() + 2, selectedY, bounds.getWidth() - 4, 18, 4, DesignerTheme.colors().selected());
+		DesignerMaterials.mask(graphics, bounds.getX() + 2, selectedY, bounds.getWidth() - 4, 18, 4, DesignerTheme.colors().selected());
 		for (int row = 0; row < visible && first + row < values.size(); row++) {
 			int index = first + row;
 			int y = bounds.getY() + 2 + row * 18;
@@ -153,10 +157,15 @@ final class DesignerDropdown {
 		@Override
 		protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 			renderSurface(graphics);
-			var font = Minecraft.getInstance().font;
+			var font = DesignerFonts.body();
 			graphics.drawString(font, font.plainSubstrByWidth(getMessage().getString(), width - 23), getX() + 6, getY() + 4,
 					active ? DesignerFormScreen.FOREGROUND : DesignerFormScreen.MUTED, false);
-			graphics.drawString(font, "▾", getX() + width - 14, getY() + 4, DesignerFormScreen.ACCENT, false);
+			graphics.pose().pushPose();
+			graphics.pose().translate(getX() + width - 10, getY() + height / 2F, 0);
+			graphics.pose().mulPose(com.mojang.math.Axis.ZP.rotationDegrees(90));
+			graphics.pose().scale(0.65F, 0.65F, 1);
+			DesignerGlyphs.draw(graphics, DesignerTheme.Symbol.NEXT, active ? DesignerFormScreen.ACCENT : DesignerFormScreen.MUTED);
+			graphics.pose().popPose();
 		}
 	}
 }

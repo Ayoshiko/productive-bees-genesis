@@ -68,7 +68,7 @@ final class DesignerMachineEntryButton extends DesignerTheme.Action {
 		if (!item.isEmpty()) {
 			ItemStack display = item.copy();
 			display.set(DataComponents.CUSTOM_NAME, BeeDesignerClient.itemName(item));
-			graphics.renderTooltip(Minecraft.getInstance().font, display, mouseX, mouseY);
+			graphics.renderTooltip(DesignerFonts.body(), display, mouseX, mouseY);
 		}
 	}
 
@@ -77,7 +77,7 @@ final class DesignerMachineEntryButton extends DesignerTheme.Action {
 	}
 
 	DesignerMachineEntryButton fitted() {
-		setWidth(Math.min(getWidth(), Math.max(104, Math.min(300, Minecraft.getInstance().font.width(label) + 34))));
+		setWidth(Math.min(getWidth(), Math.max(104, Math.min(300, DesignerFonts.body().width(label) + 34))));
 		return this;
 	}
 
@@ -119,7 +119,7 @@ final class DesignerMachineEntryButton extends DesignerTheme.Action {
 			ResourceVisuals.draw(graphics, resource.key());
 			graphics.pose().popPose();
 		}
-		var font = Minecraft.getInstance().font;
+		var font = DesignerFonts.body();
 		graphics.drawString(font, font.plainSubstrByWidth(label.getString(), getWidth() - 26), getX() + 23, getY() + 6,
 				DesignerFormScreen.FOREGROUND, false);
 	}

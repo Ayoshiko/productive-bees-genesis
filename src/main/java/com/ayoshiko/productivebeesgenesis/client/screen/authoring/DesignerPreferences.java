@@ -43,6 +43,8 @@ final class DesignerPreferences {
 		result.addProperty("catalog_help", true);
 		result.addProperty("tutorial_seen", false);
 		result.addProperty("skin", "smooth");
+		result.addProperty("font_mode", "auto");
+		result.addProperty("surface_material", "solid");
 		result.addProperty("motion_feedback", "subtle");
 		result.addProperty("motion_transition", "slide");
 		result.addProperty("motion_menus", true);
@@ -66,6 +68,8 @@ final class DesignerPreferences {
 		choice(result, "navigation_layout", Set.of("adaptive", "menus", "expanded"));
 		choice(result, "field_layout", Set.of("adaptive", "single", "columns"));
 		choice(result, "skin", Set.of("smooth", "ae"));
+		choice(result, "font_mode", Set.of("auto", "sdf", "vanilla"));
+		choice(result, "surface_material", Set.of("solid", "glass"));
 		choice(result, "motion_feedback", Set.of("subtle", "ripple", "none"));
 		choice(result, "motion_transition", Set.of("slide", "reveal", "none"));
         range(result, "ui_scale", 0.85, 1.15);

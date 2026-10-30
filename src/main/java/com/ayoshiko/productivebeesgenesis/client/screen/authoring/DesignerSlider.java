@@ -38,7 +38,7 @@ final class DesignerSlider extends AbstractSliderButton {
 		graphics.fill(getX() + 5, trackY, getX() + width - 5, trackY + 2, DesignerFormScreen.MUTED);
 		int knob = getX() + 5 + (int) Math.round(value * (width - 16));
 		DesignerTheme.panel(graphics, isHoveredOrFocused() ? "button_hover" : "button", knob, trackY - 2, 7, 6);
-		var font = Minecraft.getInstance().font;
+		var font = DesignerFonts.body();
 		graphics.drawString(font, font.plainSubstrByWidth(getMessage().getString(), width - 10), getX() + 5, getY() + 3,
 				DesignerFormScreen.FOREGROUND, false);
 	}

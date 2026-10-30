@@ -42,7 +42,7 @@ final class DesignerStackButton extends Button {
 	}
 
 	DesignerStackButton fitted() {
-		setWidth(Math.min(getWidth(), Math.max(104, Math.min(260, Minecraft.getInstance().font.width(name) + 38))));
+		setWidth(Math.min(getWidth(), Math.max(104, Math.min(260, DesignerFonts.body().width(name) + 38))));
 		return this;
 	}
 
@@ -134,7 +134,7 @@ final class DesignerStackButton extends Button {
 		if (!stack.isEmpty()) {
 			ItemStack display = stack.copy();
 			display.set(DataComponents.CUSTOM_NAME, name);
-			graphics.renderTooltip(Minecraft.getInstance().font, display, mouseX, mouseY);
+			graphics.renderTooltip(DesignerFonts.body(), display, mouseX, mouseY);
 		}
 	}
 
@@ -150,13 +150,13 @@ final class DesignerStackButton extends Button {
 				graphics.renderItem(stack, 0, 0);
 				graphics.pose().popPose();
 			} else {
-				graphics.drawString(Minecraft.getInstance().font, "+", getX() + width / 2 - 2, getY() + height / 2 - 4,
+				graphics.drawString(DesignerFonts.body(), "+", getX() + width / 2 - 2, getY() + height / 2 - 4,
 						DesignerFormScreen.MUTED, false);
 			}
 			return;
 		}
 		DesignerTheme.panel(graphics, "slot", getX() + 1, getY() + 1, 18, 18);
-		var font = Minecraft.getInstance().font;
+		var font = DesignerFonts.body();
 		if (!stack.isEmpty()) {
 			graphics.renderItem(stack, getX() + 3, getY() + 2);
 		}

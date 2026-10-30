@@ -61,6 +61,9 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
         section("settings_appearance");
         preferenceChoice("settings_theme", "theme", "dark", "light", "ae_light", "ae_dark", "custom_dark", "custom_light");
 		preferenceChoice("settings_skin", "skin", "smooth", "ae");
+		preferenceChoice("settings_surface_material", "surface_material", "solid", "glass");
+		preferenceChoice("settings_font_mode", "font_mode", "auto", "sdf", "vanilla");
+		note("", tr("settings_font_help"));
         preferenceChoice("settings_density", "density", "compact", "comfortable", "spacious");
 		preferenceChoice("settings_navigation_layout", "navigation_layout", "adaptive", "menus", "expanded");
 		preferenceChoice("settings_field_layout", "field_layout", "adaptive", "single", "columns");

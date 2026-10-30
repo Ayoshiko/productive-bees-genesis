@@ -78,7 +78,7 @@ final class DesignerBeeButton extends Button {
 	}
 
 	DesignerBeeButton fitted() {
-		setWidth(Math.min(getWidth(), Math.max(104, Math.min(260, Minecraft.getInstance().font.width(name) + 38))));
+		setWidth(Math.min(getWidth(), Math.max(104, Math.min(260, DesignerFonts.body().width(name) + 38))));
 		return this;
 	}
 
@@ -137,7 +137,7 @@ final class DesignerBeeButton extends Button {
 		}
 		DesignerTheme.panel(graphics, "slot", getX() + 1, getY() + 1, 18, 18);
 		graphics.renderItem(icon, getX() + 2, getY() + 2);
-		var font = Minecraft.getInstance().font;
+		var font = DesignerFonts.body();
 		graphics.drawString(font, font.plainSubstrByWidth(name.getString(), Math.max(10, width - (pending ? 38 : 30) - actionSpace - (selectionMode ? 16 : 0))),
 				getX() + 24, getY() + 6, DesignerFormScreen.FOREGROUND, false);
 		if (selectionMode) {

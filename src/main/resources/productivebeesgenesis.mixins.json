@@ -67,6 +67,7 @@
     "AbstractUpgradeItemMixin"
   ],
   "client": [
+    "client.DesignerFontAccess",
     "client.ResourceSideConfigurationMixin",
     "client.PbContainerFlowerJeiMixin",
     "client.PbCentrifugeJeiLayoutMixin",

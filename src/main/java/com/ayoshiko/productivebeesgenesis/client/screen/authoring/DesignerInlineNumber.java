@@ -34,7 +34,7 @@ final class DesignerInlineNumber {
 		this.fallback = fallback;
 		this.range = range;
 		this.percent = percent;
-		var font = Minecraft.getInstance().font;
+		var font = DesignerFonts.body();
 		labelWidth = font.width(this.label) + 8;
 		controlWidth = Math.max(40, Math.min(104, font.width(displayValue()) + 18));
 	}
@@ -69,7 +69,7 @@ final class DesignerInlineNumber {
 		int textWidth = Math.min(labelWidth, Math.max(0, available - 28 - (percent ? 16 : 4)));
 		int fieldWidth = Math.min(controlWidth, Math.max(24, available - textWidth - (percent ? 16 : 4)));
 		screen.fixedNote(label, x, y, textWidth, 20);
-		var input = new DesignerTheme.Input(Minecraft.getInstance().font, x + textWidth + 4, y + 5, fieldWidth - 8, 20, label);
+		var input = new DesignerTheme.Input(DesignerFonts.body(), x + textWidth + 4, y + 5, fieldWidth - 8, 20, label);
 		input.bind(owner, key);
 		input.setMaxLength(128);
 		input.setValue(displayValue());

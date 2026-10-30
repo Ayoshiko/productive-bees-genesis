@@ -58,7 +58,7 @@ final class DesignerLibraryPage {
 		}
 		if (DesignerPreferences.enabled("catalog_help") && screen.frameHeight >= 340 && !selecting) {
 			Component help = DesignerFormScreen.tr("catalog_guide");
-			int helpHeight = Math.max(20, mc.font.split(help, screen.contentWidth - 12).size() * 10 + 8);
+			int helpHeight = Math.max(20, DesignerFonts.body().split(help, screen.contentWidth - 12).size() * 10 + 8);
 			screen.fixedNote(help, screen.left, screen.contentTop, screen.contentWidth, helpHeight);
 			screen.contentTop += helpHeight + 4;
 		}
@@ -147,7 +147,7 @@ final class DesignerLibraryPage {
 	}
 
 	private void toolbar(BeeDesignerScreen screen) {
-		var font = Minecraft.getInstance().font;
+		var font = DesignerFonts.body();
 		int y = screen.contentTop;
 		int end = screen.left + screen.contentWidth;
 		java.util.List<String> direct = new java.util.ArrayList<>();
@@ -250,7 +250,7 @@ final class DesignerLibraryPage {
 		if (total >= 0) {
 			int viewPage = Math.max(0, screen.page - firstCatalogRow) / rowsPerView;
 			int viewPages = Math.max(1, ((total + columns - 1) / columns + rowsPerView - 1) / rowsPerView);
-			graphics.drawString(Minecraft.getInstance().font, (viewPage + 1) + "/" + viewPages + "  ·  " + total,
+			graphics.drawString(DesignerFonts.body(), (viewPage + 1) + "/" + viewPages + "  ·  " + total,
 					screen.left + 52, screen.footerY() + 6, DesignerFormScreen.MUTED, false);
 		}
 	}

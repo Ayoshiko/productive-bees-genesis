@@ -67,13 +67,13 @@ final class DesignerFormLayout {
 		if (!compact(row)) {
 			return false;
 		}
-		int text = net.minecraft.client.Minecraft.getInstance().font.width(DesignerFormScreen.tr(row.label()));
+		int text = DesignerFonts.body().width(DesignerFormScreen.tr(row.label()));
 		return width - labelWidth(row, width) - 4 < row.minimumControlWidth()
 				|| text > labelWidth(row, width) - 6;
 	}
 
 	static int labelWidth(DesignerFormScreen.Row row, int width) {
-		int text = net.minecraft.client.Minecraft.getInstance().font.width(DesignerFormScreen.tr(row.label()));
+		int text = DesignerFonts.body().width(DesignerFormScreen.tr(row.label()));
 		if (row.flowWidth() > 0) {
 			return Math.max(0, Math.min(text + 10, width - row.minimumControlWidth() - 4));
 		}

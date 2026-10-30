@@ -214,7 +214,7 @@ final class DesignerRecipeSummary {
 			fields.add(new DesignerInlineNumber("maximum_short", output, "max", "1", quantity));
 		}
 		fields.add(DesignerInlineNumber.probability(output, "chance"));
-		int itemWidth = Math.max(104, Math.min(260, Minecraft.getInstance().font.width(BeeDesignerClient.itemName(stack)) + 38));
+		int itemWidth = Math.max(104, Math.min(260, DesignerFonts.body().width(BeeDesignerClient.itemName(stack)) + 38));
 		int controlsWidth = DesignerInlineNumber.totalWidth(fields);
 		boolean inline = itemWidth + controlsWidth + 24 <= screen.contentWidth;
 		int height = inline ? 24 : 24 + DesignerInlineNumber.rows(fields, screen.contentWidth - 8) * 24;
@@ -236,7 +236,7 @@ final class DesignerRecipeSummary {
 		ItemStack stack = decoded;
 		Component name = stack.isEmpty() ? Component.literal(value == null ? DesignerFormScreen.tr(label).getString() : value.toString())
 				: BeeDesignerClient.itemName(stack);
-		int width = Math.max(104, Math.min(260, Minecraft.getInstance().font.width(name) + 38));
+		int width = Math.max(104, Math.min(260, DesignerFonts.body().width(name) + 38));
 		screen.rows.add(new DesignerFormScreen.Row(label, (x, y, w) -> {
 			if (stack.isEmpty() && value != null) {
 				screen.button(x, y, w, name, edit);
@@ -248,7 +248,7 @@ final class DesignerRecipeSummary {
 
 	private static void bee(DesignerFormScreen screen, String label, JsonObject recipe, String key, Runnable edit) {
 		String id = BeeDesignerDocument.text(recipe, key, "minecraft:bee");
-		int width = Math.max(104, Math.min(260, Minecraft.getInstance().font.width(BeeDesignerClient.beeName(id)) + 38));
+		int width = Math.max(104, Math.min(260, DesignerFonts.body().width(BeeDesignerClient.beeName(id)) + 38));
 		screen.rows.add(new DesignerFormScreen.Row(label, (x, y, w) -> screen.addRenderableWidget(
 				new DesignerBeeButton(x, y, w, id, edit).fitted()), 24, false, width).flow(fieldWidth(label, width)));
 	}
@@ -258,7 +258,7 @@ final class DesignerRecipeSummary {
 		ResourceLocation id = ResourceLocation.tryParse(name);
 		var block = id == null ? null : BuiltInRegistries.BLOCK.get(id);
 		Component title = block == null ? Component.literal(name) : block.getName();
-		int width = Math.max(104, Math.min(260, Minecraft.getInstance().font.width(title) + 38));
+		int width = Math.max(104, Math.min(260, DesignerFonts.body().width(title) + 38));
 		screen.rows.add(new DesignerFormScreen.Row(label, (x, y, w) -> screen.stackButton(x, y, w,
 				block == null ? ItemStack.EMPTY : block.asItem().getDefaultInstance(), title.getString(), edit), 24, false, width).flow(fieldWidth(label, width)));
 	}
@@ -292,6 +292,6 @@ final class DesignerRecipeSummary {
 	}
 
 	private static int fieldWidth(String label, int control) {
-		return Minecraft.getInstance().font.width(DesignerFormScreen.tr(label)) + control + 14;
+		return DesignerFonts.body().width(DesignerFormScreen.tr(label)) + control + 14;
 	}
 }

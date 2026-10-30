@@ -51,7 +51,7 @@ final class DesignerDeleteScreen extends DesignerFormScreen {
 		note("", tr("delete_application_help"));
 		if (step == 2) {
 			rows.add(new Row("delete_identity", (x, y, w) -> {
-				EditBox box = new EditBox(font, x, y, w, 20, tr("delete_identity"));
+				EditBox box = new DesignerTheme.Input(font, x, y + 5, w, 20, tr("delete_identity"));
 				box.setMaxLength(256);
 				box.setValue(phrase);
 				box.setResponder(value -> phrase = value);

@@ -298,6 +298,11 @@ public final class BeeDesignerClient {
 	}
 
 	@SubscribeEvent
+	public static void frameFinished(net.neoforged.neoforge.client.event.RenderFrameEvent.Post event) {
+		DesignerFonts.betweenFrames();
+	}
+
+	@SubscribeEvent
 	public static void tick(ClientTickEvent.Post event) {
 		if (Minecraft.getInstance().screen instanceof DesignerFormScreen form) {
 			form.advanceTransition();
