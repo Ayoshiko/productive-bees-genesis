@@ -41,13 +41,15 @@ final class DesignerTextLayout {
 	final float width;
 	final float baseline;
 	final float size;
+	final float inkTop;
+	final float inkBottom;
 	private final float[] logicalAdvances;
 	private int atlasRevision = -1;
 	private int atlasBucket = -1;
 	private DesignerGlyphAtlas.Sprite[] sprites;
 
 	private DesignerTextLayout(Source source, List<Glyph> glyphs, List<Cluster> clusters,
-			int[] boundaries, float[] carets, float width, float baseline, float size) {
+			int[] boundaries, float[] carets, float width, float baseline, float size, float inkTop, float inkBottom) {
 		this.source = source;
 		this.glyphs = List.copyOf(glyphs);
 		this.clusters = List.copyOf(clusters);
@@ -56,6 +58,8 @@ final class DesignerTextLayout {
 		this.width = width;
 		this.baseline = baseline;
 		this.size = size;
+		this.inkTop = inkTop;
+		this.inkBottom = inkBottom;
 		logicalAdvances = new float[source.text().length() + 1];
 		for (Cluster cluster : clusters) {
 			logicalAdvances[cluster.end()] += cluster.right() - cluster.left();
@@ -115,6 +119,8 @@ final class DesignerTextLayout {
 		List<Glyph> glyphs = new ArrayList<>();
 		List<Cluster> clusters = new ArrayList<>();
 		float pen = 0;
+		float inkTop = Float.POSITIVE_INFINITY;
+		float inkBottom = Float.NEGATIVE_INFINITY;
 		char[] chars = text.toCharArray();
 		boolean logicalBidi = !source.visualOrder() && !font.code();
 		Bidi bidi = new Bidi(text, Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT);
@@ -152,6 +158,11 @@ final class DesignerTextLayout {
 						}
 						float advance = DesignerFonts.fallbackAdvance(point, run.style(), font.size());
 						glyphs.add(new Glyph(null, point, point, pen, 0, advance, run.style()));
+						if (!Character.isWhitespace(point)) {
+							float scale = font.size() / 8.5F;
+							inkTop = Math.min(inkTop, -7 * scale);
+							inkBottom = Math.max(inkBottom, scale);
+						}
 						pen += advance;
 					}
 					clusters.add(new Cluster(run.start(), run.end(), left, pen, rtl));
@@ -161,6 +172,11 @@ final class DesignerTextLayout {
 				}
 				GlyphVector vector = run.face().layoutGlyphVector(CONTEXT, chars, run.start(), run.end(),
 						rtl ? java.awt.Font.LAYOUT_RIGHT_TO_LEFT : java.awt.Font.LAYOUT_LEFT_TO_RIGHT);
+				var bounds = vector.getVisualBounds();
+				if (!bounds.isEmpty()) {
+					inkTop = Math.min(inkTop, (float) bounds.getMinY());
+					inkBottom = Math.max(inkBottom, (float) bounds.getMaxY());
+				}
 				int count = vector.getNumGlyphs();
 				TreeMap<Integer, float[]> spans = new TreeMap<>();
 				for (int index = 0; index < count; index++) {
@@ -198,7 +214,12 @@ final class DesignerTextLayout {
 			}
 			previous = carets[index];
 		}
-		return new DesignerTextLayout(source, glyphs, clusters, boundaries, carets, pen, font.baseline(), font.size());
+		if (!Float.isFinite(inkTop)) {
+			inkTop = -font.baseline();
+			inkBottom = 8 - font.baseline();
+		}
+		return new DesignerTextLayout(source, glyphs, clusters, boundaries, carets, pen, font.baseline(), font.size(),
+				font.baseline() + inkTop, font.baseline() + inkBottom);
 	}
 
 	private record FaceRun(int start, int end, java.awt.Font face, Style style) {}

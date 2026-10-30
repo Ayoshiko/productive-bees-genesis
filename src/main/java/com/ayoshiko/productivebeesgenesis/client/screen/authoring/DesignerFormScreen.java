@@ -24,6 +24,7 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import mekanism.api.chemical.ChemicalStack;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -379,9 +380,9 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	protected final void selection(int x, int y, int width, String current, String[] values, Consumer<String> selected) {
-		int cell = java.util.Arrays.stream(values).mapToInt(value -> font.width(selectionLabel(value)) + 16).max().orElse(40);
+		int[] cells = Arrays.stream(values).mapToInt(value -> Math.max(28, font.width(selectionLabel(value)) + 16)).toArray();
 		if (values.length < 2 || values.length > 6 || !java.util.Arrays.asList(values).contains(current)
-				|| cell * values.length + (values.length - 1) * 3 > width) {
+					|| Arrays.stream(cells).sum() + (values.length - 1) * 3 > width) {
 			dropdown(x, y, width, current, values, value -> {
 				if (!value.equals(current)) {
 					selected.accept(value);
@@ -389,15 +390,18 @@ public abstract class DesignerFormScreen extends Screen {
 			});
 			return;
 		}
-		int[] cells = new int[values.length];
-		java.util.Arrays.fill(cells, (width - (values.length - 1) * 3) / values.length);
-		int currentIndex = Math.max(0, java.util.Arrays.asList(values).indexOf(current));
 		String key = "choice|" + locationScope + "|" + x + "/" + y + "|" + String.join(",", values);
+		segmented(x, y, current, values, cells, key, selected);
+	}
+
+	private void segmented(int x, int y, String current, String[] values, int[] cells, String key, Consumer<String> selected) {
+		int currentIndex = Arrays.asList(values).indexOf(current);
 		DesignerMotionValue indicator = indicator(key, currentIndex);
 		addRenderableWidget(new DesignerTabIndicator(x, y, cells, currentIndex, indicator));
+		int offset = 0;
 		for (int index = 0; index < values.length; index++) {
 			String value = values[index];
-			addRenderableWidget(new DesignerTheme.Tab(x + index * (cells[index] + 3), y, cells[index], selectionLabel(value),
+			addRenderableWidget(new DesignerTheme.Tab(x + offset, y, cells[index], selectionLabel(value),
 					value.equals(current), () -> {
 						if (value.equals(current)) {
 							return;
@@ -407,6 +411,7 @@ public abstract class DesignerFormScreen extends Screen {
 							rebuild();
 						}
 					})).setTooltip(Tooltip.create(option(value)));
+			offset += cells[index] + 3;
 		}
 	}
 
@@ -606,40 +611,53 @@ public abstract class DesignerFormScreen extends Screen {
 			rows.add(new Row(label, (x, y, w) -> dropdown(x, y, w, current, options, select)));
 			return;
 		}
-		List<GeneChoice> buttons = geneChoices(options, contentWidth);
-		int height = buttons.getLast().row() * 24 + 40;
+		int minimum = Arrays.stream(options).mapToInt(value -> Math.max(28, font.width(selectionLabel(value)) + 16)).sum()
+				+ (options.length - 1) * 3;
+		Row inline = new Row(label, (x, y, w) -> geneSegments(x, y, w, current, options, key, select), 20, false, minimum);
+		if (minimum <= 360 && (!DesignerFormLayout.stacked(inline, contentWidth) || minimum <= contentWidth - 4)) {
+			rows.add(inline.flow(font.width(tr(label)) + minimum + 14));
+			return;
+		}
+		List<GeneChoice> choicesByRow = geneChoices(options, contentWidth - 12);
+		int height = 16 + (choicesByRow.getLast().row() + 1) * 23;
 		rows.add(new Row("", (x, y, w) -> {
-			labels.add(new Label(tr(label), x + 6, y + 4, w - 12, 1, true));
-			for (GeneChoice choice : buttons) {
-				var button = new DesignerTheme.Action(x + choice.x(), y + 18 + choice.row() * 24, choice.width(),
-						selectionLabel(choice.value()), () -> {
-					select.accept(choice.value());
-					rebuild();
-				});
-				button.selected = current.equals(choice.value());
-				button.setTooltip(Tooltip.create(option(choice.value())));
-				addRenderableWidget(button);
-			}
+			labels.add(new Label(tr(label), x + 6, y + 2, w - 12, 1, true));
+			geneSegments(x + 6, y + 16, w - 12, current, options, key, select);
 		}, height, true));
+	}
+
+	private void geneSegments(int x, int y, int width, String current, String[] values, String field, Consumer<String> selected) {
+		List<GeneChoice> choices = geneChoices(values, width);
+		for (int row = 0; row <= choices.getLast().row(); row++) {
+			List<GeneChoice> line = new ArrayList<>();
+			for (GeneChoice choice : choices) {
+				if (choice.row() == row) {
+					line.add(choice);
+				}
+			}
+			String[] options = line.stream().map(GeneChoice::value).toArray(String[]::new);
+			int[] cells = line.stream().mapToInt(GeneChoice::width).toArray();
+			segmented(x, y + row * 23, current, options, cells, "gene|" + locationScope + "|" + field + "|" + row, selected);
+		}
 	}
 
 	private List<GeneChoice> geneChoices(String[] values, int width) {
 		List<GeneChoice> choices = new ArrayList<>();
-		int x = 6;
+		int x = 0;
 		int row = 0;
 		for (String value : values) {
-			int size = Math.min(width - 12, Math.max(40, font.width(selectionLabel(value)) + 20));
-			if (x > 6 && x + size > width - 6) {
-				x = 6;
+			int size = Math.min(Math.max(1, width), Math.max(28, font.width(selectionLabel(value)) + 16));
+			if (x > 0 && x + size > width) {
+				x = 0;
 				row++;
 			}
-			choices.add(new GeneChoice(value, x, row, size));
-			x += size + 4;
+			choices.add(new GeneChoice(value, row, size));
+			x += size + 3;
 		}
 		return choices;
 	}
 
-	private record GeneChoice(String value, int x, int row, int width) {}
+	private record GeneChoice(String value, int row, int width) {}
 
 	protected Button dropdown(int x, int y, int w, String current, String[] values, Consumer<String> selected) {
 		return dropdown(x, y, w, current, values, value -> true, selected);
@@ -748,13 +766,14 @@ public abstract class DesignerFormScreen extends Screen {
 		bands = DesignerFormLayout.arrange(rows, contentWidth);
 		bandOffsets = new int[bands.size() + 1];
 		for (int index = 0; index < bands.size(); index++) {
-			bandOffsets[index + 1] = bandOffsets[index] + bands.get(index).height();
+			int groupGap = index + 1 < bands.size() && groupStarts.contains(bands.get(index + 1).source()) ? 4 : 0;
+			bandOffsets[index + 1] = bandOffsets[index] + bands.get(index).height() + groupGap;
 		}
 		List<GroupSurface> surfaces = new ArrayList<>();
 		int first = 0;
 		for (int index = 1; index < bands.size(); index++) {
 			if (groupStarts.contains(bands.get(index).source())) {
-				surfaces.add(new GroupSurface(bandOffsets[first], bandOffsets[index]));
+				surfaces.add(new GroupSurface(bandOffsets[first], bandOffsets[index] - 4));
 				first = index;
 			}
 		}
@@ -1174,20 +1193,32 @@ public abstract class DesignerFormScreen extends Screen {
 				int top = contentTop + group.top - offset;
 				int bottom = contentTop + group.bottom - offset - DesignerPreferences.rowGap();
 				if (bottom >= contentTop && top < editorBottom()) {
-					DesignerTheme.panel(graphics, "card", left, top, contentWidth, bottom - top);
+					if (DesignerAeSkin.enabled()) {
+						DesignerTheme.panel(graphics, "card", left, top, contentWidth, bottom - top);
+					} else {
+						var colors = DesignerTheme.colors();
+						int fill = DesignerPalette.mix(colors.panel(), colors.card(), 0.55F);
+						DesignerMaterials.surface(graphics, left, top, contentWidth, bottom - top, DesignerMaterials.CARD_RADIUS,
+								fill, DesignerPalette.mix(fill, colors.border(), 0.16F));
+					}
 				}
 			}
 			for (var entry : rowViews.entrySet()) {
 				RowView view = entry.getValue();
 				int y = view.y - offset;
-				if (DesignerPreferences.enabled("alternating_rows") && entry.getKey() % 2 == 0) {
+				if (DesignerPreferences.enabled("alternating_rows") && entry.getKey() % 2 == 0
+						&& !groupStarts.contains(bands.get(entry.getKey()).source())) {
 					DesignerMaterials.mask(graphics, left + 3, y + 2, contentWidth - 6, view.height - 4, DesignerMaterials.CONTROL_RADIUS,
 							DesignerPalette.mix(DesignerTheme.colors().card(), DesignerTheme.colors().panel(), 0.08F));
 				}
 				boolean lastInGroup = entry.getKey() + 1 >= bands.size()
 						|| groupStarts.contains(bands.get(entry.getKey() + 1).source());
 				for (Rect2i section : view.sections) {
-					if (!lastInGroup) {
+					if (!DesignerAeSkin.enabled()) {
+						DesignerMaterials.mask(graphics, section.getX() + 3, section.getY() - offset + 1, section.getWidth() - 6,
+								section.getHeight() - 2, DesignerMaterials.CONTROL_RADIUS,
+								DesignerPalette.mix(DesignerTheme.colors().panel(), DesignerTheme.colors().card(), 0.35F));
+					} else if (!lastInGroup) {
 						int inset = Math.min(10, section.getWidth() / 4);
 						int lineY = section.getY() + section.getHeight() - offset - 1;
 						graphics.fill(section.getX() + inset, lineY, section.getX() + section.getWidth() - inset, lineY + 1,
@@ -1213,10 +1244,9 @@ public abstract class DesignerFormScreen extends Screen {
 					int columnX = left + highlighted.x();
 					int color = highlightedError ? DesignerTheme.colors().error() : ACCENT;
 					float strength = Math.min(1, (highlightUntil - net.minecraft.Util.getMillis()) / 600.0F);
-					DesignerGlyphs.rounded(graphics, columnX, y, columnWidth, view.height - 2, 4,
-							DesignerPalette.mix(DesignerTheme.colors().panel(), color, strength * 0.045F));
-					DesignerGlyphs.rounded(graphics, columnX, y + 3, 2, Math.max(6, view.height - 8), 1,
-							DesignerPalette.mix(DesignerTheme.colors().border(), color, strength * 0.65F));
+					DesignerMaterials.mask(graphics, columnX + 3, y + 2, columnWidth - 6, view.height - 4,
+							DesignerMaterials.CONTROL_RADIUS,
+							DesignerPalette.mix(DesignerTheme.colors().card(), color, strength * 0.09F));
 					for (PositionedWidget positioned : view.widgets) {
 						if (positioned.widget instanceof DesignerTheme.Action action
 								&& action.getX() >= columnX && action.getX() < columnX + columnWidth) {
@@ -1376,11 +1406,12 @@ public abstract class DesignerFormScreen extends Screen {
 	protected void section(String key) {
 		buildingGroup = key;
 		anchor(key);
-		int rowHeight = compactHeight() ? 14 : 24;
+		int rowHeight = compactHeight() ? 16 : 20;
 		groupStarts.add(rows.size());
 		rows.add(new Row("", (x, y, w) -> {
 			sections.add(new Rect2i(x, y, w, rowHeight - 2));
-			labels.add(new Label(option(key).copy().withColor(FOREGROUND & 0xFFFFFF), x + 4, y + (compactHeight() ? 1 : 6), w - 8, 1, true));
+			labels.add(new Label(option(key).copy().withStyle(style -> style.withBold(true)).withColor(FOREGROUND & 0xFFFFFF),
+					x + 6, y + 4, w - 12, 1, true));
 		}, rowHeight));
 	}
 
@@ -1403,15 +1434,14 @@ public abstract class DesignerFormScreen extends Screen {
 		int heading = rows.size();
 		groupStarts.add(heading);
 		rows.add(new Row("", (x, y, w) -> {
-			sections.add(new Rect2i(x, y, w, 22));
-			Component title = Component.literal(collapsedGroups.contains(identity) ? "›  " : "⌄  ").append(option(key));
-			addRenderableWidget(new DesignerTheme.GroupHeader(x, y, w, title, () -> {
+			sections.add(new Rect2i(x, y, w, 20));
+			addRenderableWidget(new DesignerTheme.GroupHeader(x, y, w, option(key), !collapsedGroups.contains(identity), () -> {
 				if (!collapsedGroups.remove(identity)) {
 					collapsedGroups.add(identity);
 				}
 				rebuild();
 			}));
-		}, 24));
+		}, 22));
 		fields.run();
 		if (collapsedGroups.contains(identity)) {
 			rows.subList(heading + 1, rows.size()).clear();

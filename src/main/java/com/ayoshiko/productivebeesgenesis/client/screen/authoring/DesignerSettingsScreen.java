@@ -77,7 +77,7 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
 		note("", tr("settings_scale_help"));
         settingSlider("backdrop", 0.1, 0.9);
 		rows.add(new Row("", (x, y, w) -> addRenderableWidget(new DesignerTheme.GroupHeader(x, y, w,
-				Component.literal(customExpanded ? "⌄  " : "›  ").append(tr("settings_custom_theme")), () -> {
+				tr("settings_custom_theme"), customExpanded, () -> {
 					customExpanded = !customExpanded;
 					rebuild();
 				}))));

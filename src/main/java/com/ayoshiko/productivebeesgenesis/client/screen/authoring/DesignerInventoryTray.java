@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
-import com.ayoshiko.productivebeesgenesis.util.NumberFormatter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.Rect2i;
@@ -73,17 +72,7 @@ final class DesignerInventoryTray {
 			DesignerTheme.panel(graphics, "slot", slot.getX(), slot.getY(), 18, 18);
 			ItemStack stack = mc.player == null ? ItemStack.EMPTY : mc.player.getInventory().items.get(index);
 			graphics.renderItem(stack, slot.getX() + 1, slot.getY() + 1);
-			graphics.renderItemDecorations(font, stack, slot.getX() + 1, slot.getY() + 1, "");
-			if (stack.getCount() > 1) {
-				graphics.pose().pushPose();
-				var countFont = DesignerFonts.count();
-				String count = NumberFormatter.formatCompactSlot(stack.getCount());
-				float scale = Math.min(1F, 16F / Math.max(1, countFont.width(count)));
-				graphics.pose().translate(slot.getX() + 17 - countFont.width(count) * scale, slot.getY() + 17 - countFont.lineHeight * scale, 220);
-				graphics.pose().scale(scale, scale, 1);
-				graphics.drawString(countFont, count, 0, 0, 0xFFFFFFFF, true);
-				graphics.pose().popPose();
-			}
+			graphics.renderItemDecorations(mc.font, stack, slot.getX() + 1, slot.getY() + 1);
 			if (slot.contains(mouseX, mouseY)) {
 				hovered = stack;
 				graphics.fill(slot.getX() + 1, slot.getY() + 1, slot.getX() + 17, slot.getY() + 17, 0x30FFFFFF);

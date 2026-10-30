@@ -13,6 +13,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 final class DesignerBeeFields {
@@ -188,17 +189,23 @@ final class DesignerBeeFields {
 			screen.field("breedingItem", definition, "breedingItem", "");
 		}
 		screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> {
-			int cell = (w - 8) / 3;
-			screen.button(x, y, cell, DesignerFormScreen.tr("pick_item"), () -> Minecraft.getInstance().setScreen(new BeeDesignerItemPicker(screen,
-					stack -> definition.addProperty("breedingItem", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))));
-			screen.button(x + cell + 4, y, cell, DesignerFormScreen.tr("breeding_tag"), () -> Minecraft.getInstance().setScreen(
-					DesignerResourcePicker.open(screen, "item_tag", value -> definition.addProperty("breedingItem", "#" + value.get("id").getAsString()))));
-			screen.button(x + (cell + 4) * 2, y, cell, DesignerFormScreen.tr("breeding_default"), () -> {
+			String[] actions = {"pick_item", "breeding_tag", "breeding_default"};
+			int[] sizes = Arrays.stream(actions).mapToInt(key -> Math.max(40, DesignerFonts.body().width(DesignerFormScreen.tr(key)) + 20)).toArray();
+			if (Arrays.stream(sizes).sum() + 8 > w - 12) {
+				Arrays.fill(sizes, Math.max(20, (w - 20) / 3));
+			}
+			Component help = DesignerFormScreen.tr("breeding_food_help");
+			screen.button(x + 6, y, sizes[0], DesignerFormScreen.tr(actions[0]), () -> Minecraft.getInstance().setScreen(new BeeDesignerItemPicker(screen,
+					stack -> definition.addProperty("breedingItem", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))))
+					.setTooltip(Tooltip.create(DesignerFormScreen.tr(actions[0]).copy().append("\n").append(help)));
+			screen.button(x + 10 + sizes[0], y, sizes[1], DesignerFormScreen.tr(actions[1]), () -> Minecraft.getInstance().setScreen(
+					DesignerResourcePicker.open(screen, "item_tag", value -> definition.addProperty("breedingItem", "#" + value.get("id").getAsString()))))
+					.setTooltip(Tooltip.create(DesignerFormScreen.tr(actions[1]).copy().append("\n").append(help)));
+			screen.button(x + 14 + sizes[0] + sizes[1], y, sizes[2], DesignerFormScreen.tr(actions[2]), () -> {
 				definition.remove("breedingItem");
 				screen.rebuild();
-			});
+			}).setTooltip(Tooltip.create(DesignerFormScreen.tr(actions[2]).copy().append("\n").append(help)));
 		}));
-		screen.note("", DesignerFormScreen.tr("breeding_food_help"));
 	}
 
 	static void specialBehavior(DesignerFormScreen screen, JsonObject definition) {

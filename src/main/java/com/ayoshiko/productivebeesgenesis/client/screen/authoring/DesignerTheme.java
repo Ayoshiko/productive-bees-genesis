@@ -11,6 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.StringUtil;
 
 import java.util.function.Supplier;
@@ -302,7 +303,7 @@ final class DesignerTheme {
 			if (font.width(text) > width - 10) {
 				text = font.plainSubstrByWidth(text, Math.max(0, width - 10 - font.width("…"))) + "…";
 			}
-			graphics.drawString(font, text, getX() + (width - font.width(text)) / 2, getY() + (height - 8) / 2 + offset,
+			graphics.drawString(font, text, getX() + (width - font.width(text)) / 2, DesignerFonts.centeredY(font, text, getY(), height) + offset,
 					textColor(), false);
 		}
 
@@ -380,7 +381,7 @@ final class DesignerTheme {
 			var font = DesignerFonts.body();
 			String text = font.plainSubstrByWidth(getMessage().getString(), Math.max(0, width - 10));
 			int color = !active ? palette.muted() : selected ? palette.text() : palette.muted();
-			graphics.drawString(font, text, getX() + (width - font.width(text)) / 2, getY() + (height - 8) / 2, color, false);
+			graphics.drawString(font, text, getX() + (width - font.width(text)) / 2, DesignerFonts.centeredY(font, text, getY(), height), color, false);
 		}
 
 	}
@@ -408,35 +409,33 @@ final class DesignerTheme {
 	}
 
 	static final class GroupHeader extends Action {
-		GroupHeader(int x, int y, int width, Component label, Runnable action) {
+		private final boolean expanded;
+		private final FormattedCharSequence heading;
+
+		GroupHeader(int x, int y, int width, Component label, boolean expanded, Runnable action) {
 			super(x, y, width, label, action);
+			this.expanded = expanded;
+			var lines = DesignerFonts.body().split(label.copy().withStyle(style -> style.withBold(true)), Math.max(1, width - 28));
+			heading = lines.isEmpty() ? FormattedCharSequence.EMPTY : lines.getFirst();
 			setTooltip(Tooltip.create(label));
 		}
 
 		@Override
 		protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 			if (isHoveredOrFocused()) {
-				DesignerGlyphs.rounded(graphics, getX(), getY(), width, height, 4,
-						DesignerPalette.mix(palette.panel(), palette.hover(), 0.55F));
+				DesignerMaterials.mask(graphics, getX() + 3, getY() + 1, width - 6, height - 2, DesignerMaterials.CONTROL_RADIUS,
+						palette.accent() & 0xFFFFFF | 0x10000000);
 			}
 			var font = DesignerFonts.body();
-			String title = getMessage().getString();
-			int inset = 6;
-			if (title.startsWith("⌄  ") || title.startsWith("›  ")) {
-				boolean expanded = title.startsWith("⌄");
-				graphics.pose().pushPose();
-				graphics.pose().translate(getX() + 7, getY() + height / 2F, 0);
-				if (expanded) {
-					graphics.pose().mulPose(com.mojang.math.Axis.ZP.rotationDegrees(90));
-				}
-				graphics.pose().scale(0.65F, 0.65F, 1);
-				DesignerGlyphs.draw(graphics, Symbol.NEXT, palette.muted());
-				graphics.pose().popPose();
-				title = title.substring(3);
-				inset = 16;
+			graphics.drawString(font, heading, getX() + 6, DesignerFonts.centeredY(font, heading, getY(), height), palette.text(), false);
+			graphics.pose().pushPose();
+			graphics.pose().translate(getX() + width - 10, getY() + height / 2F, 0);
+			if (expanded) {
+				graphics.pose().mulPose(com.mojang.math.Axis.ZP.rotationDegrees(90));
 			}
-			graphics.drawString(font, font.plainSubstrByWidth(title, width - inset - 6),
-					getX() + inset, getY() + (height - 8) / 2, palette.text(), false);
+			graphics.pose().scale(0.65F, 0.65F, 1);
+			DesignerGlyphs.draw(graphics, Symbol.NEXT, palette.muted());
+			graphics.pose().popPose();
 			if (isFocused()) {
 				stroke(graphics, getX(), getY(), width, height, palette.accent());
 			}

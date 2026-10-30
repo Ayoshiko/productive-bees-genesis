@@ -9,6 +9,7 @@ import net.minecraft.client.gui.font.FontSet;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Style;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
@@ -33,7 +34,6 @@ final class DesignerFonts {
 	private static final DesignerFont BODY = new DesignerFont(false, 8.5F);
 	private static final DesignerFont CODE = new DesignerFont(true, 8.5F);
 	private static final DesignerFont TITLE = new DesignerFont(false, 10.5F);
-	private static final DesignerFont COUNT = new DesignerFont(true, 7F);
 	private static final DesignerGlyphAtlas ATLAS = new DesignerGlyphAtlas();
 	private static final LinkedHashMap<Key, DesignerTextLayout> LAYOUTS = new LinkedHashMap<>(256, 0.75F, true);
 	private static final Map<FaceKey, java.awt.Font> FACES = new LinkedHashMap<>();
@@ -62,10 +62,6 @@ final class DesignerFonts {
 
 	static Font code() {
 		return DesignerPreferences.text("font_mode").equals("vanilla") ? Minecraft.getInstance().font : CODE;
-	}
-
-	static Font count() {
-		return DesignerPreferences.text("font_mode").equals("vanilla") ? Minecraft.getInstance().font : COUNT;
 	}
 
 	static Font title() {
@@ -341,6 +337,22 @@ final class DesignerFonts {
 
 	static void drawPlain(GuiGraphics graphics, Font font, String text, float x, float y, int color) {
 		graphics.drawString(font, DesignerTextLayout.plainSequence(text, Style.EMPTY), x, y, color, false);
+	}
+
+	static int centeredY(Font font, String text, int top, int height) {
+		if (font instanceof DesignerFont designer) {
+			var layout = designer.layout(text, Style.EMPTY);
+			return Math.round(top + (height - layout.inkTop - layout.inkBottom) / 2);
+		}
+		return top + (height - 8) / 2;
+	}
+
+	static int centeredY(Font font, FormattedCharSequence text, int top, int height) {
+		if (font instanceof DesignerFont designer) {
+			var layout = designer.layout(text);
+			return Math.round(top + (height - layout.inkTop - layout.inkBottom) / 2);
+		}
+		return top + (height - 8) / 2;
 	}
 
 	static void invalidate() {

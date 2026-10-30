@@ -59,8 +59,8 @@
 - 发布 JAR 构建无损精简 PNG 编码、JSON 空白与 ZIP 元数据，保留全部资源路径、像素、颜色元数据和完整许可；构建报告按实际压缩占用分类。
 - 外观页将颜色／粒子与体型／渲染分组，环境属性成组显示，常用组默认展开；体型、采蜜体型、速度、攻击与繁殖用量使用紧凑数字行。普通蜂种与万象直接选择普通／上下翻转姿态，保留未知旧值；半透明移到常用外观，颜色缺省对齐 PB。
 - 蜂种读取复用按资源代际失效的反向配方索引与有界编码缓存，同代际后续读取只处理相关配方；定义路径索引随快照重建、停服释放。物品／方块名称拼音与标签按查询需要生成，减少首次打开方块选择时的重复工作。
-- 初始基因可在设置中选择下拉菜单或全部按钮；按钮按实际本地化宽度换行，保留随机与未知旧值，点击当前项不改写草稿。普通枚举使用下拉，布尔属性使用开关，流程模式和页面切换保留分段导航。过滤页宽窗双列，窄窗合并模式、筛选、全选和撤销，批量操作显示选择数量。
-- 内部缩放调整文字与控件并重排，窗口范围和物品栏尺寸保持稳定，提供 100% 恢复按钮。草稿和选中卡片保持完整圆角，分组横线内缩且避开底边，产物拖动手柄平时只显示点阵。
+- 初始基因可在设置中选择下拉菜单或完整分段切换条；复用页签的滑动选中背景，标签与选项按本地化文字宽度紧凑排列，空间够时两字段同行，窄窗口换行，单列偏好保留。随机与未知旧值保留，点击当前项不改写草稿。普通枚举使用下拉，布尔属性使用开关，流程模式和顶部栏目导航保留原有分段交互。过滤页宽窗双列，窄窗合并模式、筛选、全选和撤销，批量操作显示选择数量。
+- 内部缩放调整文字与控件并重排，窗口范围和物品栏尺寸保持稳定，提供 100% 恢复按钮。草稿和选中卡片保持完整圆角，现代主题以轻量分组背景、加粗标题、柔和标题底色与留白表达层级，移除重复的标题横线和定位蓝色侧标；定位改为整块淡色提示，折叠箭头移到标题右侧，繁殖食物操作聚拢并保留说明提示。AE 主题保留像素分隔线，产物拖动手柄平时只显示点阵。
 - 获取与产物页面统一先显示配方摘要，再进入完整编辑；物品框随名称收紧，数量与概率可在摘要直接输入；固定数量同步上下限，范围数量分别编辑，概率按百分数填写。流体显示图标、名称和 mB，数量与处理时间也可直接修改。常用数值范围移至提示，非法输入仍保留校验。机器配方集中展示输入、输出与费用，将来源、MBD2 内容选项和 MMR 画布／位置放入可展开分组，窄窗口自动调整。短摘要字段按实际内容宽度合并：结果蜂与概率、流体与数量／时间优先同行，放不下时换行；重排后按字段身份恢复输入焦点。
 - 跨整合包导入分别提示世界同 ID、本机旧草稿和 PB 名称键冲突。替换前将不同的旧草稿原文送入编辑器回收站，保管失败则停止导入；名称键冲突要求复制新身份。副本更新自身 `bee_exists` 条件，外部蜂种条件保留；新身份不携带来源整合包的停用配方清单。
 - 机器及远端资源目录读取完整有界快照后按客户端语言筛选，逐页核对版本；同会话分页复用服务端目录，退出取消请求，重载混入或读取失败时保留明确提示。资源按钮仅在草稿、语言或配方版本变化时解析，减少逐帧重复工作。
@@ -72,7 +72,8 @@
 
 - Mekanism Empowered 与 Empowered Unleashed 分别按真实模组 ID 接入，蜂箱和离心机均支持强化速度、强化能量、IO 容量、自动插入器、快速物品插入和快速物品弹出六种升级。蜂箱初始输入支持蜂笼与基因小食，沿附属原生插入面配置及吞吐公式；内部库存容量保持原合同。
 - 蜂箱和 PB 离心处理共用运行时速度公式，正确还原 Unleashed 的每 tick 操作数编码。普通／强化速度和能量增减立即刷新耗电，储能缓存同时识别两类能量升级，修复安装顺序、卸载及 ME／EME 工厂耗电更新遗漏；蜂箱仍保留最短 1 tick 周期。既有原生快速输出不重复叠加附属倍率，中英文安装前置和两种附属择一说明同步更新。
-- 编辑器背包数量改为紧凑等宽文字与轻阴影，移除黑色底块并限制槽内宽度。离心机和蜂箱的数量标签按实际图标坐标定位，优先对齐屏幕像素；原版背包、光标与其他 GUI 的数量不受本模组替换。
+- 编辑器物品栏恢复 Minecraft 当前字体和原版物品数量／耐久／冷却装饰，移除自定义数字字体。离心机、蜂箱及直连槽恢复原先固定 0.7 倍的紧凑数量样式，撤回随 GUI 比例变化的数字像素倍率调整。其他 GUI 的原版数量保留原入口。
+- 栏目和普通按钮按缓存的实际字形上下边界垂直居中，修正平滑字体的文字偏移；栏目名称与滑动选中动效保留。
 - JSON 语法颜色整行绘制，光标、点击和选区复用同一布局；连续选区先合并再绘制，修复逐字背景重叠产生深色竖条及片段度量偏移。
 - 字符数上限、粘贴、直接光标／选区定位与删除保留完整组合字符、代理对和 ZWJ 字素；JSON 达到上限后替换选区正确使用释放的空间。字体切换和资源重载使目录宽度缓存失效。
 - 完整资源重载期间暂停新资源生产与读取，重叠重载统一收口；任一失败保持暂停，后续新批次成功才恢复。停服后的迟到回调不重建旧服务器状态，成功加载、更新、卸载与独立重进均核对有效目录。
@@ -121,7 +122,7 @@
 - Release builds losslessly compact PNG encoding, JSON whitespace and ZIP metadata while retaining every resource path, pixel, color metadata chunk and full license. Artifact reports group actual compressed bytes.
 - Appearance groups colors/particles and size/rendering; common groups stay expanded, environment fields share a group, and size, nectar size, speed, attack and breeding amounts use compact numeric rows. Ordinary bees and Myriad have normal/upside-down pose choices with unknown values retained. Translucency is in ordinary appearance, and absent colors follow PB's defaults.
 - Bee reads reuse generation-aware reverse recipe indexes and bounded encoding caches, processing related recipes on subsequent reads. Definition paths follow their snapshot and are released on shutdown. Item/block Pinyin and tags are built only when the query needs them, reducing work when opening the block picker.
-- Genes and ordinary enums use dropdowns, booleans use switches, and workflow modes retain segmented navigation. The filter uses two columns in wide windows and combines mode, visibility, select-all and undo in narrow windows; bulk actions display selection counts.
+- Initial genes offer dropdowns or complete segmented controls with a sliding selection indicator. Labels and choices use measured localized widths, pairing fields when space permits and wrapping in narrow windows while respecting the single-column preference. Random and unknown existing values remain available; selecting the current value does not edit the draft. Ordinary enums use dropdowns, booleans use switches, and the main navigation retains its existing appearance and motion. Modern form groups use lighter surfaces, bold headings, subtle header fills and spacing instead of redundant heading dividers or blue location bars; location hints cover the relevant row softly. Breeding-food actions stay together with explanatory tooltips. The filter uses two columns in wide windows and combines mode, visibility, select-all and undo in narrow windows.
 - Acquisition and production show summaries before full editing. Item fields fit their labels; amounts and probabilities are directly editable in summaries. Fixed amounts update both bounds, ranges retain separate bounds, and chance is entered as a percentage. Fluids show an icon, localized name and mB, with editable amounts and processing time. Common numeric ranges move to tooltips while invalid values remain checked. Machine inputs, outputs and costs are grouped, with sources, MBD2 content options and MMR canvas/positions collapsed by default and responsive layouts for narrow windows. Short summary fields share available row space: result bees stay with chances and fluids with amounts/times when they fit. Reflow preserves focus by field identity.
 - Cross-pack import distinguishes existing world IDs, local drafts and PB name-key collisions. Different prior draft bytes are archived before replacement; archive failure stops import, and name-key conflicts require a new copied identity. Copies rewrite self-referencing `bee_exists` conditions while retaining external references, and new identities drop source-pack disabled-recipe lists.
 - Remote catalogs load bounded, version-consistent snapshots for client-language search. Server pages reuse a session-owned catalog; leaving cancels pending requests and reload/failure states are reported. Resource buttons decode only after document, language or recipe-version changes.
@@ -131,6 +132,8 @@
 
 #### Fixed
 
+- Restore the editor inventory to Minecraft's current font and native item count, durability and cooldown decorations. Machine and direct-slot counts return to their previous fixed 0.7-scale compact style, removing the GUI-dependent pixel-scale adjustment and the unused editor count font.
+- Center navigation and button labels using cached visual glyph bounds, correcting the vertical offset of localized smooth fonts without changing navigation labels or selection motion.
 - Character limits, pasting, direct cursor/selection placement and deletion preserve complete combining clusters, surrogate pairs and ZWJ graphemes. JSON selection replacement uses the space freed at the character limit. Font-mode switches and resource reloads invalidate catalog width measurements.
 - Pause new resource production and editor reads during complete resource reloads. Overlapping reloads share completion state; any failure keeps admission paused until a new successful batch. Late callbacks after shutdown do not recreate server state. Successful pack loading, updates, removal and an independent restart verify the stable catalog.
 - Apply all new Myriad fields to actual bee NBT, including clearing immunities, inherited colors/sizes and replaced flower sources. Additional acquisition recipes survive the Myriad configuration processor and retain ownership through portable/KubeJS exports. Cross-pack recipe-only imports retain the destination pack's Myriad attributes.

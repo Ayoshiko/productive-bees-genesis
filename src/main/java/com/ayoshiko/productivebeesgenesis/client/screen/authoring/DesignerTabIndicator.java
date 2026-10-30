@@ -29,8 +29,15 @@ final class DesignerTabIndicator extends AbstractWidget {
         long now = net.minecraft.Util.getMillis();
         double seconds = frameAt == 0 ? 0 : (now - frameAt) / 1000.0;
         frameAt = now;
-        position.advance(target, seconds, Math.min(0.22, DesignerPreferences.number("animation_ms") / 1000.0),
-				DesignerPreferences.animate() && DesignerPreferences.enabled("motion_selection"));
+        if (target < 0) {
+            position.snap(-1);
+        } else {
+            if (position.position() < 0) {
+                position.snap(target);
+            }
+            position.advance(target, seconds, Math.min(0.22, DesignerPreferences.number("animation_ms") / 1000.0),
+                    DesignerPreferences.animate() && DesignerPreferences.enabled("motion_selection"));
+        }
         var colors = DesignerTheme.colors();
 		if (DesignerAeSkin.enabled()) {
 			DesignerAeSkin.frame(graphics, getX(), getY(), width, 20, colors.input(), true);
@@ -38,7 +45,10 @@ final class DesignerTabIndicator extends AbstractWidget {
 			DesignerMaterials.surface(graphics, getX(), getY(), width, 20, DesignerMaterials.CONTROL_RADIUS,
 					colors.input(), DesignerPalette.mix(colors.input(), colors.border(), 0.5F));
 		}
-        double value = Math.max(0, Math.min(cells.length - 1, position.position()));
+		if (target < 0) {
+			return;
+		}
+		double value = Math.max(0, Math.min(cells.length - 1, position.position()));
         int first = (int) Math.floor(value);
         int second = Math.min(first + 1, cells.length - 1);
         double fraction = value - first;
