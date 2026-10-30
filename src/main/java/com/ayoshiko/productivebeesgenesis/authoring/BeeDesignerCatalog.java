@@ -22,16 +22,64 @@ import java.util.Locale;
 public final class BeeDesignerCatalog {
 	private static final int PAGE_SIZE = 24;
 
+	/** 每个编辑会话只保留最近一种目录，重载或主动刷新后重新读取。 */
+	static final class Snapshot {
+		private String kind;
+		private long generation;
+		private List<JsonObject> entries;
+	}
+
 	private BeeDesignerCatalog() {
 	}
 
 	public static JsonObject page(MinecraftServer server, JsonObject query) {
+		return page(server, query, new Snapshot());
+	}
+
+	static JsonObject page(MinecraftServer server, JsonObject query, Snapshot snapshot) {
 		String kind = BeeDesignerDocument.text(query, "kind", "item");
 		String search = BeeDesignerDocument.text(query, "search", "").toLowerCase(Locale.ROOT);
 		if (search.length() > 128) {
 			throw new IllegalArgumentException("Search exceeds 128 characters");
 		}
 		int page = query.has("page") ? query.get("page").getAsInt() : 0;
+		if (snapshot.entries == null || !kind.equals(snapshot.kind) || snapshot.generation != BeeDesignerSources.generation
+				|| page == 0 && search.isEmpty()) {
+			snapshot.entries = entries(server, kind);
+			snapshot.kind = kind;
+			snapshot.generation = BeeDesignerSources.generation;
+		}
+		List<JsonObject> entries = snapshot.entries;
+		List<JsonObject> matches = entries.stream().filter(entry -> entry.get("id").getAsString().contains(search)
+				|| entry.get("name").getAsString().toLowerCase(Locale.ROOT).contains(search))
+				.filter(entry -> !kind.equals("machine") || !query.has("host") || query.get("host").getAsString().equals("all_hosts")
+						|| entry.get("host").getAsString().equals(query.get("host").getAsString()))
+				.sorted(Comparator.comparing(entry -> entry.get("id").getAsString())).toList();
+		int pages = Math.max(1, (matches.size() + PAGE_SIZE - 1) / PAGE_SIZE);
+		int selected = Math.max(0, Math.min(page, pages - 1));
+		JsonArray result = new JsonArray();
+		matches.stream().skip((long) selected * PAGE_SIZE).limit(PAGE_SIZE).forEach(result::add);
+		JsonObject response = new JsonObject();
+		response.addProperty("kind", kind);
+		response.addProperty("page", selected);
+		response.addProperty("pages", pages);
+		response.addProperty("total", matches.size());
+		response.addProperty("generation", BeeDesignerSources.generation);
+		response.add("entries", result);
+		if (kind.equals("machine")) {
+			JsonObject hosts = new JsonObject();
+			for (var host : BeeDesignerMachineRecipes.Host.values()) {
+				JsonObject state = new JsonObject();
+				state.addProperty("version", BeeDesignerMachineRuntime.version(host));
+				state.addProperty("problem", BeeDesignerMachineRuntime.problem(host));
+				hosts.add(host.name(), state);
+			}
+			response.add("hosts", hosts);
+		}
+		return response;
+	}
+
+	private static List<JsonObject> entries(MinecraftServer server, String kind) {
 		List<JsonObject> entries = new ArrayList<>();
 		switch (kind) {
 			case "machine" -> entries.addAll(BeeDesignerMachineRuntime.catalog());
@@ -78,33 +126,7 @@ public final class BeeDesignerCatalog {
 					.forEach(tag -> entries.add(entry(tag.getFirst().location(), Component.literal("#" + tag.getFirst().location()))));
 			default -> throw new IllegalArgumentException("Unsupported catalog kind: " + kind);
 		}
-		List<JsonObject> matches = entries.stream().filter(entry -> entry.get("id").getAsString().contains(search)
-				|| entry.get("name").getAsString().toLowerCase(Locale.ROOT).contains(search))
-				.filter(entry -> !kind.equals("machine") || !query.has("host") || query.get("host").getAsString().equals("all_hosts")
-						|| entry.get("host").getAsString().equals(query.get("host").getAsString()))
-				.sorted(Comparator.comparing(entry -> entry.get("id").getAsString())).toList();
-		int pages = Math.max(1, (matches.size() + PAGE_SIZE - 1) / PAGE_SIZE);
-		int selected = Math.max(0, Math.min(page, pages - 1));
-		JsonArray result = new JsonArray();
-		matches.stream().skip((long) selected * PAGE_SIZE).limit(PAGE_SIZE).forEach(result::add);
-		JsonObject response = new JsonObject();
-		response.addProperty("kind", kind);
-		response.addProperty("page", selected);
-		response.addProperty("pages", pages);
-		response.addProperty("total", matches.size());
-		response.addProperty("generation", BeeDesignerSources.generation);
-		response.add("entries", result);
-		if (kind.equals("machine")) {
-			JsonObject hosts = new JsonObject();
-			for (var host : BeeDesignerMachineRecipes.Host.values()) {
-				JsonObject state = new JsonObject();
-				state.addProperty("version", BeeDesignerMachineRuntime.version(host));
-				state.addProperty("problem", BeeDesignerMachineRuntime.problem(host));
-				hosts.add(host.name(), state);
-			}
-			response.add("hosts", hosts);
-		}
-		return response;
+		return List.copyOf(entries);
 	}
 
 	private static JsonObject entry(ResourceLocation id, Component name) {

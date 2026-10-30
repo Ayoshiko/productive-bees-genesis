@@ -24,7 +24,7 @@ final class DesignerConditionsScreen extends DesignerFormScreen {
 	protected void init() {
 		begin();
 		note("", tr("conditions_help"));
-		JsonArray conditions = BeeDesignerDocument.array(owner, field);
+		JsonArray conditions = owner.has(field) ? owner.getAsJsonArray(field) : new JsonArray();
 		for (int index = 0; index < conditions.size(); index++) {
 			int selected = index;
 			JsonObject condition = conditions.get(index).getAsJsonObject();
@@ -41,6 +41,9 @@ final class DesignerConditionsScreen extends DesignerFormScreen {
 			}
 			rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("remove_condition"), () -> {
 				conditions.remove(selected);
+				if (conditions.isEmpty()) {
+					owner.remove(field);
+				}
 				rebuild();
 			})));
 		}
@@ -55,6 +58,7 @@ final class DesignerConditionsScreen extends DesignerFormScreen {
 				condition.addProperty(type.equals("neoforge:mod_loaded") ? "modid" : "bee",
 						type.equals("neoforge:mod_loaded") ? "productivebees" : "minecraft:bee");
 				conditions.add(condition);
+				owner.add(field, conditions);
 				rebuild();
 			})));
 		}
@@ -64,9 +68,6 @@ final class DesignerConditionsScreen extends DesignerFormScreen {
 
 	@Override
 	public void onClose() {
-		if (BeeDesignerDocument.array(owner, field).isEmpty()) {
-			owner.remove(field);
-		}
 		minecraft.setScreen(parent);
 	}
 }

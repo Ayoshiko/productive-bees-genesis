@@ -37,17 +37,24 @@ public final class BeeDesignerMachineRuntime {
 
 	/** MI 的运行配方持有多产物列表，不能用总是返回 EMPTY 的 getResultItem 判断蜂蛋。 */
 	static boolean candidate(Recipe<?> recipe, ResourceLocation bee) {
+		Set<ResourceLocation> owners = outputBees(recipe);
+		return owners == null || owners.contains(bee);
+	}
+
+	static Set<ResourceLocation> outputBees(Recipe<?> recipe) {
 		if (!isType(recipe, "aztech.modern_industrialization.machines.recipe.MachineRecipe")) {
-			return true;
+			return null;
 		}
 		try {
+			Set<ResourceLocation> owners = new java.util.HashSet<>();
 			for (Object output : (List<?>) recipe.getClass().getField("itemOutputs").get(recipe)) {
 				ItemStack stack = (ItemStack) output.getClass().getMethod("getStack").invoke(output);
-				if (bee.equals(BeeDesignerEggs.bee(stack))) {
-					return true;
+				ResourceLocation bee = BeeDesignerEggs.bee(stack);
+				if (bee != null) {
+					owners.add(bee);
 				}
 			}
-			return false;
+			return Set.copyOf(owners);
 		} catch (ReflectiveOperationException failure) {
 			throw unavailable(Host.MI, failure);
 		}

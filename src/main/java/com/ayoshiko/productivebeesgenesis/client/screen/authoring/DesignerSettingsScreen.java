@@ -15,6 +15,7 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
     private String importPath = "";
     private boolean saving;
     private boolean layoutChanged;
+	private boolean customExpanded = DesignerPreferences.text("theme").startsWith("custom_");
 
     DesignerSettingsScreen(Screen parent) {
         super(tr("settings"));
@@ -28,7 +29,7 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
         if (status.isBlank() && !DesignerPreferences.problem().isBlank()) {
             status = DesignerPreferences.problem();
         }
-        tabs(left, contentTop, contentWidth, category, new String[]{"appearance", "interaction", "shortcuts", "installation"},
+        tabs(left, contentTop, contentWidth, category, new String[]{"appearance", "interaction", "shortcuts", "installation", "files"},
                 value -> true, value -> {
                     category = value;
                     page = 0;
@@ -41,6 +42,7 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
             case "interaction" -> interaction();
             case "shortcuts" -> shortcuts();
             case "installation" -> installation();
+            case "files" -> DesignerFileLocationsScreen.addLocations(this);
             default -> throw new IllegalStateException("Unknown settings category");
         }
         finishRows();
@@ -57,11 +59,27 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
 
     private void appearance() {
         section("settings_appearance");
-        preferenceChoice("settings_theme", "theme", "dark", "light", "ae_light", "custom_dark", "custom_light");
+        preferenceChoice("settings_theme", "theme", "dark", "light", "ae_light", "ae_dark", "custom_dark", "custom_light");
+		preferenceChoice("settings_skin", "skin", "smooth", "ae");
         preferenceChoice("settings_density", "density", "compact", "comfortable", "spacious");
+		preferenceChoice("settings_navigation_layout", "navigation_layout", "adaptive", "menus", "expanded");
+		preferenceChoice("settings_field_layout", "field_layout", "adaptive", "single", "columns");
+		preferenceToggle("settings_collapse_sections", "collapse_sections");
+		preferenceToggle("settings_catalog_help", "catalog_help");
+		note("", tr("settings_responsive_help"));
         settingSlider("ui_scale", 0.85, 1.15);
         settingSlider("backdrop", 0.1, 0.9);
-        section("settings_custom_theme");
+		rows.add(new Row("", (x, y, w) -> addRenderableWidget(new DesignerTheme.GroupHeader(x, y, w,
+				Component.literal(customExpanded ? "⌄  " : "›  ").append(tr("settings_custom_theme")), () -> {
+					customExpanded = !customExpanded;
+					rebuild();
+				}))));
+		if (customExpanded || !DesignerPreferences.enabled("collapse_sections")) {
+			customTheme();
+		}
+	}
+
+	private void customTheme() {
         note("", tr("settings_theme_help"));
         rows.add(new Row("", (x, y, w) -> {
             int cell = (w - 6) / 2;
@@ -69,6 +87,15 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
             button(x + cell + 6, y, cell, tr("settings_custom_light"), () -> editTheme("custom_light"));
         }, 20, true));
         JsonObject colors = custom.getAsJsonObject("colors");
+		try {
+			DesignerPalette preview = DesignerPalette.parse(custom);
+			double ratio = Math.min(DesignerPalette.contrastRatio(preview.text(), preview.panel()),
+					DesignerPalette.contrastRatio(preview.text(), preview.button()));
+			note(ratio < 4.5 ? "error" : "", Component.translatable("designer.settings_contrast",
+					String.format(java.util.Locale.ROOT, "%.1f", ratio)));
+		} catch (IllegalArgumentException invalid) {
+			note("error", statusMessage(invalid.getMessage()));
+		}
         for (String key : List.of("panel", "card", "input", "button", "hover", "text", "muted", "accent", "border", "error", "success")) {
 			rows.add(new Row("theme.color." + key, (x, y, w) -> {
 				addRenderableWidget(new DesignerTheme.Swatch(x, y, 26, () -> colors.get(key).getAsString(), () ->
@@ -112,11 +139,23 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
 
     private void interaction() {
         section("settings_animation");
+		rows.add(new Row("motion_preset", (x, y, w) -> {
+			int cell = (w - 8) / 3;
+			String[] presets = {"gentle", "snappy", "still"};
+			for (int index = 0; index < presets.length; index++) {
+				String preset = presets[index];
+				button(x + index * (cell + 4), y, cell, tr("motion_preset." + preset), () -> motionPreset(preset));
+			}
+		}, 24, true));
         preferenceToggle("settings_animations", "animations");
         preferenceToggle("settings_reduce_motion", "reduce_motion");
         settingSlider("animation_ms", 80, 400);
 		settingSlider("motion_amount", 0, 24);
 		preferenceChoice("settings_motion_style", "motion_style", "responsive", "smooth");
+		preferenceChoice("settings_motion_feedback", "motion_feedback", "subtle", "ripple", "none");
+		preferenceChoice("settings_motion_transition", "motion_transition", "slide", "reveal", "none");
+		preferenceToggle("settings_motion_menus", "motion_menus");
+		preferenceToggle("settings_motion_selection", "motion_selection");
         section("settings_behavior");
         settingSlider("preview_sensitivity", 0.15, 1.5);
         settingSlider("tooltip_ms", 0, 1500);
@@ -127,8 +166,24 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
         note("", tr("settings_interaction_help"));
     }
 
+	private void motionPreset(String preset) {
+		JsonObject values = DesignerPreferences.snapshot();
+		values.addProperty("reduce_motion", preset.equals("still"));
+		values.addProperty("animations", !preset.equals("still"));
+		values.addProperty("animation_ms", preset.equals("snappy") ? 130 : 220);
+		values.addProperty("motion_amount", preset.equals("snappy") ? 6 : 3);
+		values.addProperty("motion_style", preset.equals("snappy") ? "responsive" : "smooth");
+		values.addProperty("motion_feedback", preset.equals("still") ? "none" : "subtle");
+		values.addProperty("motion_transition", preset.equals("still") ? "none" : "slide");
+		DesignerPreferences.apply(values);
+		status = "designer.motion_preset_applied";
+		rebuild();
+	}
+
     private void shortcuts() {
         section("settings_shortcuts");
+		rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("tutorial_reopen"), () ->
+				DesignerTutorialScreen.start(this))));
         for (String key : List.of("search", "save", "undo", "redo", "theme", "layout", "settings", "pages", "selection", "drag", "number")) {
             note("", tr("shortcut." + key));
         }
@@ -139,10 +194,11 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
         for (String key : List.of("creative", "permission", "apply", "datapack", "names", "kubejs", "restart")) {
             note("", tr("installation." + key));
         }
+		note("", tr("editor_texture_credit"));
     }
 
     private void preferenceChoice(String label, String key, String... choices) {
-        rows.add(new Row(label, (x, y, w) -> dropdown(x, y, w, DesignerPreferences.text(key), choices, value -> {
+        rows.add(new Row(label, (x, y, w) -> selection(x, y, w, DesignerPreferences.text(key), choices, value -> {
             DesignerPreferences.set(key, value);
             if (key.equals("theme")) {
                 custom = DesignerPreferences.palette().json();
@@ -155,7 +211,7 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
         rows.add(new Row(label, (x, y, w) -> addRenderableWidget(new DesignerTheme.Switch(x, y, Math.min(w, 90),
                 DesignerPreferences.enabled(key), () -> {
                     DesignerPreferences.set(key, !DesignerPreferences.enabled(key));
-                }))));
+                })), 20, false, 90));
     }
 
     private void settingSlider(String key, double min, double max) {
@@ -168,7 +224,7 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
     }
 
     private static String display(String key, double value) {
-        return key.endsWith("_ms") ? Long.toString(Math.round(value)) : Long.toString(Math.round(value * 100));
+        return key.endsWith("_ms") || key.equals("motion_amount") ? Long.toString(Math.round(value)) : Long.toString(Math.round(value * 100));
     }
 
     private void importTheme(String value) {

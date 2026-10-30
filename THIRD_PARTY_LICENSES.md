@@ -158,3 +158,11 @@
 - **许可证**: MIT
 - **使用方式**: 可选联动，`RenderBlockBeLoadFixMixin` 修复建筑小工具渲染方块实体加载时序问题；未安装时经 `MixinConfigPlugin` 跳过该 Mixin
 - **来源**: https://modrinth.com/mod/building-gadgets-2
+
+## 蜂蜂应援手册书本原材质 / Handbook book texture
+
+- **作者 / Author**: gummyc_type2，beebeeblock-the-skyhive 作者。
+- **来源 / Source**: 用户提供的原始 `guide.png` 及作者信息。
+- **使用方式 / Use**: 资源蜜蜂编辑器手册使用原书本的像素形状、透明轮廓和书页，仅将封面换成黄色。
+- **感谢 / Thanks**: 感谢 gummyc_type2 提供原材质；游戏内设置页与中英文项目说明保留署名。
+- **原素材许可 / Original asset license**: 以原作者适用许可为准；本条记录作者、来源与换色范围。

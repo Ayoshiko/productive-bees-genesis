@@ -29,9 +29,9 @@ final class DesignerBeePicker extends DesignerFormScreen {
 		});
 		contentTop = frameTop + 56;
 		var ids = BeeDesignerEggs.bees();
-		String text = search.toLowerCase(java.util.Locale.ROOT);
-		var matches = ids.stream().sorted().filter(id -> id.contains(text)
-				|| BeeDesignerScreen.beeName(id).getString().toLowerCase(java.util.Locale.ROOT).contains(text)).toList();
+		var filter = DesignerSearch.compile(search);
+		var matches = ids.stream().sorted().filter(id -> filter.matches(id.split(":", 2)[0],
+				filter.needsName() ? DesignerSearch.indexed(id + " " + BeeDesignerScreen.beeName(id).getString()) : id, java.util.List.of())).toList();
 		int columns = Math.max(1, contentWidth / 142);
 		for (int offset = 0; offset < matches.size(); offset += columns) {
 			int first = offset;

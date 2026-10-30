@@ -46,12 +46,17 @@ final class DesignerGlyphs {
     }
 
     static void rounded(GuiGraphics graphics, int x, int y, int width, int height, int radius, int color) {
-        int r = Math.min(radius, Math.min(width, height) / 2);
-        for (int row = 0; row < height; row++) {
-            double distance = Math.max(r - row - 0.5, row + 0.5 - (height - r));
-            int inset = distance > 0 ? (int) Math.ceil(r - Math.sqrt(Math.max(0, r * r - distance * distance))) : 0;
-            graphics.fill(x + inset, y + row, x + width - inset, y + row + 1, color);
-        }
+		if (width <= 0 || height <= 0) {
+			return;
+		}
+		int r = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
+		graphics.fill(x, y + r, x + width, y + height - r, color);
+		for (int row = 0; row < r; row++) {
+			double distance = r - row - 0.5;
+			int inset = (int) Math.ceil(r - Math.sqrt(Math.max(0, r * r - distance * distance)));
+			graphics.fill(x + inset, y + row, x + width - inset, y + row + 1, color);
+			graphics.fill(x + inset, y + height - row - 1, x + width - inset, y + height - row, color);
+		}
     }
 
     static void ripple(GuiGraphics graphics, int x, int y, int width, int height, double hotspotX, double hotspotY,

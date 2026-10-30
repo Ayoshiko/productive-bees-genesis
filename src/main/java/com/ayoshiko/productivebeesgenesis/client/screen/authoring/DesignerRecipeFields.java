@@ -26,7 +26,30 @@ final class DesignerRecipeFields {
 		screen.scope("recipes/" + id);
 		screen.anchor("type");
 		String type = recipe.get("type").getAsString();
+		if (com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerWorldConversions.shared(recipe)) {
+			screen.note("", DesignerFormScreen.tr("conversion_shared_readonly"));
+			screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> screen.button(x, y, w, DesignerFormScreen.tr("runtime_data"),
+					() -> minecraft.setScreen(new DesignerJsonScreen(screen, recipe, id, true)))));
+			screen.scope("");
+			return;
+		}
 		switch (type) {
+			case "productivebees:bottler" -> {
+				ingredient("ingredient", recipe, "ingredient");
+				screen.rows.add(new DesignerFormScreen.Row("fluid", (x, y, w) -> screen.addRenderableWidget(new DesignerResourceButton(
+						x, y, w, recipe.getAsJsonObject("fluid"), true, () -> minecraft.setScreen(DesignerResourcePicker.open(screen, "fluid", chosen -> {
+							JsonObject fluid = new JsonObject();
+							fluid.add("fluid", chosen.get("id"));
+							fluid.addProperty("amount", 250);
+							recipe.add("fluid", fluid);
+						}))))));
+				screen.number("fluid_amount", recipe.getAsJsonObject("fluid"), "amount", "250", DesignerNumberRange.of(1, Integer.MAX_VALUE, true));
+				screen.rows.add(new DesignerFormScreen.Row("egg_output", (x, y, w) -> screen.stackButton(x, y, w,
+						DesignerStackButton.decode(recipe.get("result")), "", () -> minecraft.setScreen(new DesignerEggScreen(
+								screen, recipe.getAsJsonObject("result"), chosen -> recipe.add("result", chosen))))));
+				screen.note("", DesignerFormScreen.tr("bottler_help"));
+			}
+			case "productivebees:item_conversion", "productivebees:block_conversion" -> DesignerConversionFields.add(screen, recipe);
 			case "productivebees:bee_breeding" -> {
 				screen.bee("parent1", recipe, "parent1", "minecraft:bee");
 				screen.bee("parent2", recipe, "parent2", "minecraft:bee");
@@ -80,7 +103,6 @@ final class DesignerRecipeFields {
 		boolean resource = type.startsWith("productivebeesgenesis:");
 		String field = type.equals("productivebees:advanced_beehive") ? "results" : "outputs";
 		JsonArray outputs = recipe.has(field) ? recipe.getAsJsonArray(field) : new JsonArray();
-		recipe.add(field, outputs);
 		if (type.endsWith("centrifuging") || type.endsWith("centrifuge")) {
 			if (type.equals("productivebees:centrifuge")) {
 				defaultCentrifugeTime();
@@ -94,12 +116,17 @@ final class DesignerRecipeFields {
 		if (type.equals("productivebees:centrifuge")) {
 			screen.anchor("fluid");
 			screen.rows.add(new DesignerFormScreen.Row("fluid", (x, y, w) -> {
-				screen.button(x, y, w - 26, recipe.has("fluid") ? Component.literal(recipe.get("fluid").toString()) : DesignerFormScreen.tr("pick_fluid"),
-						() -> minecraft.setScreen(DesignerResourcePicker.open(screen, "fluid", value -> recipe.add("fluid",
-								com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerSelections.fluidOutput(value, minecraft.level.registryAccess(), 1000)))));
-				screen.ghost(x, y, w - 26, value -> value instanceof net.neoforged.neoforge.fluids.FluidStack, value -> recipe.add("fluid",
+				int width = Math.min(w - 26, 230);
+				Runnable pick = () -> minecraft.setScreen(DesignerResourcePicker.open(screen, "fluid", value -> recipe.add("fluid",
+						com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerSelections.fluidOutput(value, minecraft.level.registryAccess(), 1000))));
+				if (recipe.has("fluid")) {
+					screen.addRenderableWidget(new DesignerResourceButton(x, y, width, recipe.getAsJsonObject("fluid"), true, pick));
+				} else {
+					screen.button(x, y, width, DesignerFormScreen.tr("pick_fluid"), pick);
+				}
+				screen.ghost(x, y, width, value -> value instanceof net.neoforged.neoforge.fluids.FluidStack, value -> recipe.add("fluid",
 						com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerSelections.fluidOutput(DesignerFormScreen.selection(value), minecraft.level.registryAccess(), 1000)));
-				screen.button(x + w - 22, y, 22, Component.literal("×"), () -> {
+				screen.button(x + width + 4, y, 22, Component.literal("×"), () -> {
 					recipe.remove("fluid");
 					screen.rebuild();
 				});
@@ -109,17 +136,13 @@ final class DesignerRecipeFields {
 			}
 		}
 		for (int index = 0; index < outputs.size(); index++) {
-			int selected = index;
 			screen.scope("recipes/" + id + "/" + field + "/" + index);
 			screen.anchor("");
 			JsonObject output = outputs.get(index).getAsJsonObject();
 			ItemStack stack = resource ? ItemStack.EMPTY : DesignerStackButton.decode(output.get("item"));
 			Component name = stack.isEmpty() ? DesignerFormScreen.option(BeeDesignerDocument.text(output, "kind", "output")) : stack.getHoverName();
-			screen.outputHeading(Component.translatable("designer.output_numbered", index + 1, name), () -> {
-				outputs.remove(selected);
-				screen.rebuild();
-			});
-			DesignerOutputScreen.addFields(screen, output, resource);
+			screen.outputHeading(Component.translatable("designer.output_numbered", index + 1, name), outputs, output);
+			DesignerOutputScreen.addFields(screen, output, resource, outputs);
 		}
 		screen.scope("recipes/" + id);
 		screen.anchor(field);
@@ -141,6 +164,7 @@ final class DesignerRecipeFields {
 				output = BeeDesignerDocument.itemOutput(item);
 			}
 			outputs.add(output);
+			recipe.add(field, outputs);
 			screen.rebuild();
 		})));
 	}

@@ -189,6 +189,9 @@ public final class MyriadBeeTypeCache {
 	 * @param level 服务端世界
 	 */
 	public static void updateBeeTypeCache(ServerLevel level) {
+		if (com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime.reloadBlocked(level.getServer())) {
+			return;
+		}
 		long currentTick = level.getGameTime();
 		if (!warmupComplete && currentTick < nextWarmupTick) return;
 		nextWarmupTick = currentTick + 20L;
@@ -256,6 +259,14 @@ public final class MyriadBeeTypeCache {
 	}
 
 	/** 枚举同蜂种的所有配方，按完整组件去重；缺失时等待重载，不伪造蜜脾。 */
+	public static int availableForms(ServerLevel level, ResourceLocation beeType) {
+		List<ItemStack> templates = resolveHoneycombTemplates(level, beeType);
+		if (templates.isEmpty()) {
+			return 0;
+		}
+		return templates.stream().anyMatch(comb -> !RandomHoneycombSelector.buildCombBlockTemplate(beeType, comb).isEmpty()) ? 3 : 1;
+	}
+
 	private static List<ItemStack> resolveHoneycombTemplates(ServerLevel level, ResourceLocation beeType) {
 		List<ItemStack> result = new ArrayList<>();
 		for (ItemStack output : BeeInfoHelper.getAllBeeProduce(level, beeType)) {

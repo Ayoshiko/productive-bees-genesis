@@ -15,6 +15,58 @@ class Ae2NetworkWorkCoordinatorTest {
 	}
 
 	@Test
+	void intermittentWorkersRetainTheirOrderAcrossExistingCooldowns() {
+		Object network = new Object();
+		Object handle = Ae2NetworkWorkCoordinator.resolve(network);
+		long[] workers = new long[19];
+		int[] turns = new int[workers.length];
+		Ae2NetworkWorkCoordinator.recordResolvedExtractCost(handle, 0, 10_000_000, 300_000);
+		for (int round = 0; round < workers.length * 3; round++) {
+			long tick = 1L + round * 20L;
+			int accepted = 0;
+			for (int index = 0; index < workers.length; index++) {
+				if (workers[index] == 0) workers[index] = Ae2NetworkWorkCoordinator.createWorkerId();
+				if (!Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, workers[index], tick)) continue;
+				turns[index]++;
+				accepted++;
+				Ae2NetworkWorkCoordinator.recordResolvedExtractCost(handle, tick, 10_000_000, 300_000);
+			}
+			assertEquals(1, accepted);
+		}
+		for (int turnsPerWorker : turns) assertEquals(3, turnsPerWorker);
+	}
+
+	@Test
+	void aWaitingOutputWorkerCannotBeStarvedByRepeatedSlowFirstWorker() {
+		Object network = new Object();
+		Object handle = Ae2NetworkWorkCoordinator.resolve(network);
+		long first = Ae2NetworkWorkCoordinator.createWorkerId();
+		long second = Ae2NetworkWorkCoordinator.createWorkerId();
+		for (int tick = 0; tick < 12; tick++) {
+			if (Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, first, tick)) {
+				Ae2NetworkWorkCoordinator.recordResolvedCost(handle, tick, 10_000_000, 150_000);
+			}
+			boolean secondTurn = Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, second, tick);
+			assertEquals(tick % 2 == 1, secondTurn);
+			if (secondTurn) Ae2NetworkWorkCoordinator.recordResolvedCost(handle, tick, 10_000_000, 150_000);
+		}
+	}
+
+	@Test
+	void staleWaitingReservationIsConsumedAndCannotFreezeRotation() {
+		Object network = new Object();
+		Object handle = Ae2NetworkWorkCoordinator.resolve(network);
+		long active = Ae2NetworkWorkCoordinator.createWorkerId();
+		long vanished = Ae2NetworkWorkCoordinator.createWorkerId();
+		Ae2NetworkWorkCoordinator.recordResolvedCost(handle, 0, 1_000_000, 150_000);
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, active, 1));
+		assertFalse(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, vanished, 1));
+		assertFalse(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, active, 2));
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, active, 3));
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, active, 204));
+	}
+
+	@Test
 	void healthyNetworkDoesNotThrottleWorkers() {
 		Object network = new Object();
 		long first = Ae2NetworkWorkCoordinator.createWorkerId();

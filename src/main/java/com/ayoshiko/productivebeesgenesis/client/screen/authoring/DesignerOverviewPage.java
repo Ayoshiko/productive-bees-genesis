@@ -28,15 +28,18 @@ final class DesignerOverviewPage {
 		screen.field("name_en", names, "en_us", "");
 		screen.scope("definition");
 		DesignerBeeModels.add(screen, definition);
-		for (String color : List.of("primaryColor", "secondaryColor", "particleColor", "glowColor")) {
+		for (String color : List.of("primaryColor", "secondaryColor", "particleColor", "tertiaryColor")) {
 			screen.field(color, definition, color, "#FFFFFF");
 		}
 		screen.number("size", definition, "size", "1");
-		screen.toggle("createComb", definition, "createComb", false);
+		screen.number("pollinatedSize", definition, "pollinatedSize", BeeDesignerDocument.text(definition, "size", "1"));
+		screen.toggle("colorCycle", definition, "colorCycle", false);
+		screen.toggle("useGlowLayer", definition, "useGlowLayer", BeeDesignerDocument.text(definition, "renderer", "default").equals("default_crystal"));
+		screen.toggle("createComb", definition, "createComb", true);
 		heading(screen, "attributes", () -> locate.accept("definition/speed"));
-		screen.number("speed", definition, "speed", "0.3");
+		screen.number("speed", definition, "speed", "1");
 		screen.number("attack", definition, "attack", "2");
-		screen.item("breedingItem", definition, "breedingItem", "minecraft:poppy");
+		DesignerBeeFields.breedingFood(screen, definition);
 		screen.number("breedingItemCount", definition, "breedingItemCount", "1");
 		for (String flower : List.of("flowerItem", "flowerBlock", "flowerTag", "flowerFluid", "flowerResource")) {
 			if (definition.has(flower)) {
@@ -53,7 +56,7 @@ final class DesignerOverviewPage {
 				}
 			}
 		}
-		JsonObject genes = BeeDesignerDocument.object(definition, "attributes");
+		JsonObject genes = definition;
 		screen.gene("weatherTolerance", genes, "weather_tolerance", "weather_tolerance.none", "weather_tolerance.rain", "weather_tolerance.any");
 		screen.gene("temper", genes, "temper", "temper.passive", "temper.normal", "temper.hostile", "temper.aggressive");
 		screen.gene("behavior", genes, "behavior", "behavior.diurnal", "behavior.nocturnal", "behavior.metaturnal");

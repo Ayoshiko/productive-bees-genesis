@@ -143,8 +143,7 @@ final class DesignerIngredientCatalog {
 				JsonObject selection = new JsonObject();
 				selection.addProperty("kind", "block");
 				selection.addProperty("id", id.toString());
-				return new Entry(id, selection, block.getName(),
-						BuiltInRegistries.BLOCK.wrapAsHolder(block).tags().map(tag -> tag.location().toString()).toList(), new ItemStack(block));
+				return new Entry(id, selection, block.getName(), null, new ItemStack(block));
 			}
 			if (value instanceof Pair<?, ?> pair && pair.getSecond() instanceof HolderSet.Named<?> holders) {
 				var id = holders.key().location();
@@ -255,7 +254,6 @@ final class DesignerIngredientCatalog {
 			idText = id.toString();
 			this.ingredient = ingredient;
 			this.name = name;
-			searchable = name == null ? null : (idText + " " + name.getString()).toLowerCase(Locale.ROOT);
 			this.tags = tags;
 			this.preview = preview;
 			var block = BuiltInRegistries.BLOCK.get(id);
@@ -265,16 +263,23 @@ final class DesignerIngredientCatalog {
 
 		String searchable() {
 			if (searchable == null) {
-				name = ((ItemStack) ingredient).getHoverName();
-				searchable = (idText + " " + name.getString()).toLowerCase(Locale.ROOT);
+				if (name == null) {
+					name = ((ItemStack) ingredient).getHoverName();
+				}
+				searchable = DesignerSearch.indexed(idText + " " + name.getString());
 			}
 			return searchable;
 		}
 
 		List<String> tags() {
 			if (tags == null) {
-				var item = ((ItemStack) ingredient).getItem();
-				tags = BuiltInRegistries.ITEM.wrapAsHolder(item).tags().map(tag -> tag.location().toString()).toList();
+				if (ingredient instanceof JsonObject object && "block".equals(object.get("kind").getAsString())) {
+					tags = BuiltInRegistries.BLOCK.wrapAsHolder(BuiltInRegistries.BLOCK.get(id)).tags()
+							.map(tag -> tag.location().toString()).toList();
+				} else {
+					var item = ((ItemStack) ingredient).getItem();
+					tags = BuiltInRegistries.ITEM.wrapAsHolder(item).tags().map(tag -> tag.location().toString()).toList();
+				}
 			}
 			return tags;
 		}

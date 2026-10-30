@@ -21,7 +21,8 @@ final class DesignerMachineEntryButton extends DesignerTheme.Action {
 	private ItemStack item = ItemStack.EMPTY;
 	private FluidStack fluid = FluidStack.EMPTY;
 	private ResourceProductionRecipe.Output resource;
-	private final Component label;
+	private final Component name;
+	private Component label;
 
 	DesignerMachineEntryButton(int x, int y, int width, BeeDesignerMachineRecipes.Entry entry, Runnable action) {
 		super(x, y, width, Component.empty(), action);
@@ -55,7 +56,9 @@ final class DesignerMachineEntryButton extends DesignerTheme.Action {
 		}
 		String amount = BeeDesignerDocument.text(entry.value(), entry.amountKey(), "1");
 		String chance = BeeDesignerDocument.text(entry.node(), entry.chanceKey(), "1");
+		this.name = name.copy();
 		label = name.copy().append(" × " + amount).append(chance.equals("1") ? "" : " · " + chance);
+		setMessage(label);
 		if (item.isEmpty()) {
 			setTooltip(Tooltip.create(label));
 		}
@@ -71,6 +74,20 @@ final class DesignerMachineEntryButton extends DesignerTheme.Action {
 
 	Component summary() {
 		return label;
+	}
+
+	DesignerMachineEntryButton fitted() {
+		setWidth(Math.min(getWidth(), Math.max(104, Math.min(300, Minecraft.getInstance().font.width(label) + 34))));
+		return this;
+	}
+
+	DesignerMachineEntryButton identityOnly() {
+		label = name;
+		setMessage(label);
+		if (item.isEmpty()) {
+			setTooltip(Tooltip.create(label));
+		}
+		return this;
 	}
 
 	private static String chemicalId(JsonElement value) {

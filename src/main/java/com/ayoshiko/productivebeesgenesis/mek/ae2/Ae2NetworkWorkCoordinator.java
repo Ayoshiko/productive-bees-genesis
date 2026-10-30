@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>
  * 输入与输出分别共享网络预算和活跃宿主轮次，避免慢输出阻塞健康输入。
  * 健康方向不限制宿主轮次；检测到慢操作后，同一网络该方向每刻只放行一个活跃宿主，
- * 并通过持久轮转游标避免固定 tick 顺序造成饥饿。不同网络拥有独立预算，
+ * 并按未获许可的申请顺序轮转，避免固定 tick 顺序和宿主冷却造成饥饿。不同网络拥有独立预算，
  * 不再因一套病态外部存储拖慢无关网络。
  * <p>
  * 网络键使用身份语义弱引用，状态值不反向持有网络或宿主；宿主只以 long 令牌登记，
@@ -30,8 +30,7 @@ final class Ae2NetworkWorkCoordinator {
 	 * 原实现在<b>每次</b> {@code tryAcquire} 里都遍历整张宿主表做淘汰：一台机器每刻会取
 	 * 多次令牌（物品直推、批量输出、流体推送各一次），N 台机器共享同一网络时就是每刻
 	 * O(N²) 次 map 迭代。现在把淘汰从热路径摘出来，改为每 {@value} 刻扫一次；
-	 * 「本刻谁活跃」由 {@link NetworkState#selectNextWorker(long)} 按活跃窗口过滤保证，
-	 * 因此淘汰只是内存回收，延后执行不影响调度正确性。
+	 * 未获许可的申请单独保留有限窗口，选取只弹出队首；淘汰只负责回收历史条目。
 	 */
 	private static final long WORKER_REAP_INTERVAL_TICKS = 20L;
 	private static final int EWMA_SHIFT = 3;
@@ -116,14 +115,19 @@ final class Ae2NetworkWorkCoordinator {
 		synchronized (state) {
 			state.touchWorker(workerId, gameTick);
 			state.refreshBudget(gameTick);
+			if (!state.isExpensive() && state.spentNanos < NETWORK_BUDGET_NANOS) {
+				state.waiting.remove(workerId);
+				return true;
+			}
+			if (state.turnTick != gameTick || state.turnWorkerId != workerId) {
+				state.waiting.put(workerId, gameTick);
+			}
 			if (state.spentNanos >= NETWORK_BUDGET_NANOS) return false;
-			if (!state.isExpensive()) return true;
 			if (state.turnTick != gameTick) {
 				state.turnTick = gameTick;
 				state.turnWorkerId = state.selectNextWorker(gameTick);
 			}
 			if (state.turnWorkerId != workerId) return false;
-			state.cursorWorkerId = workerId;
 			return true;
 		}
 	}
@@ -186,6 +190,7 @@ final class Ae2NetworkWorkCoordinator {
 	private static void release(NetworkState state, long workerId) {
 		synchronized (state) {
 			state.workerLastSeen.remove(workerId);
+			state.waiting.remove(workerId);
 			if (state.lastTouchedWorkerId == workerId) state.lastTouchedWorkerId = 0L;
 			if (state.turnWorkerId == workerId) state.turnWorkerId = 0L;
 		}
@@ -259,8 +264,10 @@ final class Ae2NetworkWorkCoordinator {
 	}
 
 	private static final class NetworkState {
+		private static final long WAITING_TICKS = 200L;
 		// 所有访问均持有 state 锁；原始 long 表无需额外并发节点或逐次装箱。
 		private final Long2LongOpenHashMap workerLastSeen = new Long2LongOpenHashMap();
+		private final Long2LongLinkedOpenHashMap waiting = new Long2LongLinkedOpenHashMap();
 		private long lastTouchedWorkerId;
 		private long lastTouchedTick = Long.MIN_VALUE;
 		private boolean hasCostSample;
@@ -269,7 +276,6 @@ final class Ae2NetworkWorkCoordinator {
 		private long spentNanos;
 		private long turnTick = Long.MIN_VALUE;
 		private long turnWorkerId;
-		private long cursorWorkerId;
 		/** 上次淘汰宿主表的游戏刻，用于把 O(宿主数) 的清理摊到每 N 刻一次。 */
 		private long lastReapTick = Long.MIN_VALUE;
 
@@ -287,8 +293,7 @@ final class Ae2NetworkWorkCoordinator {
 		 * 登记本刻活跃宿主。
 		 * <p>
 		 * 同刻连续调用的同一宿主只登记一次；淘汰每 {@link #WORKER_REAP_INTERVAL_TICKS} 刻一次，
-		 * 「本刻谁有资格被选中」由 {@link #selectNextWorker(long)} 的活跃窗口过滤保证，
-		 * 因此淘汰延后不会让已消失的宿主拿到令牌。
+		 * 等待申请只含令牌与时间，不反向持有机器；换网和卸载会主动注销。
 		 */
 		private void touchWorker(long workerId, long gameTick) {
 			if (lastTouchedWorkerId == workerId && lastTouchedTick == gameTick) return;
@@ -311,28 +316,26 @@ final class Ae2NetworkWorkCoordinator {
 			while (iterator.hasNext()) {
 				if (iterator.next().getLongValue() < oldestActiveTick) iterator.remove();
 			}
+			var waitingIterator = Long2LongMaps.fastIterator(waiting);
+			while (waitingIterator.hasNext()) {
+				long seen = waitingIterator.next().getLongValue();
+				if (gameTick >= seen && gameTick - seen > WAITING_TICKS) waitingIterator.remove();
+			}
 		}
 
 		/**
-		 * 在**本刻活跃窗口内**的宿主中按游标轮转选出一个。
+		 * 按申请先后弹出一个宿主，不在每刻扫描整张宿主表。
 		 * <p>
-		 * 必须按活跃窗口过滤：淘汰已改为周期性执行，若直接遍历整张表，已经停止调用
-		 * （区块卸载/换网）的宿主仍可能被选中，造成本刻令牌空转、轮转被冻结。
+		 * 冷却不清除未获许可的申请；已消失的申请至多浪费一次预约，过期后直接丢弃。
 		 */
 		private long selectNextWorker(long gameTick) {
-			long oldestActiveTick = gameTick - ACTIVE_WORKER_WINDOW_TICKS;
-			long first = Long.MAX_VALUE;
-			long afterCursor = Long.MAX_VALUE;
-			var iterator = Long2LongMaps.fastIterator(workerLastSeen);
-			while (iterator.hasNext()) {
-				var entry = iterator.next();
-				if (entry.getLongValue() < oldestActiveTick) continue;
-				long workerId = entry.getLongKey();
-				if (workerId < first) first = workerId;
-				if (workerId > cursorWorkerId && workerId < afterCursor) afterCursor = workerId;
+			while (!waiting.isEmpty()) {
+				long workerId = waiting.firstLongKey();
+				long seen = waiting.removeFirstLong();
+				if (gameTick >= seen && gameTick - seen > WAITING_TICKS) continue;
+				return workerId;
 			}
-			if (afterCursor != Long.MAX_VALUE) return afterCursor;
-			return first == Long.MAX_VALUE ? 0L : first;
+			return 0L;
 		}
 	}
 

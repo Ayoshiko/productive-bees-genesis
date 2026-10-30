@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.config;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -55,6 +56,16 @@ public final class BeeAttributeConfigSection {
 	public final ModConfigSpec.ConfigValue<String> particleType;
 	public final ModConfigSpec.ConfigValue<String> nestingPreference;
 	public final ModConfigSpec.ConfigValue<String> postPollination;
+	public final ModConfigSpec.ConfigValue<String> tertiaryColor;
+	public final ModConfigSpec.DoubleValue pollinatedSize;
+	public final ModConfigSpec.BooleanValue useGlowLayer;
+	public final ModConfigSpec.ConfigValue<String> attackResponse;
+	public final ModConfigSpec.ConfigValue<List<? extends String>> invulnerability;
+	public final ModConfigSpec.ConfigValue<String> renderTransform;
+	public final ModConfigSpec.ConfigValue<String> flowerBlock;
+	public final ModConfigSpec.ConfigValue<String> flowerTag;
+	public final ModConfigSpec.ConfigValue<String> flowerFluid;
+	public final ModConfigSpec.ConfigValue<String> flowerType;
 	public final Map<String, ModConfigSpec.BooleanValue> traits;
 
 	private BeeAttributeConfigSection(ModConfigSpec.Builder builder) {
@@ -119,8 +130,9 @@ public final class BeeAttributeConfigSection {
 				.defineInRange("attack", 2.147483647E9D, 0.0D, (double) Integer.MAX_VALUE);
 
 		breedingItem = builder
-				.comment("繁殖物品ID")
-				.define("breedingItem", "productivebees:honey_treat", ModConfig::validateResourceLocation);
+				.comment("繁殖物品 ID、#物品标签；空值使用 PB 默认")
+				.define("breedingItem", "productivebees:honey_treat", value -> value instanceof String text && text.length() <= 256
+						&& (text.isEmpty() || ModConfig.validateResourceLocation(text.startsWith("#") ? text.substring(1) : text)));
 
 		breedingItemCount = builder
 				.comment("繁殖所需物品数量")
@@ -161,6 +173,38 @@ public final class BeeAttributeConfigSection {
 				.translation("productivebeesgenesis.configuration.bee_attributes.postPollination")
 				.define("postPollination", "none", value -> value instanceof String text
 						&& Set.of("none", "amber_encase", "bonemeal", "force_grow_crop", "sus").contains(text));
+		tertiaryColor = builder.comment("第三颜色；空值跟随主颜色")
+				.translation("productivebeesgenesis.configuration.bee_attributes.tertiaryColor")
+				.define("tertiaryColor", "", value -> value instanceof String text && (text.isEmpty() || ModConfig.validateColor(text)));
+		pollinatedSize = builder.comment("采蜜后体型；0 表示跟随基础体型")
+				.translation("productivebeesgenesis.configuration.bee_attributes.pollinatedSize")
+				.defineInRange("pollinatedSize", 0.0D, 0.0D, 10.0D);
+		useGlowLayer = builder.comment("PB 蜜蜂发光图层")
+				.translation("productivebeesgenesis.configuration.bee_attributes.useGlowLayer")
+				.define("useGlowLayer", false);
+		attackResponse = builder.comment("攻击附加效果：none / fire / lava")
+				.translation("productivebeesgenesis.configuration.bee_attributes.attackResponse")
+				.define("attackResponse", "none", value -> value instanceof String text && Set.of("none", "fire", "lava").contains(text));
+		invulnerability = builder.comment("免疫的伤害类型 msgId；空列表不增加免疫")
+				.translation("productivebeesgenesis.configuration.bee_attributes.invulnerability")
+				.defineListAllowEmpty("invulnerability", List.of(), () -> "inFire", value -> value instanceof String text
+						&& !text.isBlank() && text.length() <= 128 && text.chars().noneMatch(Character::isISOControl));
+		renderTransform = builder.comment("PB 渲染变换名称；none 表示默认")
+				.translation("productivebeesgenesis.configuration.bee_attributes.renderTransform")
+				.define("renderTransform", "none", value -> value instanceof String text && text.length() <= 128);
+		flowerBlock = builder.comment("方块花源 ID；空值不覆盖其它花源")
+				.translation("productivebeesgenesis.configuration.bee_attributes.flowerBlock")
+				.define("flowerBlock", "", BeeAttributeConfigSection::optionalResource);
+		flowerTag = builder.comment("花源标签；可用 ! 前缀反向匹配方块标签")
+				.translation("productivebeesgenesis.configuration.bee_attributes.flowerTag")
+				.define("flowerTag", "", value -> value instanceof String text && text.length() <= 256
+						&& (text.isEmpty() || ModConfig.validateResourceLocation(text.startsWith("!") ? text.substring(1) : text)));
+		flowerFluid = builder.comment("流体花源 ID；由支持该花源的蜂箱执行")
+				.translation("productivebeesgenesis.configuration.bee_attributes.flowerFluid")
+				.define("flowerFluid", "", BeeAttributeConfigSection::optionalResource);
+		flowerType = builder.comment("花源标签匹配：blocks / entity_types")
+				.translation("productivebeesgenesis.configuration.bee_attributes.flowerType")
+				.define("flowerType", "blocks", value -> value instanceof String text && Set.of("blocks", "entity_types").contains(text));
 		Map<String, ModConfigSpec.BooleanValue> configurableTraits = new LinkedHashMap<>();
 		for (String trait : new String[]{"coldResistant", "selfheal", "irradiated", "withered", "blinding", "draconic",
 				"slimy", "teleporting", "munchies", "redstoned", "stringy", "stingless", "translucent", "colorCycle"}) {

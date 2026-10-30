@@ -29,6 +29,8 @@ import java.util.Map;
 
 /** 注册表与运行中配方在服务器线程取快照，源 JSON 的 IO 只读取封闭的资源引用。 */
 public final class BeeDesignerReader {
+	private static Map<ResourceLocation, String> indexedDefinitions = Map.of();
+	private static Map<ResourceLocation, java.util.List<ResourceLocation>> definitionPaths = Map.of();
 	private BeeDesignerReader() {
 	}
 
@@ -39,9 +41,19 @@ public final class BeeDesignerReader {
 		}
 	}
 
-	public static ResourceLocation definitionPath(ResourceLocation bee) {
-		var definitions = BeeDesignerSources.definitions.keySet().stream().filter(path -> path.getNamespace().equals(bee.getNamespace())
-				&& path.getPath().substring(path.getPath().lastIndexOf('/') + 1).equals(bee.getPath())).toList();
+	public static synchronized ResourceLocation definitionPath(ResourceLocation bee) {
+		var current = BeeDesignerSources.definitions;
+		if (indexedDefinitions != current) {
+			Map<ResourceLocation, java.util.List<ResourceLocation>> paths = new HashMap<>();
+			for (ResourceLocation path : current.keySet()) {
+				ResourceLocation id = path.withPath(path.getPath().substring(path.getPath().lastIndexOf('/') + 1));
+				paths.computeIfAbsent(id, unused -> new java.util.ArrayList<>()).add(path);
+			}
+			paths.replaceAll((id, values) -> java.util.List.copyOf(values));
+			definitionPaths = Map.copyOf(paths);
+			indexedDefinitions = current;
+		}
+		var definitions = definitionPaths.getOrDefault(bee, java.util.List.of());
 		if (definitions.size() > 1) {
 			CompoundTag runtime = BeeReloadListener.INSTANCE.getData(bee);
 			if (runtime != null && runtime.contains("group")) {
@@ -58,6 +70,11 @@ public final class BeeDesignerReader {
 					: "designer.error.definition_ambiguous|") + bee);
 		}
 		return definitions.getFirst();
+	}
+
+	static synchronized void clear() {
+		indexedDefinitions = Map.of();
+		definitionPaths = Map.of();
 	}
 
 	public static JsonObject beeData(MinecraftServer server, ResourceLocation bee) {
@@ -81,6 +98,9 @@ public final class BeeDesignerReader {
 	}
 
 	public static Snapshot snapshot(MinecraftServer server, ResourceLocation bee) {
+		if (com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime.reloadBlocked(server)) {
+			throw new IllegalStateException("designer.error.reload_incomplete");
+		}
 		if (BeeReloadListener.INSTANCE.getData(bee) == null) {
 			throw new IllegalArgumentException("designer.error.bee_missing|" + bee);
 		}
@@ -104,17 +124,9 @@ public final class BeeDesignerReader {
 			document.add("recipes", JsonParser.parseString(managed).getAsJsonObject().get("recipes").deepCopy());
 			return new Snapshot(document, sources, BeeDesignerSources.generation);
 		}
-		for (var holder : server.getRecipeManager().getRecipes().stream()
-				.sorted(Comparator.comparing(value -> value.id().toString())).toList()) {
-			String type = BuiltInRegistries.RECIPE_SERIALIZER.getKey(holder.value().getSerializer()).toString();
-			if (!BeeDesignerCompiler.RECIPE_TYPES.contains(type) && !java.util.Set.of("modern_industrialization", "mbd2",
-					"modular_machinery_reborn").contains(ResourceLocation.parse(type).getNamespace())) {
-				continue;
-			}
-			if (!candidate(holder.value(), type, bee, server.registryAccess())) {
-				continue;
-			}
-			JsonObject json = encode(holder, server.registryAccess());
+		BeeDesignerRecipeIndex index = BeeDesignerRecipeIndex.forServer(server);
+		for (var holder : index.recipes(bee)) {
+			JsonObject json = index.encode(holder, server);
 			if (belongs(json, bee.toString())) {
 				if (recipes.size() >= 64) {
 					throw new IllegalArgumentException("designer.error.recipe_limit");
@@ -198,18 +210,19 @@ public final class BeeDesignerReader {
 	public static JsonObject readSources(Snapshot snapshot) {
 		JsonObject document = snapshot.document.deepCopy();
 		JsonObject recipes = document.getAsJsonObject("recipes");
+		char[] buffer = new char[8192];
 		for (var entry : snapshot.sources.entrySet()) {
 			try (Reader reader = entry.getValue().openAsReader()) {
-				char[] buffer = new char[BeeDesignerProtocol.MAX_BYTES + 1];
-				int count = 0;
+				StringBuilder text = new StringBuilder();
 				int read;
-				while (count < buffer.length && (read = reader.read(buffer, count, buffer.length - count)) > 0) {
-					count += read;
+				while ((read = reader.read(buffer)) != -1) {
+					if (text.length() + read > BeeDesignerProtocol.MAX_BYTES) {
+						throw new IllegalArgumentException("Recipe source exceeds designer budget");
+					}
+					text.append(buffer, 0, read);
 				}
-				if (count == buffer.length) {
-					throw new IllegalArgumentException("Recipe source exceeds designer budget");
-				}
-				JsonObject source = BeeDesignerProtocol.parse(new String(buffer, 0, count));
+				String raw = text.toString();
+				JsonObject source = BeeDesignerProtocol.parse(raw);
 				boolean machine = BeeDesignerMachineRecipes.host(source) != null;
 				if (!machine) {
 					recipes.getAsJsonObject(entry.getKey()).entrySet().forEach(value -> source.add(value.getKey(), value.getValue()));
@@ -218,7 +231,7 @@ public final class BeeDesignerReader {
 				if (BeeDesignerMachineRecipes.host(source) != null) {
 					JsonObject info = document.getAsJsonObject("machine_sources").getAsJsonObject(entry.getKey());
 					info.addProperty("source_pack", entry.getValue().sourcePackId());
-					info.addProperty("source_sha256", BeeDesignerMachineScripts.hash(new String(buffer, 0, count)));
+					info.addProperty("source_sha256", BeeDesignerMachineScripts.hash(raw));
 				}
 			} catch (IOException exception) {
 				throw new UncheckedIOException(exception);
@@ -230,6 +243,9 @@ public final class BeeDesignerReader {
 	}
 
 	public static boolean belongs(JsonObject recipe, String bee) {
+		if (BeeDesignerWorldConversions.supports(BeeDesignerDocument.text(recipe, "type", ""))) {
+			return BeeDesignerWorldConversions.owners(recipe).contains(bee);
+		}
 		if (BeeDesignerMachineRecipes.host(recipe) != null) {
 			return BeeDesignerMachineRecipes.belongs(recipe, bee);
 		}
@@ -255,7 +271,7 @@ public final class BeeDesignerReader {
 			JsonObject components = ingredient.getAsJsonObject().getAsJsonObject("components");
 			return components != null && bee.equals(BeeDesignerDocument.text(components, "productivebees:bee_type", ""));
 		}
-		if (type.startsWith("minecraft:crafting_")) {
+		if (type.startsWith("minecraft:crafting_") || type.equals("productivebees:bottler")) {
 			var result = recipe.get(field);
 			if (!result.isJsonObject()) {
 				return false;

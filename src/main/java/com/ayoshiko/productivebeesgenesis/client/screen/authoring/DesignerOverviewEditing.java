@@ -4,6 +4,8 @@ import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineRecipes;
 import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 
 /** 总览复用同一份字段模型；机器身份与生产节点 ID 始终由原入口管理。 */
 final class DesignerOverviewEditing {
@@ -94,14 +96,10 @@ final class DesignerOverviewEditing {
             for (int index = 0; index < outputs.size(); index++) {
                 JsonObject output = outputs.get(index).getAsJsonObject();
                 screen.scope("recipes/" + id + "/" + outputField + "/" + index);
-                if (!resource) {
-                    screen.rows.add(new DesignerFormScreen.Row("output", (x, y, w) -> {
-                        screen.stackButton(x, y, w, DesignerStackButton.decode(output.get("item")),
-                                DesignerFormScreen.tr("material").getString(), () -> Minecraft.getInstance().setScreen(
-                                        new DesignerIngredientScreen(screen, output, "item", selected -> output.add("item", selected), false)));
-                    }));
-                }
-                DesignerOutputScreen.addFields(screen, output, resource);
+                var stack = resource ? ItemStack.EMPTY : DesignerStackButton.decode(output.get("item"));
+                var name = stack.isEmpty() ? DesignerFormScreen.option(BeeDesignerDocument.text(output, "kind", "output")) : stack.getHoverName();
+                screen.outputHeading(Component.translatable("designer.output_numbered", index + 1, name), outputs, output);
+                DesignerOutputScreen.addFields(screen, output, resource, outputs);
             }
         }
         if (recipe.has("fluid")) {

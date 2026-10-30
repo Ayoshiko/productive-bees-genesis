@@ -20,6 +20,7 @@ final class DesignerDraftsScreen extends DesignerFormScreen {
 	private boolean busy;
 	private boolean requested;
 	private String sort = "recent";
+	private final java.util.Set<String> selected = new java.util.LinkedHashSet<>();
 	private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
 	DesignerDraftsScreen(BeeDesignerScreen parent) {
@@ -47,7 +48,7 @@ final class DesignerDraftsScreen extends DesignerFormScreen {
 			refresh();
 		}
 		if (drafts != null) {
-			String text = query.toLowerCase(Locale.ROOT);
+			var filter = DesignerSearch.compile(query);
 			Comparator<BeeDesignerDrafts.Entry> order = switch (sort) {
 				case "oldest" -> Comparator.comparingLong(BeeDesignerDrafts.Entry::modified);
 				case "name" -> Comparator.comparing(this::name, String.CASE_INSENSITIVE_ORDER);
@@ -57,11 +58,18 @@ final class DesignerDraftsScreen extends DesignerFormScreen {
 			int visible = 0;
 			for (var entry : drafts.stream().sorted(order.thenComparing(BeeDesignerDrafts.Entry::id)).toList()) {
 				String name = name(entry);
-				if (!entry.id().contains(text) && !name.toLowerCase(Locale.ROOT).contains(text)) {
+				if (!filter.matches(entry.id().split(":", 2)[0], DesignerSearch.indexed(entry.id() + " " + name), List.of())) {
 					continue;
 				}
 				visible++;
 				String date = entry.modified() == 0 ? tr("date_unknown").getString() : DATE.format(Instant.ofEpochMilli(entry.modified()));
+				rows.add(new Row("", (x, y, w) -> button(x, y, w, Component.translatable(
+						selected.contains(entry.id()) ? "designer.collection_unselect_named" : "designer.collection_select_named", name), () -> {
+					if (!selected.remove(entry.id()) && selected.size() < 128) {
+						selected.add(entry.id());
+					}
+					rebuild();
+				}).active = entry.problem().isBlank()));
 				rows.add(new Row("", (x, y, w) -> {
 					addRenderableWidget(new DesignerBeeButton(x, y, w - 56, entry.id(), Component.literal(name), entry.pending(), () -> {
 						if (!entry.problem().isBlank()) {
@@ -100,6 +108,9 @@ final class DesignerDraftsScreen extends DesignerFormScreen {
 			}
 		}
 		rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("recycle_bin"), () -> minecraft.setScreen(new DesignerRecycleScreen(parent)))));
+		rows.add(new Row("", (x, y, w) -> primaryButton(x, y, w, Component.translatable("designer.export_selection", selected.size()),
+				() -> minecraft.setScreen(new DesignerCollectionScreen(this, java.util.List.copyOf(selected), null, true))).active = !selected.isEmpty()));
+		rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("file_locations"), () -> minecraft.setScreen(new DesignerFileLocationsScreen(this)))));
 		finishRows();
 		button(left, footerY(), 90, tr("refresh"), this::refresh).active = !busy;
 		button(left + 96, footerY(), Math.max(50, contentWidth - 182), tr("open_drafts_folder"),

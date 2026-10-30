@@ -66,10 +66,9 @@ final class DesignerProductionScreen extends DesignerFormScreen {
 		anchor("");
 		anchor("route");
 		section("production_route");
-		rows.add(new Row("route", (x, y, w) -> tabs(x, y, w, options.get("route").getAsString(),
-				new String[]{"centrifuge", "direct"}, value -> true, value -> {
+		rows.add(new Row("route", (x, y, w) -> selection(x, y, w, options.get("route").getAsString(),
+				new String[]{"centrifuge", "direct"}, value -> {
 			options.addProperty("route", value);
-			rebuild();
 		}), 20, true));
 		boolean centrifuge = options.get("route").getAsString().equals("centrifuge");
 		note("flow", tr(centrifuge ? "flow_centrifuge" : "flow_direct"));
@@ -77,27 +76,14 @@ final class DesignerProductionScreen extends DesignerFormScreen {
 			number("processing_time", options, "time", "200");
 		}
 		section("item_outputs");
+		note("", tr("output_actions_help"));
 		for (int index = 0; index < items.size(); index++) {
-			int selected = index;
 			scope("production_nodes/" + entryId + "/items/" + index);
 			anchor("");
 			JsonObject output = items.get(index).getAsJsonObject();
 			ItemStack display = DesignerStackButton.decode(output.get("item"));
-			outputHeading(Component.translatable("designer.output_numbered", index + 1, display.isEmpty() ? tr("output") : display.getHoverName()), () -> {
-				items.remove(selected);
-				rebuild();
-			});
-			rows.add(new Row("output", (x, y, w) -> {
-				ItemStack stack = DesignerStackButton.decode(output.get("item"));
-				addRenderableWidget(new DesignerStackButton(x, y, w, stack, tr("pick_item").getString(), () ->
-						minecraft.setScreen(new BeeDesignerItemPicker(this, stackValue -> output.add("item", BeeDesignerSelections.ingredient(
-								selection(stackValue), minecraft.level.registryAccess(), true))))));
-				ghost(x, y, w, value -> value instanceof ItemStack, value -> output.add("item", BeeDesignerSelections.ingredient(
-						selection(value), minecraft.level.registryAccess(), true)));
-			}));
-			number("minimum", output, "min", "1");
-			number("maximum", output, "max", "1");
-			number("chance", output, "chance", "1");
+			outputHeading(Component.translatable("designer.output_numbered", index + 1, display.isEmpty() ? tr("output") : display.getHoverName()), items, output);
+			DesignerOutputScreen.addFields(this, output, false, items);
 		}
 		scope("production_nodes/" + entryId);
 		rows.add(new Row("", (x, y, w) -> button(x, y, Math.min(220, w), tr("add_material_output"), () -> minecraft.setScreen(
@@ -127,14 +113,10 @@ final class DesignerProductionScreen extends DesignerFormScreen {
 		}
 		section("resource_outputs");
 		for (int index = 0; index < resources.size(); index++) {
-			int selected = index;
 			scope("production_nodes/" + entryId + "/resources/" + index);
 			anchor("");
 			JsonObject output = resources.get(index).getAsJsonObject();
-			outputHeading(Component.translatable("designer.output_numbered", index + 1, option(BeeDesignerDocument.text(output, "kind", "output"))), () -> {
-				resources.remove(selected);
-				rebuild();
-			});
+			outputHeading(Component.translatable("designer.output_numbered", index + 1, option(BeeDesignerDocument.text(output, "kind", "output"))), resources, output);
 			rows.add(new Row("output", (x, y, w) -> {
 				addRenderableWidget(new DesignerResourceButton(x, y, w, output, false,
 						() -> minecraft.setScreen(new DesignerOutputScreen(this, output, true))));

@@ -15,8 +15,10 @@ record DesignerPalette(String name, boolean light, int panel, int card, int inpu
         return switch (id) {
             case "light" -> new DesignerPalette("Modern light", true, 0xFFF5F6F8, 0xFFEAEDF2, 0xFFFFFFFF,
                     0xFFECEFF4, 0xFFDCE5F3, 0xFF253140, 0xFF657284, 0xFF536FD1, 0xFFD1D8E2, 0xFFBD3B42, 0xFF248263);
-            case "ae_light" -> new DesignerPalette("AE light", true, 0xFFE7E9ED, 0xFFD8DBE1, 0xFFF9FAFC,
-                    0xFFD5D9E1, 0xFFE1DDF2, 0xFF303343, 0xFF64687C, 0xFF7860AE, 0xFFB5BAC7, 0xFFB93645, 0xFF357B64);
+            case "ae_light" -> new DesignerPalette("AE light", true, 0xFFCBCCD4, 0xFFBFC1D0, 0xFFADB0C4,
+                    0xFF9A9EB5, 0xFFA2D3FC, 0xFF413F54, 0xFF535469, 0xFF655591, 0xFF878FA5, 0xFFA52E42, 0xFF286B48);
+			case "ae_dark" -> new DesignerPalette("AE dark", false, 0xFF343442, 0xFF3F4052, 0xFF252633,
+					0xFF55576E, 0xFF596F89, 0xFFF2F2F2, 0xFFB9BCCC, 0xFFB6A0E0, 0xFF79798F, 0xFFFF9CA6, 0xFF9DD6B4);
             default -> new DesignerPalette("Modern dark", false, 0xFF151B24, 0xFF1E2733, 0xFF111720,
                     0xFF283344, 0xFF35445A, 0xFFE8ECF3, 0xFFA0ADC0, 0xFF93ACF6, 0xFF3A475A, 0xFFFF9298, 0xFF79CBA5);
         };
@@ -110,4 +112,20 @@ record DesignerPalette(String name, boolean light, int panel, int card, int inpu
         double luminance = ((color >> 16) & 255) * 0.2126 + ((color >> 8) & 255) * 0.7152 + (color & 255) * 0.0722;
         return luminance > 154 ? 0xFF17212C : 0xFFFFFFFF;
     }
+
+	static double contrastRatio(int first, int second) {
+		double a = luminance(first);
+		double b = luminance(second);
+		return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+	}
+
+	private static double luminance(int color) {
+		double result = 0;
+		double[] weights = {0.2126, 0.7152, 0.0722};
+		for (int index = 0; index < 3; index++) {
+			double channel = (color >> (16 - index * 8) & 255) / 255.0;
+			result += weights[index] * (channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4));
+		}
+		return result;
+	}
 }

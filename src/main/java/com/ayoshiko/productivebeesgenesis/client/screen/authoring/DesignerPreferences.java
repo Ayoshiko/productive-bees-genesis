@@ -37,6 +37,16 @@ final class DesignerPreferences {
         result.addProperty("auto_save_ms", 60000);
         result.addProperty("context_hints", true);
         result.addProperty("alternating_rows", true);
+		result.addProperty("navigation_layout", "adaptive");
+		result.addProperty("field_layout", "adaptive");
+		result.addProperty("collapse_sections", true);
+		result.addProperty("catalog_help", true);
+		result.addProperty("tutorial_seen", false);
+		result.addProperty("skin", "smooth");
+		result.addProperty("motion_feedback", "subtle");
+		result.addProperty("motion_transition", "slide");
+		result.addProperty("motion_menus", true);
+		result.addProperty("motion_selection", true);
         result.add("custom_dark", DesignerPalette.preset("dark").json());
         result.add("custom_light", DesignerPalette.preset("light").json());
         return result;
@@ -51,8 +61,13 @@ final class DesignerPreferences {
             result.add(key, supplied.get(key).deepCopy());
         }
         range(result, "version", 1, 1);
-        choice(result, "theme", Set.of("dark", "light", "ae_light", "custom_dark", "custom_light"));
+        choice(result, "theme", Set.of("dark", "light", "ae_light", "ae_dark", "custom_dark", "custom_light"));
         choice(result, "density", Set.of("compact", "comfortable", "spacious"));
+		choice(result, "navigation_layout", Set.of("adaptive", "menus", "expanded"));
+		choice(result, "field_layout", Set.of("adaptive", "single", "columns"));
+		choice(result, "skin", Set.of("smooth", "ae"));
+		choice(result, "motion_feedback", Set.of("subtle", "ripple", "none"));
+		choice(result, "motion_transition", Set.of("slide", "reveal", "none"));
         range(result, "ui_scale", 0.85, 1.15);
         range(result, "backdrop", 0.1, 0.9);
         range(result, "animation_ms", 80, 400);
@@ -72,7 +87,8 @@ final class DesignerPreferences {
             }
         }
         range(result, "auto_save_ms", 15000, 600000);
-        for (String key : List.of("animations", "reduce_motion", "auto_save", "context_hints", "alternating_rows")) {
+        for (String key : List.of("animations", "reduce_motion", "auto_save", "context_hints", "alternating_rows",
+				"collapse_sections", "catalog_help", "tutorial_seen", "motion_menus", "motion_selection")) {
             if (!result.get(key).isJsonPrimitive() || !result.getAsJsonPrimitive(key).isBoolean()) {
                 throw new IllegalArgumentException("designer.error.preference_field|" + key);
             }
@@ -193,6 +209,11 @@ final class DesignerPreferences {
     static boolean enabled(String key) {
         return values.get(key).getAsBoolean();
     }
+
+	static boolean compactNavigation(int width) {
+		String mode = text("navigation_layout");
+		return mode.equals("menus") || width < 280 || mode.equals("adaptive") && width < 480;
+	}
 
     static int rowGap() {
         return switch (text("density")) {

@@ -24,6 +24,11 @@ final class DesignerTransition {
             return;
         }
         update();
+		if (DesignerPreferences.text("motion_transition").equals("none")) {
+			phase = Phase.STABLE;
+			movement.snap(0);
+			return;
+		}
         double amplitude = DesignerPreferences.number("motion_amount");
         if (phase == Phase.STABLE) {
             movement.snap(direction * amplitude);
@@ -36,7 +41,7 @@ final class DesignerTransition {
     }
 
     void leave(Runnable action) {
-        if (!DesignerPreferences.animate()) {
+        if (!DesignerPreferences.animate() || DesignerPreferences.text("motion_transition").equals("none")) {
             action.run();
             return;
         }
@@ -62,6 +67,7 @@ final class DesignerTransition {
             }
         } else if (phase == Phase.ENTERING && Math.abs(movement.position()) < 0.02) {
             phase = Phase.STABLE;
+            movement.snap(0);
         }
     }
 
@@ -92,8 +98,16 @@ final class DesignerTransition {
 
     float contentOffsetX() {
         update();
-        return (float) movement.position();
+		return DesignerPreferences.text("motion_transition").equals("slide") ? (float) movement.position() : 0;
     }
+
+	float reveal() {
+		update();
+		if (!DesignerPreferences.animate() || !DesignerPreferences.text("motion_transition").equals("reveal") || phase != Phase.ENTERING) {
+			return 1;
+		}
+		return (float) (0.9 + 0.1 * DesignerMotionValue.easeOut((Util.getMillis() - started) / DesignerPreferences.number("animation_ms")));
+	}
 
     boolean leaving() {
         return phase == Phase.LEAVING;

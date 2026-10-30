@@ -85,6 +85,13 @@ public final class MyriadRecipeProcessor {
 		return holder;
 	}
 
+	RecipeHolder<?> processRecipe(RecipeHolder<?> holder, java.util.Set<net.minecraft.resources.ResourceLocation> custom) {
+		if (custom.contains(holder.id())) {
+			return MyriadCreationsEventHandler.isMyriadCreationsEnabled() ? holder : null;
+		}
+		return processRecipe(holder);
+	}
+
 	/** 处理钓鱼配方 */
 	private RecipeHolder<?> processFishingRecipe(RecipeHolder<?> holder, BeeFishingRecipe fishing) {
 		if (!isMyriadcreations(fishing.output)) {

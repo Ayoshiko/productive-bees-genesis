@@ -16,6 +16,11 @@ final class DesignerStackButton extends Button {
 	private final String fallback;
 	private final Component name;
 	private boolean square;
+	private Runnable removeOutput;
+	private Runnable beginOutputDrag;
+	private boolean outputPressed;
+	private double pressedX;
+	private double pressedY;
 
 	DesignerStackButton(int x, int y, int width, ItemStack stack, String fallback, Runnable clicked) {
 		super(x, y, width, 20, Component.empty(), ignored -> clicked.run(), DEFAULT_NARRATION);
@@ -34,6 +39,70 @@ final class DesignerStackButton extends Button {
 		square = true;
 		setHeight(getWidth());
 		return this;
+	}
+
+	DesignerStackButton fitted() {
+		setWidth(Math.min(getWidth(), Math.max(104, Math.min(260, Minecraft.getInstance().font.width(name) + 38))));
+		return this;
+	}
+
+	void outputActions(Runnable remove, Runnable beginDrag) {
+		removeOutput = remove;
+		beginOutputDrag = beginDrag;
+	}
+
+	boolean outputPressed() {
+		return outputPressed;
+	}
+
+	@Override
+	public boolean mouseClicked(double x, double y, int button) {
+		if (removeOutput != null && active && visible && isMouseOver(x, y)) {
+			if (button == 1) {
+				removeOutput.run();
+				return true;
+			}
+			if (button == 0) {
+				outputPressed = true;
+				pressedX = x;
+				pressedY = y;
+				return true;
+			}
+		}
+		return super.mouseClicked(x, y, button);
+	}
+
+	@Override
+	public boolean mouseDragged(double x, double y, int button, double dx, double dy) {
+		if (outputPressed && button == 0) {
+			if (Math.hypot(x - pressedX, y - pressedY) >= 3) {
+				outputPressed = false;
+				beginOutputDrag.run();
+			}
+			return true;
+		}
+		return super.mouseDragged(x, y, button, dx, dy);
+	}
+
+	@Override
+	public boolean mouseReleased(double x, double y, int button) {
+		if (outputPressed && button == 0) {
+			outputPressed = false;
+			if (isMouseOver(x, y)) {
+				onPress();
+			}
+			return true;
+		}
+		return super.mouseReleased(x, y, button);
+	}
+
+	@Override
+	public boolean keyPressed(int key, int scan, int modifiers) {
+		if (removeOutput != null && isFocused() && key == org.lwjgl.glfw.GLFW.GLFW_KEY_DELETE) {
+			removeOutput.run();
+			return true;
+		}
+		return super.keyPressed(key, scan, modifiers);
 	}
 
 	static ItemStack decode(JsonElement value) {

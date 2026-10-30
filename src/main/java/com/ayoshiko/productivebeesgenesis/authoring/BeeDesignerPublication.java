@@ -267,7 +267,7 @@ final class BeeDesignerPublication {
 		var definition = server.getResourceManager().getResource(path.withPath("productivebees/" + path.getPath() + ".json"));
 		if (BeeReloadListener.INSTANCE.getData(ResourceLocation.parse(id)) == null || raw == null
 				|| !document.get("definition").equals(JsonParser.parseString(raw)) || definition.isEmpty()
-				|| !definition.get().sourcePackId().equals(packId)) {
+				|| !BeeDesignerMyriad.recipesOnly(document) && !definition.get().sourcePackId().equals(packId)) {
 			throw new IllegalStateException("Bee definition was not activated: " + id);
 		}
 		for (String recipe : document.getAsJsonObject("recipes").keySet()) {
@@ -284,7 +284,7 @@ final class BeeDesignerPublication {
 			if (server.getRecipeManager().byKey(key).isEmpty() || resource.isEmpty() || !resource.get().sourcePackId().equals(packId)) {
 				throw new IllegalStateException("Recipe was not activated: " + recipe);
 			}
-			if (BeeDesignerMachineRecipes.host(source) != null) {
+			if (BeeDesignerMachineRecipes.host(source) != null || BeeDesignerMyriad.recipesOnly(document)) {
 				var ops = server.registryAccess().createSerializationContext(JsonOps.INSTANCE);
 				var expected = Recipe.CODEC.parse(ops, source).getOrThrow();
 				var actual = server.getRecipeManager().byKey(key).orElseThrow().value();

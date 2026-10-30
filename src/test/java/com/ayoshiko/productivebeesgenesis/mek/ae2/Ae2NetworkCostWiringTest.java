@@ -43,7 +43,12 @@ class Ae2NetworkCostWiringTest {
 		String source = read("Ae2LeftoverReturner.java");
 		assertTrue(source.contains("timedInsert(holder, storage, key, remaining, Actionable.SIMULATE"));
 		assertTrue(source.contains("timedInsert(holder, storage, key, simulated, Actionable.MODULATE"));
-		assertTrue(source.contains("holder.recordNetworkCost(storage, tick, cost,"));
+		assertTrue(source.contains("holder.recordNetworkExtractCost(storage, tick, cost,"),
+				"余料回送的模拟和提交成本必须计入输入恢复预算");
+		assertTrue(source.contains("holder.tryAcquireNetworkExtract(storage, tick)"),
+				"回送申请和成本记录必须使用同一输入预算");
+		assertFalse(source.contains("holder.recordNetworkCost(storage, tick, cost,"),
+				"输入恢复不得消耗普通产物的输出预算");
 		assertTrue(source.contains("buffers.insertCostTracker.record(tick, cost)"));
 		assertTrue(source.replaceAll("\\s+", " ").contains("return storage.insert(key, amount, action, source); } finally {"));
 	}

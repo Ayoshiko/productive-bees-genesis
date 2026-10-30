@@ -29,6 +29,115 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
+## [1.2.1] - 2026-10-29
+
+**本地更新，尚未对外发布。** 本节汇总 1.2.0 之后的编辑器、兼容与性能修复。
+
+### 新增
+
+- 逐步教学会实际跳转到目录、外观、属性、获得、产物、检查、导出与生成文件，并用贴近控件的柔和圆角光圈、步骤标记和短曲线箭头提示操作；支持键盘切步、跳过与减少动态效果。生成文件预览增加上一个／下一个和文件列表快捷切换。
+- 万象创世配置补齐伤害免疫、攻击反馈、第三颜色、采蜜体型、发光图层、渲染变换和方块／标签／流体花源。专属“获得方式”入口可添加 PB 繁殖、转化、巢穴、钓鱼、灌装、合成及已适配的 MI／MBD2／MMR 机器配方，并支持独立检查、应用、导出和跨包导入。
+- PB 灌装获得蜂蛋接入物品、流体用量与完整蜂种输出编辑、编译校验和重载。
+- 万象创世蜜脾转化过滤页统一编辑器主题，提供过滤列表、添加蜂种和效果预览；按服务器真实蜜脾／蜜脾块能力展示有效、缺失、停用和依赖不可用状态。支持搜索、Shift 连选、拖动排序、批量移除、复制／粘贴、撤销及缺失项清理；未保存编辑保留，外部配置冲突可合并本地增删后再保存。
+- JSON 编辑新增查找／替换、区分大小写、匹配高亮与计数、跳转行、行列和选区状态；支持 Tab 缩进／反缩进、自动缩进与括号、匹配括号高亮、复制行／选区和删除行，均接入撤销。停止输入后检查语法，非法 JSON 保留原文并阻止提交，只读页保留查找与复制。
+- 编辑器支持中文全拼、首字母及带声调输入，兼容 `lv/lü/lu` 搜索；蜂种、材料、AE 资源、机器、群系、草稿和文件浏览复用同一搜索规则，保留名称／ID、`@模组`、`#标签` 与多词交集。
+- 接入 PB 13.14.0 的物品转化与方块转化配方，编辑材料、结果、概率、授粉和真实方块状态属性。共享多蜂配方显示为只读；复制蜂种时生成独立归属，停用蜂种只移除该蜂归属并保留其余蜂种。
+
+- 目录支持 Shift 连选、Ctrl 增减、鼠标框选与取消恢复，保留 128 蜂上限；收藏自动读取可用整合包清单并只补空白署名。文件浏览提供固定路径栏、统一文件行、选择确认与键盘导航。
+- 编辑器补齐 PB 第三颜色、循环配色、采蜜后体型、发光层、攻击效果、伤害免疫和繁殖食物标签／默认值；方块标签花源支持反向匹配。AE2 主题使用终端面板／像素边框和已安装原生工具按钮资源；现代主题提供轻柔／跟手／静止预设、独立菜单与选中动效。
+- 蜂种目录与草稿支持多选，一次导出便携收藏包、数据包或 KubeJS 作者包。便携收藏可带到其他整合包导入，保留来源整合包、作者、版本、发布链接和原创修改说明；许可说明可选，提示尊重原作者。导入先预览来源、依赖和重名选择。
+- 小窗口按本地化标题宽度保留直接导航，剩余栏目进入“更多”；目录合并搜索和常用操作，极矮窗口仍显示完整蜂种卡片。支持单列／优先双列、上下字段排版、少量选项直接切换、次要分组与自定义颜色折叠。问题定位自动展开目标，提醒边框贴近控件；导入操作固定底部。首次使用有可跳过、可重新查看的引导。
+- 个性化设置增加独立 AE 风格按钮材质、AE 深色、文字对比度提示、按压／涟漪和方向滑动／局部展开选项；明暗切换保留主题系列。
+- 感谢 gummyc_type2（beebeeblock-the-skyhive 作者）提供蜂蜂应援手册书本原材质；本模组保留原像素形状并换为黄色。
+- 编辑器设置增加“文件位置”，草稿库、回收站和发布页也可快捷打开。显示当前游戏实例的完整目录，支持复制路径、打开文件夹和查找最近一次导出，区分本机文件与独立服务器文件。
+- 回收站可确认永久删除本机归档草稿、丢弃待应用删除或清除变更；世界已停用蜂种可经多步确认清除恢复入口，应用后生效，已有物品和蜜脾处理配方继续保留。
+
+### 变更
+
+- 蜂种读取复用按资源代际失效的反向配方索引与有界编码缓存，同代际后续读取只处理相关配方；定义路径索引随快照重建、停服释放。物品／方块名称拼音与标签按查询需要生成，减少首次打开方块选择时的重复工作。
+- 基因和普通枚举统一使用下拉，布尔属性使用开关，流程模式和页面切换保留分段导航。过滤页宽窗双列，窄窗合并模式、筛选、全选和撤销，批量操作显示选择数量。
+- 获取与产物页面统一先显示配方摘要，再进入完整编辑；物品框随名称收紧，数量与概率可在摘要直接输入；固定数量同步上下限，范围数量分别编辑，概率按百分数填写。流体显示图标、名称和 mB，数量与处理时间也可直接修改。常用数值范围移至提示，非法输入仍保留校验。机器配方集中展示输入、输出与费用，将来源、MBD2 内容选项和 MMR 画布／位置放入可展开分组，窄窗口自动调整。短摘要字段按实际内容宽度合并：结果蜂与概率、流体与数量／时间优先同行，放不下时换行；重排后按字段身份恢复输入焦点。
+- 跨整合包导入分别提示世界同 ID、本机旧草稿和 PB 名称键冲突。替换前将不同的旧草稿原文送入编辑器回收站，保管失败则停止导入；名称键冲突要求复制新身份。副本更新自身 `bee_exists` 条件，外部蜂种条件保留；新身份不携带来源整合包的停用配方清单。
+- 机器及远端资源目录读取完整有界快照后按客户端语言筛选，逐页核对版本；同会话分页复用服务端目录，退出取消请求，重载混入或读取失败时保留明确提示。资源按钮仅在草稿、语言或配方版本变化时解析，减少逐帧重复工作。
+- PB `bee_nbt_changer` 在 13.14.0 的 `matches` 固定为 false，尚不开放为可用编辑模板；该版本孵化配方序列化器的两个材料共用 `input` 字段，暂不提供会破坏独立材料往返的编辑入口。特殊全局配方、硬编码实体／注册和未实现的 `passiveEffects` 保留明确边界。
+
+- 物品产物支持右键或 Delete 删除整组，拖动物品或标题手柄调整顺序，也可使用上下移动按钮。数量、概率和组件一起保留，生产编辑、原有配方和图形总览共用这些操作。
+
+### 修复
+
+- 完整资源重载期间暂停新资源生产与读取，重叠重载统一收口；任一失败保持暂停，后续新批次成功才恢复。停服后的迟到回调不重建旧服务器状态，成功加载、更新、卸载与独立重进均核对有效目录。
+- 修复万象新配置只展示而未完整写入实际蜂种 NBT 的缺口；清空免疫、继承颜色／体型和更换花源会清理旧值。额外获得配方不会在万象配置重载时被原处理器重写，便携与 KubeJS 导出保留归属；跨包导入沿用目标包万象属性，只导入额外配方。
+- 过滤配置保存使用服务器有序文件队列与请求回执，加入权限、基准冲突、分页代际和大小校验；保存超时或结果未知保留草稿并提示核对，单人主人可保存，多人继续要求 OP 等级至少 2。
+- 补齐新增万象配置的中英法名称及悬停说明，修复配置翻译完整性检查失败；补全过滤页窄窗全选文字并显示批量选择数，改善深色教学徽标与主按钮的文字对比度。
+- 修复 `Ae2NetworkCostWiringTest` 仍按旧输出预算接口检查余料回送、导致构建失败的问题；校验对应当前输入预算，仍要求模拟与提交两次计费及 finally 保证，不改动回送资产逻辑。
+- 编辑应用或数据包重载后清理 PB 物品／方块转化查询的旧缓存，使新增或修改配方及时生效。
+- 导入等待期间立即禁用重复操作；获取配方的错误定位进入对应编辑页面，保留字段定位。
+
+- 修复蜂卡截获“⋯”菜单点击和万象卡片未进入专属配置页。花源局部切换不再触发整页滑动，重复点击当前选项不重置数据。产物与检查／导出页面重新分区，生成文件与资源身份渐进展开。
+- 目录和草稿后台刷新等待菜单或框选结束，迟到范围不会覆盖新选择。修复检查通过后因服务端补齐受管字段而误报“内容已修改”；检查结果对应实际提交，之后编辑仍需重查，切换栏目清除旧字段定位提示。
+- 发布文件预览按当前工程缓存、收藏展示复用解析快照；可见控件判断使用身份集合，圆角大面板减少重复绘制。修复 PB 空繁殖食物／标签被误判为物品 ID，以及动效幅度缺失翻译。
+- 修复仅浏览蜂种、基因、加载条件或 MMR 布局就写入缺省字段、导致自动生成草稿的问题。实际编辑、新建和手动保存仍可保留草稿。
+- 丢弃当前待删除草稿后清除当前编辑，避免下一次自动保存又生成同一草稿；确认期间文件变化时保留文件并提示刷新。
+- 应用成功后保留“已应用”提示，后台草稿保存不再覆盖它；回收记录清除说明区分待应用与已完成状态。
+- 修复物品模型缓存通过渲染上下文强引用旧世界与实体的问题；模型仅弱持有上下文，保留星空蜜脾、万象创世蜜脾／蜜脾块与蜂蛋的原有渲染和模型选择。
+- 蜂箱满槽时提前跳过蜂蛋实体构造和普通／加固含蜂蜂笼的 NBT 复制；输出堵塞时先检查蜂笼容量，空蜂笼取蜂和腾出空位后恢复装入保持可用。
+- 修复慢 AE2 网络在固定机器顺序和间隔拉取下长期饿死后续机器的问题；等待预算保留顺序，不推进拉取冷却或累加失败。输入余料回送共用输入预算，断线时本地可落槽的暂存不被前排纯回网条目阻塞；多车道预算等待与真正拒收分别处理。保留原有拉取／回送量、配置周期及拒收退避策略。
+- 离心机 ME 库存列举复用槽位物品键，减少数量变化后的重复构造；键缓存校验完整组件，修复原地修改物品组件后继续使用旧键的问题。
+
+### English
+
+**Local update; not published yet.** This release section includes editor, compatibility and performance changes since 1.2.0.
+
+#### Added
+
+- The guided tour opens the actual library, appearance, attributes, acquisition, production, validation, export and generated-file pages. Subtle rounded focus rings, step badges and short curved arrows identify controls, with keyboard navigation, skipping and reduced motion. Generated-file previews add previous/next and quick list navigation.
+- Myriad settings add damage immunity, attack effects, third color, nectar size, glow layers, render transforms and block/tag/fluid flowers. Its acquisition entry supports additional PB breeding, conversion, spawning, fishing and bottling, crafting, and supported MI/MBD2/MMR recipes, with validation, application, export and cross-pack import.
+- PB Bottler bee-egg recipes now support editing item/fluid inputs and amounts, complete bee output identity, codec validation and reload.
+- The Myriad comb filter adopts the editor theme with Rules, Add bees and Preview views. Actual server comb/block capabilities distinguish valid, missing, retired and unavailable targets. Search, Shift ranges, dragging, bulk removal, clipboard import/export, undo and missing-entry cleanup are included. Unsaved edits are retained and external configuration changes can be merged before saving.
+- JSON editing adds Find/Replace, case sensitivity, match highlighting/counts, Go to Line and line/column/selection status. Tab indentation/outdent, optional automatic brackets and indentation, bracket matching, line/selection duplication and line deletion integrate with undo. Delayed syntax checks preserve invalid text and block commit; read-only pages retain search and copying.
+- Full Pinyin, initials and tone-marked search, including `lv/lü/lu`, across bees, ingredients, AE resources, machines, biomes, drafts and file browsing. Name/ID, `@mod`, `#tag` and multi-term intersection remain available.
+- PB 13.14.0 item and block conversion recipes with materials, results, chance, pollination and registered block-state properties. Shared recipes are read-only; copied bees receive independent ownership, and retiring a bee retains other owners.
+- Shift ranges, Ctrl toggles, marquee selection and cancel-to-restore in the library, retaining the 128-bee limit. Collections fill blank attribution fields from an available modpack manifest. File browsing adds a persistent path bar, consistent rows, selection confirmation and keyboard navigation.
+- PB third color, color cycling, nectar size, glow layer, attack effects, immunity, breeding tags/defaults and inverse block-tag flowers. AE2 themes use terminal surfaces, pixel bevels and installed native button assets; modern themes add Gentle/Responsive/Still presets and separate menu/selection motion.
+- Multi-select bees or drafts and export portable collections, datapacks or KubeJS bundles. Portable collections transfer projects between modpacks and retain source names, authors, versions, release links and custom-content notes, with optional license notes and attribution guidance. Import previews sources, dependencies and identity conflicts.
+- Small windows retain fitting localized page tabs with More for overflow, combine library tools and preserve full bee cards at minimum height. Single/preferred two-column and stacked fields, direct short choices, collapsible groups and custom colors, and optional library help. Diagnostics expand their target with a soft control border; import actions stay in the footer. A skippable guide can be reopened from settings.
+- Independent AE-style button materials, AE dark, text-contrast guidance, press/ripple feedback and slide/reveal transitions. Theme switching preserves its palette family.
+- Thanks to gummyc_type2, author of beebeeblock-the-skyhive, for the original handbook book texture, retained pixel-for-pixel and recolored yellow.
+- File Locations in editor settings, with shortcuts from drafts, the recycle bin and publishing. Shows full paths for the current game instance, copies paths, opens folders and locates the most recent export, with dedicated-server files identified separately.
+- Confirmed permanent deletion of local archived drafts and discard of pending deletion or cleanup changes. Retired world bees can have their restoration entry cleared through multiple confirmations and Apply; existing items and comb-processing recipes remain protected.
+
+#### Changed
+
+- Bee reads reuse generation-aware reverse recipe indexes and bounded encoding caches, processing related recipes on subsequent reads. Definition paths follow their snapshot and are released on shutdown. Item/block Pinyin and tags are built only when the query needs them, reducing work when opening the block picker.
+- Genes and ordinary enums use dropdowns, booleans use switches, and workflow modes retain segmented navigation. The filter uses two columns in wide windows and combines mode, visibility, select-all and undo in narrow windows; bulk actions display selection counts.
+- Acquisition and production show summaries before full editing. Item fields fit their labels; amounts and probabilities are directly editable in summaries. Fixed amounts update both bounds, ranges retain separate bounds, and chance is entered as a percentage. Fluids show an icon, localized name and mB, with editable amounts and processing time. Common numeric ranges move to tooltips while invalid values remain checked. Machine inputs, outputs and costs are grouped, with sources, MBD2 content options and MMR canvas/positions collapsed by default and responsive layouts for narrow windows. Short summary fields share available row space: result bees stay with chances and fluids with amounts/times when they fit. Reflow preserves focus by field identity.
+- Cross-pack import distinguishes existing world IDs, local drafts and PB name-key collisions. Different prior draft bytes are archived before replacement; archive failure stops import, and name-key conflicts require a new copied identity. Copies rewrite self-referencing `bee_exists` conditions while retaining external references, and new identities drop source-pack disabled-recipe lists.
+- Remote catalogs load bounded, version-consistent snapshots for client-language search. Server pages reuse a session-owned catalog; leaving cancels pending requests and reload/failure states are reported. Resource buttons decode only after document, language or recipe-version changes.
+- PB 13.14.0 `bee_nbt_changer.matches` always returns false, so it is not offered as a working template. Its incubation serializer maps both materials to `input`, preventing independent round trips through an editor. Special global recipes, hard-coded entities/registrations and the unimplemented `passiveEffects` field retain explicit support limits.
+
+- Remove an entire item output with right-click or Delete, drag its item or header handle to reorder, or use up/down buttons. Amounts, chance and components move together in production editing, existing recipes and the visual overview.
+
+#### Fixed
+
+- Pause new resource production and editor reads during complete resource reloads. Overlapping reloads share completion state; any failure keeps admission paused until a new successful batch. Late callbacks after shutdown do not recreate server state. Successful pack loading, updates, removal and an independent restart verify the stable catalog.
+- Apply all new Myriad fields to actual bee NBT, including clearing immunities, inherited colors/sizes and replaced flower sources. Additional acquisition recipes survive the Myriad configuration processor and retain ownership through portable/KubeJS exports. Cross-pack recipe-only imports retain the destination pack's Myriad attributes.
+- Filter saves use the server's ordered file queue with request acknowledgements, permissions, baseline conflict checks, generation-aware pages and size limits. Timeouts or unknown outcomes retain edits for reconciliation. Single-player owners can save; multiplayer still requires permission level 2.
+- Complete English, Chinese and French labels/tooltips for new Myriad settings, fixing the configuration translation check. Restore the narrow filter's select-all label, show bulk-selection counts and improve tutorial badge/button text contrast in dark themes.
+- Fix the build failure caused by `Ae2NetworkCostWiringTest` checking the former output-budget interface for leftover recovery. It now verifies the input budget, both simulation and commit charges and finally accounting, without changing transfer ownership.
+- Invalidate PB item/block conversion query caches after editor application or datapack reload so updated recipes take effect.
+- Disable repeated actions immediately while importing, and open the corresponding acquisition recipe editor when navigating to a diagnostic field.
+
+- Bee cards no longer swallow their More menu, and Myriad cards open dedicated settings. Local flower choices avoid full-page motion and repeated clicks preserve data. Production and check/export pages separate summaries, primary actions and advanced details.
+- Background catalog and draft refreshes wait for menus or marquee gestures, and late ranges cannot overwrite a newer selection. Validation no longer appears stale immediately after the server adds managed fields: results match the submitted content and expire after edits. Changing pages clears old field-location notices.
+- Cache generated-file previews and parsed collection views, index scrolling controls by identity, and reduce repeated rounded-panel draws. Accept PB default/tag breeding food and show localized motion distances.
+- Browsing bees, genes, load conditions or MMR layouts no longer writes defaults and creates automatic drafts. Actual edits, new projects and manual saving still retain drafts.
+- Discarding the current pending deletion also ends that edit, preventing autosave from recreating the draft. Files changed during confirmation are retained with a refresh prompt.
+- Successful application keeps its confirmation message when the background draft save completes. Recycle cleanup guidance distinguishes pending and completed changes.
+- Cached item models retain render worlds and entities only weakly, allowing previous client worlds to be released while preserving cosmic combs, Myriad comb/block textures and spawn-egg model selection.
+- Full apiaries skip spawn-egg entity creation and NBT copies for filled ordinary or sturdy cages. Cage output capacity is checked before preparing bee data; empty-cage extraction and immediate recovery when a bee slot opens remain available.
+- Fix starvation on slow AE2 networks with fixed machine ordering and intermittent pulls. Budget waiters retain their place without advancing pull cooldowns or increasing failure counts. Input leftovers share the input budget; disconnected network-only entries no longer block later local recovery, and multi-lane budget waits are distinguished from actual rejections. Existing transfer amounts, configured intervals and rejection backoff are preserved.
+- Centrifuge ME inventory listings reuse per-slot item keys across quantity changes. The cache checks full components, fixing stale keys after in-place item-component changes.
+
 ## [1.2.0] - 2026-10-22
 
 **资源蜜蜂编辑器初版正式发布。** 现在可以在游戏里创建、修改资源蜜蜂，并将设置应用到当前世界，或导出给整合包使用。

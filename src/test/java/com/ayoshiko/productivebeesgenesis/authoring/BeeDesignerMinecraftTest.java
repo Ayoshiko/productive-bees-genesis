@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.authoring;
 
 import com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeRecipe;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
 import com.ayoshiko.productivebeesgenesis.client.screen.authoring.DesignerColorValue;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import com.google.gson.JsonArray;
@@ -79,6 +80,102 @@ class BeeDesignerMinecraftTest {
 		assertEquals("bonemeal", validated.get("postPollination"));
 		values.addProperty("attack", 2.147483648E9);
 		assertThrows(IllegalArgumentException.class, () -> BeeDesignerMyriad.validate(snapshot));
+	}
+
+	@Test
+	void myriadNewFieldsKeepListsAndInheritedValuesValid() {
+		JsonObject snapshot = BeeDesignerMyriad.snapshot();
+		JsonObject values = snapshot.getAsJsonObject("values");
+		values.add("invulnerability", JsonParser.parseString("[\"inFire\",\"magic\"]"));
+		values.addProperty("tertiaryColor", "#AABBCC");
+		values.addProperty("pollinatedSize", 1.8);
+		values.addProperty("useGlowLayer", true);
+		values.addProperty("attackResponse", "fire");
+		values.addProperty("breedingItem", "#minecraft:flowers");
+		Map<String, Object> result = BeeDesignerMyriad.validate(snapshot);
+		assertEquals(List.of("inFire", "magic"), result.get("invulnerability"));
+		assertEquals(1.8, result.get("pollinatedSize"));
+		values.remove("invulnerability");
+		values.remove("breedingItem");
+		result = BeeDesignerMyriad.validate(snapshot);
+		assertEquals(List.of(), result.get("invulnerability"));
+		assertEquals("", result.get("breedingItem"));
+		values.addProperty("attackResponse", "unsupported");
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerMyriad.validate(snapshot));
+	}
+
+	@Test
+	void myriadRecipeProjectPreservesConfigDefinitionAndRejectsAttributeEdits() {
+		JsonObject original = BeeDesignerDocument.create("productivebees:myriadcreations");
+		original.addProperty("definition_path", "productivebees:myriadcreations");
+		BeeDesignerMyriad.prepareRecipes(original);
+		JsonObject edited = original.deepCopy();
+		String recipe = BeeDesignerDocument.addRecipe(edited, "productivebees:bee_conversion");
+		BeeDesignerMyriad.validateRecipes(original, edited);
+		var files = BeeDesignerCompiler.files(Map.of("productivebees:myriadcreations", edited.toString()));
+		assertFalse(files.keySet().stream().anyMatch(path -> path.contains("/productivebees/myriadcreations.json")));
+		assertTrue(edited.getAsJsonObject("recipes").getAsJsonObject(recipe).get(BeeDesignerMyriad.CUSTOM_RECIPE).getAsBoolean());
+		JsonObject copy = BeeDesignerDocument.copyAs(edited, "test:myriad_copy");
+		assertFalse(copy.has(BeeDesignerMyriad.RECIPES_ONLY));
+		assertTrue(copy.getAsJsonObject("recipes").asMap().values().stream().allMatch(value -> !value.getAsJsonObject().has(BeeDesignerMyriad.CUSTOM_RECIPE)));
+		edited.getAsJsonObject("definition").addProperty("attack", 45);
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerMyriad.validateRecipes(original, edited));
+	}
+
+	@Test
+	void bottlerEggRecipeRoundTripsAndCopiesFullBeeIdentity() {
+		JsonObject document = BeeDesignerDocument.create("test:mixed");
+		String id = BeeDesignerDocument.addRecipe(document, "productivebees:bottler");
+		JsonObject source = document.getAsJsonObject("recipes").getAsJsonObject(id);
+		var recipe = (cy.jdkdigital.productivebees.common.recipe.BottlerRecipe) Recipe.CODEC.parse(
+				REGISTRIES.createSerializationContext(JsonOps.INSTANCE), source).getOrThrow();
+		assertEquals(ResourceLocation.parse("test:mixed"), BeeDesignerEggs.bee(recipe.result));
+		assertTrue(recipe.matches(new FluidStack(Fluids.WATER, 250), new ItemStack(Items.HONEY_BOTTLE)));
+		assertFalse(recipe.matches(new FluidStack(Fluids.WATER, 249), new ItemStack(Items.HONEY_BOTTLE)));
+		assertTrue(BeeDesignerReader.belongs(source, "test:mixed"));
+		JsonObject copy = BeeDesignerDocument.copyAs(document, "test:bottler_copy");
+		JsonObject copied = copy.getAsJsonObject("recipes").asMap().values().iterator().next().getAsJsonObject();
+		assertTrue(BeeDesignerReader.belongs(copied, "test:bottler_copy"));
+		assertFalse(BeeDesignerReader.belongs(copied, "test:mixed"));
+	}
+
+	@Test
+	void myriadExtraRecipesKeepOwnershipAcrossPortableAndKubeJsExports(@TempDir Path directory) throws IOException {
+		JsonObject document = BeeDesignerDocument.create("productivebees:myriadcreations");
+		String builtin = BeeDesignerDocument.addRecipe(document, "productivebees:bee_fishing");
+		document.getAsJsonObject("recipes").getAsJsonObject(builtin).addProperty(BeeDesignerMyriad.CUSTOM_RECIPE, false);
+		BeeDesignerMyriad.prepareRecipes(document);
+		assertFalse(document.getAsJsonObject("recipes").has(builtin));
+		String extra = BeeDesignerDocument.addRecipe(document, "productivebees:bee_breeding");
+		var sources = Map.of("productivebees:myriadcreations", document.toString());
+		var files = BeeDesignerCompiler.files(sources);
+		assertFalse(files.keySet().stream().anyMatch(path -> path.contains("/productivebees/myriadcreations.json")));
+		JsonObject indexed = JsonParser.parseString(files.get("data/productivebeesgenesis/bee_designer/index.json"))
+				.getAsJsonObject().getAsJsonObject("productivebees:myriadcreations");
+		assertTrue(BeeDesignerMyriad.customRecipe(indexed.getAsJsonObject("recipes").getAsJsonObject(extra)));
+		var bundle = BeeDesignerArchive.kubeJsFiles(document);
+		assertTrue(bundle.values().stream().anyMatch(value -> value.contains(BeeDesignerMyriad.CUSTOM_RECIPE)));
+		Path archive = BeeDesignerCollection.export(directory, sources, BeeDesignerCredits.empty());
+		JsonObject restored = JsonParser.parseString(BeeDesignerArchive.read(archive).get("productivebees:myriadcreations")).getAsJsonObject();
+		assertTrue(BeeDesignerMyriad.recipesOnly(restored));
+		assertTrue(BeeDesignerMyriad.customRecipe(restored.getAsJsonObject("recipes").getAsJsonObject(extra)));
+		assertEquals(document.get("definition"), restored.get("definition"));
+	}
+
+	@Test
+	void overlappingReloadFailureStaysBlockedUntilANewSuccessfulReload() {
+		MinecraftServer server = mock(MinecraftServer.class);
+		ResourceRuntime.beginReload(server);
+		ResourceRuntime.beginReload(server);
+		ResourceRuntime.finishReload(server, false);
+		ResourceRuntime.finishReload(server, true);
+		assertTrue(ResourceRuntime.reloadBlocked(server));
+		assertThrows(IllegalStateException.class, () -> BeeDesignerReader.snapshot(server, ResourceLocation.parse("test:active")));
+		ResourceRuntime.beginReload(server);
+		assertTrue(ResourceRuntime.reloadBlocked(server));
+		ResourceRuntime.finishReload(server, true);
+		assertFalse(ResourceRuntime.reloadBlocked(server));
+		ResourceRuntime.stopped(new net.neoforged.neoforge.event.server.ServerStoppedEvent(server));
 	}
 	@Test
 	void kubeJsBundlePreservesDefinitionsNamesComponentsAndStableRecipes(@TempDir Path directory) throws IOException {
@@ -171,6 +268,43 @@ class BeeDesignerMinecraftTest {
 		assertTrue(files.get("data/test/productivebees/metals/designer.json").contains("third_party_field"));
 		assertTrue(files.containsKey("data/test/recipe/original_recipe.json"));
 		assertFalse(files.keySet().stream().anyMatch(path -> path.contains("bee_designer/designer/")));
+	}
+
+	@Test
+	void pbAppearanceAndBehaviorFieldsSurviveExportAndRejectInvalidValues() {
+		MinecraftServer server = mock(MinecraftServer.class);
+		when(server.registryAccess()).thenReturn(REGISTRIES.freeze());
+		JsonObject document = BeeDesignerDocument.create("test:pb_fields");
+		JsonObject definition = document.getAsJsonObject("definition");
+		definition.addProperty("tertiaryColor", "#123456");
+		definition.addProperty("colorCycle", true);
+		definition.addProperty("useGlowLayer", true);
+		definition.addProperty("pollinatedSize", 1.75);
+		definition.addProperty("attackResponse", "fire");
+		JsonArray immunity = new JsonArray();
+		immunity.add("inFire");
+		definition.add("invulnerability", immunity);
+		definition.addProperty("breedingItem", "#minecraft:flowers");
+		assertDoesNotThrow(() -> BeeDesignerCompiler.validate(document, server));
+		var data = BeeCreator.create(ResourceLocation.parse("test:pb_fields"), definition);
+		assertEquals(0xFF123456, data.getInt("tertiaryColor"));
+		assertEquals(1.75F, data.getFloat("pollinatedSize"));
+		assertTrue(data.getBoolean("colorCycle"));
+		assertTrue(data.getBoolean("useGlowLayer"));
+		assertEquals("fire", data.getString("attackResponse"));
+		assertEquals("inFire", data.getList("invulnerability", net.minecraft.nbt.Tag.TAG_STRING).getString(0));
+		var files = BeeDesignerCompiler.files(Map.of("test:pb_fields", document.toString()));
+		assertEquals(definition, JsonParser.parseString(files.get("data/test/productivebees/pb_fields.json")));
+		definition.addProperty("breedingItem", "");
+		assertDoesNotThrow(() -> BeeDesignerCompiler.validate(document, server));
+		definition.addProperty("pollinatedSize", 0);
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerCompiler.validate(document, server));
+		definition.addProperty("pollinatedSize", 1);
+		definition.addProperty("colorCycle", "yes");
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerCompiler.validate(document, server));
+		definition.addProperty("colorCycle", true);
+		immunity.add(new JsonObject());
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerCompiler.validate(document, server));
 	}
 
 	@Test

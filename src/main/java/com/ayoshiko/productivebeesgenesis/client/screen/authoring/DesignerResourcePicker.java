@@ -1,17 +1,16 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import mekanism.api.MekanismAPI;
 
 import java.util.function.Consumer;
+import java.util.List;
 
 /** 目录来自服务端；选中后只创建声明副本，不读取容器能力。 */
 final class DesignerResourcePicker extends DesignerFormScreen {
@@ -28,7 +27,7 @@ final class DesignerResourcePicker extends DesignerFormScreen {
 	private String query = "";
 	private JsonObject catalog;
 	private int catalogPage;
-	private long request;
+	private final DesignerRemoteCatalog remote;
 	private long searchAt;
 
 	DesignerResourcePicker(Screen parent, String kind, Consumer<JsonObject> selected) {
@@ -36,6 +35,7 @@ final class DesignerResourcePicker extends DesignerFormScreen {
 		this.parent = parent;
 		editorParent = parent;
 		this.kind = kind;
+		remote = new DesignerRemoteCatalog(kind);
 		this.selected = selected;
 	}
 
@@ -48,21 +48,26 @@ final class DesignerResourcePicker extends DesignerFormScreen {
 			searchAt = System.currentTimeMillis() + 300;
 		});
 		contentTop = frameTop + 56;
-		if (catalog == null) {
-			request();
-		} else {
+		if (!remote.started()) {
+			remote.start();
+		}
+		filterCatalog();
+		if (catalog != null) {
 			for (var value : catalog.getAsJsonArray("entries")) {
 				JsonObject entry = value.getAsJsonObject();
 				String id = entry.get("id").getAsString();
 				rows.add(new Row("", (x, y, w) -> {
-					button(x, y, w, Component.literal(entry.get("name").getAsString() + "  ·  " + id), () -> {
+					button(x, y, w, entryName(entry).copy().append("  ·  " + id), () -> {
+						if (remote.loading() || !remote.problem().isBlank()) {
+							return;
+						}
 						try {
 							selected.accept(toSelection(entry));
 							minecraft.setScreen(parent);
 						} catch (RuntimeException exception) {
 							status = exception.getMessage();
 						}
-					}).active = !entry.has("available") || entry.get("available").getAsBoolean();
+					}).active = !remote.loading() && remote.problem().isBlank() && (!entry.has("available") || entry.get("available").getAsBoolean());
 				}));
 			}
 		}
@@ -71,14 +76,18 @@ final class DesignerResourcePicker extends DesignerFormScreen {
 		button(left, footerY(), 24, Component.literal("‹"), () -> {
 			catalogPage--;
 			page = 0;
-			request();
-		}).active = catalogPage > 0;
+			rebuild();
+		}).active = !remote.loading() && catalogPage > 0;
 		button(left + 28, footerY(), 60, Component.literal((catalogPage + 1) + "/" + pages), () -> {}).active = false;
 		button(left + 92, footerY(), 24, Component.literal("›"), () -> {
 			catalogPage++;
 			page = 0;
-			request();
-		}).active = catalogPage + 1 < pages;
+			rebuild();
+		}).active = !remote.loading() && catalogPage + 1 < pages;
+		button(left + 124, footerY(), 64, tr("refresh"), () -> {
+			remote.start();
+			rebuild();
+		}).active = !remote.loading();
 		button(left + contentWidth - 80, footerY(), 80, Component.translatable("gui.cancel"), this::onClose);
 	}
 
@@ -100,32 +109,71 @@ final class DesignerResourcePicker extends DesignerFormScreen {
 		return result;
 	}
 
-	private void request() {
-		JsonObject data = new JsonObject();
-		data.addProperty("kind", kind);
-		data.addProperty("search", query);
-		data.addProperty("page", catalogPage);
-		request = BeeDesignerClient.request("materials", data);
+	private Component entryName(JsonObject entry) {
+		if (kind.equals("biome")) {
+			ResourceLocation id = ResourceLocation.parse(entry.get("id").getAsString());
+			return Component.translatable("biome." + id.getNamespace() + "." + id.getPath());
+		}
+		if (kind.equals("resource")) {
+			return option(ResourceLocation.parse(entry.get("id").getAsString()).getPath());
+		}
+		return Component.literal(entry.get("name").getAsString());
+	}
+
+	private void filterCatalog() {
+		status = remote.problem().isBlank() ? (remote.loading() ? "designer.status.loading" : "") : remote.problem();
+		if (remote.loading() || remote.metadata() == null) {
+			catalog = null;
+			return;
+		}
+		var filter = DesignerSearch.compile(query);
+		var matches = remote.entries().stream().filter(entry -> filter.matches(
+				ResourceLocation.parse(entry.get("id").getAsString()).getNamespace(),
+				DesignerSearch.indexed(entry.get("id").getAsString() + " " + entryName(entry).getString()),
+				kind.endsWith("_tag") ? List.of(entry.get("id").getAsString()) : List.of())).toList();
+		int pages = Math.max(1, (matches.size() + 23) / 24);
+		catalogPage = Math.max(0, Math.min(catalogPage, pages - 1));
+		catalog = remote.metadata().deepCopy();
+		var entries = new JsonArray();
+		matches.stream().skip((long) catalogPage * 24).limit(24).forEach(entries::add);
+		catalog.add("entries", entries);
+		catalog.addProperty("pages", pages);
+		catalog.addProperty("page", catalogPage);
 	}
 
 	void receive(long sequence, JsonObject data) {
-		if (sequence == request) {
-			catalog = data;
-			catalogPage = data.get("page").getAsInt();
+		if (remote.receive(sequence, data) && !remote.loading()) {
+			rebuild();
+		}
+	}
+
+	void failed(long sequence, String message) {
+		if (remote.fail(sequence, message)) {
 			rebuild();
 		}
 	}
 
 	@Override
 	public void tick() {
+		super.tick();
 		if (searchAt != 0 && System.currentTimeMillis() >= searchAt) {
 			searchAt = 0;
-			request();
+			rebuild();
+		}
+		if (remote.tick()) {
+			rebuild();
 		}
 	}
 
 	@Override
+	public void removed() {
+		remote.cancel();
+		super.removed();
+	}
+
+	@Override
 	public void onClose() {
+		remote.cancel();
 		minecraft.setScreen(parent);
 	}
 }

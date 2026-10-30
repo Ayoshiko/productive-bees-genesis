@@ -148,33 +148,24 @@ public final class Ae2InputPuller {
 		boolean pendingRetryable = holder.getPendingItemBuffer().hasRetryableItems(currentTick);
 		if (!inputPullEnabled && !pendingRetryable) return;
 
-		// 2. 回送退避检查（Task 10：3 次重试失败后进入退避窗口，跳过整个拉取流程减少循环频率）
-		//    入口级别跳过实现深度退避（Task 4）：避免进入 getAvailableStacks 遍历前的无效开销
-		//    holder 已非 null，getPushState() 永不返回 null（final 字段构造时初始化）
 		Ae2PushBackoff returnBackoff = holder.getPushState().getReturnBackoff();
-		if (returnBackoff.shouldSkip(System.nanoTime())) {
-			return;
-		}
-
-		// 模块2.5：强检测 grid node 状态，仅当 ONLINE(3) 时继续拉取
-		// 状态 0/1/2: OFFLINE/NETWORK_BOOTING/MISSING_CHANNEL — 不进入拉取路径，避免无效的 getAvailableStacks 遍历
-		// 使用 pushState 缓存（20 tick 刷新一次）避免每 tick 高频调用 getGridNodeState
-		int nodeState = holder.getPushState().getCachedNodeState(host);
-		if (nodeState != Ae2GridNodeManager.STATE_ONLINE) {
-			return;
-		}
+		boolean returnCooling = returnBackoff.shouldSkip(System.nanoTime());
+		if (returnCooling && !pendingRetryable) return;
 		boolean pendingRetriedEarly = false;
 		if (pendingRetryable) {
-			MEStorage pendingStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
-			if (pendingStorage != null) {
-				retryPendingItems(level, holder, pendingStorage, inputSlots, currentTick,
-						host instanceof BlockEntity entity ? entity : null);
-				host.productivebeesgenesis$markAe2StateChanged();
-				pendingRetriedEarly = true;
-			}
+			MEStorage pendingStorage = !returnCooling
+					&& holder.getPushState().getCachedNodeState(host) == Ae2GridNodeManager.STATE_ONLINE
+					? Ae2GridNodeManager.getCachedMeStorage(holder, host) : null;
+			// 已知资产可先落本地槽；网络断线和回送冷却只限制网络交互。
+			retryPendingItems(level, holder, pendingStorage, inputSlots, currentTick,
+					host instanceof BlockEntity entity ? entity : null);
+			host.productivebeesgenesis$markAe2StateChanged();
+			pendingRetriedEarly = true;
 		}
 		// Pending recovery above is independent from the switch for accepting new inputs.
 		if (!inputPullEnabled || holder.getPendingItemBuffer().isBlocked()) return;
+		if (returnBackoff.shouldSkip(System.nanoTime())) return;
+		if (holder.getPushState().getCachedNodeState(host) != Ae2GridNodeManager.STATE_ONLINE) return;
 
 		// 3. Level 与当前游戏刻已在入口获取并复用，避免重复调用。
 
@@ -253,6 +244,9 @@ public final class Ae2InputPuller {
 			host.productivebeesgenesis$markAe2StateChanged();
 		}
 		if (holder.getPendingItemBuffer().isBlocked()) return;
+
+		// 先取得许可再扫描候选与规划车道；等待不是一次拉取尝试，不推进原有冷却。
+		if (!holder.tryAcquireNetworkExtract(meStorage, currentTick)) return;
 
 		// 9. 获取复用缓冲与调度状态；同样延后到真正需要扫描网络库存时。
 		Ae2PushBuffers buffers = Ae2OutputPusher.getReusableBuffers(holder, host);
@@ -705,8 +699,10 @@ public final class Ae2InputPuller {
 		} else if (!networkWorkDeferred) {
 			holder.onInputPullFail(unlimitedAttempted);
 		}
-		holder.updateLastPullTick(currentTick);
-		holder.updateLastPullCounter(pullCounter);
+		if (totalPulled > 0 || !networkWorkDeferred) {
+			holder.updateLastPullTick(currentTick);
+			holder.updateLastPullCounter(pullCounter);
+		}
 
 		// 拉取列表已使用完毕，clear 而非新建（复用 ReusableBuffers）
 		pullList.clear();
@@ -1036,14 +1032,16 @@ public final class Ae2InputPuller {
 			keyBackoff.recordSuccess(key, System.nanoTime(),
 					Ae2StorageHealth.successfulExtractDelay(maxNetworkCost));
 		}
+		boolean returnAttempted = false;
 		if (transfer.knownAmount() > 0) {
-			Ae2LeftoverReturner.returnLeftoverToMe(holder, meStorage, key, actionSource, gameTick);
+			returnAttempted = Ae2LeftoverReturner.returnLeftoverToMe(holder, meStorage, key, actionSource, gameTick);
 		}
 		boolean stranded = transfer.knownAmount() > 0;
-		transfer.finish(pending, gameTick, false);
+		boolean returnFailed = stranded && returnAttempted;
+		transfer.finish(pending, gameTick, false, 0, returnFailed);
 		if (stranded && level.getBlockEntity(pos) != null) level.getBlockEntity(pos).setChanged();
-		return new PullBatchResult(insertedCount, maxNetworkCost, slowNetworkOperation, stranded,
-				!slowNetworkOperation && !stranded);
+		return new PullBatchResult(insertedCount, maxNetworkCost, slowNetworkOperation, returnFailed,
+				!slowNetworkOperation && !returnFailed);
 	}
 
 	/** 重试已知余量；每轮最多四个身份，发生未知结果立即停止本机重试。 */
@@ -1063,14 +1061,16 @@ public final class Ae2InputPuller {
 		if (pending.isBlocked()) return;
 		int attempts = 0;
 		for (Ae2PendingItemBuffer.PendingItem entry : pending.snapshot(currentTick)) {
-			if (attempts++ >= 4 || pending.isBlocked()) break;
+			if (pending.isBlocked() || attempts >= 4) break;
+			if (meStorage == null && entry.amount() <= 0) continue;
+			attempts++;
 			AEItemKey key = Ae2ItemFingerprint.decode(entry.fingerprint(), level.registryAccess());
 			if (key == null) {
 				pending.recordFailure(entry.fingerprint(), currentTick);
 				LogThrottle.warn("ae2_pending_item_decode", "AE2 pending 指纹无法解析，保留等待迁移: {}", entry.fingerprint());
 				continue;
 			}
-			if (entry.returnToNetworkAmount() > 0) {
+			if (entry.returnToNetworkAmount() > 0 && meStorage != null) {
 				retryKnownAmount(holder, meStorage, inputSlots, entry, key, entry.returnToNetworkAmount(), true, currentTick, host);
 			}
 			if (entry.amount() > 0 && !pending.isBlocked()) {
@@ -1097,8 +1097,9 @@ public final class Ae2InputPuller {
 					}
 				}
 			}
-			Ae2LeftoverReturner.returnLeftoverToMe(holder, storage, key, ActionSourceHolder.INSTANCE, tick);
-			transfer.finish(pending, tick, networkOnly, entry.retries());
+			boolean returnAttempted = Ae2LeftoverReturner.returnLeftoverToMe(
+					holder, storage, key, ActionSourceHolder.INSTANCE, tick);
+			transfer.finish(pending, tick, networkOnly, entry.retries(), returnAttempted);
 		} catch (LinkageError | RuntimeException error) {
 			transfer.fingerprint();
 			LogThrottle.error("ae2_input_transfer_unknown",

@@ -15,8 +15,49 @@ import java.util.Map;
 /** 万象属性使用唯一的服务端配置所有者，不生成会被配置再次覆盖的蜂种文件。 */
 public final class BeeDesignerMyriad {
 	private static final Gson GSON = new Gson();
+	public static final String RECIPES_ONLY = "myriad_recipes_only";
+	public static final String CUSTOM_RECIPE = "productivebeesgenesis:myriad_recipe";
 
 	private BeeDesignerMyriad() {
+	}
+
+	public static boolean recipesOnly(JsonObject document) {
+		return PBConstants.MYRIADCREATIONS_TYPE_STRING.equals(BeeDesignerDocument.text(document, "id", ""))
+				&& document.has(RECIPES_ONLY) && document.get(RECIPES_ONLY).isJsonPrimitive()
+				&& document.getAsJsonPrimitive(RECIPES_ONLY).isBoolean() && document.get(RECIPES_ONLY).getAsBoolean();
+	}
+
+	static void prepareRecipes(JsonObject document) {
+		document.addProperty(RECIPES_ONLY, true);
+		JsonObject recipes = document.getAsJsonObject("recipes");
+		recipes.entrySet().removeIf(entry -> !customRecipe(entry.getValue().getAsJsonObject())
+				&& !additionalType(entry.getValue().getAsJsonObject()));
+		document.addProperty("baseline", BeeDesignerDocument.fingerprint(document));
+	}
+
+	public static boolean customRecipe(JsonObject recipe) {
+		var marker = recipe.get(CUSTOM_RECIPE);
+		return marker != null && marker.isJsonPrimitive() && marker.getAsJsonPrimitive().isBoolean() && marker.getAsBoolean();
+	}
+
+	static boolean additionalType(JsonObject recipe) {
+		String type = BeeDesignerDocument.text(recipe, "type", "");
+		return BeeDesignerMachineRecipes.host(recipe) != null || type.startsWith("minecraft:crafting_") || type.equals("productivebees:bottler");
+	}
+
+	static void validateRecipes(JsonObject original, JsonObject document) {
+		if (!recipesOnly(original) || !recipesOnly(document) || !original.get("definition").equals(document.get("definition"))
+				|| !original.get("names").equals(document.get("names")) || document.has("production_nodes")) {
+			throw new IllegalArgumentException("designer.error.myriad_recipe_scope");
+		}
+		for (var recipe : document.getAsJsonObject("recipes").entrySet()) {
+			String type = BeeDesignerDocument.text(recipe.getValue().getAsJsonObject(), "type", "");
+			if (!additionalType(recipe.getValue().getAsJsonObject()) && !java.util.Set.of("productivebees:bee_breeding",
+					"productivebees:bee_conversion", "productivebees:bee_spawning", "productivebees:bee_fishing").contains(type)) {
+				throw new IllegalArgumentException("designer.error.myriad_recipe_scope");
+			}
+			recipe.getValue().getAsJsonObject().addProperty(CUSTOM_RECIPE, true);
+		}
 	}
 
 	private static Map<String, ModConfigSpec.ConfigValue<?>> fields() {
@@ -49,6 +90,16 @@ public final class BeeDesignerMyriad {
 		values.put("particleType", appearance.particleType);
 		values.put("nestingPreference", appearance.nestingPreference);
 		values.put("postPollination", appearance.postPollination);
+		values.put("tertiaryColor", appearance.tertiaryColor);
+		values.put("pollinatedSize", appearance.pollinatedSize);
+		values.put("useGlowLayer", appearance.useGlowLayer);
+		values.put("attackResponse", appearance.attackResponse);
+		values.put("invulnerability", appearance.invulnerability);
+		values.put("renderTransform", appearance.renderTransform);
+		values.put("flowerBlock", appearance.flowerBlock);
+		values.put("flowerTag", appearance.flowerTag);
+		values.put("flowerFluid", appearance.flowerFluid);
+		values.put("flowerType", appearance.flowerType);
 		values.putAll(appearance.traits);
 		values.put("fishingEnabled", config.fishingEnabled);
 		values.put("fishingChance", config.fishingChance);
@@ -86,7 +137,10 @@ public final class BeeDesignerMyriad {
 	}
 
 	public static JsonObject ordinaryTemplate() {
-		JsonObject values = snapshot().getAsJsonObject("values");
+		return template(snapshot().getAsJsonObject("values"));
+	}
+
+	public static JsonObject template(JsonObject values) {
 		JsonObject document = BeeDesignerDocument.create(PBConstants.MYRIADCREATIONS_TYPE_STRING);
 		JsonObject definition = document.getAsJsonObject("definition");
 		for (String key : List.of("primaryColor", "secondaryColor", "particleColor", "glowColor", "flowerItem", "createComb", "size",
@@ -98,6 +152,28 @@ public final class BeeDesignerMyriad {
 				definition.add(key, values.get(key).deepCopy());
 			}
 		}
+		for (String key : List.of("tertiaryColor", "attackResponse", "renderTransform", "flowerBlock", "flowerTag", "flowerFluid")) {
+			if (!values.get(key).getAsString().isEmpty()) {
+				definition.add(key, values.get(key).deepCopy());
+			}
+		}
+		definition.add("useGlowLayer", values.get("useGlowLayer"));
+		definition.add("invulnerability", values.get("invulnerability").deepCopy());
+		definition.add("flowerType", values.get("flowerType"));
+		String selectedFlower = "flowerItem";
+		for (String key : List.of("flowerFluid", "flowerBlock", "flowerTag")) {
+			if (definition.has(key)) {
+				selectedFlower = key;
+			}
+		}
+		for (String key : List.of("flowerItem", "flowerFluid", "flowerBlock", "flowerTag")) {
+			if (!key.equals(selectedFlower)) {
+				definition.remove(key);
+			}
+		}
+		if (values.get("pollinatedSize").getAsDouble() > 0) {
+			definition.add("pollinatedSize", values.get("pollinatedSize"));
+		}
 		ModConfig.SERVER.beeAttributes().traits.keySet().forEach(key -> definition.add(key, values.get(key).deepCopy()));
 		JsonObject genes = new JsonObject();
 		for (String key : List.of("temper", "behavior", "endurance", "productivity")) {
@@ -106,6 +182,10 @@ public final class BeeDesignerMyriad {
 		genes.add("weather_tolerance", values.get("weatherTolerance").deepCopy());
 		definition.add("attributes", genes);
 		return document;
+	}
+
+	static void validateResources(Map<String, Object> values, net.minecraft.server.MinecraftServer server) {
+		BeeDesignerCompiler.validate(template(GSON.toJsonTree(values).getAsJsonObject()), server);
 	}
 
 	public static Map<String, Object> validate(JsonObject data) {
@@ -117,6 +197,12 @@ public final class BeeDesignerMyriad {
 		for (var entry : fields().entrySet()) {
 			Object current = entry.getValue().get();
 			var element = values.get(entry.getKey());
+			if (element == null && entry.getKey().equals("invulnerability")) {
+				element = new com.google.gson.JsonArray();
+			}
+			if (element == null && entry.getKey().equals("breedingItem")) {
+				element = new com.google.gson.JsonPrimitive("");
+			}
 			if (element == null) {
 				throw invalid(entry.getKey(), entry.getValue());
 			}
@@ -147,6 +233,12 @@ public final class BeeDesignerMyriad {
 				throw invalid(entry.getKey(), entry.getValue());
 			}
 			parsed.put(entry.getKey(), value);
+		}
+		if (((List<?>) parsed.get("invulnerability")).size() > 128) {
+			throw new IllegalArgumentException("designer.error.invulnerability");
+		}
+		if (parsed.get("flowerType").equals("entity_types") && ((String) parsed.get("flowerTag")).startsWith("!")) {
+			throw new IllegalArgumentException("designer.error.flower_entity_tag|" + parsed.get("flowerTag"));
 		}
 		if ((int) parsed.get("produceOutputMin") > (int) parsed.get("produceOutputMax")) {
 			throw new IllegalArgumentException("designer.error.output_range");

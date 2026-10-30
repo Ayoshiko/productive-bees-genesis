@@ -22,10 +22,12 @@ final class RecipeTypeScreen extends DesignerFormScreen {
 	protected void init() {
 		begin();
 		for (String type : new String[]{"productivebees:advanced_beehive", "productivebees:centrifuge",
+				"productivebees:item_conversion", "productivebees:block_conversion",
 				"productivebeesgenesis:resource_production", "productivebeesgenesis:resource_centrifuging",
 				"productivebees:bee_breeding", "productivebees:bee_conversion", "productivebees:bee_spawning",
 				"productivebees:bee_fishing", "minecraft:crafting_shapeless", "minecraft:crafting_shaped"}) {
-			boolean isProduction = type.endsWith("advanced_beehive") || type.endsWith("centrifuge") || type.startsWith("productivebeesgenesis:");
+			boolean isProduction = type.endsWith("advanced_beehive") || type.endsWith("centrifuge") || type.startsWith("productivebeesgenesis:")
+					|| com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerWorldConversions.supports(type);
 			if (isProduction != production) {
 				continue;
 			}

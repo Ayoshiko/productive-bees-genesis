@@ -25,9 +25,13 @@ public final class BeeDesignerDrafts {
 	private BeeDesignerDrafts() {
 	}
 
-	public record Entry(String id, Map<String, String> names, long modified, String problem, boolean pending, boolean deleted) {
+	public record Entry(String id, Map<String, String> names, long modified, String problem, boolean pending, boolean deleted, boolean purged) {
 		public Entry(String id, Map<String, String> names, long modified, String problem, boolean pending) {
-			this(id, names, modified, problem, pending, false);
+			this(id, names, modified, problem, pending, false, false);
+		}
+
+		public Entry(String id, Map<String, String> names, long modified, String problem, boolean pending, boolean deleted) {
+			this(id, names, modified, problem, pending, deleted, false);
 		}
 	}
 
@@ -60,6 +64,24 @@ public final class BeeDesignerDrafts {
 		return document;
 	}
 
+	/** 导入不覆盖旧草稿；保管失败时保留原件并中止导入。坏原文也按字节归档。 */
+	public static Path preserveBeforeImport(Path directory, JsonObject incoming) throws IOException {
+		BeeDesignerCompiler.validateStructure(incoming);
+		String id = incoming.get("id").getAsString();
+		Path existing = path(directory, id);
+		if (!Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
+			return null;
+		}
+		try {
+			if (read(directory, id).equals(incoming)) {
+				return null;
+			}
+		} catch (IOException | RuntimeException invalid) {
+			// 无效旧草稿仍有作者原文，archive 按原字节保管，不解析或丢弃。
+		}
+		return archive(directory, id);
+	}
+
 	public static JsonObject latest(Path directory) throws IOException {
 		List<Entry> entries = list(directory);
 		if (!entries.isEmpty()) {
@@ -83,7 +105,7 @@ public final class BeeDesignerDrafts {
 				Map<String, String> names = new LinkedHashMap<>();
 				document.getAsJsonObject("names").entrySet().forEach(entry -> names.put(entry.getKey(), entry.getValue().getAsString()));
 				boolean pending = document.has("_editor_recovery") || !BeeDesignerDocument.fingerprint(document).equals(BeeDesignerDocument.text(document, "baseline", "new"));
-				result.add(new Entry(id, Map.copyOf(names), modified, "", pending, BeeDesignerLifecycle.deleted(document)));
+				result.add(new Entry(id, Map.copyOf(names), modified, "", pending, BeeDesignerLifecycle.deleted(document), BeeDesignerLifecycle.purged(document)));
 			} catch (IOException | RuntimeException failure) {
 				String problem = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
 				result.add(new Entry(id, Map.of(), modified, problem, false));
@@ -127,7 +149,7 @@ public final class BeeDesignerDrafts {
 					JsonObject document = archived(directory, token);
 					Map<String, String> names = new LinkedHashMap<>();
 					document.getAsJsonObject("names").entrySet().forEach(entry -> names.put(entry.getKey(), entry.getValue().getAsString()));
-					Entry entry = new Entry(document.get("id").getAsString(), Map.copyOf(names), modified, "", true, BeeDesignerLifecycle.deleted(document));
+					Entry entry = new Entry(document.get("id").getAsString(), Map.copyOf(names), modified, "", true, BeeDesignerLifecycle.deleted(document), BeeDesignerLifecycle.purged(document));
 					result.add(new Archived(token, entry));
 				} catch (IOException | RuntimeException failure) {
 					String problem = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
@@ -141,6 +163,23 @@ public final class BeeDesignerDrafts {
 
 	public static JsonObject archived(Path directory, String token) throws IOException {
 		return readFile(archivePath(directory, token));
+	}
+
+	public static void deleteArchive(Path directory, String token, long modified) throws IOException {
+		Path source = archivePath(directory, token);
+		deleteFile(source, modified);
+	}
+
+	public static void discard(Path directory, String id, long modified) throws IOException {
+		deleteFile(path(directory, id), modified);
+	}
+
+	private static void deleteFile(Path source, long modified) throws IOException {
+		if (!Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)
+				|| Files.getLastModifiedTime(source, LinkOption.NOFOLLOW_LINKS).toMillis() != modified) {
+			throw new IOException("designer.error.recycle_changed");
+		}
+		Files.delete(source);
 	}
 
 	public static JsonObject restoreArchive(Path directory, String token) throws IOException {

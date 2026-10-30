@@ -106,17 +106,31 @@ public final class BeeDesignerDocument {
 		copy.remove("disabled_recipes");
 		copy.remove("_editor_recovery");
 		copy.remove(BeeDesignerLifecycle.FIELD);
+		copy.remove(BeeDesignerMyriad.RECIPES_ONLY);
 		JsonObject origin = new JsonObject();
 		origin.addProperty("kind", "editor");
 		origin.addProperty("source_pack", "");
 		origin.addProperty("copied_from", previous);
+		if (source.has("_editor_origin") && source.get("_editor_origin").isJsonObject()) {
+			JsonObject original = source.getAsJsonObject("_editor_origin");
+			String sourcePack = text(original, "copied_source_pack", text(original, "source_pack", ""));
+			if (!sourcePack.isBlank()) {
+				origin.addProperty("copied_source_pack", sourcePack);
+			}
+		}
 		copy.add("_editor_origin", origin);
 		JsonObject recipes = new JsonObject();
+		rewriteSelfConditions(copy.getAsJsonObject("definition"), previous, newId);
 		Map<String, String> ids = new LinkedHashMap<>();
 		int index = 0;
 		for (var entry : source.getAsJsonObject("recipes").entrySet()) {
 			JsonObject recipe = entry.getValue().getAsJsonObject().deepCopy();
+			recipe.remove(BeeDesignerMyriad.CUSTOM_RECIPE);
 			String type = recipe.get("type").getAsString();
+			rewriteSelfConditions(recipe, previous, newId);
+			if (BeeDesignerWorldConversions.supports(type)) {
+				BeeDesignerWorldConversions.retarget(recipe, newId);
+			}
 			String field = switch (type) {
 				case "productivebees:advanced_beehive" -> "ingredient";
 				case "productivebees:bee_breeding" -> "offspring";
@@ -210,6 +224,18 @@ public final class BeeDesignerDocument {
 		throw new IllegalArgumentException("designer.error.copy_limit");
 	}
 
+	private static void rewriteSelfConditions(JsonElement value, String previous, String next) {
+		if (value.isJsonArray()) {
+			value.getAsJsonArray().forEach(entry -> rewriteSelfConditions(entry, previous, next));
+		} else if (value.isJsonObject()) {
+			JsonObject object = value.getAsJsonObject();
+			if (text(object, "type", "").equals("productivebees:bee_exists") && text(object, "bee", "").equals(previous)) {
+				object.addProperty("bee", next);
+			}
+			object.asMap().values().forEach(entry -> rewriteSelfConditions(entry, previous, next));
+		}
+	}
+
 	private static void rewriteIdentityComponents(JsonElement value, String previous, String next) {
 		if (value.isJsonArray()) {
 			value.getAsJsonArray().forEach(entry -> rewriteIdentityComponents(entry, previous, next));
@@ -264,6 +290,17 @@ public final class BeeDesignerDocument {
 		}
 		JsonObject recipe = recipe(type);
 		switch (type) {
+			case "productivebees:item_conversion", "productivebees:block_conversion" -> BeeDesignerWorldConversions.initialize(recipe, bee);
+			case "productivebees:bottler" -> {
+				JsonObject ingredient = new JsonObject();
+				ingredient.addProperty("item", "minecraft:honey_bottle");
+				recipe.add("ingredient", ingredient);
+				JsonObject fluid = new JsonObject();
+				fluid.addProperty("fluid", "minecraft:water");
+				fluid.addProperty("amount", 250);
+				recipe.add("fluid", fluid);
+				recipe.add("result", BeeDesignerEggs.output(bee));
+			}
 			case "productivebees:advanced_beehive" -> {
 				recipe.addProperty("ingredient", bee);
 				JsonArray outputs = new JsonArray();

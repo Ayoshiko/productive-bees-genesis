@@ -144,4 +144,79 @@ class BeeDesignerLifecycleMinecraftTest {
 		assertEquals(1, archives.size());
 		assertEquals(original, BeeDesignerDrafts.archived(directory, archives.getFirst().token()));
 	}
+
+	@Test
+	void clearingRecycleRequiresItsOwnConfirmationAndPreservesWorldSettlement() {
+		JsonObject source = BeeDesignerDocument.create("test:purged");
+		String processing = BeeDesignerDocument.addRecipe(source, "productivebees:centrifuge");
+		JsonObject retired = BeeDesignerLifecycle.retire(source, 1234, UUID.randomUUID());
+		String before = retired.toString();
+		JsonObject purged = BeeDesignerLifecycle.purge(retired);
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerLifecycle.validateTransition(retired, purged, null));
+		var confirmation = new BeeDesignerLifecycle.Confirmation(retired, BeeDesignerSources.generation, true);
+		JsonObject request = confirmation.review();
+		request.addProperty("purging", false);
+		request.addProperty("step", 1);
+		assertThrows(IllegalArgumentException.class, () -> confirmation.confirm(request));
+		request.addProperty("purging", true);
+		for (int step = 1; step <= 3; step++) {
+			request.addProperty("step", step);
+			request.addProperty("phrase", "test:purged");
+			confirmation.confirm(request);
+		}
+		assertTrue(confirmation.permits(purged));
+		assertEquals(purged, confirmation.stage(9999, UUID.randomUUID()));
+		assertDoesNotThrow(() -> BeeDesignerLifecycle.validateTransition(retired, purged, confirmation));
+		JsonObject changed = purged.deepCopy();
+		changed.getAsJsonObject("definition").addProperty("size", 2);
+		assertFalse(confirmation.permits(changed));
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerLifecycle.validateTransition(retired, changed, confirmation));
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerLifecycle.validateTransition(purged, retired, confirmation));
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerLifecycle.restore(purged));
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerLifecycle.purge(purged));
+		assertThrows(IllegalArgumentException.class, () -> new BeeDesignerLifecycle.Confirmation(source, BeeDesignerSources.generation, true));
+		assertEquals(before, retired.toString());
+		var files = BeeDesignerCompiler.files(Map.of("test:purged", purged.toString()));
+		assertEquals(source.get("definition"), JsonParser.parseString(files.get("data/test/productivebees/purged.json")));
+		assertEquals(source.getAsJsonObject("recipes").get(processing), JsonParser.parseString(recipeFile(files, processing)));
+		assertFalse(BeeDesignerLifecycle.deleted(BeeDesignerDocument.copyAs(purged, "test:purged_copy")));
+		assertDoesNotThrow(() -> BeeDesignerLifecycle.validateTransition(purged, BeeDesignerDocument.copyAs(purged, "test:purged_copy"), null));
+	}
+
+	@Test
+	void recycledFileDeletionRejectsChangedFilesAndRemovesOnlyConfirmedRecord(@TempDir Path directory) throws IOException {
+		JsonObject first = BeeDesignerDocument.create("test:delete_archive");
+		BeeDesignerDrafts.save(directory, first);
+		Path archived = BeeDesignerDrafts.archive(directory, "test:delete_archive");
+		JsonObject second = BeeDesignerDocument.create("test:kept_archive");
+		BeeDesignerDrafts.save(directory, second);
+		Path kept = BeeDesignerDrafts.archive(directory, "test:kept_archive");
+		long modified = Files.getLastModifiedTime(archived).toMillis();
+		Files.setLastModifiedTime(archived, java.nio.file.attribute.FileTime.fromMillis(modified + 5000));
+		String token = archived.getFileName().toString();
+		assertThrows(IOException.class, () -> BeeDesignerDrafts.deleteArchive(directory, token, modified));
+		assertTrue(Files.exists(archived));
+		assertThrows(IOException.class, () -> BeeDesignerDrafts.deleteArchive(directory, "../outside.json", modified));
+		BeeDesignerDrafts.deleteArchive(directory, token, Files.getLastModifiedTime(archived).toMillis());
+		assertFalse(Files.exists(archived));
+		assertTrue(Files.exists(kept));
+		assertEquals(second, BeeDesignerDrafts.archived(directory, kept.getFileName().toString()));
+		Files.writeString(archived, "{broken", java.nio.charset.StandardCharsets.UTF_8);
+		BeeDesignerDrafts.deleteArchive(directory, token, Files.getLastModifiedTime(archived).toMillis());
+		assertFalse(Files.exists(archived));
+	}
+
+	@Test
+	void pendingDeletionDiscardDoesNotDeletePreviousArchivedEdits(@TempDir Path directory) throws IOException {
+		JsonObject source = BeeDesignerDocument.create("test:discard_delete");
+		BeeDesignerDrafts.save(directory, source);
+		BeeDesignerDrafts.save(directory, BeeDesignerLifecycle.retire(source, 1234, UUID.randomUUID()));
+		var entry = BeeDesignerDrafts.list(directory).getFirst();
+		assertThrows(IOException.class, () -> BeeDesignerDrafts.discard(directory, entry.id(), entry.modified() - 5000));
+		assertTrue(BeeDesignerLifecycle.deleted(BeeDesignerDrafts.read(directory, entry.id())));
+		BeeDesignerDrafts.discard(directory, entry.id(), entry.modified());
+		assertTrue(BeeDesignerDrafts.list(directory).isEmpty());
+		var archived = BeeDesignerDrafts.archives(directory).getFirst();
+		assertEquals(source, BeeDesignerDrafts.archived(directory, archived.token()));
+	}
 }

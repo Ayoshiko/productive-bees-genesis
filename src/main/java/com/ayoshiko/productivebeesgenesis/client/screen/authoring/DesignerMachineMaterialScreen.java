@@ -34,8 +34,8 @@ final class DesignerMachineMaterialScreen extends DesignerFormScreen {
 		}
 		if (!entry.kind().equals("energy")) {
 			rows.add(new Row("material", (x, y, w) -> {
-				addRenderableWidget(new DesignerMachineEntryButton(x, y, w, entry, this::choose));
-				ghost(x, y, w, value -> DesignerMachineRecipeScreen.accepts(entry.kind(), value), value -> replace(selection(value)));
+				DesignerMachineEntryButton material = addRenderableWidget(new DesignerMachineEntryButton(x, y, w, entry, this::choose).fitted());
+				ghost(x, y, material.getWidth(), value -> DesignerMachineRecipeScreen.accepts(entry.kind(), value), value -> replace(selection(value)));
 			}));
 		}
 		number("machine_amount", entry.value(), entry.amountKey(), "1", DesignerNumberRange.forMachine(entry));
@@ -69,18 +69,29 @@ final class DesignerMachineMaterialScreen extends DesignerFormScreen {
 			}
 		}
 		if (entry.host() == BeeDesignerMachineRecipes.Host.MBD2) {
-			section("machine_content_options");
-			toggle("machine_per_tick", entry.node(), "perTick", false);
-			number("machine_tier_chance", entry.node(), "tierChanceBoost", "0");
-			field("machine_slot_name", entry.node(), "slotName", "");
-			field("machine_ui_name", entry.node(), "uiName", "");
+			group("machine_content_options", true, () -> {
+				toggle("machine_per_tick", entry.node(), "perTick", false);
+				number("machine_tier_chance", entry.node(), "tierChanceBoost", "0");
+				field("machine_slot_name", entry.node(), "slotName", "");
+				field("machine_ui_name", entry.node(), "uiName", "");
+			});
 		}
 		if (entry.host() == BeeDesignerMachineRecipes.Host.MMR) {
-			section("machine_position");
-			JsonObject point = BeeDesignerDocument.object(entry.node(), "position");
-			number("machine_x", point, "x", "0");
-			number("machine_y", point, "y", "0");
-			note("", tr("machine_position_help"));
+			group("machine_position", true, () -> {
+				JsonObject point = entry.node().has("position") ? entry.node().getAsJsonObject("position") : new JsonObject();
+				java.util.function.Consumer<String> moved = value -> {
+					if (!point.has("x")) {
+						point.addProperty("x", 0);
+					}
+					if (!point.has("y")) {
+						point.addProperty("y", 0);
+					}
+					entry.node().add("position", point);
+				};
+				number("machine_x", point, "x", "0", DesignerNumberRange.forField("machine_x", "x"), moved);
+				number("machine_y", point, "y", "0", DesignerNumberRange.forField("machine_y", "y"), moved);
+				note("", tr("machine_position_help"));
+			});
 		}
 		rows.add(new Row("advanced", (x, y, w) -> button(x, y, w, tr("edit_json"), () ->
 				minecraft.setScreen(new DesignerJsonScreen(this, entry.node(), tr("machine_material").getString())))));

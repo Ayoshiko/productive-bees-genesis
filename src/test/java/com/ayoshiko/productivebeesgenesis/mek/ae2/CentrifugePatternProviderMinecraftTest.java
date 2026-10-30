@@ -150,6 +150,26 @@ class CentrifugePatternProviderMinecraftTest {
 	}
 
 	@Test
+	void outputListingsReuseKeysAcrossQuantityChangesAndRefreshCompleteComponents() throws Exception {
+		Fixture fixture = new Fixture();
+		fixture.config.setDataType(DataType.OUTPUT, RelativeSide.TOP);
+		ItemStack output = new ItemStack(Items.IRON_INGOT, 12);
+		output.set(DataComponents.CUSTOM_NAME, Component.literal("first"));
+		fixture.output.setStack(output);
+		AEItemKey first = AEItemKey.of(output);
+		assertEquals(12, fixture.storage.getAvailableStacks().get(first));
+		fixture.output.getStack().setCount(11);
+		assertEquals(11, fixture.storage.getAvailableStacks().get(first));
+		fixture.output.getStack().set(DataComponents.CUSTOM_NAME, Component.literal("second"));
+		fixture.output.getStack().setCount(10);
+		AEItemKey second = AEItemKey.of(fixture.output.getStack());
+		assertEquals(0, fixture.storage.getAvailableStacks().get(first));
+		assertEquals(10, fixture.storage.getAvailableStacks().get(second));
+		assertEquals(10, fixture.storage.extract(second, 20, Actionable.MODULATE, IActionSource.empty()));
+		assertEquals(0, fixture.storage.getAvailableStacks().get(second));
+	}
+
+	@Test
 	void outputVisibilityRemainsDelegatedToOriginalAe2Target() throws Exception {
 		Fixture fixture = new Fixture();
 		fixture.config.setDataType(DataType.OUTPUT, RelativeSide.TOP);
@@ -266,6 +286,7 @@ class CentrifugePatternProviderMinecraftTest {
 		final MEStorage storage;
 		final PatternProviderTarget target;
 		final Ae2OutputStateHolder holder = new Ae2OutputStateHolder();
+		final AeItemKeyCache keyCache = new AeItemKeyCache(3);
 
 		Fixture() throws Exception {
 			var sideHost = ModBlockEntities.MEK_CENTRIFUGE.get().create(
@@ -283,6 +304,7 @@ class CentrifugePatternProviderMinecraftTest {
 					new Class<?>[]{IAe2OutputHostBase.class, IMekCentrifugeTile.class}, (proxy, method, args) ->
 						switch (method.getName()) {
 							case "productivebeesgenesis$getAe2StateHolder" -> holder;
+							case "productivebeesgenesis$getAeItemKeyCache" -> keyCache;
 							case "productivebeesgenesis$getInputSlotCount" -> inputs.size();
 							case "productivebeesgenesis$getInputSlot" -> inputs.get((int) args[0]);
 							case "productivebeesgenesis$isValidInput" -> ((ItemStack) args[0]).is(Items.RAW_IRON);

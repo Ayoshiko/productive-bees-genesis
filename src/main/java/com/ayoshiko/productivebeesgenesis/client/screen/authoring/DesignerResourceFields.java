@@ -25,6 +25,9 @@ final class DesignerResourceFields {
 			screen.resourceView(output, false);
 		}
 		screen.rows.add(new DesignerFormScreen.Row("kind", (x, y, w) -> screen.dropdown(x, y, w, kind, kinds, selected -> {
+					if (selected.equals(kind)) {
+						return;
+					}
 					for (String key : new String[]{"id", "type", "data", "tier", "energy_type"}) {
 						output.remove(key);
 					}
@@ -62,17 +65,17 @@ final class DesignerResourceFields {
 			screen.choice("tier", output, "tier", "high_voltage", "high_voltage", "extreme_high_voltage");
 		} else if (kind.equals("ae_key")) {
 			if (ModList.get().isLoaded("ae2")) {
-				screen.rows.add(new DesignerFormScreen.Row("ae_selection", (x, y, w) -> screen.button(x, y, w,
-						DesignerFormScreen.tr("pick_ae_key"), () -> net.minecraft.client.Minecraft.getInstance().setScreen(
-						new DesignerAeKeyPicker(screen, value -> {
-							for (String field : new String[]{"type", "id", "data"}) {
-								output.add(field, value.get(field));
-							}
-						})))));
 				screen.rows.add(new DesignerFormScreen.Row("ae_selection", (x, y, w) -> {
-					screen.button(x, y, w / 2 - 2, DesignerFormScreen.tr("pick_item"), () -> net.minecraft.client.Minecraft.getInstance().setScreen(new BeeDesignerItemPicker(screen,
+					int cell = (w - 8) / 3;
+					screen.button(x, y, cell, DesignerFormScreen.tr("pick_ae_key_short"), () -> net.minecraft.client.Minecraft.getInstance().setScreen(
+							new DesignerAeKeyPicker(screen, value -> {
+								for (String field : new String[]{"type", "id", "data"}) {
+									output.add(field, value.get(field));
+								}
+							})));
+					screen.button(x + cell + 4, y, cell, DesignerFormScreen.tr("pick_item"), () -> net.minecraft.client.Minecraft.getInstance().setScreen(new BeeDesignerItemPicker(screen,
 							stack -> DesignerAeItemKey.select(output, stack))));
-					screen.button(x + w / 2 + 2, y, w / 2 - 2, DesignerFormScreen.tr("pick_fluid"), () -> net.minecraft.client.Minecraft.getInstance().setScreen(DesignerResourcePicker.open(screen,
+					screen.button(x + (cell + 4) * 2, y, cell, DesignerFormScreen.tr("pick_fluid"), () -> net.minecraft.client.Minecraft.getInstance().setScreen(DesignerResourcePicker.open(screen,
 							"fluid", selection -> DesignerAeItemKey.selectFluid(output,
 									com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerSelections.fluid(selection, net.minecraft.client.Minecraft.getInstance().level.registryAccess())))));
 					screen.ghost(x, y, w, value -> value instanceof ItemStack || value instanceof FluidStack, value -> {
@@ -82,18 +85,18 @@ final class DesignerResourceFields {
 							DesignerAeItemKey.selectFluid(output, stack);
 						}
 					});
-				}));
+				}, 20, true));
 			} else {
 				screen.note("dependency", DesignerFormScreen.tr("needs_ae2"));
 			}
-			screen.field("ae_type", output, "type", "");
-			screen.field("resource_id", output, "id", "");
-			screen.rows.add(new DesignerFormScreen.Row("ae_data", (x, y, w) -> screen.button(x, y, w, DesignerFormScreen.tr("edit_json"), () ->
-					net.minecraft.client.Minecraft.getInstance().setScreen(new DesignerJsonScreen(screen, BeeDesignerDocument.object(output, "data"), "AE key")))));
+			screen.group("resource_identity", true, () -> {
+				screen.field("ae_type", output, "type", "");
+				screen.field("resource_id", output, "id", "");
+				screen.rows.add(new DesignerFormScreen.Row("ae_data", (x, y, w) -> screen.button(x, y, w, DesignerFormScreen.tr("edit_json"), () ->
+						net.minecraft.client.Minecraft.getInstance().setScreen(new DesignerJsonScreen(screen, BeeDesignerDocument.object(output, "data"), "AE key")))));
+			});
 		}
 		screen.field("amount", output, "amount", "1000");
-		screen.note("", Component.translatable("designer.range_integer", "1", kind.equals("emc")
-				? "10^" + com.ayoshiko.productivebeesgenesis.resource.ResourceExactAmounts.MAX_DECIMAL_DIGITS + " − 1" : Long.toString(Long.MAX_VALUE)));
 		screen.note("unit", DesignerFormScreen.tr("unit." + kind));
 		if (!flower) {
 			screen.number("chance", output, "chance", "1");

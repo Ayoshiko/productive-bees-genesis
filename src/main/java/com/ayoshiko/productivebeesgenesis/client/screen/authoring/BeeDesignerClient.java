@@ -36,6 +36,7 @@ public final class BeeDesignerClient {
 	private static long sequence;
 	private static final java.util.ArrayDeque<BeeDesignerProtocol.Request> REQUESTS = new java.util.ArrayDeque<>();
 	private static long lastSent;
+	private static final Set<Long> CANCELLED = new java.util.LinkedHashSet<>();
 	private static boolean namesDirty;
 	private static java.util.function.Supplier<java.util.Iterator<?>> externalIngredients = java.util.Collections::emptyIterator;
 	static long ingredientVersion;
@@ -129,6 +130,7 @@ public final class BeeDesignerClient {
 
 	public static void initialize() {
 		BeeDesignerProtocol.clientReceiver = BeeDesignerClient::receive;
+		com.ayoshiko.productivebeesgenesis.network.FilterConfigResultPayload.receiver = DesignerFilterScreen::receive;
 	}
 
 	static void closeEditorWindow() {
@@ -152,7 +154,20 @@ public final class BeeDesignerClient {
 		return sequence;
 	}
 
+	static void cancelRequest(long sequence) {
+		REQUESTS.removeIf(request -> request.sequence() == sequence);
+		if (sequence > 0) {
+			CANCELLED.add(sequence);
+			if (CANCELLED.size() > 128) {
+				CANCELLED.remove(CANCELLED.iterator().next());
+			}
+		}
+	}
+
 	private static void receive(BeeDesignerProtocol.Response response) {
+		if (session != null && session.equals(response.session()) && CANCELLED.remove(response.sequence())) {
+			return;
+		}
 		JsonObject data = JsonParser.parseString(response.json()).getAsJsonObject();
 		if (response.action().equals("names_reset")) {
 			NAMES.clear();
@@ -174,12 +189,27 @@ public final class BeeDesignerClient {
 			session = response.session();
 			sequence = 0;
 			REQUESTS.clear();
+			CANCELLED.clear();
 			screen = new BeeDesignerScreen(data.get("can_publish").getAsBoolean());
 			Minecraft.getInstance().setScreen(screen);
 			DesignerDraftIndex.ensureLoaded();
 			return;
 		}
 		if (session != null && session.equals(response.session())) {
+			DesignerFormScreen currentForm = Minecraft.getInstance().screen instanceof DesignerFormScreen form ? form : null;
+			for (int depth = 0; currentForm != null && !(currentForm instanceof DesignerCollectionScreen) && depth < 16; depth++) {
+				currentForm = currentForm.editorParent instanceof DesignerFormScreen form ? form : null;
+			}
+			if (currentForm instanceof DesignerCollectionScreen collecting) {
+				if (response.action().equals("export_snapshot")) {
+					collecting.receive(response.sequence(), data);
+					return;
+				}
+				if (response.action().equals("result") && !data.get("success").getAsBoolean()
+						&& collecting.failed(response.sequence(), data.get("message").getAsString())) {
+					return;
+				}
+			}
 			if (Minecraft.getInstance().screen instanceof NewBeeScreen copy && response.action().equals("copy_id")) {
 				copy.receive(response.sequence(), data);
 				return;
@@ -203,10 +233,15 @@ public final class BeeDesignerClient {
 				picker.failed(response.sequence(), data.get("message").getAsString());
 			}
 		}
-		if (session != null && session.equals(response.session()) && response.action().equals("materials")
-				&& Minecraft.getInstance().screen instanceof DesignerResourcePicker picker) {
-			picker.receive(response.sequence(), data);
-			return;
+		if (session != null && session.equals(response.session()) && Minecraft.getInstance().screen instanceof DesignerResourcePicker picker) {
+			if (response.action().equals("materials")) {
+				picker.receive(response.sequence(), data);
+				return;
+			}
+			if (response.action().equals("result") && !data.get("success").getAsBoolean()) {
+				picker.failed(response.sequence(), data.get("message").getAsString());
+				return;
+			}
 		}
 		if (session != null && session.equals(response.session()) && response.action().equals("history")
 				&& Minecraft.getInstance().screen instanceof DesignerHistoryScreen history) {
@@ -283,6 +318,7 @@ public final class BeeDesignerClient {
 
 	@SubscribeEvent
 	public static void logout(ClientPlayerNetworkEvent.LoggingOut event) {
+		DesignerSearch.clear();
 		DesignerIngredientCatalog.clear();
 		if (net.neoforged.fml.ModList.get().isLoaded("ae2")) {
 			DesignerAeKeyPicker.clear();
@@ -290,8 +326,10 @@ public final class BeeDesignerClient {
 		NAMES.clear();
 		RETIRED.clear();
 		namesDirty = false;
+		DesignerCatalogMetrics.clear();
 		DesignerDraftIndex.clear();
 		REQUESTS.clear();
+		CANCELLED.clear();
 		if (screen != null) {
 			screen.disconnected();
 		}
@@ -305,6 +343,7 @@ public final class BeeDesignerClient {
 	@SubscribeEvent
 	public static void tagsUpdated(net.neoforged.neoforge.event.TagsUpdatedEvent event) {
 		Minecraft.getInstance().execute(() -> {
+			DesignerSearch.clear();
 			DesignerIngredientCatalog.clear();
 			if (net.neoforged.fml.ModList.get().isLoaded("ae2")) {
 				DesignerAeKeyPicker.clear();

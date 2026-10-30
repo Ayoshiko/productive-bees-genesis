@@ -1,14 +1,20 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -34,13 +40,20 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 	private final Screen parent;
 	private final Consumer<Path> selected;
 	private final boolean machineSources;
+	private final ArrayDeque<Path> history = new ArrayDeque<>();
 	private Path location;
+	private Path chosen;
 	private List<Entry> entries = List.of();
 	private String query = "";
+	private String pathText;
+	private EditBox pathField;
+	private Button openButton;
+	private long searchAt;
 	private boolean reading;
 	private boolean initialized;
 	private long generation;
 	private boolean truncated;
+	private long lastClick;
 
 	DesignerFileBrowserScreen(Screen parent, String initial, boolean machineSources, Consumer<Path> selected) {
 		super(tr("browse_file"));
@@ -49,88 +62,167 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 		this.machineSources = machineSources;
 		this.selected = selected;
 		try {
-			location = initial.isBlank() ? net.minecraft.client.Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath()
+			location = initial.isBlank() ? Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath()
 					: Path.of(initial).toAbsolutePath().normalize();
 		} catch (RuntimeException failure) {
-			location = net.minecraft.client.Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath();
+			location = Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath();
 			status = "designer.error.browser_path";
 		}
+		pathText = location.toString();
 	}
 
 	@Override
 	protected void init() {
 		begin();
-		searchField(frameTop + 32, query, value -> {
+		int y = frameTop + 32;
+		button(left, y, 22, Component.literal("‹"), () -> {
+			if (!history.isEmpty()) {
+				read(history.removeLast(), false);
+			}
+		}).active = !reading && !history.isEmpty();
+		button(left + 26, y, 22, Component.literal("↑"), this::up)
+				.setTooltip(Tooltip.create(tr("browser_up")));
+		pathField = addRenderableWidget(new DesignerTheme.Input(font, left + 56, y + 5, contentWidth - 116, 20, tr("browser_path")));
+		pathField.setMaxLength(4096);
+		pathField.setValue(pathText);
+		pathField.setResponder(value -> pathText = value);
+		pathField.setTooltip(Tooltip.create(Component.literal(location.toString()).append("\n").append(tr("browser_path_help"))));
+		button(left + contentWidth - 52, y, 24, Component.literal("↵"), this::openPath).active = !reading;
+		Button refresh = button(left + contentWidth - 24, y, 24, Component.literal("↻"), () -> read(location, false));
+		refresh.setTooltip(Tooltip.create(tr("refresh")));
+		refresh.active = !reading;
+		y += 24;
+		int shortcuts = contentWidth >= 380 ? 160 : 78;
+		searchField(y, contentWidth - shortcuts - 4, query, value -> {
 			query = value;
-			rebuild();
+			chosen = null;
+			if (openButton != null) {
+				openButton.active = false;
+			}
+			searchAt = System.currentTimeMillis() + 150;
 		});
-		contentTop = frameTop + 56;
-		note("", tr(machineSources ? "browser_machine_help" : "browser_project_help"));
-		note("", Component.literal(location.toString()));
-		rows.add(new Row("", (x, y, w) -> {
-			button(x, y, 92, tr("browser_up"), () -> {
-				Path directory = location.getParent();
-				if (directory != null) read(directory);
-			}).active = !reading && location.getParent() != null;
-			button(x + 98, y, 84, tr("refresh"), () -> read(location)).active = !reading;
-		}));
 		List<Path> roots = new ArrayList<>();
 		FileSystems.getDefault().getRootDirectories().forEach(roots::add);
-		if (roots.size() > 1) {
-			String[] choices = roots.stream().map(Path::toString).toArray(String[]::new);
-			rows.add(new Row("browser_drive", (x, y, w) -> dropdown(x, y, w,
-					location.getRoot().toString(), choices, value -> read(Path.of(value)))));
+		int shortcutX = left + contentWidth - shortcuts;
+		if (shortcuts > 100) {
+			dropdown(shortcutX, y, 74, location.getRoot().toString(), roots.stream().map(Path::toString).toArray(String[]::new),
+					value -> read(Path.of(value), true)).active = !reading;
+			shortcutX += 80;
 		}
-		if (reading) {
-			note("", tr("browser_loading"));
-		} else {
-			String normalized = query.toLowerCase(Locale.ROOT).strip();
-			for (Entry entry : entries) {
-				if (!entry.path().getFileName().toString().toLowerCase(Locale.ROOT).contains(normalized)) continue;
-				rows.add(new Row("", (x, y, w) -> {
-					Component label = Component.translatable(entry.directory() ? "designer.browser_directory" : "designer.browser_file",
-							entry.path().getFileName().toString());
-					button(x, y, w, label, () -> {
-						if (entry.directory()) {
-							read(entry.path());
-						} else {
-							selected.accept(entry.path());
-							minecraft.setScreen(parent);
-						}
-					}).setTooltip(Tooltip.create(Component.literal(entry.path().toString())));
-				}));
-			}
-			if (entries.isEmpty()) note("", tr("browser_empty"));
-			if (truncated) note("error", tr("browser_limit"));
+		button(shortcutX, y, 78, tr("browser_instance"), () -> read(Minecraft.getInstance().gameDirectory.toPath(), true))
+				.active = !reading;
+		contentTop = y + 26;
+		var filter = DesignerSearch.compile(query);
+		List<Entry> visible = entries.stream().filter(entry -> filter.matches("",
+				DesignerSearch.indexed(entry.path().getFileName().toString()), List.of())).toList();
+		if (frameHeight >= 240) {
+			fixedNote(Component.translatable("designer.browser_results", visible.size()).append("  ·  ")
+					.append(tr(machineSources ? "browser_machine_types" : "browser_project_types")),
+					left, contentTop, contentWidth, 16);
+			contentTop += 18;
+		}
+		for (Entry entry : visible) {
+			rows.add(new Row("", (x, rowY, w) -> addRenderableWidget(new FileEntry(x, rowY, w, entry)), 28));
+		}
+		if (visible.isEmpty() && !reading) {
+			note("", tr(query.isBlank() ? "browser_empty" : "empty_search"));
+		}
+		if (truncated) {
+			note("error", tr("browser_limit"));
 		}
 		finishRows();
-		button(left, footerY(), 90, Component.translatable("gui.cancel"), this::onClose);
+		int cell = (contentWidth - 6) / 2;
+		button(left, footerY(), cell, Component.translatable("gui.cancel"), this::onClose);
+		openButton = primaryButton(left + cell + 6, footerY(), cell, tr("browser_open_selected"), this::openSelected);
+		openButton.active = chosen != null && !reading;
 		if (!initialized) {
 			initialized = true;
-			read(location);
+			read(location, false);
 		}
 	}
 
-	private void read(Path requested) {
+	@Override
+	public void tick() {
+		if (searchAt != 0 && System.currentTimeMillis() >= searchAt) {
+			searchAt = 0;
+			page = 0;
+			rebuild();
+		}
+	}
+
+	private void up() {
+		if (!reading && location.getParent() != null) {
+			read(location.getParent(), true);
+		}
+	}
+
+	private void openPath() {
+		try {
+			read(Path.of(pathText), true);
+		} catch (RuntimeException invalid) {
+			status = "designer.error.browser_path";
+		}
+	}
+
+	private void choose(Entry entry) {
+		if (reading) {
+			return;
+		}
+		if (entry.directory()) {
+			read(entry.path(), true);
+			return;
+		}
+		long now = System.currentTimeMillis();
+		boolean doubleClick = entry.path().equals(chosen) && now - lastClick < 350;
+		chosen = entry.path();
+		lastClick = now;
+		status = chosen.getFileName().toString();
+		openButton.active = true;
+		if (doubleClick) {
+			openSelected();
+		}
+	}
+
+	private void openSelected() {
+		if (chosen != null && !reading) {
+			selected.accept(chosen);
+			minecraft.setScreen(parent);
+		}
+	}
+
+	private void read(Path requested, boolean remember) {
 		long request = ++generation;
 		reading = true;
-		status = "";
+		status = "designer.browser_loading";
 		Path absolute = requested.toAbsolutePath().normalize();
 		try {
 			CompletableFuture.supplyAsync(() -> list(absolute, machineSources), DIRECTORY).whenComplete((result, failure) ->
 					minecraft.execute(() -> {
-				if (generation != request) return;
+				if (generation != request) {
+					return;
+				}
 				reading = false;
 				if (failure == null) {
+					if (remember && !location.equals(result.directory())) {
+						if (history.size() >= 32) {
+							history.removeFirst();
+						}
+						history.addLast(location);
+					}
 					location = result.directory();
+					pathText = location.toString();
 					entries = result.entries();
 					truncated = result.truncated();
+					chosen = null;
+					query = "";
+					status = "";
 					page = 0;
 				} else {
-					entries = List.of();
 					status = "designer.error.browser_read|" + absolute;
 				}
-				if (minecraft.screen == this) rebuild();
+				if (minecraft.screen == this) {
+					rebuild();
+				}
 			}));
 		} catch (RejectedExecutionException failure) {
 			reading = false;
@@ -167,6 +259,40 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 	}
 
 	@Override
+	public boolean keyPressed(int key, int scan, int modifiers) {
+		if (hasControlDown() && key == GLFW.GLFW_KEY_L) {
+			setFocused(pathField);
+			pathField.moveCursorToEnd(false);
+			pathField.setHighlightPos(0);
+			return true;
+		}
+		if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+			if (getFocused() == pathField) {
+				openPath();
+				return true;
+			}
+			if (getFocused() instanceof FileEntry file) {
+				if (file.entry.directory()) {
+					read(file.entry.path(), true);
+				} else {
+					chosen = file.entry.path();
+					openSelected();
+				}
+				return true;
+			}
+			if (chosen != null && !(getFocused() instanceof Button)) {
+				openSelected();
+				return true;
+			}
+		}
+		if (hasAltDown() && key == GLFW.GLFW_KEY_UP) {
+			up();
+			return true;
+		}
+		return super.keyPressed(key, scan, modifiers);
+	}
+
+	@Override
 	public void onClose() {
 		generation++;
 		minecraft.setScreen(parent);
@@ -177,6 +303,39 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 		generation++;
 		reading = false;
 		super.removed();
+	}
+
+	private final class FileEntry extends DesignerTheme.Action {
+		private final Entry entry;
+
+		FileEntry(int x, int y, int width, Entry entry) {
+			super(x, y, width, Component.literal(entry.path().getFileName().toString()), () -> choose(entry));
+			this.entry = entry;
+			setHeight(26);
+			setTooltip(Tooltip.create(Component.literal(entry.path().toString()).append("\n")
+					.append(tr(entry.directory() ? "browser_enter_folder" : "browser_file_help"))));
+		}
+
+		@Override
+		protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+			selected = entry.path().equals(chosen);
+			renderSurface(graphics);
+			int color = entry.directory() ? DesignerTheme.colors().accent() : MUTED;
+			int x = getX() + 7;
+			int y = getY() + 8;
+			if (entry.directory()) {
+				graphics.fill(x, y, x + 6, y + 2, color);
+				graphics.renderOutline(x, y + 2, 13, 9, color);
+			} else {
+				graphics.renderOutline(x + 2, y - 1, 9, 12, color);
+				graphics.fill(x + 4, y + 3, x + 9, y + 4, color);
+				graphics.fill(x + 4, y + 6, x + 9, y + 7, color);
+			}
+			String name = entry.path().getFileName().toString();
+			String type = entry.directory() ? "›" : name.substring(name.lastIndexOf('.') + 1).toUpperCase(Locale.ROOT);
+			graphics.drawString(font, font.plainSubstrByWidth(name, Math.max(1, width - 80)), getX() + 28, getY() + 9, FOREGROUND, false);
+			graphics.drawString(font, type, getX() + width - font.width(type) - 10, getY() + 9, MUTED, false);
+		}
 	}
 
 	private record Entry(Path path, boolean directory) {}

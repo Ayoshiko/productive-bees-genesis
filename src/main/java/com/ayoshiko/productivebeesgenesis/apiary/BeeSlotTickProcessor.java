@@ -232,6 +232,10 @@ class BeeSlotTickProcessor {
 		// 必须在首次调用 upgradeHandler.getXxx() 之前执行，确保缓存守卫正确递增
 		upgradeHandler.tickRefresh();
 		Level level = slotManager.getLevel();
+		if (level instanceof ServerLevel serverLevel && ResourceRuntime.reloadBlocked(serverLevel.getServer())) {
+			activationCounter.deactivateAll();
+			return;
+		}
 
 		// 预加载转化配方索引（幂等，仅首次全量遍历）— 供花朵有效性判定中的转化原料检查使用
 		BeeConversionQueries.ensureLoaded(level);

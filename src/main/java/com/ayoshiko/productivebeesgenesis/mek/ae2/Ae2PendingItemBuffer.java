@@ -249,6 +249,14 @@ public final class Ae2PendingItemBuffer {
 		entry.nextAttemptTick = currentTick + delay;
 	}
 
+	/** 未取得网络许可不是拒收；保留失败次数，下个真实刻继续等待。 */
+	void recordDeferred(String fingerprint, long currentTick, int previousRetries) {
+		PendingItem entry = find(fingerprint);
+		if (entry == null) return;
+		entry.retries = Math.min(MAX_RETRY_COUNT, Math.max(previousRetries, entry.retries));
+		entry.nextAttemptTick = currentTick + 1L;
+	}
+
 	/** 将缓冲写入方块实体 NBT。 */
 	public void save(CompoundTag parent) {
 		transfer.save(parent);

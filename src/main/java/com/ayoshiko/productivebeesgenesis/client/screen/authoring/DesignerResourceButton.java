@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
 import com.ayoshiko.productivebeesgenesis.client.resource.ResourceVisuals;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceProductionRecipe;
@@ -9,6 +10,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
+import net.minecraft.locale.Language;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
@@ -19,6 +21,12 @@ import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
 final class DesignerResourceButton extends DesignerTheme.Action {
 	private final JsonObject output;
 	private final boolean fluid;
+	private JsonObject observed;
+	private long recipeVersion;
+	private Language language;
+	private FluidStack fluidStack = FluidStack.EMPTY;
+	private ResourceProductionRecipe.Output resource;
+	private Component label = Component.empty();
 
 	DesignerResourceButton(int x, int y, int width, JsonObject output, boolean fluid, Runnable action) {
 		super(x, y, width, Component.empty(), action);
@@ -27,33 +35,59 @@ final class DesignerResourceButton extends DesignerTheme.Action {
 		this.fluid = fluid;
 	}
 
+	DesignerResourceButton fitted() {
+		refreshDisplay();
+		setWidth(Math.min(getWidth(), Math.max(104, Math.min(260, Minecraft.getInstance().font.width(label) + 38))));
+		return this;
+	}
+
 	@Override
 	protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		DesignerTheme.panel(graphics, isHoveredOrFocused() ? "button_hover" : "input", getX(), getY(), getWidth(), 20);
 		DesignerTheme.panel(graphics, "slot", getX() + 1, getY() + 1, 18, 18);
-		Component label;
+		refreshDisplay();
+		if (!fluidStack.isEmpty()) {
+			drawFluid(graphics, fluidStack, getX() + 2, getY() + 2);
+		} else if (resource != null) {
+			graphics.pose().pushPose();
+			graphics.pose().translate(getX() + 2, getY() + 2, 0);
+			ResourceVisuals.draw(graphics, resource.key());
+			graphics.pose().popPose();
+		}
+		graphics.drawString(Minecraft.getInstance().font, Minecraft.getInstance().font.plainSubstrByWidth(label.getString(), getWidth() - 28),
+				getX() + 24, getY() + 6, DesignerFormScreen.FOREGROUND, false);
+	}
+
+	private void refreshDisplay() {
+		long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
+		Language currentLanguage = Language.getInstance();
+		if (output.equals(observed) && recipeVersion == version && language == currentLanguage) {
+			return;
+		}
+		observed = output.deepCopy();
+		recipeVersion = version;
+		language = currentLanguage;
+		fluidStack = FluidStack.EMPTY;
+		resource = null;
 		try {
 			if (fluid) {
-				FluidStack stack = SizedFluidIngredient.FLAT_CODEC.parse(Minecraft.getInstance().level.registryAccess()
+				fluidStack = SizedFluidIngredient.FLAT_CODEC.parse(Minecraft.getInstance().level.registryAccess()
 						.createSerializationContext(JsonOps.INSTANCE), output).getOrThrow().getFluids()[0];
-				drawFluid(graphics, stack, getX() + 2, getY() + 2);
-				label = stack.getHoverName().copy().append(" · " + stack.getAmount() + " mB");
+				label = fluidStack.getHoverName().copy().append(" · " + fluidStack.getAmount() + " mB");
 			} else {
-				var resource = ResourceProductionRecipe.Output.CODEC.parse(JsonOps.INSTANCE, output).getOrThrow();
-				graphics.pose().pushPose();
-				graphics.pose().translate(getX() + 2, getY() + 2, 0);
-				ResourceVisuals.draw(graphics, resource.key());
-				graphics.pose().popPose();
+				resource = ResourceProductionRecipe.Output.CODEC.parse(JsonOps.INSTANCE, output).getOrThrow();
 				label = ResourceVisuals.name(resource.key()).copy().append(" · ")
 						.append(ResourceVisuals.quantity(resource.key(), resource.exactAmount(), 1));
 			}
 		} catch (RuntimeException exception) {
-			label = Component.literal(BeeDesignerDocument.text(output, "kind", "?") + " · "
-					+ BeeDesignerDocument.text(output, "id", ""));
+			// 无效草稿保留身份供用户修正，避免每帧重复解码同一失败值。
+			fluidStack = FluidStack.EMPTY;
+			resource = null;
+			label = Component.literal(BeeDesignerDocument.text(output, "kind", fluid ? "fluid" : "?") + " · "
+					+ BeeDesignerDocument.text(output, "id", BeeDesignerDocument.text(output, "fluid", "")));
 		}
+		setMessage(label);
 		setTooltip(Tooltip.create(label));
-		graphics.drawString(Minecraft.getInstance().font, Minecraft.getInstance().font.plainSubstrByWidth(label.getString(), getWidth() - 28),
-				getX() + 24, getY() + 6, DesignerFormScreen.FOREGROUND, false);
 	}
 
 	static void drawFluid(GuiGraphics graphics, FluidStack stack, int x, int y) {

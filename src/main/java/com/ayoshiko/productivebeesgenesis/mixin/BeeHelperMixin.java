@@ -6,12 +6,18 @@ import com.ayoshiko.productivebeesgenesis.apiary.ItemStackMergeHelper;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
+import cy.jdkdigital.productivebees.common.recipe.BlockConversionRecipe;
+import cy.jdkdigital.productivebees.common.recipe.ItemConversionRecipe;
 import cy.jdkdigital.productivebees.util.BeeHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.animal.Bee;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -19,6 +25,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -43,6 +50,34 @@ import java.util.concurrent.atomic.AtomicLong;
 	 */
 @Mixin(BeeHelper.class)
 public abstract class BeeHelperMixin {
+	@Shadow @Final private static Map<String, List<RecipeHolder<BlockConversionRecipe>>> blockConversionRecipeMap;
+	@Shadow @Final private static Map<String, List<RecipeHolder<ItemConversionRecipe>>> itemConversionRecipeMap;
+	@Unique private static long productivebeesgenesis$conversionVersion = Long.MIN_VALUE;
+
+	@Inject(method = "getBlockConversionRecipe", at = @At("HEAD"), remap = false)
+	private static void productivebeesgenesis$refreshBlockConversions(Bee bee, BlockState state,
+			CallbackInfoReturnable<RecipeHolder<BlockConversionRecipe>> cir) {
+		productivebeesgenesis$refreshConversions(bee);
+	}
+
+	@Inject(method = "getItemConversionRecipe", at = @At("HEAD"), remap = false)
+	private static void productivebeesgenesis$refreshItemConversions(Bee bee, ItemStack stack,
+			CallbackInfoReturnable<RecipeHolder<ItemConversionRecipe>> cir) {
+		productivebeesgenesis$refreshConversions(bee);
+	}
+
+	@Unique
+	private static void productivebeesgenesis$refreshConversions(Bee bee) {
+		if (bee.level().isClientSide()) {
+			return;
+		}
+		long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
+		if (productivebeesgenesis$conversionVersion != version) {
+			blockConversionRecipeMap.clear();
+			itemConversionRecipeMap.clear();
+			productivebeesgenesis$conversionVersion = version;
+		}
+	}
 
 	/** 完整 32 位掩码，用于节流计数器重置 */
 	@Unique

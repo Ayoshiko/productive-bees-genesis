@@ -16,7 +16,7 @@ record DesignerNumberRange(BigDecimal min, BigDecimal max, boolean integer, bool
     }
 
     static DesignerNumberRange forField(String label, String key) {
-        if (key.equals("size") || key.equals("speed")) {
+        if (key.equals("size") || key.equals("pollinatedSize") || key.equals("speed")) {
             return new DesignerNumberRange(BigDecimal.ZERO, BigDecimal.valueOf(100), false, true);
         }
         if (key.equals("attack")) {
@@ -47,11 +47,11 @@ record DesignerNumberRange(BigDecimal min, BigDecimal max, boolean integer, bool
     boolean valid(String text) {
         try {
             BigDecimal value = new BigDecimal(text);
-            if (integer) {
-                value.toBigIntegerExact();
-            }
             int lower = value.compareTo(min);
-            return (exclusiveMin ? lower > 0 : lower >= 0) && value.compareTo(max) <= 0;
+            if ((exclusiveMin ? lower <= 0 : lower < 0) || value.compareTo(max) > 0) {
+                return false;
+            }
+            return !integer || value.stripTrailingZeros().scale() <= 0;
         } catch (NumberFormatException | ArithmeticException failure) {
             return false;
         }

@@ -106,6 +106,10 @@ final class JdtePublicResourceBridge {
         if (!matchesExtendedRecipe(host, candidate)) return;
         var level = (ServerLevel) host.getLevel();
         var bee = (ConfigurableBee) candidate;
+        if (ResourceRuntime.reloadBlocked(level.getServer())) {
+            call(event, "reject");
+            return;
+        }
         var spec = ResourceRuntime.pbCatalog(level).get(bee.getBeeType());
         if (spec == null) return;
         if (!spec.validForJdte() || !Ae2IntegrationLoader.isAe2Loaded()) {
@@ -128,6 +132,10 @@ final class JdtePublicResourceBridge {
         if (!matchesExtendedRecipe(host, candidate)) return;
         var level = (ServerLevel) host.getLevel();
         var bee = (ConfigurableBee) candidate;
+        if (ResourceRuntime.reloadBlocked(level.getServer())) {
+            call(event, "claim");
+            return;
+        }
         var spec = ResourceRuntime.pbCatalog(level).get(bee.getBeeType());
         if (spec == null) return;
         call(event, "claim");

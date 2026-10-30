@@ -41,8 +41,9 @@ final class DesignerImportScreen extends DesignerFormScreen {
 				.active = !reading));
 		for (var entry : projects.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList()) {
 			JsonObject document = JsonParser.parseString(entry.getValue()).getAsJsonObject();
-			rows.add(new Row("", (x, y, w) -> button(x, y, w, BeeDesignerScreen.beeName(entry.getKey()).copy()
-					.append(" · " + entry.getKey()), () -> parent.importDocument(document))));
+			rows.add(new Row("", (x, y, w) -> addRenderableWidget(new DesignerBeeButton(x, y, w, entry.getKey(),
+					DesignerCollectionScreen.localizedName(document), false, () -> minecraft.setScreen(new DesignerImportReviewScreen(parent, this, document))))));
+			DesignerCollectionScreen.addCredits(this, document);
 		}
 		finishRows();
 		button(left, footerY(), 90, Component.translatable("gui.cancel"), this::onClose);

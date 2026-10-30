@@ -129,7 +129,7 @@ class CentrifugeInputReturnCompatibilityTest {
 		assertFalse(ae2.contains("remainingLimit"));
 		assertFalse(ae2.contains("maxItems"));
 		assertTrue(ae2.contains("int requested = Math.max(0, current.getCount())"));
-		int aeSimulateInsert = ae2.indexOf("storage.insert(key, requested, Actionable.SIMULATE");
+		int aeSimulateInsert = ae2.indexOf("holder, storage, key, requested, Actionable.SIMULATE");
 		int aeSimulateExtract = ae2.indexOf("slot.shrinkStack(requestedExtract, Action.SIMULATE)");
 		assertTrue(aeSimulateInsert >= 0 && aeSimulateExtract > aeSimulateInsert,
 				"AE2 路径必须先模拟网络接收量，再探测源槽可提取量");

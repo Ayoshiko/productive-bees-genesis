@@ -28,11 +28,11 @@ public final class Ae2LeftoverReturner {
         return (int) accepted;
     }
 
-    static void returnLeftoverToMe(Ae2OutputStateHolder holder, MEStorage storage, AEItemKey key,
+    static boolean returnLeftoverToMe(Ae2OutputStateHolder holder, MEStorage storage, AEItemKey key,
             IActionSource source, long tick) {
         var transfer = holder.getPendingItemBuffer().transfer();
         long remaining = transfer.knownAmount();
-        if (remaining <= 0 || !holder.tryAcquireNetworkWork(storage, tick)) return;
+        if (remaining <= 0 || !canReturnNow(holder, storage, tick)) return false;
         var backoff = holder.getPushState().getReturnBackoff();
         long simulated;
         try {
@@ -43,7 +43,7 @@ public final class Ae2LeftoverReturner {
         } catch (LinkageError | RuntimeException error) {
             backoff.recordFailure(System.nanoTime());
             LogThrottle.warn("ae2_leftover_simulation", "AE2 回送模拟失败，保留已知余量: {}", error.toString());
-            return;
+            return true;
         }
         if (simulated > 0) {
             transfer.offer(simulated, -1);
@@ -52,9 +52,15 @@ public final class Ae2LeftoverReturner {
         }
         if (transfer.knownAmount() == 0) backoff.recordSuccess();
         else backoff.recordFailure(System.nanoTime());
+        return true;
     }
 
-    private static long timedInsert(Ae2OutputStateHolder holder, MEStorage storage, AEItemKey key,
+    /** 输入恢复先于新取料共用输入预算，常规产物不能耗尽它的恢复机会。 */
+    public static boolean canReturnNow(Ae2OutputStateHolder holder, MEStorage storage, long tick) {
+        return storage != null && holder.tryAcquireNetworkExtract(storage, tick);
+    }
+
+    public static long timedInsert(Ae2OutputStateHolder holder, MEStorage storage, AEItemKey key,
             long amount, Actionable action, IActionSource source, long tick) {
         long start = System.nanoTime();
         try {
@@ -62,7 +68,7 @@ public final class Ae2LeftoverReturner {
         } finally {
             long cost = System.nanoTime() - start;
             Ae2GlobalInsertBudget.recordCost(tick, cost);
-            holder.recordNetworkCost(storage, tick, cost, Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
+            holder.recordNetworkExtractCost(storage, tick, cost, Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
             if (holder.getReusableBuffers() instanceof Ae2PushBuffers buffers) {
                 buffers.insertCostTracker.record(tick, cost);
             }

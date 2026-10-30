@@ -39,16 +39,15 @@ final class DesignerMachineRecipeScreen extends DesignerFormScreen {
 			return;
 		}
 		section("machine_settings");
-		note("", Component.literal(id));
 		note("", DesignerMachinePicker.machineName(source));
-		rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("view_jei"),
-				() -> DesignerOverviewEditing.viewJei(this, id, recipe))));
-		if (parent instanceof BeeDesignerScreen editor) {
-			rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("machine_replace"), () ->
-					minecraft.setScreen(new DesignerMachinePicker(editor, editor.editingDocument(), id)))));
-		}
-		note("", Component.literal(host.name() + " · " + BeeDesignerDocument.text(source, "host_version",
-				BeeDesignerDocument.text(source, "version", "")) + " · " + BeeDesignerDocument.text(recipe, "machine", recipe.get("type").getAsString())));
+		rows.add(new Row("", (x, y, w) -> {
+			int cell = (w - 6) / 2;
+			button(x, y, cell, tr("view_jei"), () -> DesignerOverviewEditing.viewJei(this, id, recipe));
+			if (parent instanceof BeeDesignerScreen editor) {
+				button(x + cell + 6, y, cell, tr("machine_replace"), () ->
+						minecraft.setScreen(new DesignerMachinePicker(editor, editor.editingDocument(), id)));
+			}
+		}));
 		number("machine_processing_time", recipe, host == BeeDesignerMachineRecipes.Host.MMR ? "time" : "duration", "20");
 		if (host == BeeDesignerMachineRecipes.Host.MI) {
 			number("machine_eu", recipe, "eu", "1");
@@ -58,31 +57,44 @@ final class DesignerMachineRecipeScreen extends DesignerFormScreen {
 		materials(true);
 		materials(false);
 		if (host == BeeDesignerMachineRecipes.Host.MMR) {
-			section("machine_canvas");
-			number("machine_width", recipe, "width", "256");
-			number("machine_height", recipe, "height", "256");
-			toggle("machine_render_progress", recipe, BeeDesignerMachineRecipes.fieldName(recipe, "renderProgress"), true);
-			JsonObject progress = BeeDesignerDocument.object(recipe, BeeDesignerMachineRecipes.fieldName(recipe, "progressData"));
-			JsonObject position = BeeDesignerDocument.object(progress, "position");
-			if (!position.has("x")) {
-				position.addProperty("x", 74);
-				position.addProperty("y", 8);
+			group("machine_canvas", true, () -> {
+				number("machine_width", recipe, "width", "256");
+				number("machine_height", recipe, "height", "256");
+				toggle("machine_render_progress", recipe, BeeDesignerMachineRecipes.fieldName(recipe, "renderProgress"), true);
+				String progressKey = BeeDesignerMachineRecipes.fieldName(recipe, "progressData");
+				JsonObject progress = recipe.has(progressKey) ? recipe.getAsJsonObject(progressKey) : new JsonObject();
+				JsonObject position = progress.has("position") ? progress.getAsJsonObject("position") : new JsonObject();
+				Runnable changed = () -> recipe.add(progressKey, progress);
+				java.util.function.Consumer<String> moved = value -> {
+					if (!position.has("x")) {
+						position.addProperty("x", 74);
+					}
+					if (!position.has("y")) {
+						position.addProperty("y", 8);
+					}
+					progress.add("position", position);
+					changed.run();
+				};
+				number("machine_progress_x", position, "x", "74", DesignerNumberRange.of(0, dimension("width") - 1, true), moved);
+				number("machine_progress_y", position, "y", "8", DesignerNumberRange.of(0, dimension("height") - 1, true), moved);
+				choice("machine_progress_direction", progress, "direction", "left", changed, "left", "right", "up", "down");
+				field("machine_progress_empty", progress, BeeDesignerMachineRecipes.fieldName(progress, "emptyTexture"), "modular_machinery_reborn:textures/gui/empty_arrow.png", changed);
+				field("machine_progress_filled", progress, BeeDesignerMachineRecipes.fieldName(progress, "filledTexture"), "modular_machinery_reborn:textures/gui/filled_arrow.png", changed);
+			});
+		}
+		group("machine_source", true, () -> {
+			note("", Component.literal(id));
+			note("", Component.literal(host.name() + " · " + BeeDesignerDocument.text(source, "host_version",
+					BeeDesignerDocument.text(source, "version", "")) + " · " + BeeDesignerDocument.text(recipe, "machine", recipe.get("type").getAsString())));
+			if (source.has("source_file") || source.has("source_pack")) {
+				note("", Component.literal(BeeDesignerDocument.text(source, "source_file", BeeDesignerDocument.text(source, "source_pack", ""))
+						+ (source.has("line") ? ":" + source.get("line").getAsString() : "")));
 			}
-			number("machine_progress_x", position, "x", "74", DesignerNumberRange.of(0, dimension("width") - 1, true));
-			number("machine_progress_y", position, "y", "8", DesignerNumberRange.of(0, dimension("height") - 1, true));
-			choice("machine_progress_direction", progress, "direction", "left", "left", "right", "up", "down");
-			field("machine_progress_empty", progress, BeeDesignerMachineRecipes.fieldName(progress, "emptyTexture"), "modular_machinery_reborn:textures/gui/empty_arrow.png");
-			field("machine_progress_filled", progress, BeeDesignerMachineRecipes.fieldName(progress, "filledTexture"), "modular_machinery_reborn:textures/gui/filled_arrow.png");
-		}
-		section("machine_source");
-		if (source.has("source_file") || source.has("source_pack")) {
-			note("", Component.literal(BeeDesignerDocument.text(source, "source_file", BeeDesignerDocument.text(source, "source_pack", ""))
-					+ (source.has("line") ? ":" + source.get("line").getAsString() : "")));
-		}
-		rows.add(new Row("advanced", (x, y, w) -> button(x, y, w, tr("edit_json"), () ->
-				minecraft.setScreen(new DesignerJsonScreen(this, recipe, id)))));
-		rows.add(new Row("conditions", (x, y, w) -> button(x, y, w, tr("edit_conditions"), () ->
-				minecraft.setScreen(new DesignerConditionsScreen(this, recipe, "neoforge:conditions")))));
+			rows.add(new Row("advanced", (x, y, w) -> button(x, y, w, tr("edit_json"), () ->
+					minecraft.setScreen(new DesignerJsonScreen(this, recipe, id)))));
+			rows.add(new Row("conditions", (x, y, w) -> button(x, y, w, tr("edit_conditions"), () ->
+					minecraft.setScreen(new DesignerConditionsScreen(this, recipe, "neoforge:conditions")))));
+		});
 		note("", tr("machine_apply_help"));
 		finishRows();
 		button(left, footerY(), 72, Component.translatable("gui.done"), this::onClose);
@@ -108,10 +120,27 @@ final class DesignerMachineRecipeScreen extends DesignerFormScreen {
 			}
 			scope("recipes/" + id + "/" + path);
 			anchor("");
+			anchor(entry.amountKey());
+			anchor(entry.chanceKey());
+			boolean supported = BeeDesignerMachineRecipes.supported(entry.host(), entry.kind());
+			List<DesignerInlineNumber> fields = supported ? List.of(
+					new DesignerInlineNumber("quantity", entry.value(), entry.amountKey(), "1", DesignerNumberRange.forMachine(entry)),
+					DesignerInlineNumber.probability(entry.node(), entry.chanceKey())) : List.of();
+			DesignerMachineEntryButton material = new DesignerMachineEntryButton(0, 0, Math.max(104, contentWidth - 76), entry, () ->
+					minecraft.setScreen(new DesignerMachineMaterialScreen(this, entry)));
+			if (supported) {
+				material.identityOnly();
+			}
+			material.fitted();
+			boolean inline = material.getWidth() + DesignerInlineNumber.totalWidth(fields) + 100 <= contentWidth;
+			int height = inline || fields.isEmpty() ? 24 : 24 + DesignerInlineNumber.rows(fields, contentWidth - 8) * 24;
 			rows.add(new Row("", (x, y, w) -> {
-				addRenderableWidget(new DesignerMachineEntryButton(x, y, w - 70, entry, () ->
-						minecraft.setScreen(new DesignerMachineMaterialScreen(this, entry))));
-				ghost(x, y, w - 70, value -> accepts(entry.kind(), value), value -> {
+				material.setX(x);
+				material.setY(y);
+				addRenderableWidget(material);
+				int start = inline ? material.getWidth() + 12 : 4;
+				DesignerInlineNumber.flow(this, fields, x + start, y + (inline ? 0 : 24), w - start - (inline ? 76 : 4));
+				ghost(x, y, material.getWidth(), value -> accepts(entry.kind(), value), value -> {
 					BeeDesignerMachineRecipes.replaceMaterial(entry, BeeDesignerMachineRecipes.material(selection(value), minecraft.level.registryAccess()));
 					rebuild();
 				});
@@ -127,13 +156,9 @@ final class DesignerMachineRecipeScreen extends DesignerFormScreen {
 					entry.remove();
 					rebuild();
 				});
-			}));
-			if (BeeDesignerMachineRecipes.supported(entry.host(), entry.kind())) {
-				number("machine_amount", entry.value(), entry.amountKey(), "1", DesignerNumberRange.forMachine(entry));
-				number("chance", entry.node(), entry.chanceKey(), "1");
-				if (entry.host() == BeeDesignerMachineRecipes.Host.MBD2) {
-					toggle("machine_per_tick", entry.node(), "perTick", false);
-				}
+			}, height, true));
+			if (supported && entry.host() == BeeDesignerMachineRecipes.Host.MBD2) {
+				toggle("machine_per_tick", entry.node(), "perTick", false);
 			}
 		}
 		scope("recipes/" + id);

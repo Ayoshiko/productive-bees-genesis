@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineRecipes;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerWorldConversions;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
@@ -55,11 +56,35 @@ final class DesignerRecipeSummary {
 					BeeDesignerDocument.text(recipe, "time", BeeDesignerDocument.text(recipe, "duration", "20"))));
 			for (var entry : BeeDesignerMachineRecipes.entries(recipe)) {
 				screen.rows.add(new DesignerFormScreen.Row(entry.input() ? "machine_inputs" : "machine_outputs", (x, y, w) ->
-						screen.addRenderableWidget(new DesignerMachineEntryButton(x, y, w, entry, edit))));
+						screen.addRenderableWidget(new DesignerMachineEntryButton(x, y, w, entry, edit).fitted())));
 			}
 			return;
 		}
 		switch (type) {
+			case "productivebees:bottler" -> {
+				item(screen, "ingredient", recipe.get("ingredient"), edit);
+				screen.rows.add(new DesignerFormScreen.Row("fluid", (x, y, w) -> screen.addRenderableWidget(new DesignerResourceButton(
+						x, y, w, recipe.getAsJsonObject("fluid"), true, edit).fitted())));
+				inline(screen, new DesignerInlineNumber("fluid_amount", recipe.getAsJsonObject("fluid"), "amount", "250", DesignerNumberRange.of(1, Integer.MAX_VALUE, true)));
+				item(screen, "egg_output", recipe.get("result"), edit);
+			}
+			case "productivebees:item_conversion" -> {
+				item(screen, "conversion_input", recipe.get("ingredients"), edit);
+				item(screen, "conversion_output", recipe.get("result"), edit);
+				if (!BeeDesignerWorldConversions.shared(recipe) && recipe.has("result")) {
+					inline(screen, new DesignerInlineNumber("quantity", recipe.getAsJsonObject("result"), "count", "1", DesignerNumberRange.of(1, 99, true)));
+				}
+				chance(screen, recipe);
+			}
+			case "productivebees:block_conversion" -> {
+				if (recipe.has("input") && (!recipe.get("input").isJsonArray() || !recipe.getAsJsonArray("input").isEmpty())) {
+					item(screen, "conversion_input", recipe.get("input"), edit);
+				} else {
+					block(screen, "conversion_from", recipe.getAsJsonObject("from"), edit);
+				}
+				block(screen, "conversion_to", recipe.getAsJsonObject("to"), edit);
+				chance(screen, recipe);
+			}
 			case "productivebees:bee_breeding" -> {
 				bee(screen, "parent1", recipe, "parent1", edit);
 				bee(screen, "parent2", recipe, "parent2", edit);
@@ -75,19 +100,20 @@ final class DesignerRecipeSummary {
 			case "productivebees:bee_spawning" -> {
 				item(screen, "spawningNest", recipe.get("ingredient"), edit);
 				item(screen, "spawn_item", recipe.get("spawn_item"), edit);
-				screen.note("biomes", recipe.has("biomes") ? Component.literal(recipe.get("biomes").toString()) : DesignerFormScreen.tr("any_biome"));
+				biomes(screen, recipe.get("biomes"));
 				screen.note("", DesignerFormScreen.tr("overview_spawn_help"));
 			}
 			case "productivebees:bee_fishing" -> {
 				screen.note("", DesignerFormScreen.tr("overview_fishing_help"));
-				screen.note("biomes", recipe.has("biomes") ? Component.literal(recipe.get("biomes").toString()) : DesignerFormScreen.tr("any_biome"));
+				biomes(screen, recipe.get("biomes"));
 				chance(screen, recipe);
 			}
 			case "minecraft:crafting_shaped", "minecraft:crafting_shapeless" -> {
 				craftingGrid(screen, recipe, edit);
 				item(screen, "egg_output", recipe.get("result"), edit);
-				screen.note("quantity", Component.literal(recipe.has("result") && recipe.get("result").isJsonObject()
-						? BeeDesignerDocument.text(recipe.getAsJsonObject("result"), "count", "1") : "1"));
+				if (recipe.has("result") && recipe.get("result").isJsonObject()) {
+					inline(screen, new DesignerInlineNumber("quantity", recipe.getAsJsonObject("result"), "count", "1", DesignerNumberRange.of(1, 64, true)));
+				}
 			}
 			default -> {
 				boolean centrifuge = type.endsWith("centrifuge") || type.endsWith("centrifuging");
@@ -100,7 +126,11 @@ final class DesignerRecipeSummary {
 				}
 				screen.note("", DesignerFormScreen.tr(flow));
 				if (recipe.has("ingredient")) {
-					item(screen, "ingredient", recipe.get("ingredient"), edit);
+					if (type.equals("productivebees:advanced_beehive") && recipe.get("ingredient").isJsonPrimitive()) {
+						screen.rows.add(new DesignerFormScreen.Row("bee", (x, y, w) -> screen.beeButton(x, y, w, recipe.get("ingredient").getAsString(), edit)));
+					} else {
+						item(screen, "ingredient", recipe.get("ingredient"), edit);
+					}
 				}
 				String field = type.endsWith("advanced_beehive") ? "results" : "outputs";
 				if (recipe.has(field)) {
@@ -111,22 +141,21 @@ final class DesignerRecipeSummary {
 									screen.addRenderableWidget(new DesignerResourceButton(x, y, w, output, false, edit))));
 							chance(screen, output);
 						} else {
-							ItemStack stack = DesignerStackButton.decode(output.get("item"));
-							String amount = BeeDesignerDocument.text(output, "min", "1") + "–" + BeeDesignerDocument.text(output, "max", "1");
-							screen.rows.add(new DesignerFormScreen.Row("output", (x, y, w) ->
-									screen.stackButton(x, y, w, stack, DesignerFormScreen.tr("output").getString(), edit)));
-							screen.note("quantity", Component.literal(amount + " · ").append(DesignerFormScreen.tr("chance"))
-									.append(" " + BeeDesignerDocument.text(output, "chance", "1")));
+							itemOutput(screen, output, edit);
 						}
 					}
 				}
 				if (recipe.has("fluid")) {
+					int width = new DesignerResourceButton(0, 0, 260, recipe.getAsJsonObject("fluid"), true, edit).fitted().getWidth();
 					screen.rows.add(new DesignerFormScreen.Row("fluid", (x, y, w) ->
-							screen.addRenderableWidget(new DesignerResourceButton(x, y, w, recipe.getAsJsonObject("fluid"), true, edit))));
+							screen.addRenderableWidget(new DesignerResourceButton(x, y, w, recipe.getAsJsonObject("fluid"), true, edit).fitted()), 24, false, width)
+							.flow(fieldWidth("fluid", width)));
+					inline(screen, new DesignerInlineNumber("fluid_amount", recipe.getAsJsonObject("fluid"), "amount", "1000",
+							DesignerNumberRange.forField("fluid_amount", "amount")));
 				}
 				if (recipe.has("processingTime") || recipe.has("processing_time")) {
-					screen.note("", Component.translatable("designer.recipe_time",
-							BeeDesignerDocument.text(recipe, "processing_time", BeeDesignerDocument.text(recipe, "processingTime", "200"))));
+					String time = recipe.has("processing_time") ? "processing_time" : "processingTime";
+					inline(screen, new DesignerInlineNumber("processing_time", recipe, time, "200", DesignerNumberRange.forField("processing_time", time)));
 				}
 				if (BeeDesignerDocument.text(recipe, "include_pb_outputs", "false").equals("true")) {
 					screen.note("", DesignerFormScreen.tr("overview_include_pb"));
@@ -171,29 +200,98 @@ final class DesignerRecipeSummary {
 			}, cell + 4));
 		}
 	}
+
+	private static void itemOutput(DesignerFormScreen screen, JsonObject output, Runnable edit) {
+		ItemStack stack = DesignerStackButton.decode(output.get("item"));
+		String minimum = BeeDesignerDocument.text(output, "min", "1");
+		String maximum = BeeDesignerDocument.text(output, "max", "1");
+		List<DesignerInlineNumber> fields = new ArrayList<>();
+		var quantity = DesignerNumberRange.forField("quantity", "min");
+		if (minimum.equals(maximum)) {
+			fields.add(new DesignerInlineNumber("quantity", output, "min", "1", quantity).paired("max"));
+		} else {
+			fields.add(new DesignerInlineNumber("minimum_short", output, "min", "1", quantity));
+			fields.add(new DesignerInlineNumber("maximum_short", output, "max", "1", quantity));
+		}
+		fields.add(DesignerInlineNumber.probability(output, "chance"));
+		int itemWidth = Math.max(104, Math.min(260, Minecraft.getInstance().font.width(BeeDesignerClient.itemName(stack)) + 38));
+		int controlsWidth = DesignerInlineNumber.totalWidth(fields);
+		boolean inline = itemWidth + controlsWidth + 24 <= screen.contentWidth;
+		int height = inline ? 24 : 24 + DesignerInlineNumber.rows(fields, screen.contentWidth - 8) * 24;
+		screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> {
+			var item = screen.stackButton(x + 4, y, inline ? Math.min(itemWidth, w - controlsWidth - 20) : w - 8,
+					stack, DesignerFormScreen.tr("output").getString(), edit);
+			int start = inline ? item.getWidth() + 16 : 4;
+			DesignerInlineNumber.flow(screen, fields, x + start, y + (inline ? 0 : 24), w - start - 4);
+		}, height, true));
+	}
 	static void item(DesignerFormScreen screen, String label, JsonElement value, Runnable edit) {
-		screen.rows.add(new DesignerFormScreen.Row(label, (x, y, w) -> {
-			ItemStack stack = DesignerStackButton.decode(value);
-			if (stack.isEmpty() && value != null && value.isJsonPrimitive()) {
-				ResourceLocation id = ResourceLocation.tryParse(value.getAsString());
-				if (id != null && BuiltInRegistries.ITEM.containsKey(id) && BuiltInRegistries.ITEM.get(id) != Items.AIR) {
-					stack = new ItemStack(BuiltInRegistries.ITEM.get(id));
-				}
+		ItemStack decoded = DesignerStackButton.decode(value);
+		if (decoded.isEmpty() && value != null && value.isJsonPrimitive()) {
+			ResourceLocation id = ResourceLocation.tryParse(value.getAsString());
+			if (id != null && BuiltInRegistries.ITEM.containsKey(id) && BuiltInRegistries.ITEM.get(id) != Items.AIR) {
+				decoded = new ItemStack(BuiltInRegistries.ITEM.get(id));
 			}
+		}
+		ItemStack stack = decoded;
+		Component name = stack.isEmpty() ? Component.literal(value == null ? DesignerFormScreen.tr(label).getString() : value.toString())
+				: BeeDesignerClient.itemName(stack);
+		int width = Math.max(104, Math.min(260, Minecraft.getInstance().font.width(name) + 38));
+		screen.rows.add(new DesignerFormScreen.Row(label, (x, y, w) -> {
 			if (stack.isEmpty() && value != null) {
-				screen.button(x, y, w, Component.literal(value.toString()), edit);
+				screen.button(x, y, w, name, edit);
 			} else {
 				screen.stackButton(x, y, w, stack, DesignerFormScreen.tr(label).getString(), edit);
 			}
-		}));
+		}, 24, false, width).flow(fieldWidth(label, width)));
 	}
 
 	private static void bee(DesignerFormScreen screen, String label, JsonObject recipe, String key, Runnable edit) {
 		String id = BeeDesignerDocument.text(recipe, key, "minecraft:bee");
-		screen.rows.add(new DesignerFormScreen.Row(label, (x, y, w) -> screen.beeButton(x, y, w, id, edit)));
+		int width = Math.max(104, Math.min(260, Minecraft.getInstance().font.width(BeeDesignerClient.beeName(id)) + 38));
+		screen.rows.add(new DesignerFormScreen.Row(label, (x, y, w) -> screen.addRenderableWidget(
+				new DesignerBeeButton(x, y, w, id, edit).fitted()), 24, false, width).flow(fieldWidth(label, width)));
+	}
+
+	private static void block(DesignerFormScreen screen, String label, JsonObject state, Runnable edit) {
+		String name = state == null ? "minecraft:air" : BeeDesignerDocument.text(state, "Name", "minecraft:air");
+		ResourceLocation id = ResourceLocation.tryParse(name);
+		var block = id == null ? null : BuiltInRegistries.BLOCK.get(id);
+		Component title = block == null ? Component.literal(name) : block.getName();
+		int width = Math.max(104, Math.min(260, Minecraft.getInstance().font.width(title) + 38));
+		screen.rows.add(new DesignerFormScreen.Row(label, (x, y, w) -> screen.stackButton(x, y, w,
+				block == null ? ItemStack.EMPTY : block.asItem().getDefaultInstance(), title.getString(), edit), 24, false, width).flow(fieldWidth(label, width)));
+	}
+
+	private static void biomes(DesignerFormScreen screen, JsonElement value) {
+		if (value == null || value.isJsonArray() && value.getAsJsonArray().isEmpty()) {
+			screen.note("biomes", DesignerFormScreen.tr("any_biome"));
+			return;
+		}
+		List<JsonElement> entries = value.isJsonArray() ? value.getAsJsonArray().asList() : List.of(value);
+		List<String> names = new ArrayList<>();
+		for (JsonElement entry : entries) {
+			String text = entry.getAsString();
+			ResourceLocation id = ResourceLocation.tryParse(text);
+			names.add(id == null ? text : Component.translatableWithFallback(
+					"biome." + id.getNamespace() + "." + id.getPath(), text).getString());
+		}
+		screen.note("biomes", Component.literal(String.join(" · ", names)));
 	}
 
 	private static void chance(DesignerFormScreen screen, JsonObject recipe) {
-		screen.note("chance", Component.literal(BeeDesignerDocument.text(recipe, "chance", "1")));
+		if (BeeDesignerWorldConversions.shared(recipe)) {
+			screen.note("chance", Component.literal(BeeDesignerDocument.text(recipe, "chance", "1")));
+			return;
+		}
+		inline(screen, DesignerInlineNumber.probability(recipe, "chance"));
+	}
+
+	private static void inline(DesignerFormScreen screen, DesignerInlineNumber field) {
+		screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> field.add(screen, x + 4, y, w - 8), 24, true).flow(field.width() + 8).joined());
+	}
+
+	private static int fieldWidth(String label, int control) {
+		return Minecraft.getInstance().font.width(DesignerFormScreen.tr(label)) + control + 14;
 	}
 }

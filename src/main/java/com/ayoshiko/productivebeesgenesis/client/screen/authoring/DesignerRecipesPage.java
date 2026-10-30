@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineRecipes;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerProduction;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerWorldConversions;
 import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Tooltip;
@@ -10,6 +11,8 @@ import net.minecraft.network.chat.Component;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -17,7 +20,7 @@ import java.util.function.Consumer;
 /** 获取配方与生产节点的总览；身份与编译继续由工程模型持有。 */
 final class DesignerRecipesPage {
 	private static final String[] ACQUISITION = {"minecraft:crafting_shaped", "minecraft:crafting_shapeless",
-			"productivebees:bee_breeding", "productivebees:bee_conversion", "productivebees:bee_spawning", "productivebees:bee_fishing"};
+			"productivebees:bee_breeding", "productivebees:bee_conversion", "productivebees:bee_spawning", "productivebees:bee_fishing", "productivebees:bottler"};
 
 	private DesignerRecipesPage() {
 	}
@@ -33,7 +36,8 @@ final class DesignerRecipesPage {
 					DesignerFormScreen.tr("add_production"), () -> mc.setScreen(new DesignerProductionScreen(screen, document,
 							"node_" + UUID.randomUUID().toString().substring(0, 8))))));
 			int number = 0;
-			for (var entry : BeeDesignerDocument.object(document, "production_nodes").entrySet()) {
+			JsonObject nodes = document.has("production_nodes") ? document.getAsJsonObject("production_nodes") : new JsonObject();
+			for (var entry : nodes.entrySet()) {
 				String id = entry.getKey();
 				JsonObject node = entry.getValue().getAsJsonObject();
 				node.getAsJsonArray("recipe_ids").forEach(value -> grouped.add(value.getAsString()));
@@ -49,35 +53,48 @@ final class DesignerRecipesPage {
 					DesignerFormScreen.tr("add_individual_recipe"), () -> mc.setScreen(new RecipeTypeScreen(screen, document, true)))));
 		} else {
 			screen.section("acquisition_recipes");
-			for (int offset = 0; offset < ACQUISITION.length; offset += 3) {
-				int first = offset;
-				screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> {
-					int cell = (w - 8) / 3;
-					for (int column = 0; column < 3; column++) {
-						String type = ACQUISITION[first + column];
-						screen.button(x + column * (cell + 4), y, cell,
-								Component.literal("+ ").append(DesignerFormScreen.option(type)), () -> {
-							String id = BeeDesignerDocument.addRecipe(document, type);
-							open.accept(id);
-						});
+			int first = 0;
+			while (first < ACQUISITION.length) {
+				List<String> types = new ArrayList<>();
+				int used = 0;
+				while (first < ACQUISITION.length) {
+					String type = ACQUISITION[first];
+					int width = mc.font.width(DesignerFormScreen.option(type)) + 36;
+					if (!types.isEmpty() && used + width + 6 > screen.contentWidth) {
+						break;
 					}
-				}));
+					types.add(type);
+					used += width + 6;
+					first++;
+				}
+				screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> {
+					int offset = 0;
+					for (String type : types) {
+						Component label = Component.literal("+ ").append(DesignerFormScreen.option(type));
+						int width = Math.min(w - offset, mc.font.width(label) + 24);
+						screen.button(x + offset, y, width, label, () -> open.accept(BeeDesignerDocument.addRecipe(document, type)));
+						offset += width + 6;
+					}
+				}, 24, true));
 			}
 		}
 		for (var entry : document.getAsJsonObject("recipes").entrySet()) {
 			String id = entry.getKey();
 			JsonObject recipe = entry.getValue().getAsJsonObject();
 			String type = recipe.get("type").getAsString();
-			boolean isProduction = type.endsWith("advanced_beehive") || type.endsWith("centrifuge") || type.startsWith("productivebeesgenesis:");
+			boolean isProduction = type.endsWith("advanced_beehive") || type.endsWith("centrifuge") || type.startsWith("productivebeesgenesis:")
+					|| BeeDesignerWorldConversions.supports(type);
 			if (isProduction != production || grouped.contains(id) || BeeDesignerMachineRecipes.host(recipe) != null) {
 				continue;
 			}
-			screen.recipeHeading(DesignerFormScreen.option(type), id, () -> open.accept(id),
-					() -> remove.accept(id, () -> document.getAsJsonObject("recipes").remove(id)));
-			if (production) {
-				screen.note("", DesignerFormScreen.tr(flowKey(type)));
+			if (BeeDesignerWorldConversions.shared(recipe)) {
+				screen.overviewHeading(DesignerFormScreen.option(type), () -> open.accept(id));
+				screen.note("", DesignerFormScreen.tr("conversion_shared_readonly"));
+			} else {
+				screen.recipeHeading(DesignerFormScreen.option(type), id, () -> open.accept(id),
+						() -> remove.accept(id, () -> document.getAsJsonObject("recipes").remove(id)));
 			}
-			new DesignerRecipeFields(screen, recipe, id).add();
+			DesignerRecipeSummary.add(screen, document, id, recipe, () -> open.accept(id));
 		}
 		if (!production) {
 			screen.section("machine_recipes");
@@ -108,13 +125,4 @@ final class DesignerRecipesPage {
 		screen.note("", DesignerFormScreen.tr(production ? "production_help" : "acquisition_help"));
 	}
 
-	private static String flowKey(String type) {
-		return switch (type) {
-			case "productivebees:advanced_beehive" -> "flow_pb_direct";
-			case "productivebees:centrifuge" -> "flow_pb_centrifuge";
-			case "productivebeesgenesis:resource_production" -> "flow_resource_direct";
-			case "productivebeesgenesis:resource_centrifuging" -> "flow_resource_centrifuge";
-			default -> "production_help";
-		};
-	}
 }

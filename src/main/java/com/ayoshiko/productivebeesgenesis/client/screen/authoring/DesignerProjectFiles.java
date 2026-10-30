@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerArchive;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCollection;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCredits;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDrafts;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerProtocol;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineSources;
@@ -63,7 +65,10 @@ final class DesignerProjectFiles {
 		submit(() -> {
 			writeSettingsJson(path, snapshot);
 			return path;
-		}, saved, failed);
+		}, output -> {
+			lastExport = output;
+			saved.accept(output);
+		}, failed);
 	}
 
 	private static JsonObject readSettingsJson(Path path) throws IOException {
@@ -102,6 +107,47 @@ final class DesignerProjectFiles {
 
 	static void read(Path path, Consumer<Map<String, String>> loaded, Consumer<String> failed) {
 		submit(() -> BeeDesignerArchive.read(path), loaded, failed);
+	}
+
+	static void readCredits(Path path, Consumer<JsonObject> loaded, Consumer<String> failed) {
+		submit(() -> BeeDesignerCredits.readManifest(path), loaded, failed);
+	}
+
+	static void detectCredits(Consumer<JsonObject> loaded, Consumer<String> failed) {
+		Path directory = Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath().normalize();
+		submit(() -> {
+			Exception invalid = null;
+			for (String name : List.of("manifest.json", "modrinth.index.json")) {
+				Path path = directory.resolve(name);
+				if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+					try {
+						return BeeDesignerCredits.readManifest(path);
+					} catch (IOException | RuntimeException failure) {
+						invalid = failure;
+					}
+				}
+			}
+			if (invalid != null) {
+				throw new IOException("designer.error.credits_manifest", invalid);
+			}
+			return BeeDesignerCredits.empty();
+		}, loaded, failed);
+	}
+
+	static void exportCollection(Map<String, String> documents, JsonObject credits, String format,
+			Consumer<Path> exported, Consumer<String> failed) {
+		Map<String, String> snapshot = Map.copyOf(documents);
+		JsonObject source = credits.deepCopy();
+		Path directory = workspace();
+		submit(() -> switch (format) {
+			case "portable" -> BeeDesignerCollection.export(directory, snapshot, source);
+			case "datapack" -> BeeDesignerArchive.export(directory, snapshot, source);
+			case "kubejs" -> BeeDesignerArchive.exportKubeJs(directory, snapshot, source);
+			default -> throw new IllegalArgumentException("designer.error.collection_format");
+		}, path -> {
+			lastExport = path;
+			exported.accept(path);
+		}, failed);
 	}
 
 
@@ -161,14 +207,49 @@ final class DesignerProjectFiles {
 	}
 
 	static void openFolder(boolean exports, Consumer<String> failed) {
-		Path workspace = Minecraft.getInstance().gameDirectory.toPath().resolve("bee-designer");
-		Path directory = workspace.resolve("drafts");
+		Path directory = workspace().resolve("drafts");
 		if (exports) {
-			directory = lastExport == null ? workspace : lastExport.getParent();
+			directory = lastExport == null ? workspace().resolve("productivebeesgenesis/bee_designer/exports") : lastExport.getParent();
 		}
-		Path target = directory;
+		openDirectory(directory, true, failed);
+	}
+
+	static Path workspace() {
+		return Minecraft.getInstance().gameDirectory.toPath().resolve("bee-designer").toAbsolutePath().normalize();
+	}
+
+	static Path lastExport() {
+		return lastExport;
+	}
+
+	static void exportedOnServer(String value) {
+		var server = Minecraft.getInstance().getSingleplayerServer();
+		if (server == null) {
+			return;
+		}
+		Path path = Path.of(value).toAbsolutePath().normalize();
+		Path exports = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toAbsolutePath().normalize()
+				.resolve("productivebeesgenesis/bee_designer/exports");
+		if (path.getParent() != null && path.getParent().equals(exports)) {
+			lastExport = path;
+		}
+	}
+
+	static void openDirectory(Path directory, boolean create, Consumer<String> failed) {
+		Path target = directory.toAbsolutePath().normalize();
 		submit(() -> {
-			java.nio.file.Files.createDirectories(target);
+			for (Path cursor = target; cursor != null; cursor = cursor.getParent()) {
+				if (Files.isSymbolicLink(cursor) || Files.exists(cursor, LinkOption.NOFOLLOW_LINKS)
+						&& Files.readAttributes(cursor, java.nio.file.attribute.BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).isOther()) {
+					throw new IOException("designer.error.file_folder");
+				}
+			}
+			if (create) {
+				Files.createDirectories(target);
+			}
+			if (!Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
+				throw new IOException("designer.error.file_folder_missing");
+			}
 			net.minecraft.Util.getPlatform().openFile(target.toFile());
 			return true;
 		}, unused -> {}, failed);
@@ -202,6 +283,15 @@ final class DesignerProjectFiles {
 		submit(() -> BeeDesignerDrafts.archive(directory, id), unused -> archived.run(), failed);
 	}
 
+	static void preserveImportedDraft(JsonObject document, Runnable ready, Consumer<String> failed) {
+		Path directory = Minecraft.getInstance().gameDirectory.toPath().resolve("bee-designer");
+		String snapshot = document.toString();
+		submit(() -> BeeDesignerDrafts.preserveBeforeImport(directory, BeeDesignerProtocol.parse(snapshot)), unused -> {
+			DesignerDraftIndex.refresh();
+			ready.run();
+		}, failed);
+	}
+
 	static void recycledDrafts(Consumer<List<BeeDesignerDrafts.Archived>> loaded, Consumer<String> failed) {
 		Path directory = Minecraft.getInstance().gameDirectory.toPath().resolve("bee-designer");
 		submit(() -> BeeDesignerDrafts.archives(directory), loaded, failed);
@@ -218,6 +308,22 @@ final class DesignerProjectFiles {
 			DesignerDraftIndex.saved(document);
 			restored.accept(document);
 		}, failed);
+	}
+
+	static void deleteRecycledDraft(String token, long modified, Runnable deleted, Consumer<String> failed) {
+		Path directory = Minecraft.getInstance().gameDirectory.toPath().resolve("bee-designer");
+		submit(() -> {
+			BeeDesignerDrafts.deleteArchive(directory, token, modified);
+			return true;
+		}, unused -> deleted.run(), failed);
+	}
+
+	static void discardDraft(String id, long modified, Runnable discarded, Consumer<String> failed) {
+		Path directory = Minecraft.getInstance().gameDirectory.toPath().resolve("bee-designer");
+		submit(() -> {
+			BeeDesignerDrafts.discard(directory, id, modified);
+			return true;
+		}, unused -> discarded.run(), failed);
 	}
 
 	private static <T> void submit(FileAction<T> action, Consumer<T> completed, Consumer<String> failed) {

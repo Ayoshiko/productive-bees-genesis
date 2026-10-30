@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.authoring;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import com.google.gson.JsonArray;
@@ -27,6 +29,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Consumer;
 
 /** 所有权限、注册表和会话状态均由服务器线程拥有。 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
@@ -44,6 +47,7 @@ public final class BeeDesignerServer {
 		private boolean busy;
 		private boolean uncertain;
 		private boolean stopped;
+		private int exportReads;
 
 		private State(MinecraftServer server) {
 			publication = new BeeDesignerPublication(server);
@@ -53,10 +57,12 @@ public final class BeeDesignerServer {
 
 	private static final class Session {
 		private final UUID token = UUID.randomUUID();
+		private final BeeDesignerCatalog.Snapshot materials = new BeeDesignerCatalog.Snapshot();
 		private long lastSequence;
 		private long lastAccess = System.nanoTime();
 		private long sourceVersion;
 		private JsonObject original;
+		private boolean exporting;
 		private BeeDesignerLifecycle.Confirmation deletion;
 	}
 
@@ -116,10 +122,11 @@ public final class BeeDesignerServer {
 							message -> result(player, session, request.sequence(), false, message));
 				}
 				case "catalog" -> catalog(player, session, request.sequence(), data);
-				case "materials" -> send(player, session, request.sequence(), "materials", BeeDesignerCatalog.page(player.server, data));
+				case "materials" -> send(player, session, request.sequence(), "materials", BeeDesignerCatalog.page(player.server, data, session.materials));
 				case "bee_data" -> send(player, session, request.sequence(), "bee_data",
 						BeeDesignerReader.beeData(player.server, ResourceLocation.parse(data.get("id").getAsString())));
 				case "detail" -> detail(player, state, session, request.sequence(), data);
+				case "export_snapshot" -> exportSnapshot(player, state, session, request.sequence(), data);
 				case "copy_id" -> copyId(player, session, request.sequence(), data);
 				case "delete_prepare" -> prepareDeletion(player, state, session, request.sequence(), data);
 				case "delete_confirm" -> confirmDeletion(player, state, session, request.sequence(), data);
@@ -167,6 +174,7 @@ public final class BeeDesignerServer {
 		boolean trash = query.has("trash") && query.get("trash").getAsBoolean();
 		List<String> ids = candidates.stream().filter(id -> BeeDesignerLifecycle.deleted(ResourceLocation.parse(id)) == trash
 					|| !trash && preferred.containsKey(id))
+				.filter(id -> !trash || !BeeDesignerLifecycle.purged(ResourceLocation.parse(id)))
 				.filter(id -> id.contains(search) || names.contains(id))
 				.sorted(java.util.Comparator.comparingInt((String id) -> preferred.getOrDefault(id, Integer.MAX_VALUE)).thenComparing(id -> id)).toList();
 		int pages = Math.max(1, (ids.size() + 31) / 32);
@@ -213,7 +221,11 @@ public final class BeeDesignerServer {
 			throw new IllegalArgumentException("designer.error.permission_or_busy");
 		}
 		ResourceLocation bee = ResourceLocation.parse(data.get("id").getAsString());
-		if (BeeDesignerLifecycle.deleted(bee)) {
+		boolean purging = data.has("purging") && data.get("purging").getAsBoolean();
+		if (purging && (!BeeDesignerLifecycle.deleted(bee) || BeeDesignerLifecycle.purged(bee))) {
+			throw new IllegalArgumentException("designer.error.recycle_not_restorable");
+		}
+		if (!purging && BeeDesignerLifecycle.deleted(bee)) {
 			throw new IllegalArgumentException("designer.error.already_deleted");
 		}
 		BeeDesignerReader.Snapshot snapshot = BeeDesignerReader.snapshot(player.server, bee);
@@ -229,9 +241,13 @@ public final class BeeDesignerServer {
 						result(player, session, sequence, false, failure == null ? "designer.error.conflict" : safeMessage(failure));
 						return;
 					}
+					if (bee.equals(PBConstants.MYRIADCREATIONS_TYPE)) {
+						loaded.remove(BeeDesignerMyriad.RECIPES_ONLY);
+						loaded.addProperty("baseline", BeeDesignerDocument.fingerprint(loaded));
+					}
 					session.original = loaded.deepCopy();
 					session.sourceVersion = snapshot.generation();
-					session.deletion = new BeeDesignerLifecycle.Confirmation(loaded, snapshot.generation());
+					session.deletion = new BeeDesignerLifecycle.Confirmation(loaded, snapshot.generation(), purging);
 					send(player, session, sequence, "delete_review", session.deletion.review());
 				}));
 	}
@@ -248,7 +264,7 @@ public final class BeeDesignerServer {
 		if (session.sourceVersion != BeeDesignerSources.generation) {
 			throw new IllegalArgumentException("designer.error.conflict");
 		}
-		send(player, session, sequence, "delete_staged", BeeDesignerLifecycle.retire(session.original, System.currentTimeMillis(), player.getUUID()));
+		send(player, session, sequence, "delete_staged", session.deletion.stage(System.currentTimeMillis(), player.getUUID()));
 	}
 
 	private static void history(ServerPlayer player, State state, Session session, long sequence, JsonObject query) {
@@ -339,8 +355,37 @@ public final class BeeDesignerServer {
 		return status;
 	}
 
+	/** 与万象属性保存共用服务器文件队列；回执回到原服务器，停止后不再访问旧配置。 */
+	public static void saveFilterConfig(MinecraftServer server, ModConfig.FilterMode mode, List<String> types, Consumer<String> completed) {
+		if (!server.isSameThread()) {
+			throw new IllegalStateException("Filter settings require the server thread");
+		}
+		State state = STATES.computeIfAbsent(server, State::new);
+		if (state.busy || state.stopped || state.publication.running()) {
+			throw new IllegalStateException("designer.error.busy");
+		}
+		ModConfig.SERVER.myriadCreationsFilteredBeeTypes.set(List.copyOf(types));
+		ModConfig.SERVER.myriadCreationsFilterMode.set(mode);
+		MyriadCreationsEventHandler.invalidateFilterCache();
+		state.busy = true;
+		CompletableFuture.runAsync(ModConfig::saveGameplayServerSpec, state.io)
+				.whenComplete((unused, failure) -> server.execute(() -> {
+					state.busy = false;
+					if (state.stopped || STATES.get(server) != state) {
+						return;
+					}
+					if (failure != null) {
+						ProductiveBeesGenesis.LOGGER.error("Filter settings persistence needs inspection", failure);
+						completed.accept("designer.filter_save_unknown");
+					} else {
+						completed.accept("designer.filter_saved");
+					}
+				}));
+	}
+
 	private static void saveMyriad(ServerPlayer player, State state, Session session, long sequence, JsonObject data) {
 		Map<String, Object> values = BeeDesignerMyriad.validate(data);
+		BeeDesignerMyriad.validateResources(values, player.server);
 		BeeDesignerMyriad.apply(values);
 		state.busy = true;
 		List<String> selected = player.server.getPackRepository().getSelectedPacks().stream().map(pack -> pack.getId()).toList();
@@ -366,13 +411,48 @@ public final class BeeDesignerServer {
 				}));
 	}
 
+	private static void exportSnapshot(ServerPlayer player, State state, Session session, long sequence, JsonObject query) {
+		if (state.busy || state.publication.blocked() || session.exporting || state.exportReads >= 4) {
+			throw new IllegalArgumentException("designer.error.busy");
+		}
+		ResourceLocation bee = ResourceLocation.parse(query.get("id").getAsString());
+		if (bee.equals(PBConstants.MYRIADCREATIONS_TYPE) && !BeeDesignerLifecycle.deleted(bee)) {
+			throw new IllegalArgumentException("designer.error.collection_myriad");
+		}
+		if (query.has("generation") && query.get("generation").getAsLong() != BeeDesignerSources.generation) {
+			throw new IllegalArgumentException("designer.error.collection_changed");
+		}
+		BeeDesignerReader.Snapshot snapshot = BeeDesignerReader.snapshot(player.server, bee);
+		session.exporting = true;
+		state.exportReads++;
+		CompletableFuture.supplyAsync(() -> BeeDesignerReader.readSources(snapshot), state.io)
+				.whenComplete((loaded, failure) -> player.server.execute(() -> {
+					session.exporting = false;
+					state.exportReads--;
+					if (!active(player, state, session)) {
+						return;
+					}
+					if (failure != null || snapshot.generation() != BeeDesignerSources.generation) {
+						result(player, session, sequence, false, failure == null ? "designer.error.conflict" : safeMessage(failure));
+						return;
+					}
+					try {
+						loaded.addProperty("_editor_export_generation", snapshot.generation());
+						send(player, session, sequence, "export_snapshot", loaded);
+					} catch (RuntimeException invalid) {
+						result(player, session, sequence, false, safeMessage(invalid));
+					}
+				}));
+	}
+
 	private static void detail(ServerPlayer player, State state, Session session, long sequence, JsonObject query) {
 		if (state.busy || state.publication.blocked()) {
 			throw new IllegalArgumentException("designer.error.busy");
 		}
 		ResourceLocation bee = ResourceLocation.parse(query.get("id").getAsString());
 		if (bee.equals(PBConstants.MYRIADCREATIONS_TYPE) && !BeeDesignerLifecycle.deleted(bee)
-				&& !(query.has("lifecycle") && query.get("lifecycle").getAsBoolean())) {
+				&& !(query.has("lifecycle") && query.get("lifecycle").getAsBoolean())
+				&& !(query.has("recipes_only") && query.get("recipes_only").getAsBoolean())) {
 			if (query.has("copy") && query.get("copy").getAsBoolean()) {
 				send(player, session, sequence, "detail", BeeDesignerMyriad.ordinaryTemplate());
 			} else {
@@ -392,6 +472,12 @@ public final class BeeDesignerServer {
 						result(player, session, sequence, false, failure == null ? "designer.error.conflict" : safeMessage(failure));
 						return;
 					}
+					if (bee.equals(PBConstants.MYRIADCREATIONS_TYPE) && query.has("recipes_only") && query.get("recipes_only").getAsBoolean()) {
+						BeeDesignerMyriad.prepareRecipes(loaded);
+					} else if (bee.equals(PBConstants.MYRIADCREATIONS_TYPE) && query.has("lifecycle") && query.get("lifecycle").getAsBoolean()) {
+						loaded.remove(BeeDesignerMyriad.RECIPES_ONLY);
+						loaded.addProperty("baseline", BeeDesignerDocument.fingerprint(loaded));
+					}
 					session.original = loaded.deepCopy();
 					session.sourceVersion = snapshot.generation();
 					send(player, session, sequence, "detail", loaded);
@@ -404,6 +490,7 @@ public final class BeeDesignerServer {
 		}
 		boolean check = request.action().equals("check");
 		boolean export = request.action().equals("export");
+		String checkedFingerprint = check ? BeeDesignerDocument.fingerprint(document) : "";
 		if (!check && !canPublish(player)) {
 			throw new IllegalArgumentException("designer.error.permission");
 		}
@@ -414,11 +501,15 @@ public final class BeeDesignerServer {
 			throw new IllegalArgumentException("Another bee already uses the PB display name key: " + bee.getPath());
 		}
 		if (bee.equals(PBConstants.MYRIADCREATIONS_TYPE)) {
-			if (!BeeDesignerLifecycle.deleted(document) && (session.original == null || !BeeDesignerLifecycle.deleted(session.original))) {
+			if (session.original != null && BeeDesignerMyriad.recipesOnly(session.original) && !BeeDesignerLifecycle.deleted(document)) {
+				BeeDesignerMyriad.validateRecipes(session.original, document);
+			} else if (!BeeDesignerLifecycle.deleted(document) && (session.original == null || !BeeDesignerLifecycle.deleted(session.original))) {
 				throw new IllegalArgumentException("Use Myriad settings for its config-owned attributes");
 			}
 		}
 		String baseline = BeeDesignerDocument.text(document, "baseline", "new");
+		BeeDesignerLifecycle.validateTransition(session.original, document, session.deletion);
+		BeeDesignerWorldConversions.validateChanges(baseline.equals("new") ? null : session.original, document);
 		boolean deleting = BeeDesignerLifecycle.deleted(document);
 		if (deleting && (session.original == null || !BeeDesignerLifecycle.deleted(session.original))
 				&& (session.deletion == null || !session.deletion.permits(document))) {
@@ -434,7 +525,8 @@ public final class BeeDesignerServer {
 			JsonObject original = session.original;
 			if (original == null || !id.equals(original.get("id").getAsString())
 					|| !baseline.equals(original.get("baseline").getAsString())
-					|| (session.sourceVersion != BeeDesignerSources.generation && !BeeDesignerReader.unchanged(player.server, original))) {
+					|| (session.sourceVersion != BeeDesignerSources.generation
+							&& (BeeDesignerMyriad.recipesOnly(original) || !BeeDesignerReader.unchanged(player.server, original)))) {
 				throw new IllegalArgumentException("designer.error.conflict");
 			}
 			session.sourceVersion = BeeDesignerSources.generation;
@@ -457,7 +549,10 @@ public final class BeeDesignerServer {
 			}
 		}
 		if (check) {
-			send(player, session, request.sequence(), "diagnostics", BeeDesignerDiagnostics.check(document, player.server));
+			JsonObject diagnostics = BeeDesignerDiagnostics.check(document, player.server);
+			// 诊断对应客户端提交；服务端补齐的停用配方等受管字段不应使刚通过的结果失效。
+			diagnostics.addProperty("fingerprint", checkedFingerprint);
+			send(player, session, request.sequence(), "diagnostics", diagnostics);
 			return;
 		}
 		BeeDesignerCompiler.validate(document, player.server);
@@ -523,7 +618,7 @@ public final class BeeDesignerServer {
 		}
 	}
 
-	static String safeMessage(Throwable exception) {
+	public static String safeMessage(Throwable exception) {
 		Throwable cause = exception;
 		Set<Throwable> visited = new HashSet<>();
 		while (visited.add(cause)) {
@@ -559,6 +654,9 @@ public final class BeeDesignerServer {
 
 	@SubscribeEvent
 	public static void stop(ServerStoppedEvent event) {
+		BeeDesignerRecipeIndex.clear(event.getServer());
+		BeeDesignerFilterCatalog.clear(event.getServer());
+		BeeDesignerReader.clear();
 		State state = STATES.remove(event.getServer());
 		if (state != null) {
 			state.stopped = true;

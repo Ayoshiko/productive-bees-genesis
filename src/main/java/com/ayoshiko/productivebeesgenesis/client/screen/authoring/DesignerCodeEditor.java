@@ -15,6 +15,8 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Collections;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
@@ -36,6 +38,10 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 	private boolean draggingScrollbar;
 	private double scrollbarGrab;
 	private long lastFrame;
+	private boolean assistance = true;
+	private final DesignerCodeSearch search = new DesignerCodeSearch();
+	private Map<Integer, Integer> bracketPairs = Map.of();
+	private final List<Integer> lineStarts = new ArrayList<>();
 
 	DesignerCodeEditor(Font font, int x, int y, int width, int height, Component hint, boolean readOnly) {
 		super(x + GUTTER, y, width - GUTTER - 8, height, hint);
@@ -79,6 +85,112 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 		errorLine = line;
 	}
 
+	void assistance(boolean enabled) {
+		assistance = enabled;
+	}
+
+	void search(String query, boolean matchCase) {
+		search.query(query, matchCase, getValue());
+	}
+
+	int matchCount() {
+		return search.matches().size();
+	}
+
+	int matchNumber() {
+		int index = search.lowerBound(model.start());
+		return index < search.matches().size() && search.matches().get(index).start() == model.start() ? index + 1 : 0;
+	}
+
+	boolean findNext(boolean backwards) {
+		int index = search.next(model.start(), model.end(), backwards);
+		if (index < 0) {
+			return false;
+		}
+		var match = search.matches().get(index);
+		model.position(match.start(), match.end());
+		return true;
+	}
+
+	boolean replaceCurrent(String replacement) {
+		if (readOnly || search.matches().isEmpty()) {
+			return false;
+		}
+		int index = search.lowerBound(model.start());
+		if (index >= search.matches().size() || search.matches().get(index).start() != model.start()
+				|| search.matches().get(index).end() != model.end()) {
+			findNext(false);
+		}
+		int start = model.start();
+		apply(new DesignerCodeActions.Edit(start, model.end(), replacement, start + replacement.length(), start + replacement.length()));
+		findNext(false);
+		return true;
+	}
+
+	int replaceAll(String replacement) {
+		if (readOnly || search.matches().isEmpty()) {
+			return 0;
+		}
+		int count = search.matches().size();
+		String changed = search.replaceAll(getValue(), replacement, model.characterLimit());
+		apply(new DesignerCodeActions.Edit(0, getValue().length(), changed, model.cursor(), model.cursor()));
+		return count;
+	}
+
+	String selectedText() {
+		return model.getSelectedText();
+	}
+
+	int logicalLine() {
+		int found = Collections.binarySearch(lineStarts, model.cursor());
+		return found >= 0 ? found + 1 : -found - 1;
+	}
+
+	int column() {
+		return model.cursor() - lineStarts.get(Math.max(0, logicalLine() - 1)) + 1;
+	}
+
+	int selectedCharacters() {
+		return model.end() - model.start();
+	}
+
+	boolean goToLine(int line) {
+		if (line < 1 || line > lineStarts.size()) {
+			return false;
+		}
+		int position = lineStarts.get(line - 1);
+		model.position(position, position);
+		return true;
+	}
+
+	void indent(boolean outdent) {
+		apply(DesignerCodeActions.indent(getValue(), anchor(), model.cursor(), outdent));
+	}
+
+	void duplicate() {
+		apply(DesignerCodeActions.duplicate(getValue(), anchor(), model.cursor()));
+	}
+
+	void deleteLines() {
+		apply(DesignerCodeActions.deleteLines(getValue(), anchor(), model.cursor()));
+	}
+
+	private int anchor() {
+		return model.cursor() == model.start() ? model.end() : model.start();
+	}
+
+	private void apply(DesignerCodeActions.Edit edit) {
+		if (readOnly) {
+			return;
+		}
+		if ((long) getValue().length() - (edit.end() - edit.start()) + edit.text().length() > model.characterLimit()) {
+			throw new IllegalArgumentException("designer.code_replace_limit");
+		}
+		model.position(edit.start(), edit.end());
+		model.insertText(edit.text());
+		model.position(edit.anchor(), edit.cursor());
+	}
+
 	State state() {
 		int line = Math.min(lines.size() - 1, (int) scrollAmount() / 9);
 		int first = line >= 0 ? lines.get(line).start : 0;
@@ -107,6 +219,15 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 	private void reflow(String text) {
 		lines.clear();
 		tokens.clear();
+		lineStarts.clear();
+		lineStarts.add(0);
+		for (int index = 0; index < text.length(); index++) {
+			if (text.charAt(index) == '\n') {
+				lineStarts.add(index + 1);
+			}
+		}
+		bracketPairs = DesignerCodeActions.bracketPairs(text);
+		search.update(text);
 		int[] line = {1};
 		int[] consumed = {0};
 		font.getSplitter().splitLines(text, width - totalInnerPadding(), Style.EMPTY, false, (style, start, end) -> {
@@ -152,6 +273,8 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 	@Override
 	protected void renderContents(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		String text = getValue();
+		int bracket = bracketPairs.containsKey(model.cursor()) ? model.cursor() : model.cursor() - 1;
+		int paired = bracketPairs.getOrDefault(bracket, -1);
 		int first = Math.max(0, (int) scrollAmount() / 9 - 1);
 		int last = Math.min(lines.size(), first + height / 9 + 3);
 		int tokenIndex = 0;
@@ -169,6 +292,27 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 			Line line = lines.get(index);
 			int y = getY() + innerPadding() + index * 9;
 			int origin = getX() + innerPadding();
+			if (isFocused() && index == model.getLineAtCursor()) {
+				graphics.fill(origin, y, getX() + width - 3, y + 9, 0x0F8080A0);
+			}
+			int matchIndex = Math.max(0, search.lowerBound(line.start) - 1);
+			while (matchIndex < search.matches().size() && search.matches().get(matchIndex).start() < line.end) {
+				var match = search.matches().get(matchIndex++);
+				if (match.end() > line.start) {
+					int start = Math.max(line.start, match.start());
+					int end = Math.min(line.end, match.end());
+					graphics.fill(origin + font.width(text.substring(line.start, start)), y,
+							origin + font.width(text.substring(line.start, end)), y + 9, 0x60D9AE35);
+				}
+			}
+			if (paired >= 0) {
+				for (int position : new int[]{bracket, paired}) {
+					if (position >= line.start && position < line.end) {
+						int x = origin + font.width(text.substring(line.start, position));
+						graphics.fill(x, y, x + font.width(text.substring(position, position + 1)), y + 9, 0x50569AB5);
+					}
+				}
+			}
 			if (line.number == errorLine) {
 				graphics.fill(origin, y, getX() + width - 3, y + 9, (DesignerTheme.colors().error() & 0xFFFFFF) | 0x30000000);
 			}
@@ -356,7 +500,11 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 			return true;
 		}
 		if (visible && isFocused() && StringUtil.isAllowedChatCharacter(character)) {
-			model.insertText(Character.toString(character));
+			if (assistance) {
+				apply(DesignerCodeActions.type(getValue(), anchor(), model.cursor(), character));
+			} else {
+				model.insertText(Character.toString(character));
+			}
 			return true;
 		}
 		return false;
@@ -364,8 +512,10 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 
 	@Override
 	public boolean keyPressed(int key, int scan, int modifiers) {
-		if (!readOnly && Screen.hasControlDown() && (key == GLFW.GLFW_KEY_Z || key == GLFW.GLFW_KEY_Y)) {
-			int direction = key == GLFW.GLFW_KEY_Y || Screen.hasShiftDown() ? 1 : -1;
+		boolean control = Screen.hasControlDown() || (modifiers & GLFW.GLFW_MOD_CONTROL) != 0;
+		boolean shift = Screen.hasShiftDown() || (modifiers & GLFW.GLFW_MOD_SHIFT) != 0;
+		if (!readOnly && control && (key == GLFW.GLFW_KEY_Z || key == GLFW.GLFW_KEY_Y)) {
+			int direction = key == GLFW.GLFW_KEY_Y || shift ? 1 : -1;
 			int next = Math.max(0, Math.min(history.size() - 1, historyCursor + direction));
 			if (next >= 0 && next != historyCursor) {
 				int cursor = model.cursor();
@@ -380,9 +530,34 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 			}
 			return true;
 		}
+		if (!readOnly) {
+			if (key == GLFW.GLFW_KEY_TAB && !control) {
+				indent(shift);
+				return true;
+			}
+			if (assistance && (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER)) {
+				apply(DesignerCodeActions.newline(getValue(), anchor(), model.cursor()));
+				return true;
+			}
+			if (control && key == GLFW.GLFW_KEY_D) {
+				duplicate();
+				return true;
+			}
+			if (control && shift && key == GLFW.GLFW_KEY_K) {
+				deleteLines();
+				return true;
+			}
+			if (assistance && key == GLFW.GLFW_KEY_BACKSPACE && !control && !model.hasSelection()) {
+				var edit = DesignerCodeActions.backspacePair(getValue(), model.cursor());
+				if (edit != null) {
+					apply(edit);
+					return true;
+				}
+			}
+		}
 		if (readOnly) {
 			boolean navigation = key >= GLFW.GLFW_KEY_RIGHT && key <= GLFW.GLFW_KEY_END;
-			boolean copy = Screen.hasControlDown() && (key == GLFW.GLFW_KEY_C || key == GLFW.GLFW_KEY_A);
+			boolean copy = control && (key == GLFW.GLFW_KEY_C || key == GLFW.GLFW_KEY_A);
 			if (!navigation && !copy) {
 				return false;
 			}

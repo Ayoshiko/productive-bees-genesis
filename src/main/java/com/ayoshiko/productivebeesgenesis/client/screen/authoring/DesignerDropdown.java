@@ -50,8 +50,9 @@ final class DesignerDropdown {
 	void render(GuiGraphics graphics, int mouseX, int mouseY) {
 		var font = Minecraft.getInstance().font;
 		long now = net.minecraft.Util.getMillis();
-		double progress = DesignerPreferences.animate() ? DesignerMotionValue.easeOut((now - openedAt) / 130.0) : 1;
-		int visibleHeight = Math.max(4, (int) Math.round(bounds.getHeight() * progress));
+		double progress = DesignerPreferences.animate() && DesignerPreferences.enabled("motion_menus")
+				? DesignerMotionValue.easeOut((now - openedAt) / 130.0) : 1;
+		int visibleHeight = Math.max(4, bounds.getHeight() - (int) Math.round(8 * (1 - progress)));
 		int visibleTop = upward ? bounds.getY() + bounds.getHeight() - visibleHeight : bounds.getY();
 		if ((mouseX != lastMouseX || mouseY != lastMouseY) && bounds.contains(mouseX, mouseY)) {
 			highlighted = Math.max(first, Math.min(first + visible - 1, first + (mouseY - bounds.getY() - 2) / 18));

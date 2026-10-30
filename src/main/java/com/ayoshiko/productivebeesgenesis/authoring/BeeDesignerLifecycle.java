@@ -30,6 +30,27 @@ public final class BeeDesignerLifecycle {
 		return bee != null && BeeDesignerSources.deleted.contains(bee);
 	}
 
+	public static boolean purged(JsonObject document) {
+		return deleted(document) && document.getAsJsonObject(FIELD).has("purged")
+				&& document.getAsJsonObject(FIELD).get("purged").getAsBoolean();
+	}
+
+	public static boolean purged(ResourceLocation bee) {
+		String document = bee == null ? null : BeeDesignerSources.managed.get(bee.toString());
+		return document != null && purged(JsonParser.parseString(document).getAsJsonObject());
+	}
+
+	/** 清除回收入口仍保留身份和结算配方，避免世界库存及已付工作失去定义。 */
+	public static JsonObject purge(JsonObject retired) {
+		validate(retired);
+		if (!deleted(retired) || purged(retired)) {
+			throw new IllegalArgumentException("designer.error.recycle_not_restorable");
+		}
+		JsonObject purged = retired.deepCopy();
+		purged.getAsJsonObject(FIELD).addProperty("purged", true);
+		return purged;
+	}
+
 	public static JsonObject retire(JsonObject original, long time, UUID player) {
 		if (deleted(original)) {
 			throw new IllegalArgumentException("designer.error.already_deleted");
@@ -44,6 +65,9 @@ public final class BeeDesignerLifecycle {
 	}
 
 	public static JsonObject restore(JsonObject retired) {
+		if (purged(retired)) {
+			throw new IllegalArgumentException("designer.error.recycle_not_restorable");
+		}
 		JsonObject restored = retired.deepCopy();
 		restored.remove(FIELD);
 		return restored;
@@ -58,6 +82,10 @@ public final class BeeDesignerLifecycle {
 		}
 		JsonObject lifecycle = document.getAsJsonObject(FIELD);
 		try {
+			if (lifecycle.has("purged") && (!lifecycle.get("purged").isJsonPrimitive()
+					|| !lifecycle.getAsJsonPrimitive("purged").isBoolean())) {
+				throw new IllegalArgumentException("designer.error.lifecycle_data");
+			}
 			if (lifecycle.get("deleted_at").getAsBigDecimal().longValueExact() < 0) {
 				throw new IllegalArgumentException("designer.error.lifecycle_data");
 			}
@@ -84,6 +112,9 @@ public final class BeeDesignerLifecycle {
     }
 
     static JsonObject activeRecipe(JsonObject document, JsonObject recipe, Set<String> retired) {
+        if (BeeDesignerWorldConversions.supports(BeeDesignerDocument.text(recipe, "type", ""))) {
+			return BeeDesignerWorldConversions.active(recipe, retired);
+		}
         if (SETTLEMENT_RECIPES.contains(BeeDesignerDocument.text(recipe, "type", ""))) {
 			return recipe;
 		}
@@ -116,12 +147,21 @@ public final class BeeDesignerLifecycle {
 		private final UUID token = UUID.randomUUID();
 		private final JsonObject original;
 		private final long generation;
+		private final boolean purging;
 		private final long created = System.nanoTime();
 		private int step;
 
 		Confirmation(JsonObject original, long generation) {
+			this(original, generation, false);
+		}
+
+		Confirmation(JsonObject original, long generation, boolean purging) {
+			if (purging && (!deleted(original) || purged(original))) {
+				throw new IllegalArgumentException("designer.error.recycle_not_restorable");
+			}
 			this.original = original.deepCopy();
 			this.generation = generation;
+			this.purging = purging;
 		}
 
 		JsonObject review() {
@@ -129,6 +169,7 @@ public final class BeeDesignerLifecycle {
 			review.addProperty("id", original.get("id").getAsString());
 			review.addProperty("token", token.toString());
 			review.addProperty("step", step);
+			review.addProperty("purging", purging);
 			review.addProperty("retired_recipes", retiredRecipes(original));
 			review.addProperty("total_recipes", original.getAsJsonObject("recipes").size());
 			return review;
@@ -138,6 +179,7 @@ public final class BeeDesignerLifecycle {
 			if (System.nanoTime() - created > LIFETIME_NANOS
 					|| !token.toString().equals(BeeDesignerDocument.text(request, "token", ""))
 					|| !original.get("id").getAsString().equals(BeeDesignerDocument.text(request, "id", ""))
+					|| purging != (request.has("purging") && request.get("purging").getAsBoolean())
 					|| request.get("step").getAsBigDecimal().intValueExact() != step + 1 || step >= 3
 					|| step == 2 && !original.get("id").getAsString().equals(BeeDesignerDocument.text(request, "phrase", ""))) {
 				throw new IllegalArgumentException("designer.error.delete_confirmation");
@@ -150,11 +192,31 @@ public final class BeeDesignerLifecycle {
 		}
 
 		boolean permits(JsonObject document) {
-			return ready() && System.nanoTime() - created <= LIFETIME_NANOS
-					&& generation == BeeDesignerSources.generation
-					&& original.get("id").equals(document.get("id"))
-					&& original.get("baseline").equals(document.get("baseline"))
+			if (!ready() || System.nanoTime() - created > LIFETIME_NANOS
+					|| generation != BeeDesignerSources.generation
+					|| !original.get("id").equals(document.get("id"))
+					|| !original.get("baseline").equals(document.get("baseline"))) {
+				return false;
+			}
+			if (purging) {
+				return BeeDesignerDocument.fingerprint(purge(original)).equals(BeeDesignerDocument.fingerprint(document));
+			}
+			return !purged(document) && deleted(document)
 					&& BeeDesignerDocument.fingerprint(restore(original)).equals(BeeDesignerDocument.fingerprint(restore(document)));
+		}
+
+		JsonObject stage(long time, UUID player) {
+			return purging ? purge(original) : retire(original, time, player);
+		}
+	}
+
+	static void validateTransition(JsonObject original, JsonObject document, Confirmation confirmation) {
+		boolean wasPurged = original != null && original.get("id").equals(document.get("id")) && purged(original);
+		if (wasPurged && !purged(document)) {
+			throw new IllegalArgumentException("designer.error.recycle_not_restorable");
+		}
+		if (purged(document) && !wasPurged && (confirmation == null || !confirmation.permits(document))) {
+			throw new IllegalArgumentException("designer.error.delete_confirmation");
 		}
 	}
 }

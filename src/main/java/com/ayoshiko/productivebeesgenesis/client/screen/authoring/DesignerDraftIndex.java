@@ -64,7 +64,7 @@ final class DesignerDraftIndex {
 		Map<String, String> names = new LinkedHashMap<>();
 		document.getAsJsonObject("names").entrySet().forEach(entry -> names.put(entry.getKey(), entry.getValue().getAsString()));
 		boolean pending = document.has("_editor_recovery") || !BeeDesignerDocument.fingerprint(document).equals(BeeDesignerDocument.text(document, "baseline", "new"));
-		ENTRIES.put(id, new BeeDesignerDrafts.Entry(id, Map.copyOf(names), System.currentTimeMillis(), "", pending, BeeDesignerLifecycle.deleted(document)));
+		ENTRIES.put(id, new BeeDesignerDrafts.Entry(id, Map.copyOf(names), System.currentTimeMillis(), "", pending, BeeDesignerLifecycle.deleted(document), BeeDesignerLifecycle.purged(document)));
 		if (loaded) {
 			updated();
 		} else {
@@ -74,6 +74,10 @@ final class DesignerDraftIndex {
 
 	static long lifecycle() {
 		return lifecycle;
+	}
+
+	static long version() {
+		return generation;
 	}
 
 	static List<String> pendingIds() {
@@ -94,6 +98,11 @@ final class DesignerDraftIndex {
 	static boolean pending(String id) {
 		var entry = ENTRIES.get(id);
 		return entry != null && entry.pending();
+	}
+
+	static boolean restorable(String id) {
+		var entry = ENTRIES.get(id);
+		return entry != null && !entry.purged();
 	}
 
 	static Component name(String id) {

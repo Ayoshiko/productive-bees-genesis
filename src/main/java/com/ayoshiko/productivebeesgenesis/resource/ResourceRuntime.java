@@ -29,6 +29,8 @@ public final class ResourceRuntime {
 		volatile boolean orderlyStop;
 		volatile boolean worldClosed;
 		volatile boolean worldSaveFailed;
+		int reloads;
+		boolean reloadFailed;
 		ResourceRecipeIndex catalogIndex;
 		PbResourceCatalog catalog;
 		Map<net.minecraft.world.level.block.entity.BlockEntityType<?>, com.ayoshiko.productivebeesgenesis.api.resource.ResourceHostAdapter> hosts;
@@ -45,6 +47,28 @@ public final class ResourceRuntime {
 	}
 
 	private ResourceRuntime() {}
+
+	/** 仅记录资源重载生命周期，允许 IO 调用方发起；不从后台访问世界或配方。 */
+	public static synchronized void beginReload(MinecraftServer server) {
+		State current = STATES.computeIfAbsent(server, unused -> new State());
+		if (current.reloads == 0) {
+			current.reloadFailed = false;
+		}
+		current.reloads++;
+	}
+
+	public static synchronized void finishReload(MinecraftServer server, boolean success) {
+		State current = STATES.get(server);
+		if (current != null) {
+			current.reloads = Math.max(0, current.reloads - 1);
+			current.reloadFailed |= !success;
+		}
+	}
+
+	public static synchronized boolean reloadBlocked(MinecraftServer server) {
+		State current = STATES.get(server);
+		return current != null && (current.reloads > 0 || current.reloadFailed);
+	}
 
 	static void trackOutput(MinecraftServer server, ResourceOutputAccess output) {
 		var state = state(server);

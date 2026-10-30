@@ -44,25 +44,29 @@ final class DesignerBeeFields {
 		screen.field("primaryColor", definition, "primaryColor", "#E8BC39");
 		screen.field("secondaryColor", definition, "secondaryColor", "#383D43");
 		screen.field("particleColor", definition, "particleColor", "#E8BC39");
-		screen.field("glowColor", definition, "glowColor", "#FFFFFF");
+		screen.field("tertiaryColor", definition, "tertiaryColor", BeeDesignerDocument.text(definition, "primaryColor", "#E8BC39"));
+		screen.toggle("colorCycle", definition, "colorCycle", false);
 		screen.number("size", definition, "size", "1");
-		screen.toggle("createComb", definition, "createComb", false);
+		screen.number("pollinatedSize", definition, "pollinatedSize", BeeDesignerDocument.text(definition, "size", "1"));
+		screen.toggle("useGlowLayer", definition, "useGlowLayer", BeeDesignerDocument.text(definition, "renderer", "default").equals("default_crystal"));
+		screen.toggle("createComb", definition, "createComb", true);
 		screen.note("comb_help", DesignerFormScreen.tr("create_comb_help"));
 		if (advanced) {
-			screen.section("advanced_appearance");
-			screen.field("description", definition, "description", "");
-			screen.field("beeTexture", definition, "beeTexture", "");
-			screen.field("renderer", definition, "renderer", "default");
-			screen.field("model", definition, "model", "");
-			screen.field("animation", definition, "animation", "");
-			screen.field("renderTransform", definition, "renderTransform", "");
-			screen.toggle("translucent", definition, "translucent", false);
-			screen.anchor("advanced");
-			screen.rows.add(new DesignerFormScreen.Row("advanced", (x, y, w) -> screen.button(x, y, w,
-					DesignerFormScreen.tr("edit_definition"), () -> mc.setScreen(new DesignerJsonScreen(screen, definition,
-							document.get("id").getAsString())))));
-			screen.rows.add(new DesignerFormScreen.Row("conditions", (x, y, w) -> screen.button(x, y, w,
-					DesignerFormScreen.tr("edit_conditions"), () -> mc.setScreen(new DesignerConditionsScreen(screen, definition, "conditions")))));
+			screen.group("advanced_appearance", () -> {
+				screen.field("description", definition, "description", "");
+				screen.field("beeTexture", definition, "beeTexture", "");
+				screen.field("renderer", definition, "renderer", "default");
+				screen.field("model", definition, "model", "");
+				screen.field("animation", definition, "animation", "");
+				screen.field("renderTransform", definition, "renderTransform", "");
+				screen.toggle("translucent", definition, "translucent", false);
+				screen.anchor("advanced");
+				screen.rows.add(new DesignerFormScreen.Row("advanced", (x, y, w) -> screen.button(x, y, w,
+						DesignerFormScreen.tr("edit_definition"), () -> mc.setScreen(new DesignerJsonScreen(screen, definition,
+								document.get("id").getAsString())))));
+				screen.rows.add(new DesignerFormScreen.Row("conditions", (x, y, w) -> screen.button(x, y, w,
+						DesignerFormScreen.tr("edit_conditions"), () -> mc.setScreen(new DesignerConditionsScreen(screen, definition, "conditions")))));
+			});
 		}
 		screen.scope("");
 	}
@@ -79,8 +83,8 @@ final class DesignerBeeFields {
 		}
 		String selected = flower;
 		screen.anchor(flower);
-		screen.rows.add(new DesignerFormScreen.Row("flower_type", (x, y, w) -> screen.tabs(x, y, w,
-				selected, new String[]{"flowerItem", "flowerBlock", "flowerTag", "flowerFluid", "flowerResource"}, value -> true, value -> {
+		screen.rows.add(new DesignerFormScreen.Row("flower_type", (x, y, w) -> screen.selection(x, y, w,
+				selected, new String[]{"flowerItem", "flowerBlock", "flowerTag", "flowerFluid", "flowerResource"}, value -> {
 					for (String key : new String[]{"flowerItem", "flowerBlock", "flowerTag", "flowerFluid", "flowerResource",
 							"flowerType", "inverseFlower", "postPollination"}) {
 						definition.remove(key);
@@ -100,7 +104,6 @@ final class DesignerBeeFields {
 						};
 						definition.addProperty(value, id);
 					}
-					screen.rebuild();
 				}), 20, true));
 		if (flower.equals("flowerItem")) {
 			screen.item("flower", definition, flower, "minecraft:poppy");
@@ -119,32 +122,34 @@ final class DesignerBeeFields {
 			DesignerResourceFields.add(screen, definition.getAsJsonObject("flowerResource"), true);
 		}
 		screen.section("breeding_section");
-		screen.item("breedingItem", definition, "breedingItem", "minecraft:poppy");
+		breedingFood(screen, definition);
 		screen.number("breedingItemCount", definition, "breedingItemCount", "1");
 		screen.toggle("selfbreed", definition, "selfbreed", true);
-		screen.section("genes_section");
-		JsonObject genes = BeeDesignerDocument.object(definition, "attributes");
-		screen.gene("weatherTolerance", genes, "weather_tolerance", "weather_tolerance.none", "weather_tolerance.rain", "weather_tolerance.any");
-		screen.gene("temper", genes, "temper", "temper.passive", "temper.normal", "temper.hostile", "temper.aggressive");
-		screen.gene("behavior", genes, "behavior", "behavior.diurnal", "behavior.nocturnal", "behavior.metaturnal");
-		screen.gene("endurance", genes, "endurance", "endurance.weak", "endurance.normal", "endurance.medium", "endurance.strong");
-		screen.gene("productivity", genes, "productivity", "productivity.normal", "productivity.medium", "productivity.high", "productivity.very_high");
+		screen.group("genes_section", () -> {
+			JsonObject genes = definition;
+			screen.gene("weatherTolerance", genes, "weather_tolerance", "weather_tolerance.none", "weather_tolerance.rain", "weather_tolerance.any");
+			screen.gene("temper", genes, "temper", "temper.passive", "temper.normal", "temper.hostile", "temper.aggressive");
+			screen.gene("behavior", genes, "behavior", "behavior.diurnal", "behavior.nocturnal", "behavior.metaturnal");
+			screen.gene("endurance", genes, "endurance", "endurance.weak", "endurance.normal", "endurance.medium", "endurance.strong");
+			screen.gene("productivity", genes, "productivity", "productivity.normal", "productivity.medium", "productivity.high", "productivity.very_high");
+		});
 		screen.section("environment_section");
 		screen.toggle("waterproof", definition, "waterproof", false);
 		screen.toggle("fireproof", definition, "fireproof", false);
 		screen.toggle("coldResistant", definition, "coldResistant", false);
-		screen.number("speed", definition, "speed", "0.3");
+		screen.number("speed", definition, "speed", "1");
 		screen.number("attack", definition, "attack", "2");
 		if (advanced) {
-			screen.section("special_traits");
-			for (String key : new String[]{"selfheal", "irradiated", "withered", "blinding", "draconic", "slimy", "teleporting",
-					"munchies", "redstoned", "stringy", "stingless"}) {
-				screen.toggle(key, definition, key, false);
-			}
-			specialBehavior(screen, definition);
-			screen.anchor("advanced");
-			screen.rows.add(new DesignerFormScreen.Row("advanced", (x, y, w) -> screen.button(x, y, w,
-					DesignerFormScreen.tr("edit_definition"), () -> mc.setScreen(new DesignerJsonScreen(screen, definition, "PB definition")))));
+			screen.group("special_traits", () -> {
+				for (String key : new String[]{"selfheal", "irradiated", "withered", "blinding", "draconic", "slimy", "teleporting",
+						"munchies", "redstoned", "stringy", "stingless"}) {
+					screen.toggle(key, definition, key, false);
+				}
+				specialBehavior(screen, definition);
+				screen.anchor("advanced");
+				screen.rows.add(new DesignerFormScreen.Row("advanced", (x, y, w) -> screen.button(x, y, w,
+						DesignerFormScreen.tr("edit_definition"), () -> mc.setScreen(new DesignerJsonScreen(screen, definition, "PB definition")))));
+			});
 		}
 		screen.scope("");
 	}
@@ -156,15 +161,52 @@ final class DesignerBeeFields {
 						DesignerResourcePicker.open(screen, BeeDesignerDocument.text(definition, "flowerType", "blocks").equals("entity_types")
 								? "entity_tag" : "block_tag", value -> definition.add("flowerTag", value.get("id")))))));
 		screen.field("tag_id", definition, "flowerTag", "minecraft:flowers");
+		if (!BeeDesignerDocument.text(definition, "flowerType", "blocks").equals("entity_types")) {
+			screen.rows.add(new DesignerFormScreen.Row("inverse_flower_tag", (x, y, w) -> screen.addRenderableWidget(new DesignerTheme.Switch(x, y,
+					Math.min(w, 100), BeeDesignerDocument.text(definition, "flowerTag", "").startsWith("!"), () -> {
+				String tag = BeeDesignerDocument.text(definition, "flowerTag", "minecraft:flowers");
+				definition.addProperty("flowerTag", tag.startsWith("!") ? tag.substring(1) : "!" + tag);
+				screen.rebuild();
+			}))));
+		}
+	}
+
+	static void breedingFood(DesignerFormScreen screen, JsonObject definition) {
+		String current = BeeDesignerDocument.text(definition, "breedingItem", "");
+		if (!current.isBlank() && !current.startsWith("#")) {
+			screen.item("breedingItem", definition, "breedingItem", "minecraft:poppy");
+		} else {
+			screen.field("breedingItem", definition, "breedingItem", "");
+		}
+		screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> {
+			int cell = (w - 8) / 3;
+			screen.button(x, y, cell, DesignerFormScreen.tr("pick_item"), () -> Minecraft.getInstance().setScreen(new BeeDesignerItemPicker(screen,
+					stack -> definition.addProperty("breedingItem", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))));
+			screen.button(x + cell + 4, y, cell, DesignerFormScreen.tr("breeding_tag"), () -> Minecraft.getInstance().setScreen(
+					DesignerResourcePicker.open(screen, "item_tag", value -> definition.addProperty("breedingItem", "#" + value.get("id").getAsString()))));
+			screen.button(x + (cell + 4) * 2, y, cell, DesignerFormScreen.tr("breeding_default"), () -> {
+				definition.remove("breedingItem");
+				screen.rebuild();
+			});
+		}));
+		screen.note("", DesignerFormScreen.tr("breeding_food_help"));
 	}
 
 	static void specialBehavior(DesignerFormScreen screen, JsonObject definition) {
+		screen.anchor("attackResponse");
+		screen.rows.add(new DesignerFormScreen.Row("attackResponse", (x, y, w) -> screen.dropdown(x, y, w,
+				"attack." + BeeDesignerDocument.text(definition, "attackResponse", "none"), new String[]{"attack.none", "attack.fire", "attack.lava"},
+				value -> definition.addProperty("attackResponse", value.substring("attack.".length())))));
+		screen.note("", DesignerFormScreen.tr("attack_response_help"));
+		screen.anchor("invulnerability");
+		screen.rows.add(new DesignerFormScreen.Row("invulnerability", (x, y, w) -> screen.button(x, y, w,
+				DesignerFormScreen.tr("edit_invulnerability"), () -> Minecraft.getInstance().setScreen(new DesignerImmunityScreen(screen, definition)))));
 		screen.field("nestingPreference", definition, "nestingPreference", "");
 		screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> screen.button(x, y, w,
 				DesignerFormScreen.tr("pick_nesting_tag"), () -> Minecraft.getInstance().setScreen(
 						DesignerResourcePicker.open(screen, "block_tag", value -> definition.add("nestingPreference", value.get("id")))))));
 		screen.anchor("flowerType");
-		screen.rows.add(new DesignerFormScreen.Row("flowerType", (x, y, w) -> screen.dropdown(x, y, w,
+		screen.rows.add(new DesignerFormScreen.Row("flowerType", (x, y, w) -> screen.selection(x, y, w,
 				BeeDesignerDocument.text(definition, "flowerType", "blocks"), new String[]{"blocks", "entity_types"}, value -> {
 			definition.addProperty("flowerType", value);
 			screen.rebuild();

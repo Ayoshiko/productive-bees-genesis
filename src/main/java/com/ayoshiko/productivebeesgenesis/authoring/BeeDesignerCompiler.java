@@ -31,6 +31,8 @@ import java.util.stream.Collectors;
 /** 生成标准文件，校验复用实际配方 codec；不另建生产执行器。 */
 public final class BeeDesignerCompiler {
 	public static final Set<String> RECIPE_TYPES = Set.of("productivebees:advanced_beehive",
+			"productivebees:bottler",
+			"productivebees:item_conversion", "productivebees:block_conversion",
 			"productivebees:centrifuge", "productivebees:bee_breeding", "productivebees:bee_conversion",
 			"productivebees:bee_spawning", "productivebees:bee_fishing", "minecraft:crafting_shapeless",
 			"minecraft:crafting_shaped", "productivebeesgenesis:resource_production",
@@ -47,7 +49,7 @@ public final class BeeDesignerCompiler {
 		if (definition == null) {
 			throw new IllegalArgumentException("Missing bee definition");
 		}
-		for (String key : new String[]{"primaryColor", "secondaryColor", "particleColor", "glowColor"}) {
+		for (String key : new String[]{"primaryColor", "secondaryColor", "particleColor", "glowColor", "tertiaryColor"}) {
 			if (definition.has(key) && !string(definition, key).matches("#[0-9a-fA-F]{6}")) {
 				throw new IllegalArgumentException("designer.error.field_color|" + key);
 			}
@@ -63,7 +65,15 @@ public final class BeeDesignerCompiler {
 		}
 		for (String key : new String[]{"flowerItem", "breedingItem"}) {
 			if (definition.has(key)) {
-				ResourceLocation item = ResourceLocation.parse(string(definition, key));
+				String value = string(definition, key);
+				if (key.equals("breedingItem") && value.isEmpty()) {
+					continue;
+				}
+				if (key.equals("breedingItem") && value.startsWith("#")) {
+					ResourceLocation.parse(value.substring(1));
+					continue;
+				}
+				ResourceLocation item = ResourceLocation.parse(value);
 				if (!BuiltInRegistries.ITEM.containsKey(item) || item.toString().equals("minecraft:air")) {
 					throw new IllegalArgumentException(key + ": unknown item " + item);
 				}
@@ -100,13 +110,14 @@ public final class BeeDesignerCompiler {
 			}
 		}
 		for (String key : new String[]{"selfbreed", "createComb", "fireproof", "waterproof", "coldResistant",
-				"selfheal", "irradiated", "isSolitary", "isTranslucent", "isGlowing"}) {
+				"selfheal", "irradiated", "isSolitary", "isTranslucent", "isGlowing", "colorCycle", "useGlowLayer", "translucent",
+				"withered", "blinding", "draconic", "slimy", "teleporting", "munchies", "redstoned", "stringy", "stingless"}) {
 			if (definition.has(key) && (!definition.get(key).isJsonPrimitive()
 					|| !definition.getAsJsonPrimitive(key).isBoolean())) {
 				throw new IllegalArgumentException("designer.error.field_boolean|" + key);
 			}
 		}
-		for (String key : new String[]{"size", "speed", "attack"}) {
+		for (String key : new String[]{"size", "pollinatedSize", "speed", "attack"}) {
 			if (definition.has(key)) {
 				double value = number(definition.get(key), key);
 				double maximum = key.equals("attack") ? Integer.MAX_VALUE : 100;
@@ -117,6 +128,17 @@ public final class BeeDesignerCompiler {
 		}
 		if (definition.has("breedingItemCount")) {
 			integer(definition.get("breedingItemCount"), "breedingItemCount", 1, 64);
+		}
+		if (definition.has("invulnerability")) {
+			if (!definition.get("invulnerability").isJsonArray() || definition.getAsJsonArray("invulnerability").size() > 128) {
+				throw new IllegalArgumentException("designer.error.invulnerability");
+			}
+			for (JsonElement value : definition.getAsJsonArray("invulnerability")) {
+				if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString() || value.getAsString().isBlank()
+						|| value.getAsString().length() > 256 || value.getAsString().chars().anyMatch(Character::isISOControl)) {
+					throw new IllegalArgumentException("designer.error.invulnerability");
+				}
+			}
 		}
 		conditions(definition, "conditions", server, null);
 		BeeCreator.create(bee, definition.deepCopy());
@@ -137,6 +159,9 @@ public final class BeeDesignerCompiler {
 					BeeDesignerMachineRuntime.validate(recipe, server);
 				}
 				validateAmounts(recipe, registries);
+				if (BeeDesignerWorldConversions.supports(recipe.get("type").getAsString())) {
+					BeeDesignerWorldConversions.validate(recipe, bee.toString());
+				}
 				Recipe.CODEC.parse(registries.createSerializationContext(JsonOps.INSTANCE), recipe).getOrThrow();
 				for (String field : new String[]{"parent1", "parent2", "source", "offspring", "bee"}) {
 					if (recipe.has(field) && recipe.get(field).isJsonPrimitive()) {
@@ -190,6 +215,7 @@ public final class BeeDesignerCompiler {
 			throw new IllegalArgumentException("Missing definition, recipes or names object");
 		}
 		validateNames(document.getAsJsonObject("names"));
+		BeeDesignerCredits.validateDocument(document);
 		BeeDesignerLifecycle.validate(document);
 		if (document.has("disabled_recipes")) {
 			var disabled = document.getAsJsonArray("disabled_recipes");
@@ -332,6 +358,9 @@ public final class BeeDesignerCompiler {
 			JsonObject document = com.google.gson.JsonParser.parseString(entry.getValue()).getAsJsonObject();
 			document.remove("_editor_recovery");
 			validateStructure(document);
+			if (BeeDesignerMyriad.recipesOnly(document)) {
+				BeeDesignerMyriad.validateRecipes(document, document);
+			}
 			ResourceLocation bee = ResourceLocation.parse(document.get("id").getAsString());
 			if (!entry.getKey().equals(bee.toString())) {
 				throw new IllegalArgumentException("Managed index identity mismatch");
@@ -340,15 +369,18 @@ public final class BeeDesignerCompiler {
 				throw new IllegalArgumentException("PB name key is shared by bees with the same path: " + bee.getPath());
 			}
 			ResourceLocation definition = ResourceLocation.parse(document.get("definition_path").getAsString());
-			putFile(files, "data/" + definition.getNamespace() + "/productivebees/" + definition.getPath() + ".json",
-					document.get("definition").toString());
+			if (!BeeDesignerMyriad.recipesOnly(document)) {
+				putFile(files, "data/" + definition.getNamespace() + "/productivebees/" + definition.getPath() + ".json",
+						document.get("definition").toString());
+			}
 			for (var recipe : document.getAsJsonObject("recipes").entrySet()) {
 				ResourceLocation id = ResourceLocation.parse(recipe.getKey());
 				BeeDesignerMachineRecipes.recipeIdentity(recipe.getValue().getAsJsonObject(), recipe.getKey());
                 JsonObject source = recipe.getValue().getAsJsonObject();
                 JsonObject previous = sharedRecipes.putIfAbsent(recipe.getKey(), source);
                 if (previous != null) {
-                    if (!previous.equals(source) || !BeeDesignerDocument.text(source, "type", "").equals("productivebees:bee_spawning")
+                    if (!previous.equals(source) || !(BeeDesignerDocument.text(source, "type", "").equals("productivebees:bee_spawning")
+                            || BeeDesignerWorldConversions.supports(BeeDesignerDocument.text(source, "type", "")))
                             || !BeeDesignerReader.belongs(source, bee.toString())) {
                         throw new IllegalArgumentException("designer.error.shared_recipe_conflict|" + recipe.getKey());
                     }

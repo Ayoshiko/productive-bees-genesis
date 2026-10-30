@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineRecipes;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerLifecycle;
+import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import net.minecraft.client.gui.GuiGraphics;
@@ -15,10 +16,12 @@ import net.minecraft.network.chat.Component;
 public final class BeeDesignerScreen extends DesignerFormScreen {
 	private static final String[] TABS = {"library", "basics", "attributes", "acquisition", "production", "review", "myriad"};
 	final boolean canPublish;
+	DesignerTutorialScreen tutorial;
 	private final DesignerDraftHistory history = new DesignerDraftHistory();
 	private final DesignerPreview preview = new DesignerPreview();
 	private final DesignerMyriadPage myriadPage = new DesignerMyriadPage();
 	private final DesignerLibraryPage library = new DesignerLibraryPage();
+	private final DesignerReviewPage review = new DesignerReviewPage();
 	private JsonObject document;
 	private JsonObject myriad;
 	private JsonObject diagnostics;
@@ -34,9 +37,12 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	private long historyAt;
 	private long lastAutoSaveAt;
 	private boolean draftSaving;
+	private boolean discardingDraft;
 	private long draftSaveSequence;
 	private String savedPending = "";
 	private boolean initialized;
+	private boolean refreshPending;
+	private boolean draftsRefreshPending;
 	private boolean publishing;
 	private boolean advanced;
 	private boolean reviewOverview = true;
@@ -90,22 +96,14 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 					value -> navigate(java.util.Arrays.asList(TABS).indexOf(value)));
 			contentTop = frameTop + 54;
 		}
-		if (editing) {
-			int y = contentTop;
-			undoButton = button(left, y, 22, Component.literal("↶"), () -> restore(-1));
-			undoButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(tr("undo")));
-			redoButton = button(left + 25, y, 22, Component.literal("↷"), () -> restore(1));
-			redoButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(tr("redo")));
-			button(left + 50, y, 60, tr("edit_history"), () -> {
-				history.capture(document);
-				minecraft.setScreen(new DesignerEditHistoryScreen(this, history, value -> {
-					document = value;
-					diagnostics = null;
-				}));
-			});
-			button(left + 113, y, 54, tr("preview"), () -> editAction("preview"));
-			button(left + 170, y, Math.max(40, contentWidth - 170), tr(advanced ? "simple_fields" : "advanced"), () -> editAction("advanced"));
-			contentTop += compactHeight() ? 20 : 24;
+		if (editing && compactHeight()) {
+			titleWidth -= 26;
+			menu(frameLeft + frameWidth - 130, frameTop + 5, 24, "editor_tools",
+					new String[]{"undo", "redo", "preview", advanced ? "simple_fields" : "advanced", "edit_history", "collection_export"},
+					value -> true, this::editorTool);
+		} else if (editing) {
+			editorTools(contentTop);
+			contentTop += 24;
 			if (wide) {
 				contentWidth -= 154;
 			}
@@ -128,18 +126,29 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		}
 		if (document != null && BeeDesignerLifecycle.deleted(document) && tab > 0 && tab < 6) {
 			rows.add(new Row("", (x, rowY, rowW) -> addRenderableWidget(new DesignerBeeButton(x, rowY, rowW, document.get("id").getAsString(), () -> {}))));
-			note("", tr(BeeDesignerClient.retired(document.get("id").getAsString()) ? "delete_retired" : "delete_pending"));
+			String lifecycleStatus = BeeDesignerClient.retired(document.get("id").getAsString()) ? "delete_retired" : "delete_pending";
+			if (BeeDesignerLifecycle.purged(document)) {
+				lifecycleStatus = dirty() ? "recycle_purge_pending" : "recycle_purge_complete";
+			}
+			note("", tr(lifecycleStatus));
 			note("", tr("delete_world_assets"));
-			note("", tr("delete_application_help"));
+			if (!BeeDesignerLifecycle.purged(document) || dirty()) {
+				note("", tr("delete_application_help"));
+			}
 			rows.add(new Row("", (x, rowY, rowW) -> {
 				int actionWidth = (rowW - 4) / 2;
 				button(x, rowY, actionWidth, tr("restore_bee"), () -> {
 					loadForRestore(document.get("id").getAsString());
-				});
+				}).active = !BeeDesignerLifecycle.purged(document);
 				primaryButton(x + actionWidth + 4, rowY, actionWidth, tr("apply"), this::confirmApply).active = canPublish && !publishing;
 			}));
 		} else switch (tab) {
 			case 0 -> {
+				if (!DesignerPreferences.enabled("tutorial_seen") && !compactHeight()) {
+					rows.add(new Row("", (x, rowY, rowW) -> button(x, rowY, rowW, tr("tutorial_start"), () -> {
+						DesignerTutorialScreen.start(this);
+					})));
+				}
 				if (publication != null && publication.get("uncertain").getAsBoolean()) {
 					note("", tr("unknown_publish_help"));
 					rows.add(new Row("", (x, rowY, rowW) -> primaryButton(x, rowY, rowW, tr("reconcile"), this::reconcile)
@@ -162,7 +171,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				if (reviewOverview) {
 					DesignerOverviewPage.add(this, document, path -> navigateLocation(path, false));
 				} else {
-					DesignerReviewPage.add(this, document, diagnostics, publication, canPublish, publishing, action -> {
+					review.add(this, document, diagnostics, publication, canPublish, publishing, action -> {
 						if (action.equals("confirm_apply")) {
 							confirmApply();
 						} else {
@@ -212,6 +221,43 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		return frameWidth >= 620 && frameHeight >= 248 && document != null && tab > 0 && tab < 6;
 	}
 
+	private void editorTools(int y) {
+		undoButton = button(left, y, 22, Component.literal("↶"), () -> restore(-1));
+		undoButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(tr("undo")));
+		redoButton = button(left + 25, y, 22, Component.literal("↷"), () -> restore(1));
+		redoButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(tr("redo")));
+		int x = left + 50;
+		java.util.List<String> direct = new java.util.ArrayList<>();
+		String fields = advanced ? "simple_fields" : "advanced";
+		for (String value : new String[]{"preview", fields, "edit_history", "collection_export"}) {
+			int width = Math.max(40, font.width(tr(value)) + 14);
+			if (x + width <= left + contentWidth - 31) {
+				button(x, y, width, tr(value), () -> editorTool(value));
+				direct.add(value);
+				x += width + 4;
+			}
+		}
+		String[] hidden = java.util.Arrays.stream(new String[]{"preview", fields, "edit_history", "collection_export"})
+				.filter(value -> !direct.contains(value)).toArray(String[]::new);
+		if (hidden.length > 0) {
+			menu(left + contentWidth - 26, y, 26, "editor_tools", hidden, value -> true, this::editorTool);
+		}
+	}
+
+	private void editorTool(String action) {
+		if (action.equals("edit_history")) {
+			history.capture(document);
+			minecraft.setScreen(new DesignerEditHistoryScreen(this, history, edited -> {
+				document = edited;
+				diagnostics = null;
+			}));
+		} else if (action.equals("collection_export")) {
+			minecraft.setScreen(new DesignerCollectionScreen(this, java.util.List.of(document.get("id").getAsString()), document));
+		} else {
+			editAction(action);
+		}
+	}
+
 	private void editAction(String action) {
 			switch (action) {
 				case "undo" -> restore(-1);
@@ -226,7 +272,11 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 			}
 	}
 
-	private void navigate(int next) {
+	void navigate(int next) {
+		if (document != null && com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMyriad.recipesOnly(document)
+				&& (next == 1 || next == 2 || next == 4)) {
+			next = 6;
+		}
 		if (next < 0 || next >= TABS.length || document == null && next > 0 && next < 6) {
 			return;
 		}
@@ -234,9 +284,13 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 			history.capture(document);
 		}
 		int direction = Integer.compare(next, tab);
+		if (next != tab && status.startsWith("designer.located|")) {
+			status = "";
+		}
 		tab = next;
 		page = 0;
 		if (tab == 0) {
+			draftsRefreshPending = false;
 			library.request();
 		}
 		if (tab == 6 && myriad == null) {
@@ -244,6 +298,13 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		}
 		rebuild();
 		animatePage(direction);
+	}
+
+	void tutorialPage(int next) {
+		if (next == 5) {
+			reviewOverview = false;
+		}
+		navigate(next);
 	}
 
 
@@ -276,6 +337,18 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	private void myriad() {
 		boolean uncertain = publication != null && BeeDesignerDocument.text(publication, "phase", "").equals("myriad_uncertain");
 		myriadPage.add(this, myriad, canPublish && !publishing, uncertain, this::saveMyriad, this::onClose);
+	}
+
+	void openMyriadRecipes() {
+		JsonObject query = new JsonObject();
+		query.addProperty("id", PBConstants.MYRIADCREATIONS_TYPE_STRING);
+		query.addProperty("recipes_only", true);
+		copyAfterLoad = false;
+		restoreAfterLoad = false;
+		importAfterLoad = null;
+		BeeDesignerClient.cancelRequest(detailRequest);
+		detailRequest = BeeDesignerClient.request("detail", query);
+		status = "designer.status.loading";
 	}
 
 	private void saveMyriad() {
@@ -331,6 +404,10 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 
 	private void confirmApply() {
 		if (BeeDesignerLifecycle.deleted(document)) {
+			if (BeeDesignerLifecycle.purged(document) && !deletionConfirmed && dirty()) {
+				minecraft.setScreen(new DesignerDeleteScreen(this, this, document.get("id").getAsString(), true));
+				return;
+			}
 			if (!deletionConfirmed && !BeeDesignerClient.retired(document.get("id").getAsString())) {
 				minecraft.setScreen(new DesignerDeleteScreen(this, document.get("id").getAsString()));
 				return;
@@ -339,7 +416,8 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				if (confirmed) {
 					submit("apply");
 				}
-			}), tr("apply"), tr("delete_apply_help").copy().append("\n\n").append(tr("reload_warning"))));
+			}), tr("apply"), tr(BeeDesignerLifecycle.purged(document) ? "recycle_purge_apply_help" : "delete_apply_help")
+					.copy().append("\n\n").append(tr("reload_warning"))));
 			return;
 		}
 		if (document.has("_editor_recovery")) {
@@ -370,17 +448,26 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		savedPending = "";
 		applied = BeeDesignerDocument.text(document, "baseline", "new").equals("new") ? "" : BeeDesignerDocument.fingerprint(document);
 		diagnostics = null;
-		tab = 1;
+		tab = com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMyriad.recipesOnly(document) ? 3 : 1;
 		page = 0;
 		status = "designer.status.draft";
 		minecraft.setScreen(this);
 	}
 
 	public void loadBee(String id) {
+		if (id.equals(PBConstants.MYRIADCREATIONS_TYPE_STRING) && !copyAfterLoad && !restoreAfterLoad && importAfterLoad == null) {
+			BeeDesignerClient.cancelRequest(detailRequest);
+			detailRequest = -1;
+			status = "";
+			navigate(6);
+			return;
+		}
 		JsonObject query = new JsonObject();
 		query.addProperty("id", id);
 		query.addProperty("copy", copyAfterLoad);
 		query.addProperty("lifecycle", restoreAfterLoad);
+		query.addProperty("recipes_only", importAfterLoad != null
+				&& com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMyriad.recipesOnly(importAfterLoad));
 		detailRequest = BeeDesignerClient.request("detail", query);
 		status = "designer.status.loading";
 	}
@@ -405,7 +492,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		applied = data.get("baseline").getAsString();
 		deletionConfirmed = true;
 		tab = 5;
-		status = "designer.status.delete_staged";
+		status = BeeDesignerLifecycle.purged(data) ? "designer.status.recycle_purge_staged" : "designer.status.delete_staged";
 		saveDraft();
 		rebuild();
 	}
@@ -442,6 +529,11 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 					importAfterLoad = null;
 					imported.add("baseline", data.get("baseline"));
 					imported.add("definition_path", data.get("definition_path"));
+					if (com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMyriad.recipesOnly(imported)) {
+						imported.add("definition", data.get("definition").deepCopy());
+						imported.add("names", data.get("names").deepCopy());
+						imported.remove("disabled_recipes");
+					}
 					setDocument(imported);
 					applied = BeeDesignerDocument.fingerprint(data);
 					status = "designer.status.imported";
@@ -466,7 +558,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				submitted = "";
 				publishing = false;
 				if (document != null && document.get("id").equals(data.get("id"))) {
-					saveDraft();
+					saveDraft(() -> {}, true);
 				}
 				status = "designer.status.applied";
 				if (BeeDesignerLifecycle.deleted(data)) {
@@ -503,13 +595,15 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 			}
 			case "exported" -> {
 				publishing = false;
-				status = Component.translatable("designer.status.exported", data.get("path").getAsString()).getString();
+				DesignerProjectFiles.exportedOnServer(data.get("path").getAsString());
+				status = Component.translatable(minecraft.getSingleplayerServer() == null ? "designer.status.exported_server" : "designer.status.exported",
+						data.get("path").getAsString()).getString();
 			}
 			case "result" -> {
 				if (!data.get("success").getAsBoolean() && library.failed(sequence, data.get("message").getAsString())) {
 					status = data.get("message").getAsString();
 					if (minecraft.screen == this) {
-						rebuild();
+						refreshFromServer();
 					}
 					return;
 				}
@@ -550,8 +644,23 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 			}
 		}
 		if (minecraft.screen == this) {
-			rebuild();
+			refreshFromServer();
 		}
+	}
+
+	private void refreshFromServer() {
+		if (hasDropdown() || library.gestureInProgress() || isWindowDragging() || isInventoryDragging() || isLeaving()) {
+			refreshPending = true;
+			return;
+		}
+		refreshPending = false;
+		if (draftsRefreshPending) {
+			draftsRefreshPending = false;
+			if (tab == 0) {
+				library.request();
+			}
+		}
+		rebuild();
 	}
 
 	private void locate(String path) {
@@ -582,13 +691,19 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 					return;
 				} else if (path.equals("recipes/" + recipeId)) {
 					anchor = recipeId;
+				} else {
+					openLocated(new DesignerRecipeScreen(this, recipe, recipeId), path, path, error);
+					return;
 				}
 			} else if (path.equals("recipes/" + recipeId)) {
 				anchor = recipeId;
+			} else {
+				openLocated(new DesignerRecipeScreen(this, recipe, recipeId), path, path, error);
+				return;
 			}
 		} else if (path.startsWith("production_nodes/")) {
 			String node = path.substring("production_nodes/".length()).split("/", 2)[0];
-			if (BeeDesignerDocument.object(document, "production_nodes").has(node)) {
+			if (document.has("production_nodes") && document.getAsJsonObject("production_nodes").has(node)) {
 				openLocated(new DesignerProductionScreen(this, document, node), path, path, error);
 				return;
 			}
@@ -629,7 +744,10 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	}
 
 	private String productionNode(String recipeId) {
-		for (var entry : BeeDesignerDocument.object(document, "production_nodes").entrySet()) {
+		if (!document.has("production_nodes")) {
+			return null;
+		}
+		for (var entry : document.getAsJsonObject("production_nodes").entrySet()) {
 			for (var value : entry.getValue().getAsJsonObject().getAsJsonArray("recipe_ids")) {
 				if (value.getAsString().equals(recipeId)) {
 					return entry.getKey();
@@ -664,6 +782,10 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	}
 
 	private void saveDraft(Runnable saved) {
+		saveDraft(saved, false);
+	}
+
+	private void saveDraft(Runnable saved, boolean preserveSuccessStatus) {
 		JsonObject target = document;
 		String snapshot = document.toString();
 		DesignerFormScreen current = minecraft.screen instanceof DesignerFormScreen form ? form : this;
@@ -681,7 +803,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 			if (document != target) {
 				return;
 			}
-			if (!publishing) {
+			if (!publishing && (!preserveSuccessStatus || !message.equals("designer.status.draft_saved"))) {
 				status = message;
 			}
 			if (message.equals("designer.status.draft_saved") && target.toString().equals(snapshot)) {
@@ -727,7 +849,13 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 
 	@Override
 	public void tick() {
+		if (tutorial != null) {
+			tutorial.tick();
+		}
 		long now = System.currentTimeMillis();
+		if (refreshPending && minecraft.screen == this) {
+			refreshFromServer();
+		}
 		if (tab == 0) {
 			library.tick(this);
 		}
@@ -745,6 +873,9 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	}
 
 	void tickDraft() {
+		if (discardingDraft) {
+			return;
+		}
 		long now = System.currentTimeMillis();
 		if (document != null) {
 			if (activeRecovery != null && minecraft.screen == this) {
@@ -776,10 +907,41 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		}
 	}
 
+	void discardLocalDraft(String id, long modified, Runnable discarded, java.util.function.Consumer<String> failed) {
+		JsonObject target = document;
+		boolean current = target != null && target.get("id").getAsString().equals(id);
+		if (current) {
+			discardingDraft = true;
+			draftSaveSequence++;
+			draftSaving = false;
+		}
+		DesignerProjectFiles.discardDraft(id, modified, () -> {
+			discardingDraft = false;
+			if (current && document == target) {
+				document = null;
+				observed = null;
+				observedFingerprint = "";
+				applied = "";
+				savedDraft = "";
+				savedPending = "";
+				activeRecovery = null;
+				diagnostics = null;
+				historyAt = 0;
+				tab = 0;
+				preview.clear();
+			}
+			DesignerDraftIndex.refresh();
+			discarded.run();
+		}, message -> {
+			discardingDraft = false;
+			failed.accept(message);
+		});
+	}
+
 	void draftsUpdated() {
 		if (tab == 0) {
-			library.request();
-			rebuild();
+			draftsRefreshPending = true;
+			refreshFromServer();
 		}
 	}
 
@@ -788,6 +950,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		super.renderContent(graphics, mouseX, mouseY, partialTick);
 		if (tab == 0) {
 			library.renderFooter(this, graphics);
+			library.renderSelection(this, graphics);
 		}
 		if (hasInlinePreview()) {
 			int x = frameLeft + frameWidth - 160;
@@ -802,9 +965,28 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	}
 
 	@Override
+	protected boolean clickContent(double x, double y, int button) {
+		if (tab == 0 && !hasDropdown() && !isInventoryDragging() && library.press(this, x, y, button)) {
+			return true;
+		}
+		return super.clickContent(x, y, button);
+	}
+
+	@Override
+	protected boolean releaseContent(double x, double y, int button) {
+		if (tab == 0 && library.release(this, x, y, button)) {
+			return true;
+		}
+		return super.releaseContent(x, y, button);
+	}
+
+	@Override
 	protected boolean dragContent(double x, double y, int button, double dx, double dy) {
 		if (isWindowDragging()) {
 			return super.dragContent(x, y, button, dx, dy);
+		}
+		if (tab == 0 && button == 0 && library.drag(this, x, y)) {
+			return true;
 		}
 		if (!hasDropdown() && !isInventoryDragging() && hasInlinePreview()
 				&& x > frameLeft + frameWidth - 160 && x < frameLeft + frameWidth - 12
@@ -834,7 +1016,14 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 
 	@Override
 	public boolean keyPressed(int key, int scan, int modifiers) {
+		if (tutorial != null && key == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+			tutorial.finish();
+			return true;
+		}
 		if (isLeaving()) {
+			return true;
+		}
+		if (tab == 0 && !hasDropdown() && !(getFocused() instanceof EditBox) && library.key(this, key)) {
 			return true;
 		}
 		if (!hasDropdown() && document != null && hasControlDown() && key == org.lwjgl.glfw.GLFW.GLFW_KEY_S) {
@@ -918,6 +1107,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		} else {
 			JsonObject copy = clean;
 			copy.addProperty("baseline", "new");
+			copy.remove("disabled_recipes");
 			setDocument(copy);
 			status = "designer.status.imported";
 			restoreRecovery();

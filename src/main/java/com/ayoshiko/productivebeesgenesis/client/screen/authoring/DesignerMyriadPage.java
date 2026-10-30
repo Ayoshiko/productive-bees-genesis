@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
-import com.ayoshiko.productivebeesgenesis.client.screen.FilterListScreen;
 import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -19,7 +18,7 @@ final class DesignerMyriadPage {
 		});
 		int saveWidth = Math.min(110, screen.contentWidth - 180);
 		screen.button(screen.left + saveWidth + 4, screen.footerY(), 88,
-				DesignerFormScreen.tr("random_filter"), () -> mc.setScreen(new FilterListScreen(screen)));
+				DesignerFormScreen.tr("random_filter"), () -> mc.setScreen(new DesignerFilterScreen(screen)));
 		screen.contentTop += 24;
 		screen.note("", DesignerFormScreen.tr("reload_warning"));
 		if (snapshot == null) {
@@ -32,14 +31,24 @@ final class DesignerMyriadPage {
 				screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> screen.button(x, y, w,
 						DesignerFormScreen.tr("preview"), () -> mc.setScreen(new DesignerPreviewScreen(screen, preview(values))))));
 			}
+			if (group.equals("attributes")) {
+				flower(screen, values);
+			}
 			if (group.equals("production")) {
 				screen.note("", DesignerFormScreen.tr("myriad_random_production"));
+			}
+			if (group.equals("acquisition") && screen instanceof BeeDesignerScreen editor) {
+				screen.section("myriad_additional_recipes");
+				screen.note("", DesignerFormScreen.tr("myriad_additional_recipes_help"));
+				screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> screen.primaryButton(x, y, w,
+						DesignerFormScreen.tr("myriad_edit_recipes"), editor::openMyriadRecipes)));
+				screen.section("myriad_builtin_recipes");
 			}
 			if (uncertain) {
 				screen.note("", DesignerFormScreen.tr("error.myriad_unknown"));
 			}
 			for (var entry : values.entrySet()) {
-				if (group.equals(group(entry.getKey())) && !entry.getKey().equals("renderer")) {
+				if (group.equals(group(entry.getKey())) && !java.util.Set.of("renderer", "flowerItem", "flowerBlock", "flowerTag", "flowerFluid").contains(entry.getKey())) {
 					field(screen, values, entry.getKey(), snapshot.getAsJsonObject("ranges"));
 				}
 			}
@@ -50,10 +59,63 @@ final class DesignerMyriadPage {
 		screen.button(screen.left + screen.contentWidth - 80, screen.footerY(), 80, Component.translatable("gui.done"), close);
 	}
 
+	private void flower(DesignerFormScreen screen, JsonObject values) {
+		String selected = "flowerItem";
+		for (String key : new String[]{"flowerFluid", "flowerBlock", "flowerTag"}) {
+			if (!values.get(key).getAsString().isEmpty()) {
+				selected = key;
+			}
+		}
+		String field = selected;
+		screen.section("flower_section");
+		screen.rows.add(new DesignerFormScreen.Row("flower_type", (x, y, w) -> screen.selection(x, y, w, field,
+				new String[]{"flowerItem", "flowerBlock", "flowerTag", "flowerFluid"}, value -> {
+			for (String key : new String[]{"flowerBlock", "flowerTag", "flowerFluid"}) {
+				values.addProperty(key, "");
+			}
+			if (!value.equals("flowerItem")) {
+				values.addProperty(value, switch (value) {
+					case "flowerBlock" -> "minecraft:gold_block";
+					case "flowerTag" -> "minecraft:flowers";
+					default -> "minecraft:water";
+				});
+			}
+		}), 20, true));
+		if (field.equals("flowerItem")) {
+			screen.item("flower", values, field, "productivebees:honey_treat");
+		} else if (field.equals("flowerBlock")) {
+			screen.blockFlower(values);
+		} else {
+			screen.field("flower", values, field, "");
+			String kind = "block_tag";
+			if (field.equals("flowerFluid")) {
+				kind = "fluid";
+			} else if (values.get("flowerType").getAsString().equals("entity_types")) {
+				kind = "entity_tag";
+			}
+			String browser = kind;
+			screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> screen.button(x, y, w, DesignerFormScreen.tr("pick_item"), () ->
+					Minecraft.getInstance().setScreen(DesignerResourcePicker.open(screen, browser,
+							value -> values.add(field, value.get("id")))))));
+		}
+	}
+
 	private void field(DesignerFormScreen screen, JsonObject values, String key, JsonObject ranges) {
+		screen.anchor(key);
 		var value = values.get(key);
 		if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean()) {
 			screen.toggle(key, values, key, false);
+		} else if (key.equals("invulnerability")) {
+			screen.rows.add(new DesignerFormScreen.Row(key, (x, y, w) -> screen.button(x, y, w,
+					DesignerFormScreen.tr("edit_invulnerability"), () -> Minecraft.getInstance().setScreen(new DesignerImmunityScreen(screen, values, true)))));
+		} else if (key.equals("attackResponse")) {
+			screen.rows.add(new DesignerFormScreen.Row(key, (x, y, w) -> screen.dropdown(x, y, w,
+					"attack." + value.getAsString(), new String[]{"attack.none", "attack.fire", "attack.lava"},
+					selected -> values.addProperty(key, selected.substring("attack.".length())))));
+		} else if (key.equals("flowerType")) {
+			screen.choice(key, values, key, "blocks", "blocks", "entity_types");
+		} else if (key.equals("breedingItem")) {
+			DesignerBeeFields.breedingFood(screen, values);
 		} else if (key.endsWith("Item") || key.equals("spawningNest")) {
 			screen.item(key, values, key, "");
 		} else if (key.contains("Parent") || key.equals("conversionSource") || key.equals("conversionResult")) {
@@ -95,7 +157,8 @@ final class DesignerMyriadPage {
 				|| key.equals("breedingEnabled")) {
 			return "acquisition";
 		}
-		if (key.endsWith("Color") || key.equals("size") || key.equals("createComb") || key.equals("renderer") || key.equals("model")
+		if (key.endsWith("Color") || key.equals("size") || key.equals("pollinatedSize") || key.equals("useGlowLayer") || key.equals("renderTransform")
+				|| key.equals("createComb") || key.equals("renderer") || key.equals("model")
 				|| key.equals("animation") || key.equals("beeTexture") || key.equals("particleType") || key.equals("translucent") || key.equals("colorCycle")) {
 			return "appearance";
 		}
@@ -105,10 +168,13 @@ final class DesignerMyriadPage {
 	private static JsonObject preview(JsonObject values) {
 		JsonObject document = com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument.create("productivebees:myriadcreations");
 		JsonObject definition = values.deepCopy();
-		for (String key : new String[]{"model", "animation", "beeTexture", "nestingPreference", "postPollination"}) {
+		for (String key : new String[]{"model", "animation", "beeTexture", "nestingPreference", "postPollination", "tertiaryColor"}) {
 			if (definition.has(key) && definition.get(key).getAsString().isBlank()) {
 				definition.remove(key);
 			}
+		}
+		if (definition.has("pollinatedSize") && definition.get("pollinatedSize").getAsDouble() <= 0) {
+			definition.remove("pollinatedSize");
 		}
 		document.add("definition", definition);
 		return document;

@@ -124,6 +124,11 @@ public final class Ae2InputTransfer {
     }
 
     void finish(Ae2PendingItemBuffer pending, long tick, boolean networkOnly, int previousRetries) {
+        finish(pending, tick, networkOnly, previousRetries, true);
+    }
+
+    void finish(Ae2PendingItemBuffer pending, long tick, boolean networkOnly, int previousRetries,
+            boolean retryFailed) {
         if (!"known".equals(phase)) throw new IllegalStateException("Input result requires reconciliation");
         if (known > 0) {
             String identity = fingerprint();
@@ -131,7 +136,8 @@ public final class Ae2InputTransfer {
                     : pending.enqueue(identity, known, tick);
             known -= retained;
             if (known != 0) throw new IllegalStateException("Input pending capacity changed");
-            pending.recordFailure(identity, tick, previousRetries);
+            if (retryFailed) pending.recordFailure(identity, tick, previousRetries);
+            else pending.recordDeferred(identity, tick, previousRetries);
         }
         clear();
     }

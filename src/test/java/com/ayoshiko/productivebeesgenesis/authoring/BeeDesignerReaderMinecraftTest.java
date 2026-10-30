@@ -86,6 +86,7 @@ class BeeDesignerReaderMinecraftTest {
             Recipe<?> recipe = unpacked(new ItemStack(Items.DIAMOND));
             assertTrue(Recipe.CODEC.encodeStart(registries().createSerializationContext(JsonOps.INSTANCE), recipe).error().isPresent());
             MinecraftServer server = mock(MinecraftServer.class);
+            when(server.isSameThread()).thenReturn(true);
             RecipeManager manager = mock(RecipeManager.class);
             ResourceManager resources = mock(ResourceManager.class);
             when(server.registryAccess()).thenReturn(registries());

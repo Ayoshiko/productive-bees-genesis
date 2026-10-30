@@ -9,11 +9,11 @@ import java.util.Set;
 
 /** 诊断和总览共享精确字段路径；配方 ID 本身允许包含斜杠。 */
 final class DesignerFieldNavigation {
-	private static final Set<String> APPEARANCE = Set.of("primaryColor", "secondaryColor", "particleColor", "glowColor",
+	private static final Set<String> APPEARANCE = Set.of("primaryColor", "secondaryColor", "particleColor", "glowColor", "tertiaryColor", "pollinatedSize", "colorCycle", "useGlowLayer",
 			"size", "createComb", "description", "beeTexture", "renderer", "model", "animation", "renderTransform", "translucent", "conditions");
 	private static final Set<String> ADVANCED = Set.of("description", "beeTexture", "animation", "renderTransform", "translucent",
 			"conditions", "selfheal", "irradiated", "withered", "blinding", "draconic", "slimy", "teleporting", "munchies",
-			"redstoned", "stringy", "stingless", "nestingPreference", "flowerType", "postPollination", "particleType");
+			"redstoned", "stringy", "stingless", "nestingPreference", "flowerType", "postPollination", "particleType", "attackResponse", "invulnerability");
 
 	private DesignerFieldNavigation() {
 	}
@@ -62,6 +62,9 @@ final class DesignerFieldNavigation {
 			return false;
 		}
 		String type = BeeDesignerDocument.text(recipe, "type", "");
+		if (com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerWorldConversions.supports(type)) {
+			return true;
+		}
 		return type.equals("productivebees:advanced_beehive") || type.equals("productivebees:centrifuge")
 				|| type.equals("productivebeesgenesis:resource_production") || type.equals("productivebeesgenesis:resource_centrifuging");
 	}

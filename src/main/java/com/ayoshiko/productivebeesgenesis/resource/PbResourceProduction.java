@@ -40,6 +40,9 @@ public final class PbResourceProduction {
 
 	/** 在上游 int 计数递增前阻止已到期但无空间的受管理蜂种。 */
 	public static boolean shouldTick(AdvancedBeehiveBlockEntityAbstract hive, BeehiveBlockEntity.Occupant occupant) {
+		if (hive.getLevel() instanceof ServerLevel level && ResourceRuntime.reloadBlocked(level.getServer())) {
+			return false;
+		}
 		var scope = current(hive);
 		if (scope == null) return true;
 		long readyAt = (long) occupant.minTicksInHive() + (scope.simulated ? 450 : 0);
@@ -50,6 +53,10 @@ public final class PbResourceProduction {
 	/** 放在 Occupant.createEntity 调用处；普通释放已通过天气／出口检查，尚无生产副作用。 */
 	public static boolean beforeCreate(AdvancedBeehiveBlockEntityAbstract hive, BeehiveBlockEntity.Occupant occupant,
 			boolean simulated, BeehiveBlockEntity.BeeReleaseStatus releaseStatus) {
+		if (releaseStatus != BeehiveBlockEntity.BeeReleaseStatus.EMERGENCY
+				&& hive.getLevel() instanceof ServerLevel level && ResourceRuntime.reloadBlocked(level.getServer())) {
+			return false;
+		}
 		var scope = current(hive);
 		if (scope == null || releaseStatus == BeehiveBlockEntity.BeeReleaseStatus.EMERGENCY) return true;
 		if (!simulated && releaseStatus != BeehiveBlockEntity.BeeReleaseStatus.HONEY_DELIVERED) return true;

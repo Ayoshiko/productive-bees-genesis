@@ -228,7 +228,7 @@ final class DesignerAeKeyPicker extends DesignerFormScreen {
 				DesignerAeItemKey.selectKey(data, key);
 				String type = key.getType().getId().toString();
 				Component label = key.getDisplayName().copy().append(" · " + type + " · " + key.getId());
-				String search = (label.getString() + " " + key.getType().getDescription().getString()).toLowerCase(Locale.ROOT);
+				String search = DesignerSearch.indexed(label.getString() + " " + key.getType().getDescription().getString());
 				Entry entry = new Entry(type, key.getModId(), search, label, data);
 				if (identities.add(data.toString())) {
 					entries.add(entry);

@@ -3,10 +3,14 @@ package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineRecipes;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerProtocol;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+
+import java.util.List;
 
 final class DesignerMachinePicker extends DesignerFormScreen {
 	private final Screen parent;
@@ -15,12 +19,10 @@ final class DesignerMachinePicker extends DesignerFormScreen {
 	private JsonObject catalog;
 	private String query = "";
 	private String selected = "";
-	private long request;
+	private final DesignerRemoteCatalog remote = new DesignerRemoteCatalog("machine");
 	private long searchAt;
 	private int catalogPage;
 	private boolean loading;
-	private boolean requested;
-	private long requestedAt;
 	private final String replacementId;
 
 	DesignerMachinePicker(Screen parent, JsonObject document) {
@@ -49,13 +51,13 @@ final class DesignerMachinePicker extends DesignerFormScreen {
 				new String[]{"all_hosts", "MI", "MBD2", "MMR"}, value -> true, value -> {
 			options.addProperty("host", value);
 			catalogPage = 0;
-			request();
 			rebuild();
 		});
 		contentTop += 24;
-		if (!requested) {
+		if (!remote.started()) {
 			request();
 		}
+		filterCatalog();
 		if (loading) {
 			note("", tr("status.loading_machines"));
 		}
@@ -67,7 +69,7 @@ final class DesignerMachinePicker extends DesignerFormScreen {
 						machineName(entry).copy().append(" · " + id), id.equals(selected), () -> {
 					selected = id;
 					rebuild();
-				})).active = !loading));
+				})).active = !loading && remote.problem().isBlank()));
 			}
 			if (catalog.getAsJsonArray("entries").isEmpty() && !loading) {
 				note("", tr("machine_none"));
@@ -93,7 +95,8 @@ final class DesignerMachinePicker extends DesignerFormScreen {
 			request();
 			rebuild();
 		}).active = !loading;
-		primaryButton(left + 126, footerY(), Math.max(50, contentWidth - 197), tr(replacementId.isEmpty() ? "machine_create" : "machine_replace"), this::create).active = !loading && selected() != null;
+		primaryButton(left + 126, footerY(), Math.max(50, contentWidth - 197), tr(replacementId.isEmpty() ? "machine_create" : "machine_replace"), this::create)
+				.active = !loading && remote.problem().isBlank() && selected() != null;
 		button(left + contentWidth - 65, footerY(), 65, Component.translatable("gui.cancel"), this::onClose);
 	}
 
@@ -115,12 +118,15 @@ final class DesignerMachinePicker extends DesignerFormScreen {
 
 	static Component machineName(JsonObject descriptor) {
 		if (descriptor.has("display_name")) {
-			return Component.Serializer.fromJson(descriptor.get("display_name"), net.minecraft.client.Minecraft.getInstance().level.registryAccess());
+			return Component.Serializer.fromJson(descriptor.get("display_name"), Minecraft.getInstance().level.registryAccess());
 		}
 		return Component.literal(BeeDesignerDocument.text(descriptor, "name", BeeDesignerDocument.text(descriptor, "machine", "")));
 	}
 
 	private void createOrReplace() {
+		if (remote.loading() || !remote.problem().isBlank()) {
+			return;
+		}
 		JsonObject descriptor = selected();
 		if (descriptor == null) {
 			return;
@@ -162,41 +168,50 @@ final class DesignerMachinePicker extends DesignerFormScreen {
 
 	private void changePage(int offset) {
 		catalogPage += offset;
-		request();
-	}
-
-	private void request() {
-		requested = true;
-		JsonObject query = new JsonObject();
-		query.addProperty("kind", "machine");
-		query.addProperty("host", options.get("host").getAsString());
-		query.addProperty("search", this.query);
-		query.addProperty("page", catalogPage);
-		request = BeeDesignerClient.request("materials", query);
-		loading = true;
-		requestedAt = System.currentTimeMillis();
-		status = "designer.status.loading_machines";
-		if (request < 0) {
-			failed(request, "designer.error.designer_session");
-		}
-	}
-
-	void receive(long sequence, JsonObject catalog) {
-		if (sequence != request || !catalog.get("kind").getAsString().equals("machine")) {
-			return;
-		}
-		this.catalog = catalog;
-		loading = false;
-		catalogPage = catalog.get("page").getAsInt();
-		if (selected() == null) {
-			selected = catalog.getAsJsonArray("entries").isEmpty() ? "" : catalog.getAsJsonArray("entries").get(0).getAsJsonObject().get("id").getAsString();
-		}
-		status = "";
 		rebuild();
 	}
 
+	private void request() {
+		remote.start();
+		filterCatalog();
+	}
+
+	void receive(long sequence, JsonObject catalog) {
+		if (!remote.receive(sequence, catalog) || remote.loading()) {
+			return;
+		}
+		filterCatalog();
+		if (selected() == null) {
+			selected = this.catalog == null || this.catalog.getAsJsonArray("entries").isEmpty() ? ""
+					: this.catalog.getAsJsonArray("entries").get(0).getAsJsonObject().get("id").getAsString();
+		}
+		rebuild();
+	}
+
+	private void filterCatalog() {
+		loading = remote.loading();
+		status = remote.problem().isBlank() ? (loading ? "designer.status.loading_machines" : "") : remote.problem();
+		if (remote.loading() || remote.metadata() == null) {
+			catalog = null;
+			return;
+		}
+		var filter = DesignerSearch.compile(query);
+		String host = options.get("host").getAsString();
+		var matches = remote.entries().stream().filter(entry -> host.equals("all_hosts") || host.equals(entry.get("host").getAsString()))
+				.filter(entry -> filter.matches(ResourceLocation.parse(entry.get("id").getAsString()).getNamespace(),
+						DesignerSearch.indexed(entry.get("id").getAsString() + " " + machineName(entry).getString()), List.of())).toList();
+		int pages = Math.max(1, (matches.size() + 23) / 24);
+		catalogPage = Math.max(0, Math.min(catalogPage, pages - 1));
+		catalog = remote.metadata().deepCopy();
+		var entries = new JsonArray();
+		matches.stream().skip((long) catalogPage * 24).limit(24).forEach(entries::add);
+		catalog.add("entries", entries);
+		catalog.addProperty("pages", pages);
+		catalog.addProperty("page", catalogPage);
+	}
+
 	void failed(long sequence, String message) {
-		if (sequence == request) {
+		if (remote.fail(sequence, message)) {
 			loading = false;
 			status = message;
 			if (minecraft.screen == this) {
@@ -210,16 +225,22 @@ final class DesignerMachinePicker extends DesignerFormScreen {
 		super.tick();
 		if (searchAt != 0 && System.currentTimeMillis() >= searchAt) {
 			searchAt = 0;
-			request();
 			rebuild();
 		}
-		if (loading && System.currentTimeMillis() - requestedAt >= 8000) {
-			failed(request, "designer.error.catalog_timeout");
+		if (remote.tick()) {
+			rebuild();
 		}
 	}
 
 	@Override
+	public void removed() {
+		remote.cancel();
+		super.removed();
+	}
+
+	@Override
 	public void onClose() {
+		remote.cancel();
 		minecraft.setScreen(parent);
 	}
 }
