@@ -255,12 +255,13 @@ public final class MekCentrifugeEnergyScaling {
 	}
 
 	/**
-	 * Capacity only depends on ENERGY upgrades. Reading that counter directly keeps
-	 * accelerated sub-ticks allocation-free without walking unrelated upgrade types.
+	 * 普通与强化能量升级共同决定容量；直接读取两个计数，不遍历无关升级。
 	 */
 	private static long upgradeFingerprint(PbRecipeContext context) {
 		if (!(context instanceof IUpgradeTile upgradeTile)) return Long.MIN_VALUE;
-		return upgradeTile.getComponent().getUpgrades(Upgrade.ENERGY);
+		int energy = upgradeTile.getComponent().getUpgrades(Upgrade.ENERGY);
+		int empoweredEnergy = MekUpgradeSupport.getEmpoweredEnergyUpgrades(upgradeTile);
+		return ((long) energy << Integer.SIZE) | Integer.toUnsignedLong(empoweredEnergy);
 	}
 
 	private static long normalCapacityFor(PbRecipeContext context,

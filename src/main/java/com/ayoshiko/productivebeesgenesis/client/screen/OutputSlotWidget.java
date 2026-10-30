@@ -80,7 +80,7 @@ public final class OutputSlotWidget extends GuiElement {
 	 * 绘制槽位数量数字，复用 AE2 蜜脾拉取窗口的固定字号样式。
 	 */
 	private void drawAmount(GuiGraphics guiGraphics, Font font, long amount) {
-		LargeStackCountRenderer.renderCountAt(guiGraphics, font, relativeX, relativeY, amount);
+		LargeStackCountRenderer.renderCountAt(guiGraphics, font, relativeX + 1, relativeY + 1, amount);
 	}
 
 	@Override

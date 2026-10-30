@@ -130,7 +130,7 @@ class Ae2OptionalDependencyGuardTest {
 		// 逐个依赖块检查 type="optional"：非 optional 会让加载器强制要求该模组存在
 		for (String modId : List.of(
 				"ae2", "appflux", "appmek", "ars_nouveau", "arseng", "mekanism_extras", "emextras", "evolvedmekanism",
-				"mekanism_empowered", "jei", "jade", "kubejs", "jdte", "useless_mod", "iris",
+				"mekanism_empowered", "mekanism_empowered_unleashed", "jei", "jade", "kubejs", "jdte", "useless_mod", "iris",
 				"buildinggadgets2", "mekenergistics", "create", "meinfinitycell",
 				"industrialforegoingsouls", "soulplied_energistics", "projecte", "appliedpneumatics",
 				"experiencelib", "appex", "ae2lt", "pneumaticcraft")) {

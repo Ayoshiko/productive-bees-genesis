@@ -91,6 +91,13 @@ config="${mod_id}.iris.mixins.json"
     ordering="AFTER"
     side="BOTH"
 
+# MekanismEmpoweredUnleashed 与原版 Empowered 使用同一升级 API，分别按各自模组 ID 守卫。
+[[dependencies.${mod_id}]]
+    modId="mekanism_empowered_unleashed"
+    type="optional"
+    ordering="AFTER"
+    side="BOTH"
+
 # Iris 光影可选依赖（提供着色器兼容层，仅客户端）
 # IrisConfigPlugin 会检测 Iris 是否安装，仅安装时才应用 Iris Mixin
 [[dependencies.${mod_id}]]

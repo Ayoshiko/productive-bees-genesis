@@ -39,6 +39,7 @@ final class DesignerPreferences {
         result.addProperty("alternating_rows", true);
 		result.addProperty("navigation_layout", "adaptive");
 		result.addProperty("field_layout", "adaptive");
+		result.addProperty("gene_layout", "dropdown");
 		result.addProperty("collapse_sections", true);
 		result.addProperty("catalog_help", true);
 		result.addProperty("tutorial_seen", false);
@@ -67,6 +68,7 @@ final class DesignerPreferences {
         choice(result, "density", Set.of("compact", "comfortable", "spacious"));
 		choice(result, "navigation_layout", Set.of("adaptive", "menus", "expanded"));
 		choice(result, "field_layout", Set.of("adaptive", "single", "columns"));
+		choice(result, "gene_layout", Set.of("dropdown", "buttons"));
 		choice(result, "skin", Set.of("smooth", "ae"));
 		choice(result, "font_mode", Set.of("auto", "sdf", "vanilla"));
 		choice(result, "surface_material", Set.of("solid", "glass"));

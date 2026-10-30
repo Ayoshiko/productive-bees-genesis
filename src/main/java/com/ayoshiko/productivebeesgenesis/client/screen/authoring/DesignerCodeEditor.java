@@ -29,6 +29,7 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 	private final Model model;
 	private final List<Line> lines = new ArrayList<>();
 	private final List<Token> tokens = new ArrayList<>();
+	private final List<DesignerTextLayout.Source> styledLines = new ArrayList<>();
 	private final List<String> history = new ArrayList<>();
 	private int historyCursor = -1;
 	private boolean restoring;
@@ -219,6 +220,7 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 	private void reflow(String text) {
 		lines.clear();
 		tokens.clear();
+		styledLines.clear();
 		lineStarts.clear();
 		lineStarts.add(0);
 		for (int index = 0; index < text.length(); index++) {
@@ -259,6 +261,30 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 			}
 			tokens.add(new Token(matcher.start(), matcher.end(), kind));
 		}
+		int tokenIndex = 0;
+		for (Line visible : lines) {
+			while (tokenIndex < tokens.size() && tokens.get(tokenIndex).end <= visible.start) {
+				tokenIndex++;
+			}
+			List<DesignerTextLayout.Run> runs = new ArrayList<>();
+			int position = visible.start;
+			for (int index = tokenIndex; index < tokens.size() && tokens.get(index).start < visible.end; index++) {
+				Token token = tokens.get(index);
+				int start = Math.max(position, token.start);
+				int end = Math.min(visible.end, token.end);
+				if (start > position) {
+					runs.add(new DesignerTextLayout.Run(position - visible.start, start - visible.start, Style.EMPTY));
+				}
+				if (start < end) {
+					runs.add(new DesignerTextLayout.Run(start - visible.start, end - visible.start, Style.EMPTY.withColor(color(token.kind))));
+					position = end;
+				}
+			}
+			if (position < visible.end) {
+				runs.add(new DesignerTextLayout.Run(position - visible.start, visible.end - visible.start, Style.EMPTY));
+			}
+			styledLines.add(new DesignerTextLayout.Source(text.substring(visible.start, visible.end), List.copyOf(runs), false));
+		}
 	}
 
 
@@ -277,19 +303,10 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 		int paired = bracketPairs.getOrDefault(bracket, -1);
 		int first = Math.max(0, (int) scrollAmount() / 9 - 1);
 		int last = Math.min(lines.size(), first + height / 9 + 3);
-		int tokenIndex = 0;
-		int upper = tokens.size();
-		int offset = first < lines.size() ? lines.get(first).start : 0;
-		while (tokenIndex < upper) {
-			int middle = (tokenIndex + upper) / 2;
-			if (tokens.get(middle).end <= offset) {
-				tokenIndex = middle + 1;
-			} else {
-				upper = middle;
-			}
-		}
+
 		for (int index = first; index < last; index++) {
 			Line line = lines.get(index);
+			var source = styledLines.get(index);
 			int y = getY() + innerPadding() + index * 9;
 			int origin = getX() + innerPadding();
 			if (isFocused() && index == model.getLineAtCursor()) {
@@ -301,15 +318,15 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 				if (match.end() > line.start) {
 					int start = Math.max(line.start, match.start());
 					int end = Math.min(line.end, match.end());
-					graphics.fill(origin + font.width(text.substring(line.start, start)), y,
-							origin + font.width(text.substring(line.start, end)), y + 9, 0x60D9AE35);
+					DesignerFonts.selection(graphics, font, source, start - line.start, end - line.start, origin, y,
+							DesignerTheme.light ? 0x30D9AE35 : 0x50D9AE35);
 				}
 			}
 			if (paired >= 0) {
 				for (int position : new int[]{bracket, paired}) {
 					if (position >= line.start && position < line.end) {
-						int x = origin + font.width(text.substring(line.start, position));
-						graphics.fill(x, y, x + font.width(text.substring(position, position + 1)), y + 9, 0x50569AB5);
+						DesignerFonts.selection(graphics, font, source, position - line.start, position + 1 - line.start,
+								origin, y, 0x30569AB5);
 					}
 				}
 			}
@@ -319,40 +336,16 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 			if (model.hasSelection() && model.start() < line.end && model.end() > line.start) {
 				int start = Math.max(line.start, model.start());
 				int end = Math.min(line.end, model.end());
-				DesignerFonts.selection(graphics, font, text.substring(line.start, line.end),
-						start - line.start, end - line.start, origin, y, 0x6049A9D9);
+				DesignerFonts.selection(graphics, font, source, start - line.start, end - line.start, origin, y,
+						DesignerTheme.colors().accent() & 0xFFFFFF | (DesignerTheme.light ? 0x30000000 : 0x50000000));
 			}
-			while (tokenIndex < tokens.size() && tokens.get(tokenIndex).end <= line.start) {
-				tokenIndex++;
-			}
-			int position = line.start;
-			float x = origin;
-			for (int token = tokenIndex; token < tokens.size() && tokens.get(token).start < line.end; token++) {
-				Token current = tokens.get(token);
-				int start = Math.max(position, current.start);
-				int end = Math.min(line.end, current.end);
-				if (start > position) {
-					x = draw(graphics, text.substring(position, start), x, y, DesignerFormScreen.FOREGROUND);
-				}
-				if (start < end) {
-					x = draw(graphics, text.substring(start, end), x, y, color(current.kind));
-					position = end;
-				}
-			}
-			if (position < line.end) {
-				draw(graphics, text.substring(position, line.end), x, y, DesignerFormScreen.FOREGROUND);
-			}
+			graphics.drawString(font, DesignerTextLayout.sequence(source), origin, y, DesignerFormScreen.FOREGROUND, false);
 			if (isFocused() && index == model.getLineAtCursor() && net.minecraft.Util.getMillis() / 500 % 2 == 0) {
 				int cursor = Math.max(line.start, Math.min(line.end, model.cursor()));
-				int cursorX = origin + Math.round(DesignerFonts.caret(font, text.substring(line.start, line.end), cursor - line.start));
+				int cursorX = origin + Math.round(DesignerFonts.caret(font, source, cursor - line.start));
 				graphics.fill(cursorX, y - 1, cursorX + 1, y + 9, DesignerFormScreen.ACCENT);
 			}
 		}
-	}
-
-	private float draw(GuiGraphics graphics, String text, float x, int y, int color) {
-		DesignerFonts.drawPlain(graphics, font, text, x, y, color);
-		return x + font.getSplitter().stringWidth(text);
 	}
 
 	@Override
@@ -437,7 +430,7 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 	private void seek(double x, double y) {
 		int index = Math.max(0, Math.min(lines.size() - 1, (int) ((y - getY() - innerPadding() + scrollAmount()) / 9)));
 		Line line = lines.get(index);
-		int hit = DesignerFonts.hit(font, getValue().substring(line.start, line.end), (float) (x - getX() - innerPadding()));
+		int hit = DesignerFonts.hit(font, styledLines.get(index), (float) (x - getX() - innerPadding()));
 		model.seekCursor(Whence.ABSOLUTE, line.start + hit);
 	}
 

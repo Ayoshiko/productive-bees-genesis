@@ -8,7 +8,6 @@ import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import cy.jdkdigital.productivebees.ProductiveBeesConfig;
 import mekanism.common.tile.base.TileEntityMekanism;
-import mekanism.common.util.MekanismUtils;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
@@ -565,13 +564,8 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * @return MEK 速度升级的时间倍率（0~1，越小越快）
 	 */
 	private float getMekSpeedTimeMultiplier() {
-		// 由 MekanismUtils 统一承接 Mekanism Unleashed/MekanismEmpowered 的运行时 mixin。
 		if (!(tile instanceof TileEntityMekanism mekTile)) return 1.0f;
-		// 不能传 def=1：MU 的 getTicksD 在结果 < 1 tick 时返回负倒数，会被 max(0) 截成 0，
-		// 导致 1 个速度升级就把处理时间压到 1 tick（回归问题）。用大基数采样后还原倍率。
-		final long sampleBase = 1_000_000L;
-		double scaled = MekanismUtils.getTicksD(mekTile, (int) sampleBase);
-		return scaled > 0 ? (float) Math.min(1.0, scaled / sampleBase) : 1.0f;
+		return MekUpgradeSupport.getSpeedTimeMultiplier(mekTile);
 	}
 
 	/**

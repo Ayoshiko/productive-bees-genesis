@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.google.gson.JsonObject;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -67,10 +68,13 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
         preferenceChoice("settings_density", "density", "compact", "comfortable", "spacious");
 		preferenceChoice("settings_navigation_layout", "navigation_layout", "adaptive", "menus", "expanded");
 		preferenceChoice("settings_field_layout", "field_layout", "adaptive", "single", "columns");
+		preferenceChoice("settings_gene_layout", "gene_layout", "dropdown", "buttons");
+		note("", tr("settings_gene_layout_help"));
 		preferenceToggle("settings_collapse_sections", "collapse_sections");
 		preferenceToggle("settings_catalog_help", "catalog_help");
 		note("", tr("settings_responsive_help"));
         settingSlider("ui_scale", 0.85, 1.15);
+		note("", tr("settings_scale_help"));
         settingSlider("backdrop", 0.1, 0.9);
 		rows.add(new Row("", (x, y, w) -> addRenderableWidget(new DesignerTheme.GroupHeader(x, y, w,
 				Component.literal(customExpanded ? "⌄  " : "›  ").append(tr("settings_custom_theme")), () -> {
@@ -218,12 +222,22 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
     }
 
     private void settingSlider(String key, double min, double max) {
-        rows.add(new Row("settings_" + key, (x, y, w) -> slider(x, y, w, (DesignerPreferences.number(key) - min) / (max - min),
+        rows.add(new Row("settings_" + key, (x, y, w) -> {
+			int sliderWidth = key.equals("ui_scale") ? Math.max(40, w - 54) : w;
+			slider(x, y, sliderWidth, (DesignerPreferences.number(key) - min) / (max - min),
                 value -> Component.translatable("designer.setting_value." + key, display(key, min + value * (max - min))),
                 value -> {
                     DesignerPreferences.set(key, min + value * (max - min));
                     layoutChanged |= key.equals("ui_scale");
-                })));
+                });
+			if (key.equals("ui_scale")) {
+				button(x + sliderWidth + 6, y, 48, Component.literal("100%"), () -> {
+					DesignerPreferences.set("ui_scale", 1);
+					layoutChanged = false;
+					rebuild();
+				}).setTooltip(Tooltip.create(tr("settings_scale_reset")));
+			}
+		}));
     }
 
     private static String display(String key, double value) {

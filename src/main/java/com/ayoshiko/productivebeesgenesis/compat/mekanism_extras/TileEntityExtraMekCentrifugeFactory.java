@@ -632,6 +632,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 		// STACK/CREATIVE/SPEED 变更会改变 operationsPerTick，同刻立即失效，不等下一游戏刻
 		productivebeesgenesis$operationsPerTickCache.invalidate();
 		MekCentrifugeEnergyScaling.normalizeCapacity(this);
+		MekUpgradeSupport.refreshEmpoweredEnergy(this, upgrade);
 	}
 
 	@Override public int getOperationsPerTick() { return operationsPerTick(); }

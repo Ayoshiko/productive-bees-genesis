@@ -33,11 +33,12 @@ final class DesignerTheme {
 			case "panel" -> palette.panel();
 			case "card" -> palette.card();
 			case "input", "slot" -> palette.input();
-			case "button_hover" -> palette.hover();
+			case "button_hover", "card_hover" -> palette.hover();
 			case "button_disabled" -> DesignerPalette.mix(palette.panel(), palette.button(), 0.35F);
 			default -> palette.button();
 		};
-		boolean bordered = !name.equals("card");
+		boolean card = name.equals("card") || name.equals("card_hover");
+		boolean bordered = !card;
 		if (DesignerAeSkin.enabled()) {
 			if (name.equals("card")) {
 				graphics.fill(x, y, x + width, y + height, fill);
@@ -49,10 +50,10 @@ final class DesignerTheme {
 		int radius = DesignerMaterials.CONTROL_RADIUS;
 		if (name.equals("panel")) {
 			radius = DesignerMaterials.WINDOW_RADIUS;
-		} else if (name.equals("card")) {
+		} else if (card) {
 			radius = DesignerMaterials.CARD_RADIUS;
 		}
-		if (name.equals("panel") || name.equals("card") && height > 24) {
+		if (name.equals("panel") || card && height > 24) {
 			DesignerMaterials.shadow(graphics, x, y, width, height, name.equals("panel"));
 		}
 		if (name.equals("panel") && DesignerPreferences.text("surface_material").equals("glass")) {
@@ -64,7 +65,7 @@ final class DesignerTheme {
 			graphics.fill(x + radius, y + 1, x + width - radius, y + 2,
 					light ? 0x70FFFFFF : 0x183C526F);
 		}
-		if (!name.equals("panel") && !name.equals("card")) {
+		if (!name.equals("panel") && !card) {
 			texture(graphics, x, y, width, height, name.equals("input") || name.equals("slot"));
 		}
 	}
@@ -382,6 +383,28 @@ final class DesignerTheme {
 			graphics.drawString(font, text, getX() + (width - font.width(text)) / 2, getY() + (height - 8) / 2, color, false);
 		}
 
+	}
+
+	static final class Grip extends Action {
+		Grip(int x, int y, Runnable action) {
+			super(x, y, 20, Component.literal("⋮⋮"), action);
+			setTooltip(Tooltip.create(DesignerFormScreen.tr("output_drag_help")));
+		}
+
+		@Override
+		protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+			if (isHoveredOrFocused()) {
+				DesignerMaterials.mask(graphics, getX(), getY(), width, height, DesignerMaterials.CONTROL_RADIUS,
+						palette.accent() & 0xFFFFFF | 0x18000000);
+			}
+			graphics.pose().pushPose();
+			graphics.pose().translate(getX() + width / 2F, getY() + height / 2F, 0);
+			DesignerGlyphs.draw(graphics, Symbol.GRIP, isHoveredOrFocused() ? palette.accent() : palette.muted());
+			graphics.pose().popPose();
+			if (isFocused()) {
+				stroke(graphics, getX(), getY(), width, height, palette.accent());
+			}
+		}
 	}
 
 	static final class GroupHeader extends Action {

@@ -120,20 +120,30 @@ final class DesignerBeeButton extends Button {
 
 	@Override
 	protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-		DesignerTheme.panel(graphics, isHoveredOrFocused() ? "button_hover" : "card", getX(), getY(), width, height);
+		DesignerTheme.panel(graphics, isHoveredOrFocused() ? "card_hover" : "card", getX(), getY(), width, height);
 		long now = net.minecraft.Util.getMillis();
 		selectionFeedback.advance(selected ? 1 : 0, selectionFrame == 0 ? 0 : (now - selectionFrame) / 1000.0, 0.12,
 				DesignerPreferences.animate() && DesignerPreferences.enabled("motion_selection"));
 		selectionFrame = now;
 		if (selectionFeedback.position() > 0.01) {
-			DesignerTheme.surface(graphics, getX(), getY(), width, height,
-					DesignerPalette.mix(DesignerTheme.colors().card(), DesignerTheme.colors().selected(), (float) selectionFeedback.position()),
-					DesignerPalette.mix(DesignerTheme.colors().border(), DesignerTheme.colors().accent(), (float) selectionFeedback.position() * 0.6F));
+			int fill = DesignerPalette.mix(DesignerTheme.colors().card(), DesignerTheme.colors().selected(), (float) selectionFeedback.position());
+			int border = DesignerPalette.mix(DesignerTheme.colors().border(), DesignerTheme.colors().accent(), (float) selectionFeedback.position() * 0.6F);
+			if (DesignerAeSkin.enabled()) {
+				DesignerTheme.surface(graphics, getX(), getY(), width, height, fill, border);
+			} else {
+				DesignerMaterials.surface(graphics, getX(), getY(), width, height, DesignerMaterials.CARD_RADIUS, fill, border);
+			}
 		}
 		if (pending) {
-			graphics.fill(getX() + 1, getY() + 1, getX() + width - 1, getY() + height - 1,
-					DesignerPalette.mix(DesignerTheme.colors().card(), DesignerTheme.colors().accent(), 0.1F));
-			graphics.fill(getX() + width - 7, getY() + 8, getX() + width - 3, getY() + 12, DesignerTheme.colors().accent());
+			int color = DesignerTheme.colors().accent() & 0xFFFFFF | 0x18000000;
+			if (DesignerAeSkin.enabled()) {
+				graphics.fill(getX() + 2, getY() + 2, getX() + width - 2, getY() + height - 2, color);
+			} else {
+				DesignerMaterials.mask(graphics, getX(), getY(), width, height, DesignerMaterials.CARD_RADIUS, color);
+			}
+			if (actionSpace == 0 && !selectionMode) {
+				DesignerTheme.statusIcon(graphics, getX() + width - 12, getY() + 7, DesignerTheme.Symbol.DOT, DesignerTheme.colors().accent());
+			}
 		}
 		DesignerTheme.panel(graphics, "slot", getX() + 1, getY() + 1, 18, 18);
 		graphics.renderItem(icon, getX() + 2, getY() + 2);

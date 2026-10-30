@@ -187,9 +187,9 @@ dependencies {
     // EME本体（测试环境运行时依赖）
     runtimeOnly files('libs/EvolvedMekanismExtras-1.21.1-1.2.1.jar')
 
-    // MekanismEmpowered（可选依赖，通过反射访问MekEmpUpgrade，编译时无需jar）
-    // 注意：不添加 runtimeOnly 依赖 — MekanismEmpowered 的 NeoForge 版本与开发环境不兼容，
-    // 且与 MekanismUnleashed 冲突，无法在开发环境运行时测试。反射访问在用户生产环境自动生效。
+    // MekanismEmpowered / MekanismEmpoweredUnleashed：共用反射 API，不加入默认运行依赖。
+    // 两种附属分别在 NeoForge 21.1.234 的隔离原生测试与专服中验证；发行 JAR 要求 21.1.217+。
+    // 原版 Empowered 需同版 Core；合并版已内置 Core/Unleashed，不能与原版附属同时测试。
 
     // JDTE：编译实际生物工厂接口；旧合并加速仍支持 0.5.5+，资源生产仅对已验证版本启用。
     compileOnly files('libs/jdte-0.6.1.0.jar', 'libs/justdirethings-1.5.7.jar')

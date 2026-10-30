@@ -44,4 +44,18 @@ class DesignerThemeJsonTest {
 		normalized.addProperty("theme", "light");
 		assertEquals(before, DesignerPreferences.snapshot());
 	}
+
+	@Test
+	void geneDisplayPreferenceKeepsLegacyDefaultsAndRejectsUnknownModes() {
+		JsonObject legacy = DesignerPreferences.defaults();
+		legacy.remove("gene_layout");
+		legacy.addProperty("ui_scale", 1.15);
+		JsonObject normalized = DesignerPreferences.normalize(legacy);
+		assertEquals("dropdown", normalized.get("gene_layout").getAsString());
+		assertEquals(1.15, normalized.get("ui_scale").getAsDouble());
+		legacy.addProperty("gene_layout", "buttons");
+		assertEquals("buttons", DesignerPreferences.normalize(legacy).get("gene_layout").getAsString());
+		legacy.addProperty("gene_layout", "unknown");
+		assertThrows(IllegalArgumentException.class, () -> DesignerPreferences.normalize(legacy));
+	}
 }

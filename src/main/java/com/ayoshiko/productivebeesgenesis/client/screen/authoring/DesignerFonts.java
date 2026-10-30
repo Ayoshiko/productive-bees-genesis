@@ -33,6 +33,7 @@ final class DesignerFonts {
 	private static final DesignerFont BODY = new DesignerFont(false, 8.5F);
 	private static final DesignerFont CODE = new DesignerFont(true, 8.5F);
 	private static final DesignerFont TITLE = new DesignerFont(false, 10.5F);
+	private static final DesignerFont COUNT = new DesignerFont(true, 7F);
 	private static final DesignerGlyphAtlas ATLAS = new DesignerGlyphAtlas();
 	private static final LinkedHashMap<Key, DesignerTextLayout> LAYOUTS = new LinkedHashMap<>(256, 0.75F, true);
 	private static final Map<FaceKey, java.awt.Font> FACES = new LinkedHashMap<>();
@@ -61,6 +62,10 @@ final class DesignerFonts {
 
 	static Font code() {
 		return DesignerPreferences.text("font_mode").equals("vanilla") ? Minecraft.getInstance().font : CODE;
+	}
+
+	static Font count() {
+		return DesignerPreferences.text("font_mode").equals("vanilla") ? Minecraft.getInstance().font : COUNT;
 	}
 
 	static Font title() {
@@ -287,12 +292,22 @@ final class DesignerFonts {
 					x + font.width(text.substring(0, end)), y + 9, color);
 			return;
 		}
-		var layout = designer.plainLayout(text, Style.EMPTY);
-		for (var cluster : layout.clusters) {
-			if (cluster.start() < end && cluster.end() > start) {
-				graphics.fill((int) Math.floor(x + cluster.left()), y,
-						(int) Math.ceil(x + cluster.right()), y + 9, color);
-			}
+		selection(graphics, designer.plainLayout(text, Style.EMPTY), start, end, x, y, color);
+	}
+
+	static void selection(GuiGraphics graphics, DesignerTextLayout layout, int start, int end, int x, int y, int color) {
+		for (var span : layout.selection(start, end)) {
+			graphics.fill((int) Math.floor(x + span.left()), y,
+					(int) Math.ceil(x + span.right()), y + 9, color);
+		}
+	}
+
+	static void selection(GuiGraphics graphics, Font font, DesignerTextLayout.Source source, int start, int end, int x, int y, int color) {
+		if (font instanceof DesignerFont designer) {
+			selection(graphics, layout(designer, source), start, end, x, y, color);
+		} else {
+			graphics.fill(x + font.width(source.text().substring(0, start)), y,
+					x + font.width(source.text().substring(0, end)), y + 9, color);
 		}
 	}
 
@@ -303,11 +318,25 @@ final class DesignerFonts {
 		return font.width(text.substring(0, Math.max(0, Math.min(text.length(), position))));
 	}
 
+	static float caret(Font font, DesignerTextLayout.Source source, int position) {
+		if (font instanceof DesignerFont designer) {
+			return layout(designer, source).caret(position);
+		}
+		return font.width(source.text().substring(0, Math.max(0, Math.min(source.text().length(), position))));
+	}
+
 	static int hit(Font font, String text, float x) {
 		if (font instanceof DesignerFont designer) {
 			return designer.plainLayout(text, Style.EMPTY).hit(x);
 		}
 		return font.plainSubstrByWidth(text, Math.max(0, Math.round(x))).length();
+	}
+
+	static int hit(Font font, DesignerTextLayout.Source source, float x) {
+		if (font instanceof DesignerFont designer) {
+			return layout(designer, source).hit(x);
+		}
+		return font.plainSubstrByWidth(source.text(), Math.max(0, Math.round(x))).length();
 	}
 
 	static void drawPlain(GuiGraphics graphics, Font font, String text, float x, float y, int color) {

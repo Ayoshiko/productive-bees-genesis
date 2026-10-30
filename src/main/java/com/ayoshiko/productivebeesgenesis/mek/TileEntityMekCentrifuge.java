@@ -317,6 +317,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 		super.recalculateUpgrades(upgrade);
 		MekCentrifugeUpgradeOps.handleCreativeEnergy(this, upgrade);
 		MekCentrifugeEnergyScaling.normalizeCapacity(this);
+		MekUpgradeSupport.refreshEmpoweredEnergy(this, upgrade);
 		// SPEED/ENERGY 变化影响时间倍率 — 失效 PB 升级倍率缓存（Spark 优化）
 		pbUpgradeHandler.invalidateMultiplierCache();
 		// STACK/CREATIVE/SPEED 变更会改变 operationsPerTick，同刻立即失效，不等下一游戏刻

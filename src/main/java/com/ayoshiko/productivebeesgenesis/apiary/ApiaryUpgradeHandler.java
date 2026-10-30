@@ -5,7 +5,6 @@ import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
-import mekanism.common.config.MekanismConfig;
 import mekanism.common.util.MekanismUtils;
 
 import java.util.HashSet;
@@ -240,15 +239,11 @@ public class ApiaryUpgradeHandler {
 	/**
 	 * 获取 MEK 速度升级时间倍率
 	 * <br/>
-	 * 公式委托 {@link ApiaryUpgradeMath#computeMekSpeedTimeMultiplier}（纯公式），
-	 * 运行时入口语义由 {@code MekanismUtils} 承接可选模组 mixin。
+	 * 统一调用 {@link MekUpgradeSupport#getSpeedTimeMultiplier}，
+	 * 承接原版、Unleashed 与 Empowered 的运行时速度公式。
 	 */
 	public float getMekSpeedTimeMultiplier() {
-		int speedUpgrades = getMekSpeedUpgrades();
-		int maxSpeed = Upgrade.SPEED.getMax();
-		if (maxSpeed <= 0 || speedUpgrades <= 0) return 1.0f;
-		float maxMultiplier = MekanismConfig.general.maxUpgradeMultiplier.get();
-		return ApiaryUpgradeMath.computeMekSpeedTimeMultiplier(speedUpgrades, maxSpeed, maxMultiplier);
+		return tile == null ? 1.0f : MekUpgradeSupport.getSpeedTimeMultiplier(tile);
 	}
 
 	/**

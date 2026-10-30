@@ -87,6 +87,27 @@ class DesignerFontLayoutTest {
 	}
 
 	@Test
+	void adjacentSelectionClustersMergeBeforePixelRounding() {
+		DesignerFont font = (DesignerFont) DesignerFonts.code();
+		String text = "  \"name\": \"A\u0301蜜😀B\"";
+		var source = new DesignerTextLayout.Source(text, List.of(
+				new DesignerTextLayout.Run(0, 9, Style.EMPTY.withColor(0x245B86)),
+				new DesignerTextLayout.Run(9, text.length(), Style.EMPTY.withColor(0x487134))), false);
+		var layout = DesignerFonts.layout(font, source);
+		var full = layout.selection(0, text.length());
+		assertEquals(1, full.size());
+		assertEquals(0F, full.getFirst().left(), 0.001F);
+		assertEquals(layout.width, full.getFirst().right(), 0.001F);
+		int start = text.indexOf('A');
+		int end = text.indexOf('B');
+		var partial = layout.selection(start, end);
+		assertEquals(1, partial.size());
+		assertEquals(layout.caret(start), partial.getFirst().left(), 0.001F);
+		assertEquals(layout.caret(end), partial.getFirst().right(), 0.001F);
+		assertEquals(font.width(DesignerTextLayout.sequence(source)), (int) Math.ceil(layout.width));
+	}
+
+	@Test
 	void selectionReplacementNotifiesOnlyTheFinalCursorAndCollapsesSelection() throws Exception {
 		var constructor = Class.forName(DesignerCodeEditor.class.getName() + "$Model").getDeclaredConstructor(Font.class, int.class);
 		constructor.setAccessible(true);

@@ -254,6 +254,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		}
 		upgradeHandler.invalidateUpgradeCache();
 		MekCentrifugeEnergyScaling.normalizeCapacity(this);
+		MekUpgradeSupport.refreshEmpoweredEnergy(this, upgrade);
 	}
 
 	/**

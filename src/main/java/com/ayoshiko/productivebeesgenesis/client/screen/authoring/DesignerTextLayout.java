@@ -32,6 +32,7 @@ final class DesignerTextLayout {
 		}
 	}
 	record Cluster(int start, int end, float left, float right, boolean rtl) {}
+	record Selection(float left, float right) {}
 	final Source source;
 	final List<Glyph> glyphs;
 	final List<Cluster> clusters;
@@ -283,6 +284,26 @@ final class DesignerTextLayout {
 		return carets[Math.max(0, Math.min(carets.length - 1, position))];
 	}
 
+	List<Selection> selection(int start, int end) {
+		List<Selection> spans = new ArrayList<>();
+		for (Cluster cluster : clusters) {
+			if (cluster.start() < end && cluster.end() > start && cluster.right() > cluster.left()) {
+				spans.add(new Selection(cluster.left(), cluster.right()));
+			}
+		}
+		spans.sort(java.util.Comparator.comparingDouble(Selection::left));
+		List<Selection> merged = new ArrayList<>();
+		for (Selection span : spans) {
+			if (!merged.isEmpty() && span.left() <= merged.getLast().right() + 0.001F) {
+				Selection last = merged.removeLast();
+				merged.add(new Selection(last.left(), Math.max(last.right(), span.right())));
+			} else {
+				merged.add(span);
+			}
+		}
+		return merged;
+	}
+
 	int hit(float x) {
 		int selected = 0;
 		float distance = Float.MAX_VALUE;
@@ -359,7 +380,7 @@ final class DesignerTextLayout {
 		return sequence(plain(text, style));
 	}
 
-	private static FormattedCharSequence sequence(Source source) {
+	static FormattedCharSequence sequence(Source source) {
 		return (LogicalSequence) sink -> {
 			for (Run run : source.runs()) {
 				for (int index = run.start(); index < run.end();) {
