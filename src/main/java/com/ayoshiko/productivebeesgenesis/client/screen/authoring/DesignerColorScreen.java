@@ -161,13 +161,13 @@ final class DesignerColorScreen extends DesignerFormScreen {
 	}
 
 	@Override
-	public boolean keyPressed(int key, int scan, int modifiers) {
+	protected boolean keyContent(int key, int scan, int modifiers) {
 		if (sampling && key == GLFW.GLFW_KEY_ESCAPE) {
 			sampling = false;
 			status = "";
 			return true;
 		}
-		return super.keyPressed(key, scan, modifiers);
+		return super.keyContent(key, scan, modifiers);
 	}
 
 	@Override

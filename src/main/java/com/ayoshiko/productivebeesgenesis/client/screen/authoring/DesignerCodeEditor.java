@@ -412,6 +412,11 @@ final class DesignerCodeEditor extends AbstractScrollWidget {
 		scroll.jump(scrollAmount());
 	}
 
+	DesignerScroll autoScroll() {
+		scroll.extent(getMaxScrollAmount() + height, height);
+		return scroll;
+	}
+
 	@Override
 	protected int getInnerHeight() {
 		return lines.size() * 9;

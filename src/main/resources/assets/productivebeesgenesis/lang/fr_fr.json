@@ -2204,7 +2204,7 @@
   "designer.shortcut.theme": "F2 : alterner les thèmes sombre et clair.",
   "designer.shortcut.layout": "Ctrl+0 : réinitialiser la position et la taille de la fenêtre.",
   "designer.shortcut.settings": "Ctrl+, : ouvrir les paramètres de l’éditeur.",
-  "designer.shortcut.pages": "Page précédente/Page suivante : faire défiler les formulaires. Les catalogues se parcourent à la molette ou avec leur barre de défilement.",
+  "designer.shortcut.pages": "Page précédente/Page suivante : faire défiler les formulaires. Cliquez avec le bouton du milieu dans une zone défilante, puis déplacez la souris vers le haut ou le bas pour régler la vitesse. Revenez près du point de départ pour suspendre ; cliquez à nouveau ou appuyez sur Échap pour arrêter.",
   "designer.shortcut.selection": "Entrée : sélectionner l’entrée surlignée. Échap : fermer une fenêtre contextuelle ou revenir.",
   "designer.shortcut.drag": "Glissez la barre de titre pour déplacer la fenêtre, un bord pour la redimensionner. Les glissements depuis l’inventaire et JEI copient les déclarations.",
   "designer.shortcut.number": "Utilisez +/- pour modifier les nombres. Maintenez Maj pour un pas de 0,1.",

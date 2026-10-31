@@ -2202,7 +2202,7 @@
   "designer.shortcut.theme": "F2：切换深色／浅色主题。",
   "designer.shortcut.layout": "Ctrl+0：恢复默认窗口位置和大小。",
   "designer.shortcut.settings": "Ctrl+,：打开编辑器设置。",
-  "designer.shortcut.pages": "PageUp／PageDown：滚动表单；目录支持滚轮和滚动滑块。",
+  "designer.shortcut.pages": "PageUp／PageDown：滚动表单。可滚动区域点按中键，再上下移动鼠标控制速度；回到起点附近暂停，再次点击或 Esc 停止。",
   "designer.shortcut.selection": "Enter：确认目录选择；Esc：关闭弹层或返回上一页。",
   "designer.shortcut.drag": "拖动标题栏移动窗口；拖动边缘调整大小。背包／JEI 拖入只复制声明。",
   "designer.shortcut.number": "数字框 +／− 调整数值；按住 Shift 使用 0.1 步长。",

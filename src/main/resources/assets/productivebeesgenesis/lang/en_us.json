@@ -2202,7 +2202,7 @@
   "designer.shortcut.theme": "F2: switch between dark and light themes.",
   "designer.shortcut.layout": "Ctrl+0: reset window position and size.",
   "designer.shortcut.settings": "Ctrl+,: open editor settings.",
-  "designer.shortcut.pages": "PageUp/PageDown: scroll forms. Catalogs support the wheel and scrollbars.",
+  "designer.shortcut.pages": "PageUp/PageDown: scroll forms. Middle-click a scrollable area, then move up or down to control speed. Return near the starting point to pause; click again or press Esc to stop.",
   "designer.shortcut.selection": "Enter: select the highlighted entry. Esc: dismiss a popup or return.",
   "designer.shortcut.drag": "Drag the title bar to move; drag an edge to resize. Inventory and JEI drags copy declarations.",
   "designer.shortcut.number": "Use +/- to change numbers. Hold Shift for steps of 0.1.",

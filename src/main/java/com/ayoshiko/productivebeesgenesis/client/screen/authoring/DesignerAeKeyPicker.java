@@ -131,7 +131,7 @@ final class DesignerAeKeyPicker extends DesignerFormScreen {
 	}
 
 	@Override
-	public boolean keyPressed(int key, int scan, int modifiers) {
+	protected boolean keyContent(int key, int scan, int modifiers) {
 		if (!hasDropdown() && getFocused() == pageInput && (key == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
 				|| key == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER)) {
 			try {
@@ -143,7 +143,7 @@ final class DesignerAeKeyPicker extends DesignerFormScreen {
 			}
 			return true;
 		}
-		return super.keyPressed(key, scan, modifiers);
+		return super.keyContent(key, scan, modifiers);
 	}
 
 	private void select(JsonObject data) {

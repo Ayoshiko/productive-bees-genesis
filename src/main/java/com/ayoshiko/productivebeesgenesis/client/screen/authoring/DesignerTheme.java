@@ -200,6 +200,24 @@ final class DesignerTheme {
 		}
 	}
 
+	static void autoScrollMarker(GuiGraphics graphics, int x, int y, int direction) {
+		graphics.pose().pushPose();
+		try {
+			graphics.pose().translate(x, y, 400);
+			int fill = palette.card() & 0xFFFFFF | 0xE6000000;
+			int border = DesignerPalette.mix(palette.card(), palette.border(), 0.65F) & 0xFFFFFF | 0xB0000000;
+			DesignerMaterials.surface(graphics, -8, -8, 16, 16, DesignerMaterials.CARD_RADIUS, fill, border);
+			DesignerMaterials.mask(graphics, -1, -1, 2, 2, DesignerMaterials.CONTROL_RADIUS, palette.muted());
+			graphics.pose().scale(0.6F, 0.5F, 1);
+			graphics.pose().translate(0, -8, 0);
+			DesignerGlyphs.draw(graphics, Symbol.UP, direction < 0 ? palette.accent() : palette.muted());
+			graphics.pose().translate(0, 16, 0);
+			DesignerGlyphs.draw(graphics, Symbol.DOWN, direction > 0 ? palette.accent() : palette.muted());
+		} finally {
+			graphics.pose().popPose();
+		}
+	}
+
 	static void toggle() {
 		String theme = DesignerPreferences.text("theme");
 		String next = switch (theme) {

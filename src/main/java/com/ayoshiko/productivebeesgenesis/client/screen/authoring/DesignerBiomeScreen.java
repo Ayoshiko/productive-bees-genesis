@@ -155,7 +155,7 @@ final class DesignerBiomeScreen extends DesignerFormScreen {
 	}
 
 	@Override
-	public boolean keyPressed(int key, int scan, int modifiers) {
+	protected boolean keyContent(int key, int scan, int modifiers) {
 		if (isLeaving()) {
 			return true;
 		}
@@ -165,7 +165,7 @@ final class DesignerBiomeScreen extends DesignerFormScreen {
 			restoreSelection(key == org.lwjgl.glfw.GLFW.GLFW_KEY_Y || shift ? 1 : -1);
 			return true;
 		}
-		return super.keyPressed(key, scan, modifiers);
+		return super.keyContent(key, scan, modifiers);
 	}
 
 	@Override

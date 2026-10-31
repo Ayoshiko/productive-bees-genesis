@@ -259,7 +259,7 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 	}
 
 	@Override
-	public boolean keyPressed(int key, int scan, int modifiers) {
+	protected boolean keyContent(int key, int scan, int modifiers) {
 		if (hasControlDown() && key == GLFW.GLFW_KEY_L) {
 			setFocused(pathField);
 			pathField.moveCursorToEnd(false);
@@ -289,7 +289,7 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 			up();
 			return true;
 		}
-		return super.keyPressed(key, scan, modifiers);
+		return super.keyContent(key, scan, modifiers);
 	}
 
 	@Override

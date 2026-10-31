@@ -22,6 +22,7 @@ import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import mekanism.api.chemical.ChemicalStack;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -72,6 +73,8 @@ public abstract class DesignerFormScreen extends Screen {
 	private boolean rebuilding;
 	private static boolean completingTransition;
 	private final DesignerScroll scroll = new DesignerScroll();
+	private final DesignerAutoScroll autoScroll = new DesignerAutoScroll();
+	private int autoScrollStoppedButton = -1;
 	private final Map<Integer, RowView> rowViews = new LinkedHashMap<>();
 	private final java.util.Set<GuiEventListener> scrollingControls = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
 	private int[] bandOffsets = new int[]{0};
@@ -103,6 +106,8 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	protected void begin() {
+		autoScroll.stop();
+		autoScrollStoppedButton = -1;
 		DesignerPreferences.load();
 		DesignerTheme.apply();
 		font = DesignerFonts.body();
@@ -256,6 +261,7 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	protected final void leaveTo(Runnable action) {
+		autoScroll.stop();
 		if (minecraft != null && minecraft.screen != this) {
 			if (minecraft.screen instanceof DesignerFormScreen current) {
 				current.leaveTo(action);
@@ -299,12 +305,16 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	protected final void animatePage(int direction) {
+		autoScroll.stop();
 		scroll.jump(0);
 		realizeRows();
 		transition.enter(direction);
 	}
 
 	final void advanceTransition() {
+		if (!minecraft.isWindowActive() || minecraft.getOverlay() != null) {
+			autoScroll.stop();
+		}
 		transition.tick();
 	}
 
@@ -930,6 +940,18 @@ public abstract class DesignerFormScreen extends Screen {
 		return scroll.position();
 	}
 
+	protected DesignerScroll autoScrollAt(double x, double y) {
+		if (x < left || x >= left + contentWidth + 10 || y < contentTop || y >= editorBottom()) {
+			return null;
+		}
+		for (var child : children()) {
+			if (child instanceof DesignerCodeEditor editor && editor.active && editor.isMouseOver(x, y)) {
+				return editor.autoScroll();
+			}
+		}
+		return usesRowScrollbar() ? scroll : null;
+	}
+
 	protected final int rowOffset(int source) {
 		return bandOffsets[bandAt(source)];
 	}
@@ -1023,6 +1045,20 @@ public abstract class DesignerFormScreen extends Screen {
 		rebuild();
 	}
 
+	/** 同一目录的分页数据刷新保留中键会话；几何变化仍按普通重建取消。 */
+	protected final void refreshScrollingRows() {
+		boolean resume = autoScroll.targets(scroll);
+		double x = autoScroll.originX();
+		double y = autoScroll.originY();
+		Rect2i viewport = new Rect2i(left, contentTop, contentWidth, editorBottom() - contentTop);
+		float scale = uiScale;
+		rebuild();
+		if (resume && scale == uiScale && viewport.getX() == left && viewport.getY() == contentTop
+				&& viewport.getWidth() == contentWidth && viewport.getHeight() == editorBottom() - contentTop) {
+			autoScroll.start(scroll, x, y);
+		}
+	}
+
 	@Override
 	public final void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		long now = System.nanoTime();
@@ -1031,6 +1067,13 @@ public abstract class DesignerFormScreen extends Screen {
 		}
 		updateStatusHeight();
 		scroll.extent(bandOffsets[bandOffsets.length - 1], Math.max(1, editorBottom() - contentTop));
+		if (autoScroll.active()) {
+			if (!minecraft.isWindowActive() || minecraft.screen != this || popup != null || transition.leaving()) {
+				autoScroll.stop();
+			} else {
+				autoScroll.advance(mouseY / uiScale, lastScrollFrame == 0 ? 0 : (now - lastScrollFrame) / 1_000_000_000.0);
+			}
+		}
 		if (outputTransfer != null && lastScrollFrame != 0 && mouseX / uiScale >= left && mouseX / uiScale < left + contentWidth) {
 			double y = mouseY / uiScale;
 			int direction = 0;
@@ -1051,6 +1094,10 @@ public abstract class DesignerFormScreen extends Screen {
 		graphics.pose().scale(uiScale, uiScale, 1);
 		try {
 			renderContent(graphics, (int) (mouseX / uiScale), (int) (mouseY / uiScale), partialTick);
+			if (autoScroll.active()) {
+				DesignerTheme.autoScrollMarker(graphics, (int) Math.round(autoScroll.originX()),
+						(int) Math.round(autoScroll.originY()), autoScroll.direction());
+			}
 			DesignerTutorialScreen guide = DesignerTutorialScreen.current(this);
 			if (guide != null) {
 				guide.render(this, graphics, (int) (mouseX / uiScale), (int) (mouseY / uiScale));
@@ -1127,7 +1174,7 @@ public abstract class DesignerFormScreen extends Screen {
 		if (popup != null) {
 			popup.render(graphics, mouseX, mouseY);
 		}
-		DesignerCursor.update(minecraft.getWindow().getWindow(), popup == null ? WINDOW.edgeAt(mouseX / inventoryScale, mouseY / inventoryScale) : 0);
+		DesignerCursor.update(minecraft.getWindow().getWindow(), popup == null && !autoScroll.active() ? WINDOW.edgeAt(mouseX / inventoryScale, mouseY / inventoryScale) : 0);
 		if (inventory.isDragging()) {
 			for (GhostTarget target : targets) {
 				Rect2i area = visibleTargetArea(target);
@@ -1754,6 +1801,10 @@ public abstract class DesignerFormScreen extends Screen {
 
 	@Override
 	public final boolean mouseClicked(double x, double y, int button) {
+		if (autoScroll.stop()) {
+			autoScrollStoppedButton = button;
+			return true;
+		}
 		DesignerTutorialScreen guide = DesignerTutorialScreen.current(this);
 		if (guide != null && guide.click(this, x / uiScale, y / uiScale, button)) {
 			return true;
@@ -1764,7 +1815,13 @@ public abstract class DesignerFormScreen extends Screen {
 		double localY = y / uiScale;
 		transition.settle();
 		scroll.stop();
-		return clickContent(contentX(x / uiScale, localY), localY, button);
+		double localX = contentX(x / uiScale, localY);
+		if (button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE && popup == null && !isDragging()
+				&& !inventory.isDragging() && !WINDOW.dragging() && outputTransfer == null
+				&& autoScroll.start(autoScrollAt(localX, localY), localX, localY)) {
+			return true;
+		}
+		return clickContent(localX, localY, button);
 	}
 
 	protected boolean clickContent(double x, double y, int button) {
@@ -1815,6 +1872,13 @@ public abstract class DesignerFormScreen extends Screen {
 
 	@Override
 	public final boolean mouseReleased(double x, double y, int button) {
+		if (autoScrollStoppedButton == button) {
+			autoScrollStoppedButton = -1;
+			return true;
+		}
+		if (autoScroll.active() && button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
+			return true;
+		}
 		return releaseContent(contentX(x / uiScale, y / uiScale), y / uiScale, button);
 	}
 
@@ -1857,6 +1921,7 @@ public abstract class DesignerFormScreen extends Screen {
 
 	@Override
 	public final boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
+		autoScroll.stop();
 		if (transition.leaving()) {
 			return true;
 		}
@@ -1912,7 +1977,7 @@ public abstract class DesignerFormScreen extends Screen {
 
 	@Override
 	public final boolean mouseDragged(double x, double y, int button, double dx, double dy) {
-		if (transition.leaving()) {
+		if (autoScroll.active() || autoScrollStoppedButton == button || transition.leaving()) {
 			return true;
 		}
 		return dragContent(contentX(x / uiScale, y / uiScale), y / uiScale, button, dx / uiScale, dy / uiScale);
@@ -1941,7 +2006,14 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	@Override
-	public boolean keyPressed(int key, int scan, int modifiers) {
+	public final boolean keyPressed(int key, int scan, int modifiers) {
+		if (autoScroll.stop() && key == GLFW.GLFW_KEY_ESCAPE) {
+			return true;
+		}
+		return keyContent(key, scan, modifiers);
+	}
+
+	protected boolean keyContent(int key, int scan, int modifiers) {
 		if (outputTransfer != null && key == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
 			outputTransfer = null;
 			setDragging(false);
@@ -1998,6 +2070,7 @@ public abstract class DesignerFormScreen extends Screen {
 
 	@Override
 	public boolean charTyped(char character, int modifiers) {
+		autoScroll.stop();
 		if (transition.leaving()) {
 			return true;
 		}
@@ -2025,6 +2098,8 @@ public abstract class DesignerFormScreen extends Screen {
 
 	@Override
 	public void removed() {
+		autoScroll.stop();
+		autoScrollStoppedButton = -1;
 		transition.cancel();
 		scroll.stop();
 		WINDOW.release();

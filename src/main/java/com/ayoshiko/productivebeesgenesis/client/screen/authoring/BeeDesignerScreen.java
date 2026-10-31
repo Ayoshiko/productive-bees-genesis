@@ -654,13 +654,18 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 			return;
 		}
 		refreshPending = false;
+		boolean catalogRefresh = tab == 0 && !draftsRefreshPending;
 		if (draftsRefreshPending) {
 			draftsRefreshPending = false;
 			if (tab == 0) {
 				library.request();
 			}
 		}
-		rebuild();
+		if (catalogRefresh) {
+			refreshScrollingRows();
+		} else {
+			rebuild();
+		}
 	}
 
 	private void locate(String path) {
@@ -1015,7 +1020,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	}
 
 	@Override
-	public boolean keyPressed(int key, int scan, int modifiers) {
+	protected boolean keyContent(int key, int scan, int modifiers) {
 		if (tutorial != null && key == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
 			tutorial.finish();
 			return true;
@@ -1040,7 +1045,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				return true;
 			}
 		}
-		return super.keyPressed(key, scan, modifiers);
+		return super.keyContent(key, scan, modifiers);
 	}
 
 	@Override
