@@ -1,0 +1,11 @@
+# Changes to contribution policy, build inputs, or publishing require the repository owner.
+/.github/ @Ayoshiko
+/build.gradle @Ayoshiko
+/settings.gradle @Ayoshiko
+/gradle.properties @Ayoshiko
+/gradle/ @Ayoshiko
+/gradlew @Ayoshiko
+/gradlew.bat @Ayoshiko
+/tools/ @Ayoshiko
+/src/main/templates/META-INF/ @Ayoshiko
+/src/main/resources/META-INF/ @Ayoshiko

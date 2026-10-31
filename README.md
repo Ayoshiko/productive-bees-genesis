@@ -17,7 +17,9 @@
 
 > Please report bugs and compatibility issues through [GitHub Issues](https://github.com/Ayoshiko/productive-bees-genesis/issues).
 
-**Translations and contributions:** everyone can submit a pull request through a [fork](https://github.com/Ayoshiko/productive-bees-genesis/fork). Create a branch in your fork, add or edit the translation under `src/main/resources/assets/productivebeesgenesis/lang/` (for example `fr_fr.json`), and use **Contribute → Open pull request** with `Ayoshiko/productive-bees-genesis` as the base repository and `main-neo/1.21.1` as the base branch. Write access to this repository is needed only to push here directly; it is not required for a pull request from your fork. If GitHub blocks this flow, please share the exact error and the compare-page URL in an issue.
+**Translations and contributions:** everyone can submit a pull request through a [fork](https://github.com/Ayoshiko/productive-bees-genesis/fork). Start from the branch for your target platform: **`main-neo/1.21.1` for NeoForge 1.21.1 / Java 21**, **`forge/1.20.1` for Forge 1.20.1 / Java 17**, or `bees-processing-network/1.21.1` for network development. Keep the same base branch when opening the PR. `Alpha` is archival; do not merge entire platform or experimental branches into maintenance. Shared fixes need separate adaptations for each loader.
+
+PRs must pass the target-platform policy and the corresponding build, receive a current approval, and resolve review conversations. CI, publishing, build inputs, and platform metadata need owner review. External contributors may need a maintainer to approve Actions execution. Write access is not required for fork PRs; the Forge maintainer also uses reviewed PRs for updates. Translation files belong under `src/main/resources/assets/productivebeesgenesis/lang/` (for example `fr_fr.json`). If GitHub blocks the flow, include the exact error and compare-page URL in an issue.
 
 You can also [open a blank issue](https://github.com/Ayoshiko/productive-bees-genesis/issues/new) and attach the translation JSON. If GitHub does not accept the JSON attachment, put it in a ZIP file.
 
