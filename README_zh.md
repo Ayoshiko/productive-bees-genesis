@@ -17,7 +17,9 @@
 
 > 如遇到 bug 或兼容性问题，请通过 [GitHub Issues](https://github.com/Ayoshiko/productive-bees-genesis/issues) 反馈。
 
-**翻译与贡献：** 所有人都可以通过 [Fork](https://github.com/Ayoshiko/productive-bees-genesis/fork) 提交 PR。在自己的 Fork 中新建分支，添加或修改 `src/main/resources/assets/productivebeesgenesis/lang/` 下的翻译文件（例如 `fr_fr.json`），再通过 **Contribute → Open pull request**，将目标仓库设为 `Ayoshiko/productive-bees-genesis`、目标分支设为 `main-neo/1.21.1`。直接向本仓库推送才需要写权限，从 Fork 提交 PR 不需要成为协作者。若这个流程仍被 GitHub 阻止，请在 issue 中提供完整报错与比较页面网址。
+**翻译与贡献：** 所有人都可以通过 [Fork](https://github.com/Ayoshiko/productive-bees-genesis/fork) 提交 PR。从对应平台的分支开始修改：**NeoForge 1.21.1／Java 21 使用 `main-neo/1.21.1`**，**Forge 1.20.1／Java 17 使用 `forge/1.20.1`**，网络开发使用 `bees-processing-network/1.21.1`。创建 PR 时保持目标分支一致。`Alpha` 是历史分支；不要把不同加载器或实验分支整树合入维护分支。共用修复须为各加载器分别适配。
+
+PR 需要通过目标平台校验和对应构建，获得当前版本的审查批准，并解决审查对话。CI、发布、构建输入和平台元数据的改动需要所有者审查。外部贡献的 Actions 可能需要维护者先批准运行。Fork PR 不要求仓库写权限；Forge 维护者更新分支也通过经审查的 PR。翻译文件位于 `src/main/resources/assets/productivebeesgenesis/lang/`（例如 `fr_fr.json`）。若流程被 GitHub 阻止，请在 issue 中提供完整报错与比较页面网址。
 
 也可以[创建空白 issue](https://github.com/Ayoshiko/productive-bees-genesis/issues/new)，附上翻译 JSON；若 GitHub 不接受 JSON 附件，请先打包成 ZIP。
 
