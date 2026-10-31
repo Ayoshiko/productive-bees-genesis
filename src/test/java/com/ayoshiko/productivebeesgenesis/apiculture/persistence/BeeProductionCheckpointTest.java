@@ -260,7 +260,10 @@ class BeeProductionCheckpointTest {
 	@Test void malformedOrUnreviewedApiaryPbEffectsCannotBecomeAssets() {
 		var f = fixture(0, 0); var record = record(f.active(), f);
 		for (var type : PbUpgradeType.values()) if (!List.of(PbUpgradeType.TIME, PbUpgradeType.TIME_2,
-				PbUpgradeType.PRODUCTIVITY, PbUpgradeType.PRODUCTIVITY_2, PbUpgradeType.PRODUCTIVITY_3, PbUpgradeType.PRODUCTIVITY_4, PbUpgradeType.BLOCK).contains(type)) {
+				PbUpgradeType.PRODUCTIVITY, PbUpgradeType.PRODUCTIVITY_2, PbUpgradeType.PRODUCTIVITY_3,
+				PbUpgradeType.PRODUCTIVITY_4, PbUpgradeType.BLOCK, PbUpgradeType.GENE_SAMPLER,
+				PbUpgradeType.GENE_TYPE_ONLY, PbUpgradeType.GENE_FULL_PURITY,
+				PbUpgradeType.ESSENCE_CONVERSION, PbUpgradeType.USELESS_BYPRODUCT).contains(type)) {
 			assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.pb(record, type, 1, 64));
 			var extra = record.assets().copy().getCompound("extra");
 			extra.getCompound(ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS).putInt(type.getId(), 1);
@@ -275,6 +278,22 @@ class BeeProductionCheckpointTest {
 		var extra = record.assets().copy().getCompound("extra"); extra.getCompound(ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS).putInt("unknown", 1);
 		assertThrows(IllegalArgumentException.class, () -> PbApiaryUpgradeCounts.read(extra));
 		assertThrows(IllegalArgumentException.class, () -> MemberUpgradeChange.pb(record, PbUpgradeType.TIME, -1, 4));
+	}
+	@Test void adaptedApiaryPbEffectsSurviveCheckpointRoundTrip() throws Exception {
+		var f = fixture(0, 0);
+		var current = f.active();
+		var expected = new EnumMap<PbUpgradeType, Integer>(PbUpgradeType.class);
+		for (var type : List.of(PbUpgradeType.GENE_SAMPLER, PbUpgradeType.GENE_TYPE_ONLY,
+				PbUpgradeType.GENE_FULL_PURITY, PbUpgradeType.ESSENCE_CONVERSION, PbUpgradeType.USELESS_BYPRODUCT)) {
+			current = current.exchangeUpgrade(MemberUpgradeChange.pb(record(current, f), type, 1, 64));
+			expected.put(type, 1);
+		}
+		var restored = roundTrip(current, "adapted-pb-effects");
+		var extra = record(restored, f).assets().copy().getCompound("extra");
+		assertEquals(expected, PbApiaryUpgradeCounts.read(extra));
+		assertEquals("保留输入", extra.getString("productivebeesgenesis_pb_upgrade_input"));
+		assertEquals("保留输出", extra.getString("productivebeesgenesis_pb_upgrade_output"));
+		assertTrue(PbApiaryUpgradeCounts.read(record(f.active(), f).assets().copy().getCompound("extra")).isEmpty());
 	}
 	@Test void timingAndFirstNewPaymentPublishTogetherAfterDrainingOldWork() throws Exception {
 		var f = fixture(0, 3); var member = f.bees.member();
