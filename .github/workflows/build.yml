@@ -12,8 +12,8 @@ permissions:
   contents: read
 
 jobs:
-  package:
-    name: Forge 1.20.1 / Java 17
+  toolchain:
+    name: Prepare Forge toolchain
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -24,14 +24,50 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
-        with:
-          cache-read-only: ${{ github.event_name == 'pull_request' }}
       - uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      # Exact platform key; PR caches remain scoped to their GitHub PR ref.
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: toolchain
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: pbg-forge-tools-v1-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle.properties', 'build.gradle', 'settings.gradle', 'tools/prepare_forge_dependencies.py') }}
+      - name: Restore verified Forge compile inputs
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: python3 tools/prepare_forge_dependencies.py
+      - name: Prepare Gradle and Forge configuration
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: timeout --signal=TERM --kill-after=10s 240s ./gradlew --no-daemon help
+
+  package:
+    name: Forge 1.20.1 / Java 17
+    needs: toolchain
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require successful toolchain preparation
+        if: needs.toolchain.result != 'success'
+        run: exit 1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: pbg-forge-tools-v1-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle.properties', 'build.gradle', 'settings.gradle', 'tools/prepare_forge_dependencies.py') }}
+          fail-on-cache-miss: true
       - name: Restore verified Forge compile inputs
         run: python3 tools/prepare_forge_dependencies.py
       - name: Compile and reobfuscate distributable
-        run: ./gradlew --no-daemon jarJar reobfJarJar
+        run: timeout --signal=TERM --kill-after=10s 240s ./gradlew --no-daemon jarJar reobfJarJar
       - name: Verify Forge artifact boundaries
         run: python3 tools/verify_forge_artifact.py
       - name: Upload Forge artifact
