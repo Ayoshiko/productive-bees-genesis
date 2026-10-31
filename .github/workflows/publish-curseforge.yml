@@ -30,15 +30,34 @@ permissions:
 
 jobs:
   publish:
-    name: Build and publish
+    name: Publish verified NeoForge artifact
+    if: >-
+      github.actor == github.repository_owner &&
+      github.triggering_actor == github.repository_owner &&
+      (github.event_name != 'release' || github.event.release.author.login == github.repository_owner) &&
+      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main-neo/1.21.1')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: main-neo/1.21.1
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
+
+      - name: Verify owner release tag belongs to NeoForge maintenance
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+[.][0-9]+[.][0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
+          release_commit="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          git merge-base --is-ancestor "$release_commit" HEAD
+          git show "${release_commit}:gradle.properties" | grep -Fx 'minecraft_version=1.21.1'
+          git show "${release_commit}:build.gradle" | grep -F 'net.neoforged.moddev'
 
       - name: Normalize release metadata
         id: release_meta
@@ -62,7 +81,6 @@ jobs:
 
       - name: Download verified release artifact
         env:
-          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version }}
           RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
         shell: bash
@@ -72,7 +90,6 @@ jobs:
           url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${artifact}"
           mkdir -p build/libs
           curl --fail --location --retry 3 \
-            --header "Authorization: Bearer ${GH_TOKEN}" \
             --header 'Accept: application/octet-stream' \
             "$url" --output "build/libs/${artifact}"
           test -s "build/libs/${artifact}"
@@ -95,7 +112,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Publish to CurseForge
-        uses: Kira-NT/mc-publish@v3.3
+        uses: Kira-NT/mc-publish@c23376546a97f5ba7984e94445da359459b14419 # v3.3
         with:
           curseforge-id: ${{ vars.CURSEFORGE_PROJECT_ID }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
