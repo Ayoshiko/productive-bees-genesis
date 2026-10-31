@@ -126,7 +126,7 @@ final class DesignerBeeButton extends Button {
 				DesignerPreferences.animate() && DesignerPreferences.enabled("motion_selection"));
 		selectionFrame = now;
 		if (selectionFeedback.position() > 0.01) {
-			int fill = DesignerPalette.mix(DesignerTheme.colors().card(), DesignerTheme.colors().selected(), (float) selectionFeedback.position());
+			int fill = DesignerPalette.mix(DesignerTheme.colors().card(), DesignerTheme.colors().selected(), (float) selectionFeedback.position() * 0.55F);
 			int border = DesignerPalette.mix(DesignerTheme.colors().border(), DesignerTheme.colors().accent(), (float) selectionFeedback.position() * 0.6F);
 			if (DesignerAeSkin.enabled()) {
 				DesignerTheme.surface(graphics, getX(), getY(), width, height, fill, border);
@@ -151,15 +151,23 @@ final class DesignerBeeButton extends Button {
 		graphics.drawString(font, font.plainSubstrByWidth(name.getString(), Math.max(10, width - (pending ? 38 : 30) - actionSpace - (selectionMode ? 16 : 0))),
 				getX() + 24, getY() + 6, DesignerFormScreen.FOREGROUND, false);
 		if (selectionMode) {
-			int x = getX() + width - 15;
-			int y = getY() + 6;
+			int x = getX() + width - 20;
+			int y = getY() + 5;
 			int color = selected ? DesignerTheme.colors().accent() : DesignerTheme.colors().border();
-			DesignerTheme.surface(graphics, x, y, 10, 10, selected ? color : DesignerTheme.colors().input(), color);
+			int fill = selected ? color : DesignerTheme.colors().input();
+			if (DesignerAeSkin.enabled()) {
+				graphics.fill(x, y, x + 12, y + 12, color);
+				graphics.fill(x + 1, y + 1, x + 11, y + 11, fill);
+			} else {
+				DesignerGuideOverlay.box(graphics, x, y, 12, 12, 3, color);
+				DesignerGuideOverlay.box(graphics, x + 1, y + 1, 10, 10, 2, fill);
+			}
 			if (selected) {
-				int ink = DesignerPalette.contrast(color);
-				graphics.fill(x + 2, y + 4, x + 4, y + 6, ink);
-				graphics.fill(x + 4, y + 5, x + 6, y + 7, ink);
-				graphics.fill(x + 6, y + 2, x + 8, y + 5, ink);
+				graphics.pose().pushPose();
+				graphics.pose().translate(x + 6, y + 6, 0);
+				graphics.pose().scale(0.75F, 0.75F, 1);
+				DesignerGlyphs.draw(graphics, DesignerTheme.Symbol.CHECK, DesignerPalette.contrast(color));
+				graphics.pose().popPose();
 			}
 		}
 		if (detail != null) {

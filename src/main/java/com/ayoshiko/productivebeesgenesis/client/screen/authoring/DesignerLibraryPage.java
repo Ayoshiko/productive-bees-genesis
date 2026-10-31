@@ -54,8 +54,8 @@ final class DesignerLibraryPage {
 			query = value;
 			searchAt = System.currentTimeMillis() + 350;
 		}, this::actionLabel, value -> enabled(screen, value), value -> action(screen, value));
-		if (DesignerPreferences.enabled("catalog_help") && screen.frameHeight >= 300 && !selecting) {
-			Component help = DesignerFormScreen.tr(DesignerPreferences.enabled("tutorial_seen") ? "catalog_guide" : "catalog_welcome");
+		if (DesignerPreferences.enabled("catalog_help") && DesignerPreferences.enabled("tutorial_seen") && screen.frameHeight >= 300 && !selecting) {
+			Component help = DesignerFormScreen.tr("catalog_guide");
 			int helpHeight = Math.max(20, DesignerFonts.body().split(help, screen.contentWidth - 12).size() * 10 + 8);
 			if (screen.editorBottom() - screen.contentTop - helpHeight >= 76) {
 				screen.fixedNote(help, screen.left, screen.contentTop, screen.contentWidth, helpHeight);
@@ -186,10 +186,16 @@ final class DesignerLibraryPage {
 			case "history" -> mc.setScreen(new DesignerHistoryScreen(screen));
 			case "recycle_bin" -> screen.changeDocument(() -> mc.setScreen(new DesignerRecycleScreen(screen)));
 			case "tutorial_start" -> DesignerTutorialScreen.start(screen);
+			case "tutorial_dismiss" -> {
+				DesignerPreferences.set("tutorial_seen", true);
+				DesignerPreferences.save(message -> {
+					if (!message.equals("designer.status.preferences_saved")) {
+						screen.status = message;
+					}
+				});
+				screen.rebuild();
+			}
 			case "export_selection_action" -> mc.setScreen(new DesignerCollectionScreen(screen, List.copyOf(selection.ids()), screen.editingDocument()));
-			case "quick_select" -> mc.setScreen(new DesignerChoiceScreen(screen, "quick_select",
-					new String[]{"select_all", "clear_selection", "select_pack_bees", "select_editor_bees", "select_editor_new", "select_editor_modified", "select_pending_bees", "select_visible"},
-					choice -> action(screen, choice)));
 			case "select_all", "select_pack_bees", "select_editor_bees", "select_editor_new", "select_editor_modified", "select_pending_bees" -> {
 				cancelQuickSelection();
 				quickSelection = new DesignerCatalogQuickSelection(value, query);

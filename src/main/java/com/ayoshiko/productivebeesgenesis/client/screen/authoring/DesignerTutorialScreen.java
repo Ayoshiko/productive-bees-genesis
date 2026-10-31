@@ -369,6 +369,7 @@ final class DesignerTutorialScreen {
 	void finish() {
 		root.tutorial = null;
 		DesignerPreferences.set("tutorial_seen", true);
+		root.rebuild();
 		DesignerPreferences.save(message -> {
 			if (!message.equals("designer.status.preferences_saved")) {
 				root.status = message;

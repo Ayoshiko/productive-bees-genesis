@@ -123,6 +123,10 @@ final class DesignerGlyphs {
             case NEXT -> line(x, y, 9, 5, 16, 12, 1) || line(x, y, 16, 12, 9, 19, 1);
             case UNDO -> returnArrow(x, y);
             case REDO -> returnArrow(24 - x, y);
+            case REFRESH -> Math.abs(radius - 8) < 1 && (x <= 12 || y >= 12 || y <= 24 - x)
+                    || Math.hypot(x - 20, y - 12) <= 1
+                    || line(x, y, 17.66, 6.34, 20, 8.68, 1)
+                    || line(x, y, 20, 3.7, 20, 8.68, 1) || line(x, y, 15, 8.68, 20, 8.68, 1);
             case GRIP -> (Math.abs(x - 8) < 1.2 || Math.abs(x - 16) < 1.2)
                     && (Math.abs(y - 6) < 1.2 || Math.abs(y - 12) < 1.2 || Math.abs(y - 18) < 1.2);
         };

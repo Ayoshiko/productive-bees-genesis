@@ -238,6 +238,7 @@ final class DesignerTheme {
 	static class Action extends Button {
 		private boolean primary;
 		private boolean danger;
+		private boolean subtle;
 		protected boolean selected;
 		private final DesignerMotionValue hover = new DesignerMotionValue();
 		private final DesignerMotionValue press = new DesignerMotionValue();
@@ -275,6 +276,11 @@ final class DesignerTheme {
 
 		Action danger() {
 			danger = true;
+			return this;
+		}
+
+		Action subtle() {
+			subtle = true;
 			return this;
 		}
 
@@ -360,6 +366,11 @@ final class DesignerTheme {
 				if (primary && active) {
 					graphics.fill(getX() + 3, getY() + 3, getX() + 5, getY() + height - 3, accent);
 				}
+			} else if (subtle && !primary) {
+				int alpha = active ? (int) Math.round(hover.position() * 150) : 0;
+				DesignerMaterials.mask(graphics, getX(), getY(), width, height, DesignerMaterials.CONTROL_RADIUS,
+						alpha << 24 | palette.hover() & 0xFFFFFF);
+				offset = Math.min(1, inset);
 			} else {
 				surface(graphics, getX() + inset, getY() + inset, width - inset * 2, height - inset * 2, fill, border);
 				texture(graphics, getX() + inset, getY() + inset, width - inset * 2, height - inset * 2, false);
@@ -463,7 +474,7 @@ final class DesignerTheme {
 	enum Symbol {
 		THEME("toggle_theme"), PIN("window_pin"), SETTINGS("settings"), CLOSE("close_editor"), BACK("back"), COPY("copy"), DELETE("delete_bee"),
 		ADD("add"), MINUS("remove"), CHECK("valid"), WARNING("error"), REPLACE("drag_replace"), SEARCH("search"),
-		UP("output_move_up"), DOWN("output_move_down"), PREVIOUS("previous"), NEXT("next"), UNDO("undo"), REDO("redo"), GRIP("output_drag_help"), DOT("status");
+		UP("output_move_up"), DOWN("output_move_down"), PREVIOUS("previous"), NEXT("next"), UNDO("undo"), REDO("redo"), GRIP("output_drag_help"), DOT("status"), REFRESH("refresh");
 
 		private final String label;
 
