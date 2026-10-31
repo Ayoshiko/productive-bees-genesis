@@ -67,6 +67,14 @@ mixin {
     add sourceSets.main, 'productivebeesgenesis.refmap.json'
     config 'productivebeesgenesis.mixins.json'
 }
+tasks.withType(Jar).configureEach {
+    from('LICENSE') {
+        rename { "LICENSE_${mod_id}" }
+    }
+    from('THIRD_PARTY_LICENSES.md') {
+        rename { "THIRD_PARTY_LICENSES_${mod_id}.md" }
+    }
+}
 tasks.named('jar', Jar).configure {
     manifest.attributes('MixinConfigs': 'productivebeesgenesis.mixins.json')
     finalizedBy 'reobfJar'

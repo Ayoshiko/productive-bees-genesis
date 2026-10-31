@@ -1,9 +1,9 @@
 # Forge 1.20.1 optional compatibility
 
-Policy confirmed by the user on 2026-10-30: inspect the target mod's 1.20.1 Git
-source before adapting its interface. Drop an integration when no 1.20.1 mod
-exists. A missing repository URL or missing dependency is not proof that the
-mod has no 1.20.1 version.
+This port snapshot records source inspection performed by its contributor on
+2026-10-30. Check each target mod's actual 1.20.1 API when maintaining an
+integration. A missing repository URL or dependency is not proof that the mod
+has no 1.20.1 version.
 
 ## Source pins inspected on 2026-10-30
 
@@ -23,9 +23,10 @@ mod has no 1.20.1 version.
   targets NeoForge 1.21.1, the repository branch list contains main and a fix
   branch, and the [publisher page](https://www.curseforge.com/minecraft/mc-mods/mek-energistics)
   lists only NeoForge 1.21.1. The three mixin registrations and plugin detection
-  were removed. Sources were moved to port-disabled, outside all source sets.
-- Iris 1.21's SkipList-specific constructor hook is archived in port-disabled.
-  The 1.20.1 shader bridge uses Oculus's actual public API instead.
+  were removed. The incompatible integration sources are absent from this branch;
+  the original NeoForge implementation remains in Git history.
+- Iris 1.21's SkipList-specific constructor hook is absent from this branch.
+  The 1.20.1 shader bridge uses Oculus's public API instead.
 
 ## Runtime verification pending
 

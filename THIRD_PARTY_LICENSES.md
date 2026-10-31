@@ -28,11 +28,19 @@
 - **许可证**: Mojang EULA
 - **使用方式**: 本模组作为 Minecraft 的修改内容，遵循 Mojang 最终用户许可协议
 
-## NeoForge
+## Minecraft Forge
 
-- **项目**: NeoForge
+- **项目**: Minecraft Forge
 - **许可证**: LGPL-2.1
-- **使用方式**: 作为模组加载器
+- **使用方式**: 本分支使用 Forge 47.4.0 加载 Minecraft 1.20.1 模组
+- **源码**: https://github.com/MinecraftForge/MinecraftForge
+
+## MixinExtras
+
+- **项目**: MixinExtras 0.5.5
+- **许可证**: MIT License，原始声明保留在嵌套 JAR 的 `LICENSE_MixinExtras`
+- **使用方式**: `mixinextras-forge` 作为 jar-in-jar 运行库随 Forge 产物分发；common JAR 仅用于编译与注解处理
+- **源码**: https://github.com/LlamaLad7/MixinExtras
 
 ## Mekanism
 
@@ -139,10 +147,10 @@
 ## Just Dire Things Extras (JDTE)
 
 - **项目**: Just Dire Things Extras
-- **作者**: JustDireThings 社区
-- **许可证**: 以 Modrinth 页面声明为准（库内未附带独立许可证文本）
-- **使用方式**: 可选联动，编译期引用 `CoalescedAcceleratedMachine` 合并加速接口（`libs/jdte-0.5.9-alpha1.jar`，仅开发编译用，不分发给终端玩家）；运行时经 `MixinConfigPlugin` 条件应用，未安装 JDTE 时完全不加载相关代码
-- **来源**: https://modrinth.com/mod/just-dire-things-extras
+- **作者**: JDTE contributors
+- **许可证**: MIT License，移植快照保留声明于 `src/compatApi/LICENSE-JDTE`
+- **使用方式**: `src/compatApi/jdte` 的 `CoalescedAcceleratedMachine` 接口仅用于独立 source set 编译，不进入运行 classpath 或发行 JAR；运行时由 JDTE 提供接口，并经 `MixinConfigPlugin` 条件应用
+- **来源**: https://github.com/rulanup/JDTE/tree/ac1d813d010b6844746534a5a12c0c5b3251ff92
 
 ## KubeJS
 

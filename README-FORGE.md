@@ -7,12 +7,13 @@ feature from the newer NeoForge 1.2.1 editor.
 
 ## Build
 
-Use JDK 17. Restore the compile inputs, then build and reobfuscate the
-jar-in-jar artifact:
+Use JDK 17 and Python 3.11 or newer. Restore the compile inputs, then build,
+reobfuscate and verify the jar-in-jar artifact:
 
 ```sh
 python tools/prepare_forge_dependencies.py
-./gradlew jarJar reobfJarJar
+./gradlew --no-daemon jarJar reobfJarJar
+python tools/verify_forge_artifact.py
 ```
 
 On Windows use `gradlew.bat`. The output is
@@ -36,6 +37,13 @@ compiled in a separate compile-only source set and is not bundled.
 - Successful packaging is not an in-game compatibility test. Optional mod
   combinations and gameplay still require runtime verification.
 
+CI checks Forge metadata, Java 17 bytecode, MixinExtras, project license notices,
+and exclusion of JDTE API classes. Its job has a five-minute time limit; a timeout
+is not a successful build. The old NeoForge CurseForge workflow and unused
+NeoForge metadata template have been removed from this branch. Forge publishing
+requires a separate, reviewed release workflow after runtime acceptance.
+
 See [PORT-COMPATIBILITY.md](PORT-COMPATIBILITY.md) for source references and
-integration decisions. The existing main README documents the upstream
-NeoForge edition; follow this file for the Forge build.
+integration decisions. [README.md](README.md) and [README_zh.md](README_zh.md)
+are the English and Chinese branch entry points. Target `forge/1.20.1` for
+subsequent contributions.
