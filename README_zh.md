@@ -11,7 +11,7 @@
 
 **语言**: [English](README.md) · [中文](README_zh.md)
 
-**1.2.1：编辑器交互、拼音搜索和跨整合包导入改进。** 本地更新汇总 1.2.0 之后的改动，尚未对外发布。完整变更见 [CHANGELOG](CHANGELOG.md#121---2026-10-29)。
+**1.2.1：更清楚的编辑器工具、批量选择与跨整合包迁移。** 于 2026-10-31 正式发布，包含文字、搜索、导入导出和兼容修复。完整变更见 [CHANGELOG](CHANGELOG.md#121---2026-10-31)。
 
 **下载**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 

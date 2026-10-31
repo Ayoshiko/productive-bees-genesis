@@ -11,7 +11,7 @@
 
 **Languages**: [English](README.md) · [中文](README_zh.md)
 
-**Version 1.2.1: editor usability, Pinyin search and cross-pack import improvements.** This local update includes the changes since 1.2.0 and has not been published to external platforms. See the [CHANGELOG](CHANGELOG.md#121---2026-10-29).
+**Version 1.2.1: clearer editor tools, bulk selection and cross-pack migration.** Released on 2026-10-31 with text, search, import/export and compatibility improvements. See the [CHANGELOG](CHANGELOG.md#121---2026-10-31).
 
 **Download**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
