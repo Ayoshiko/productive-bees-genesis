@@ -62,6 +62,12 @@ this repository and open a pull request against that branch. Include the Java,
 Forge and dependency versions, the packaging result, and which runtime scenarios
 were actually tested. Report issues with **Forge 1.20.1** in the title.
 
+Branch updates use reviewed PRs, including contributions from the Forge maintainer.
+The Forge platform policy and Java 17 build must pass; approvals are dismissed after
+new changes and review conversations must be resolved. CI, publishing, build inputs,
+and platform metadata need Ayoshiko's review. Other branches and release tags remain
+owner-managed. External PR Actions may require maintainer approval before execution.
+
 Changes shared with NeoForge should be adapted and validated for each loader's API.
 Do not merge the full Forge source tree into `main-neo/1.21.1` or copy a NeoForge
 build setup over this branch.
