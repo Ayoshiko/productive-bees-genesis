@@ -19,7 +19,7 @@ import java.util.zip.ZipOutputStream;
 /** 便携收藏仅保管工程，不复制模组资产，也不会被 Minecraft 当作生效数据包。 */
 public final class BeeDesignerCollection {
 
-	public static final int MAX_BEES = 128;
+	public static final int MAX_BEES = 4096;
 
 	private BeeDesignerCollection() {
 	}

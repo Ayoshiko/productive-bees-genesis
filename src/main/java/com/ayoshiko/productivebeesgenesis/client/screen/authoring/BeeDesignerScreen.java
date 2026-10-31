@@ -10,6 +10,7 @@ import com.google.gson.JsonArray;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
+import net.minecraft.client.renderer.Rect2i;
 
 
 /** 手持编辑会话的页面协调；配方、资源选择和预览分别拥有各自状态。 */
@@ -144,11 +145,6 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 			}));
 		} else switch (tab) {
 			case 0 -> {
-				if (!DesignerPreferences.enabled("tutorial_seen") && !compactHeight()) {
-					rows.add(new Row("", (x, rowY, rowW) -> button(x, rowY, rowW, tr("tutorial_start"), () -> {
-						DesignerTutorialScreen.start(this);
-					})));
-				}
 				if (publication != null && publication.get("uncertain").getAsBoolean()) {
 					note("", tr("unknown_publish_help"));
 					rows.add(new Row("", (x, rowY, rowW) -> primaryButton(x, rowY, rowW, tr("reconcile"), this::reconcile)
@@ -298,6 +294,14 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		}
 		rebuild();
 		animatePage(direction);
+	}
+
+	void prepareTutorial() {
+		library.prepareTutorial();
+	}
+
+	Rect2i tutorialCatalogTarget(String action) {
+		return library.guideTarget(this, action);
 	}
 
 	void tutorialPage(int next) {
@@ -1219,6 +1223,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	public void removed() {
 		super.removed();
 		preview.clear();
+		library.cancelQuickSelection();
 	}
 
 	static Component beeName(String id) {

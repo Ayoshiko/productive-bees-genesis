@@ -58,7 +58,7 @@ final class DesignerDraftIndex {
 		generation++;
 		loading = false;
 		String id = document.get("id").getAsString();
-		if (ENTRIES.size() >= 256 && !ENTRIES.containsKey(id)) {
+		if (ENTRIES.size() >= BeeDesignerDrafts.MAX_DRAFTS && !ENTRIES.containsKey(id)) {
 			return;
 		}
 		Map<String, String> names = new LinkedHashMap<>();

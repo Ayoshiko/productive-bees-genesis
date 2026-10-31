@@ -114,6 +114,7 @@ final class DesignerBeeFields {
 						definition.addProperty(value, id);
 					}
 				}), 20, true));
+		screen.anchor("flower_value");
 		if (flower.equals("flowerItem")) {
 			screen.item("flower", definition, flower, "minecraft:poppy");
 		} else if (flower.equals("flowerBlock")) {

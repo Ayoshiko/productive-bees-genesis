@@ -309,6 +309,10 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
 		String simpleName = simpleClassName(mixinClassName);
+		if (simpleName.equals("DesignerRecipeUnificationMixin")) {
+			return isModLoaded("almostunified") && FMLLoader.getLoadingModList().getMods().stream()
+					.anyMatch(mod -> mod.getModId().equals("almostunified") && mod.getVersion().toString().equals("1.21.1-1.4.2"));
+		}
 		if (simpleName.equals("DesignerGeckoBeeModelMixin")) {
 			return isModLoaded("geckolib");
 		}

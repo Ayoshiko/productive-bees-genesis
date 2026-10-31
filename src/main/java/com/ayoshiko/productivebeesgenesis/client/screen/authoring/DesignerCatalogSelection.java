@@ -9,7 +9,7 @@ import java.util.function.IntFunction;
 
 /** 选择只持有目录身份与有界索引；分页未返回前保留原集合，取消框选可恢复。 */
 final class DesignerCatalogSelection {
-	static final int LIMIT = 128;
+	static final int LIMIT = com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCollection.MAX_BEES;
 	private final Set<String> ids = new LinkedHashSet<>();
 	private int anchor = -1;
 	private List<Integer> pending = List.of();
@@ -121,15 +121,24 @@ final class DesignerCatalogSelection {
 
 	boolean add(Collection<String> values) {
 		pending = List.of();
-		boolean complete = true;
-		for (String id : values) {
-			if (ids.size() < LIMIT || ids.contains(id)) {
-				ids.add(id);
-			} else {
-				complete = false;
-			}
+		Set<String> replacement = new LinkedHashSet<>(ids);
+		replacement.addAll(values);
+		if (replacement.size() > LIMIT) {
+			return false;
 		}
-		return complete;
+		ids.clear();
+		ids.addAll(replacement);
+		return true;
+	}
+
+	boolean replace(Collection<String> values) {
+		Set<String> replacement = new LinkedHashSet<>(values);
+		if (replacement.size() > LIMIT) {
+			return false;
+		}
+		clear();
+		ids.addAll(replacement);
+		return true;
 	}
 
 	void resetOrder() {

@@ -109,6 +109,32 @@ final class DesignerProjectFiles {
 		submit(() -> BeeDesignerArchive.read(path), loaded, failed);
 	}
 
+	static void instances(Path path, Consumer<List<Path>> loaded, Consumer<String> failed) {
+		submit(() -> com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerInstanceCatalog.instances(path), loaded, failed);
+	}
+
+	static void instanceCatalog(Path path, Consumer<com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerInstanceCatalog.Catalog> loaded, Consumer<String> failed) {
+		submit(() -> com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerInstanceCatalog.read(path), loaded, failed);
+	}
+
+	static void saveRegisteredCatalog(Map<String, String> documents, List<String> registered, long generation, Runnable saved, Consumer<String> failed) {
+		Path directory = Minecraft.getInstance().gameDirectory.toPath();
+		Map<String, String> snapshot = Map.copyOf(documents);
+		List<String> ids = List.copyOf(registered);
+		submit(() -> {
+			com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerInstanceCatalog.saveRuntime(directory, snapshot, ids, generation);
+			return true;
+		}, unused -> saved.run(), failed);
+	}
+
+	static void importBatch(com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMigration.Plan plan, Runnable saved, Consumer<String> failed) {
+		Path directory = Minecraft.getInstance().gameDirectory.toPath().resolve("bee-designer");
+		submit(() -> com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMigration.saveDrafts(directory, plan), ids -> {
+			DesignerDraftIndex.refresh();
+			saved.run();
+		}, failed);
+	}
+
 	static void readCredits(Path path, Consumer<JsonObject> loaded, Consumer<String> failed) {
 		submit(() -> BeeDesignerCredits.readManifest(path), loaded, failed);
 	}

@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mixin.client;
 
 import com.ayoshiko.productivebeesgenesis.client.render.MekGuiBlockItemRenderContext;
+import com.ayoshiko.productivebeesgenesis.client.screen.authoring.DesignerFormScreen;
+import net.minecraft.client.Minecraft;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import mezz.jei.gui.ghost.GhostIngredientDrag;
@@ -21,11 +23,21 @@ public class JeiGhostIngredientDragMixin {
 	@WrapMethod(method = "drawItem(Lnet/minecraft/client/gui/GuiGraphics;II)V", require = 0)
 	private void productivebeesgenesis$wrapDragRender(GuiGraphics guiGraphics, int mouseX, int mouseY,
 			Operation<Void> original) {
+		boolean designer = Minecraft.getInstance().screen instanceof DesignerFormScreen;
+		if (designer) {
+			guiGraphics.flush();
+			guiGraphics.pose().pushPose();
+			guiGraphics.pose().translate(0, 0, 1000);
+		}
 		MekGuiBlockItemRenderContext.beginJeiDragRender();
 		try {
 			original.call(guiGraphics, mouseX, mouseY);
 		} finally {
 			MekGuiBlockItemRenderContext.endJeiDragRender();
+			if (designer) {
+				guiGraphics.flush();
+				guiGraphics.pose().popPose();
+			}
 		}
 	}
 }

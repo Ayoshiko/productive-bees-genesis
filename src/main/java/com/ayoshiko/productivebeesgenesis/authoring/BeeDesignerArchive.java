@@ -44,8 +44,8 @@ public final class BeeDesignerArchive {
 		if (root.has("schema_version")) {
 			add(result, root);
 		} else {
-			if (root.size() > 128) {
-				throw new IOException("Project contains more than 128 bees");
+			if (root.size() > BeeDesignerCollection.MAX_BEES) {
+				throw new IOException("designer.error.collection_count");
 			}
 			for (var value : root.entrySet()) {
 				JsonObject document = value.getValue().getAsJsonObject();
@@ -103,6 +103,7 @@ public final class BeeDesignerArchive {
 
 	private static void add(Map<String, String> result, JsonObject document) {
 		BeeDesignerCompiler.validateStructure(document);
+		BeeDesignerLegacyOutputs.capture(document);
 		String id = document.get("id").getAsString();
 		if (result.putIfAbsent(id, document.toString()) != null) {
 			throw new IllegalArgumentException("Duplicate imported bee ID: " + id);

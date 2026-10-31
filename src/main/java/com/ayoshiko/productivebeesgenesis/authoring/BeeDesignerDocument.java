@@ -194,6 +194,7 @@ public final class BeeDesignerDocument {
 				entry.getValue().getAsJsonObject().add("recipe_ids", mapped);
 			});
 		}
+		BeeDesignerLegacyOutputs.rebase(source, copy, ids);
 		return copy;
 	}
 

@@ -176,7 +176,7 @@ public final class BeeDesignerClient {
 			return;
 		}
 		if (response.action().equals("names")) {
-			if (NAMES.size() < 128 || NAMES.containsKey(data.get("id").getAsString())) {
+			if (NAMES.size() < com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCollection.MAX_BEES || NAMES.containsKey(data.get("id").getAsString())) {
 				NAMES.put(data.get("id").getAsString(), data.getAsJsonObject("names"));
 				if (data.has("deleted") && data.get("deleted").getAsBoolean()) {
 					RETIRED.add(data.get("id").getAsString());
@@ -196,6 +196,13 @@ public final class BeeDesignerClient {
 			return;
 		}
 		if (session != null && session.equals(response.session())) {
+			DesignerFormScreen importing = Minecraft.getInstance().screen instanceof DesignerFormScreen form ? form : null;
+			for (int depth = 0; importing != null && !(importing instanceof DesignerBatchImportScreen) && depth < 16; depth++) {
+				importing = importing.editorParent instanceof DesignerFormScreen form ? form : null;
+			}
+			if (importing instanceof DesignerBatchImportScreen batch && batch.receive(response.sequence(), response.action(), data)) {
+				return;
+			}
 			DesignerFormScreen currentForm = Minecraft.getInstance().screen instanceof DesignerFormScreen form ? form : null;
 			for (int depth = 0; currentForm != null && !(currentForm instanceof DesignerCollectionScreen) && depth < 16; depth++) {
 				currentForm = currentForm.editorParent instanceof DesignerFormScreen form ? form : null;
@@ -261,7 +268,7 @@ public final class BeeDesignerClient {
 		}
 		if (session != null && session.equals(response.session()) && screen != null) {
 			if (response.action().equals("applied") && data.has("names")
-					&& (NAMES.size() < 128 || NAMES.containsKey(data.get("id").getAsString()))) {
+					&& (NAMES.size() < com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCollection.MAX_BEES || NAMES.containsKey(data.get("id").getAsString()))) {
 				NAMES.put(data.get("id").getAsString(), data.getAsJsonObject("names").deepCopy());
 				if (com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerLifecycle.deleted(data)) {
 					RETIRED.add(data.get("id").getAsString());

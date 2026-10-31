@@ -223,9 +223,14 @@ public final class BeeDesignerReader {
 				}
 				String raw = text.toString();
 				JsonObject source = BeeDesignerProtocol.parse(raw);
-				boolean machine = BeeDesignerMachineRecipes.host(source) != null;
-				if (!machine) {
-					recipes.getAsJsonObject(entry.getKey()).entrySet().forEach(value -> source.add(value.getKey(), value.getValue()));
+				source.remove("productivebeesgenesis:designer_recipe");
+				var host = BeeDesignerMachineRecipes.host(source);
+				JsonObject runtime = recipes.getAsJsonObject(entry.getKey());
+				if (host == BeeDesignerMachineRecipes.Host.MI) {
+					source = machineRuntimeSource(source, runtime).getAsJsonObject();
+				} else if (host == null) {
+					JsonObject retained = source;
+					runtime.entrySet().forEach(value -> retained.add(value.getKey(), value.getValue().deepCopy()));
 				}
 				recipes.add(entry.getKey(), source);
 				if (BeeDesignerMachineRecipes.host(source) != null) {
@@ -237,9 +242,65 @@ public final class BeeDesignerReader {
 				throw new UncheckedIOException(exception);
 			}
 		}
+		BeeDesignerLegacyOutputs.capture(document);
 		document.addProperty("baseline", BeeDesignerDocument.fingerprint(document));
 		BeeDesignerProtocol.checkSize(document.toString());
 		return document;
+	}
+
+	/** MI 的源文件可能尚未统一材料，实际配方为准；匹配原节点后保留宿主未编码的扩展字段。 */
+	private static JsonElement machineRuntimeSource(JsonElement source, JsonElement runtime) {
+		if (source.isJsonObject() && runtime.isJsonObject()) {
+			JsonObject result = source.getAsJsonObject().deepCopy();
+			JsonObject actual = runtime.getAsJsonObject();
+			if (java.util.Set.of("item", "items", "tag", "fluid", "fluids").stream().anyMatch(actual::has)) {
+				for (String field : java.util.Set.of("item", "items", "tag", "fluid", "fluids", "components", "strict", "type")) {
+					result.remove(field);
+				}
+			}
+			for (var entry : actual.entrySet()) {
+				JsonElement previous = result.get(entry.getKey());
+				result.add(entry.getKey(), previous == null ? entry.getValue().deepCopy()
+						: machineRuntimeSource(previous, entry.getValue()));
+			}
+			return result;
+		}
+		if (source.isJsonArray() && runtime.isJsonArray()) {
+			JsonArray result = new JsonArray();
+			var remaining = new java.util.ArrayList<JsonElement>();
+			source.getAsJsonArray().forEach(remaining::add);
+			for (JsonElement actual : runtime.getAsJsonArray()) {
+				JsonElement previous = remaining.stream().filter(value -> materialIdentity(value).equals(materialIdentity(actual)))
+						.findFirst().orElse(null);
+				if (previous != null) {
+					remaining.remove(previous);
+					result.add(machineRuntimeSource(previous, actual));
+				} else {
+					result.add(actual.deepCopy());
+				}
+			}
+			for (JsonElement unmatched : remaining) {
+				if (unmatched.isJsonObject() && unmatched.getAsJsonObject().keySet().stream()
+						.anyMatch(field -> !java.util.Set.of("item", "items", "tag", "fluid", "fluids", "components",
+								"strict", "type", "amount", "probability").contains(field))) {
+					throw new IllegalArgumentException("Machine runtime changed an ingredient with unknown fields");
+				}
+			}
+			return result;
+		}
+		return runtime.deepCopy();
+	}
+
+	private static JsonObject materialIdentity(JsonElement value) {
+		JsonObject identity = new JsonObject();
+		if (value.isJsonObject()) {
+			for (String field : java.util.Set.of("item", "items", "tag", "fluid", "fluids", "components", "type")) {
+				if (value.getAsJsonObject().has(field)) {
+					identity.add(field, value.getAsJsonObject().get(field));
+				}
+			}
+		}
+		return identity;
 	}
 
 	public static boolean belongs(JsonObject recipe, String bee) {
@@ -294,6 +355,13 @@ public final class BeeDesignerReader {
 		}
 		var ops = server.registryAccess().createSerializationContext(JsonOps.INSTANCE);
 		JsonObject current = snapshot(server, ResourceLocation.parse(id)).document.getAsJsonObject("recipes");
+		if (BeeDesignerMyriad.recipesOnly(original)) {
+			JsonObject retained = managed == null ? new JsonObject() : JsonParser.parseString(managed).getAsJsonObject().getAsJsonObject("recipes");
+			JsonObject imported = original.getAsJsonObject("recipes");
+			current.entrySet().removeIf(entry -> !BeeDesignerMyriad.additionalType(entry.getValue().getAsJsonObject())
+					&& !(retained.has(entry.getKey()) && BeeDesignerMyriad.customRecipe(retained.getAsJsonObject(entry.getKey())))
+					&& !(imported.has(entry.getKey()) && BeeDesignerMyriad.customRecipe(imported.getAsJsonObject(entry.getKey()))));
+		}
 		JsonObject expected = new JsonObject();
 		for (var entry : original.getAsJsonObject("recipes").entrySet()) {
 			var recipe = Recipe.CODEC.parse(ops, entry.getValue()).getOrThrow();

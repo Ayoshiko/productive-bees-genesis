@@ -20,7 +20,7 @@ import java.util.UUID;
 
 /** 本机草稿按蜂种身份隔离；坏文件保留原文，未确认成功的写入不能关闭编辑器。 */
 public final class BeeDesignerDrafts {
-	private static final int MAX_DRAFTS = 256;
+	public static final int MAX_DRAFTS = BeeDesignerCollection.MAX_BEES;
 
 	private BeeDesignerDrafts() {
 	}

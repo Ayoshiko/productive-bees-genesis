@@ -44,9 +44,20 @@ public final class BeeDesignerSources extends SimpleJsonResourceReloadListener {
 					entry -> entry.getValue().toString()));
 			sourcePacks = data.keySet().stream().collect(Collectors.toUnmodifiableMap(path -> path,
 					path -> manager.getResource(path.withPath("productivebees/" + path.getPath() + ".json"))
-							.map(resource -> resource.sourcePackId()).orElse("")));
+							.map(resource -> sourcePack(resource.source(), path.withPath("productivebees/" + path.getPath() + ".json"))).orElse("")));
 			generation++;
 		}
+	}
+
+	static String sourcePack(net.minecraft.server.packs.PackResources pack, ResourceLocation resource) {
+		if (pack instanceof com.ayoshiko.productivebeesgenesis.mixin.accessor.CompositePackResourcesAccessor composite) {
+			for (var child : composite.productivebeesgenesis$packResourcesStack()) {
+				if (child.getResource(net.minecraft.server.packs.PackType.SERVER_DATA, resource) != null) {
+					return sourcePack(child, resource);
+				}
+			}
+		}
+		return pack.packId();
 	}
 
 	@SubscribeEvent

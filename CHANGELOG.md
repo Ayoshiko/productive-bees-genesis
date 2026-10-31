@@ -35,10 +35,13 @@
 
 ### 新增
 
+- 多选工具栏新增“快速选择”：全选全部搜索结果、取消全选、整合包注册、编辑器新增／修改及未应用草稿，跨全部目录页原子更新，选择与草稿上限统一为 4096；失败或取消保留原选择。
+- 跨包迁移保留未修改的旧 PB 产物概率／数量；修复 MI 来源读取覆盖运行材料的问题，并精确兼容 Almost Unified `1.21.1-1.4.2`，防止生成配方再次统一或重复删除。应用后核对全部实际配方内容；失败原因在导入页面正文完整展示。
+- 新增跨整合包只读浏览，区分离线定义与带时间的实际注册快照，支持搜索、来源选择、JSON 预览和整批导入／导出。整批冲突先展示身份映射，复制冲突或保留／跳过身份，保管草稿后一次校验应用；繁殖、转化、条件、蜂蛋／蜜脾及机器引用一起迁移，共享所有者声明须一致。缺依赖明确拒收，结果未知提供查询。
 - 蜜蜂编辑器支持浏览器式中键自动滚动：在表单、蜂种目录、材料网格或 JSON 区域点按中键，上下移动鼠标控制方向和速度，回到起点附近暂停；起点使用紧凑的半透明圆形标记，以短箭头提示当前方向。再次点击或按 Esc 停止，停止点击不触发下方控件；滚轮、键盘编辑、切页、窗口缩放和失焦会取消。
 - 蜜蜂编辑器及全部子页面独立实现平滑文字：Noto Sans／SC 与 JetBrains Mono 精简改名子集覆盖当前翻译、3,755 个一级常用汉字和常见西文／符号，裁剪外字符按系统矢量字体、Minecraft 原生字形依次回退，字体文件压缩增量约 1.05 MB，保留相同字符覆盖与横排特性，去除未使用的竖排及装饰替代特性。按实际屏幕尺寸栅格化，连续缩放可用距离场；提供自动／距离场／游戏当前字体选择，统一宽度、换行、光标、选区及字素移动删除。资源重载释放图集，不要求安装 ModernUI／LDLib2 或运行时下载，完整 OFL 与原版权保留。
 - 现代主题采用自制高倍率圆角遮罩与非零中心九宫格材质，分层窗口／卡片／控件阴影、连续分组卡片、标题层级、实体／轻透面板、状态徽章和短保存反馈。错误与未知应用持续显示，拖入提示区分添加／替换，危险操作及输入／槽状态统一表达；现有 AE 像素主题、步进、分页与分段交互保留。
-- 逐步教学会实际跳转到目录、外观、属性、获得、产物、检查、导出与生成文件，并用贴近控件的柔和圆角光圈、步骤标记和短曲线箭头提示操作；支持键盘切步、跳过与减少动态效果。生成文件预览增加上一个／下一个和文件列表快捷切换。
+- 11 步教学先介绍常驻工程入口、跨整合包浏览与迁移，再进入目录、外观、属性、JEI 拖入、获得、产物、检查、导出与生成文件，并用贴近控件的柔和圆角光圈、步骤标记和短曲线箭头提示操作；支持键盘切步、跳过与减少动态效果。生成文件预览增加上一个／下一个和文件列表快捷切换。
 - 万象创世配置补齐伤害免疫、攻击反馈、第三颜色、采蜜体型、发光图层、渲染变换和方块／标签／流体花源。专属“获得方式”入口可添加 PB 繁殖、转化、巢穴、钓鱼、灌装、合成及已适配的 MI／MBD2／MMR 机器配方，并支持独立检查、应用、导出和跨包导入。
 - PB 灌装获得蜂蛋接入物品、流体用量与完整蜂种输出编辑、编译校验和重载。
 - 万象创世蜜脾转化过滤页统一编辑器主题，提供过滤列表、添加蜂种和效果预览；按服务器真实蜜脾／蜜脾块能力展示有效、缺失、停用和依赖不可用状态。支持搜索、Shift 连选、拖动排序、批量移除、复制／粘贴、撤销及缺失项清理；未保存编辑保留，外部配置冲突可合并本地增删后再保存。
@@ -46,10 +49,10 @@
 - 编辑器支持中文全拼、首字母及带声调输入，兼容 `lv/lü/lu` 搜索；蜂种、材料、AE 资源、机器、群系、草稿和文件浏览复用同一搜索规则，保留名称／ID、`@模组`、`#标签` 与多词交集。
 - 接入 PB 13.14.0 的物品转化与方块转化配方，编辑材料、结果、概率、授粉和真实方块状态属性。共享多蜂配方显示为只读；复制蜂种时生成独立归属，停用蜂种只移除该蜂归属并保留其余蜂种。
 
-- 目录支持 Shift 连选、Ctrl 增减、鼠标框选与取消恢复，保留 128 蜂上限；收藏自动读取可用整合包清单并只补空白署名。文件浏览提供固定路径栏、统一文件行、选择确认与键盘导航。
+- 目录支持 Shift 连选、Ctrl 增减、鼠标框选与取消恢复，支持 4096 蜂上限；收藏自动读取可用整合包清单并只补空白署名。文件浏览提供固定路径栏、统一文件行、选择确认与键盘导航。
 - 编辑器补齐 PB 第三颜色、循环配色、采蜜后体型、发光层、攻击效果、伤害免疫和繁殖食物标签／默认值；方块标签花源支持反向匹配。AE2 主题使用终端面板／像素边框和已安装原生工具按钮资源；现代主题提供轻柔／跟手／静止预设、独立菜单与选中动效。
 - 蜂种目录与草稿支持多选，一次导出便携收藏包、数据包或 KubeJS 作者包。便携收藏可带到其他整合包导入，保留来源整合包、作者、版本、发布链接和原创修改说明；许可说明可选，提示尊重原作者。导入先预览来源、依赖和重名选择。
-- 小窗口按本地化标题宽度保留直接导航，剩余栏目进入“更多”；目录合并搜索和常用操作，极矮窗口仍显示完整蜂种卡片。支持单列／优先双列、上下字段排版、少量选项直接切换、次要分组与自定义颜色折叠。问题定位自动展开目标，提醒边框贴近控件；导入操作固定底部。首次使用有可跳过、可重新查看的引导。
+- 目录常驻新建、导入、草稿、跨整合包与快速入门；带文字的“管理”提供历史、回收站和刷新。搜索与多选另行分组，重要入口在多选时继续可见；窄窗按译文宽度换行，高度不足时工具行进入滚动区。小窗口按本地化标题宽度保留直接导航，剩余栏目进入“更多”。支持单列／优先双列、上下字段排版、少量选项直接切换、次要分组与自定义颜色折叠。问题定位自动展开目标，提醒边框贴近控件；导入操作固定底部。首次使用有可跳过、可重新查看的引导。
 - 个性化设置增加独立 AE 风格按钮材质、AE 深色、文字对比度提示、按压／涟漪和方向滑动／局部展开选项；明暗切换保留主题系列。
 - 感谢 gummyc_type2（beebeeblock-the-skyhive 作者）提供蜂蜂应援手册书本原材质；本模组保留原像素形状并换为黄色。
 - 编辑器设置增加“文件位置”，草稿库、回收站和发布页也可快捷打开。显示当前游戏实例的完整目录，支持复制路径、打开文件夹和查找最近一次导出，区分本机文件与独立服务器文件。
@@ -71,10 +74,11 @@
 
 ### 修复
 
+- 弹出菜单限制在编辑器边界内并报告 JEI 占用区，修复菜单越出窗口后被物品栏遮挡。JEI 拖入期间教学卡暂时收起，拖曳材料预览在前层显示，完成／取消后恢复；JEI 配方窗口沿原入口返回编辑器。
 - Mekanism Empowered 与 Empowered Unleashed 分别按真实模组 ID 接入，蜂箱和离心机均支持强化速度、强化能量、IO 容量、自动插入器、快速物品插入和快速物品弹出六种升级。蜂箱初始输入支持蜂笼与基因小食，沿附属原生插入面配置及吞吐公式；内部库存容量保持原合同。
 - 蜂箱和 PB 离心处理共用运行时速度公式，正确还原 Unleashed 的每 tick 操作数编码。普通／强化速度和能量增减立即刷新耗电，储能缓存同时识别两类能量升级，修复安装顺序、卸载及 ME／EME 工厂耗电更新遗漏；蜂箱仍保留最短 1 tick 周期。既有原生快速输出不重复叠加附属倍率，中英文安装前置和两种附属择一说明同步更新。
 - 编辑器物品栏恢复 Minecraft 当前字体和原版物品数量／耐久／冷却装饰，移除自定义数字字体。离心机、蜂箱及直连槽恢复原先固定 0.7 倍的紧凑数量样式，撤回随 GUI 比例变化的数字像素倍率调整。其他 GUI 的原版数量保留原入口。
-- 栏目和普通按钮按缓存的实际字形上下边界垂直居中，修正平滑字体的文字偏移；栏目名称与滑动选中动效保留。
+- 栏目、普通按钮、管理下拉按钮与菜单项按缓存的实际字形上下边界垂直居中，修正“管理”文字偏高；按压时文字和箭头同步偏移。教学指向实际 JEI 材料接收槽，说明按完整正文计算高度，空间不足或遮住目标时使用带完整说明提示的紧凑教学条。
 - JSON 语法颜色整行绘制，光标、点击和选区复用同一布局；连续选区先合并再绘制，修复逐字背景重叠产生深色竖条及片段度量偏移。
 - 字符数上限、粘贴、直接光标／选区定位与删除保留完整组合字符、代理对和 ZWJ 字素；JSON 达到上限后替换选区正确使用释放的空间。字体切换和资源重载使目录宽度缓存失效。
 - 完整资源重载期间暂停新资源生产与读取，重叠重载统一收口；任一失败保持暂停，后续新批次成功才恢复。停服后的迟到回调不重建旧服务器状态，成功加载、更新、卸载与独立重进均核对有效目录。
@@ -102,17 +106,20 @@
 
 #### Added
 
-- The guided tour opens the actual library, appearance, attributes, acquisition, production, validation, export and generated-file pages. Subtle rounded focus rings, step badges and short curved arrows identify controls, with keyboard navigation, skipping and reduced motion. Generated-file previews add previous/next and quick list navigation.
+- Quick select chooses all matching bees across every page, clears selection, or selects modpack content, editor additions/changes and unapplied drafts. Selection and local-draft limits are 4096, with atomic completion and preservation on failure or cancellation.
+- Migration retains unchanged legacy PB output amounts/chances, keeps MI runtime materials when reading original sources, and supports Almost Unified `1.21.1-1.4.2` without re-unifying or removing designer recipes. All runtime recipe contents remain checked; import failures show complete details in the page body.
+- Cross-pack browsing distinguishes offline definitions from timed runtime registration snapshots and supports search, origin filters, JSON previews and batch import/export. Batch migration previews conflict policies and identity maps, preserves drafts, updates breeding/conversion/condition/component/machine references, and validates before a single application. Shared ownership must agree; missing dependencies are rejected and uncertain results can be queried.
+- The 11-step guided tour introduces visible project tools and cross-pack browsing/migration, then guides the actual library, appearance, attributes, JEI dragging, acquisition, production, validation, export and generated-file pages. Subtle rounded focus rings, step badges and short curved arrows identify controls, with keyboard navigation, skipping and reduced motion. Generated-file previews add previous/next and quick list navigation.
 - Myriad settings add damage immunity, attack effects, third color, nectar size, glow layers, render transforms and block/tag/fluid flowers. Its acquisition entry supports additional PB breeding, conversion, spawning, fishing and bottling, crafting, and supported MI/MBD2/MMR recipes, with validation, application, export and cross-pack import.
 - PB Bottler bee-egg recipes now support editing item/fluid inputs and amounts, complete bee output identity, codec validation and reload.
 - The Myriad comb filter adopts the editor theme with Rules, Add bees and Preview views. Actual server comb/block capabilities distinguish valid, missing, retired and unavailable targets. Search, Shift ranges, dragging, bulk removal, clipboard import/export, undo and missing-entry cleanup are included. Unsaved edits are retained and external configuration changes can be merged before saving.
 - JSON editing adds Find/Replace, case sensitivity, match highlighting/counts, Go to Line and line/column/selection status. Tab indentation/outdent, optional automatic brackets and indentation, bracket matching, line/selection duplication and line deletion integrate with undo. Delayed syntax checks preserve invalid text and block commit; read-only pages retain search and copying.
 - Full Pinyin, initials and tone-marked search, including `lv/lü/lu`, across bees, ingredients, AE resources, machines, biomes, drafts and file browsing. Name/ID, `@mod`, `#tag` and multi-term intersection remain available.
 - PB 13.14.0 item and block conversion recipes with materials, results, chance, pollination and registered block-state properties. Shared recipes are read-only; copied bees receive independent ownership, and retiring a bee retains other owners.
-- Shift ranges, Ctrl toggles, marquee selection and cancel-to-restore in the library, retaining the 128-bee limit. Collections fill blank attribution fields from an available modpack manifest. File browsing adds a persistent path bar, consistent rows, selection confirmation and keyboard navigation.
+- Shift ranges, Ctrl toggles, marquee selection and cancel-to-restore in the library, supporting a 4096-bee limit. Collections fill blank attribution fields from an available modpack manifest. File browsing adds a persistent path bar, consistent rows, selection confirmation and keyboard navigation.
 - PB third color, color cycling, nectar size, glow layer, attack effects, immunity, breeding tags/defaults and inverse block-tag flowers. AE2 themes use terminal surfaces, pixel bevels and installed native button assets; modern themes add Gentle/Responsive/Still presets and separate menu/selection motion.
 - Multi-select bees or drafts and export portable collections, datapacks or KubeJS bundles. Portable collections transfer projects between modpacks and retain source names, authors, versions, release links and custom-content notes, with optional license notes and attribution guidance. Import previews sources, dependencies and identity conflicts.
-- Small windows retain fitting localized page tabs with More for overflow, combine library tools and preserve full bee cards at minimum height. Single/preferred two-column and stacked fields, direct short choices, collapsible groups and custom colors, and optional library help. Diagnostics expand their target with a soft control border; import actions stay in the footer. A skippable guide can be reopened from settings.
+- The catalog keeps New, Import, Drafts, Other modpacks and Quick tour visible; a labeled Manage menu contains history, recycling and refresh. Search and selection are grouped separately, retaining project tools during selection. Narrow windows wrap localized controls, and short windows scroll the tools. Small windows retain fitting localized page tabs with More for overflow. Single/preferred two-column and stacked fields, direct short choices, collapsible groups and custom colors, and optional library help. Diagnostics expand their target with a soft control border; import actions stay in the footer. A skippable guide can be reopened from settings.
 - Independent AE-style button materials, AE dark, text-contrast guidance, press/ripple feedback and slide/reveal transitions. Theme switching preserves its palette family.
 - Thanks to gummyc_type2, author of beebeeblock-the-skyhive, for the original handbook book texture, retained pixel-for-pixel and recolored yellow.
 - File Locations in editor settings, with shortcuts from drafts, the recycle bin and publishing. Shows full paths for the current game instance, copies paths, opens folders and locates the most recent export, with dedicated-server files identified separately.
@@ -133,8 +140,9 @@
 
 #### Fixed
 
+- Keep popups within the editor and report their area to JEI, preventing menus from extending beneath the ingredient list. The coach hides during JEI dragging, the ingredient preview renders in front, and completion/cancellation restores it; recipe windows retain their normal return path to the editor.
 - Restore the editor inventory to Minecraft's current font and native item count, durability and cooldown decorations. Machine and direct-slot counts return to their previous fixed 0.7-scale compact style, removing the GUI-dependent pixel-scale adjustment and the unused editor count font.
-- Center navigation and button labels using cached visual glyph bounds, correcting the vertical offset of localized smooth fonts without changing navigation labels or selection motion.
+- Center navigation, ordinary buttons, the Manage dropdown and menu items using cached visual glyph bounds, fixing the raised Manage label; pressed text and arrows move together. The JEI coach points to the actual receiving slot and sizes its card for the complete instructions, using compact coaching with full details when space is limited or the target would be covered.
 - Character limits, pasting, direct cursor/selection placement and deletion preserve complete combining clusters, surrogate pairs and ZWJ graphemes. JSON selection replacement uses the space freed at the character limit. Font-mode switches and resource reloads invalidate catalog width measurements.
 - Pause new resource production and editor reads during complete resource reloads. Overlapping reloads share completion state; any failure keeps admission paused until a new successful batch. Late callbacks after shutdown do not recreate server state. Successful pack loading, updates, removal and an independent restart verify the stable catalog.
 - Apply all new Myriad fields to actual bee NBT, including clearing immunities, inherited colors/sizes and replaced flower sources. Additional acquisition recipes survive the Myriad configuration processor and retain ownership through portable/KubeJS exports. Cross-pack recipe-only imports retain the destination pack's Myriad attributes.

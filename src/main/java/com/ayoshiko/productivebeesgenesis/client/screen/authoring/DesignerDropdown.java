@@ -31,16 +31,19 @@ final class DesignerDropdown {
 	private final boolean upward;
 
 	DesignerDropdown(int x, int y, int width, String current, String[] options, Predicate<String> enabled,
-			Consumer<String> selected, int screenWidth, int screenHeight) {
+			Consumer<String> selected, Rect2i available) {
 		values = List.of(options);
 		this.enabled = enabled;
 		this.selected = selected;
-		visible = Math.max(1, Math.min(values.size(), Math.min(10, (screenHeight - 12) / 18)));
+		visible = Math.max(1, Math.min(values.size(), Math.min(10, (available.getHeight() - 4) / 18)));
 		int popupHeight = visible * 18 + 4;
-		int popupWidth = Math.min(screenWidth - 12, Math.max(width, values.stream()
+		int popupWidth = Math.min(available.getWidth(), Math.max(width, values.stream()
 				.mapToInt(value -> DesignerFonts.body().width(DesignerFormScreen.option(value)) + 28).max().orElse(width)));
-		int top = y + 18 + popupHeight <= screenHeight - 4 ? y + 18 : Math.max(4, y - popupHeight - 2);
-		bounds = new Rect2i(Math.max(4, Math.min(x, screenWidth - popupWidth - 4)), top, popupWidth, popupHeight);
+		int bottom = available.getY() + available.getHeight();
+		int top = y + 20 + popupHeight <= bottom ? y + 20 : y - popupHeight - 2;
+		top = Math.max(available.getY(), Math.min(top, bottom - popupHeight));
+		int left = Math.max(available.getX(), Math.min(x, available.getX() + available.getWidth() - popupWidth));
+		bounds = new Rect2i(left, top, popupWidth, popupHeight);
 		upward = top < y;
 		highlighted = Math.max(0, values.indexOf(current));
 		first = Math.max(0, Math.min(highlighted - visible / 2, values.size() - visible));
@@ -76,8 +79,9 @@ final class DesignerDropdown {
 				highlighted = index;
 			}
 			String value = values.get(index);
-			graphics.drawString(font, font.plainSubstrByWidth(DesignerFormScreen.option(value).getString(), bounds.getWidth() - 24),
-					bounds.getX() + 8, y + 7, enabled.test(value) ? DesignerFormScreen.FOREGROUND : DesignerFormScreen.MUTED, false);
+			String text = font.plainSubstrByWidth(DesignerFormScreen.option(value).getString(), bounds.getWidth() - 24);
+			graphics.drawString(font, text, bounds.getX() + 8, DesignerFonts.centeredY(font, text, y, 18),
+					enabled.test(value) ? DesignerFormScreen.FOREGROUND : DesignerFormScreen.MUTED, false);
 		}
 		lastMouseX = mouseX;
 		lastMouseY = mouseY;
@@ -145,6 +149,10 @@ final class DesignerDropdown {
 		}
 	}
 
+	Rect2i bounds() {
+		return bounds;
+	}
+
 	boolean closed() {
 		return closed;
 	}
@@ -156,12 +164,13 @@ final class DesignerDropdown {
 
 		@Override
 		protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-			renderSurface(graphics);
+			int offset = renderSurface(graphics);
 			var font = DesignerFonts.body();
-			graphics.drawString(font, font.plainSubstrByWidth(getMessage().getString(), width - 23), getX() + 6, getY() + 4,
-					active ? DesignerFormScreen.FOREGROUND : DesignerFormScreen.MUTED, false);
+			String text = font.plainSubstrByWidth(getMessage().getString(), Math.max(0, width - 23));
+			graphics.drawString(font, text, getX() + 6, DesignerFonts.centeredY(font, text, getY(), height) + offset,
+					textColor(), false);
 			graphics.pose().pushPose();
-			graphics.pose().translate(getX() + width - 10, getY() + height / 2F, 0);
+			graphics.pose().translate(getX() + width - 10, getY() + height / 2F + offset, 0);
 			graphics.pose().mulPose(com.mojang.math.Axis.ZP.rotationDegrees(90));
 			graphics.pose().scale(0.65F, 0.65F, 1);
 			DesignerGlyphs.draw(graphics, DesignerTheme.Symbol.NEXT, active ? DesignerFormScreen.ACCENT : DesignerFormScreen.MUTED);

@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.Rect2i;
 import org.lwjgl.glfw.GLFW;
 
 /** 目录自己管理搜索节流、分页和响应序号，迟到的搜索不能替换新结果。 */
@@ -35,9 +36,9 @@ final class DesignerLibraryPage {
 	private Button previous;
 	private Button next;
 	private boolean selecting;
-	private boolean searching;
 	private final DesignerCatalogSelection selection = new DesignerCatalogSelection();
-	private Button exportSelection;
+	private final DesignerCatalogToolbar toolbar = new DesignerCatalogToolbar();
+	private DesignerCatalogQuickSelection quickSelection;
 	private boolean pressed;
 	private boolean boxing;
 	private boolean additiveBox;
@@ -49,18 +50,17 @@ final class DesignerLibraryPage {
 
 	void add(BeeDesignerScreen screen) {
 		var mc = Minecraft.getInstance();
-		exportSelection = null;
-		if (screen.compactHeight() && query.isBlank() && !searching) {
-			screen.contentTop -= 2;
-		} else {
-			toolbar(screen);
-			screen.contentTop += 24;
-		}
-		if (DesignerPreferences.enabled("catalog_help") && screen.frameHeight >= 340 && !selecting) {
-			Component help = DesignerFormScreen.tr("catalog_guide");
+		toolbar.add(screen, selecting, query, value -> {
+			query = value;
+			searchAt = System.currentTimeMillis() + 350;
+		}, this::actionLabel, value -> enabled(screen, value), value -> action(screen, value));
+		if (DesignerPreferences.enabled("catalog_help") && screen.frameHeight >= 300 && !selecting) {
+			Component help = DesignerFormScreen.tr(DesignerPreferences.enabled("tutorial_seen") ? "catalog_guide" : "catalog_welcome");
 			int helpHeight = Math.max(20, DesignerFonts.body().split(help, screen.contentWidth - 12).size() * 10 + 8);
-			screen.fixedNote(help, screen.left, screen.contentTop, screen.contentWidth, helpHeight);
-			screen.contentTop += helpHeight + 4;
+			if (screen.editorBottom() - screen.contentTop - helpHeight >= 76) {
+				screen.fixedNote(help, screen.left, screen.contentTop, screen.contentWidth, helpHeight);
+				screen.contentTop += helpHeight + 4;
+			}
 		}
 		if (!DesignerDraftIndex.problem().isBlank()) {
 			screen.note("error", DesignerFormScreen.statusMessage(DesignerDraftIndex.problem()));
@@ -132,62 +132,18 @@ final class DesignerLibraryPage {
 		}
 		previous = screen.button(screen.left, screen.footerY(), 20, Component.literal("‹"), () -> screen.scrollViewport(-1));
 		next = screen.button(screen.left + 24, screen.footerY(), 20, Component.literal("›"), () -> screen.scrollViewport(1));
-		if (screen.compactHeight()) {
-			int x = screen.left + screen.contentWidth - 160;
-			screen.button(x, screen.footerY(), 24, Component.literal("⌕"), () -> {
-				searching = !searching;
-				screen.rebuild();
-			}).setTooltip(net.minecraft.client.gui.components.Tooltip.create(DesignerFormScreen.tr("search")));
-			String[] actions = selecting
-					? new String[]{"export_selection_action", "select_visible", "clear_selection", "select_bees", "new", "local_drafts", "import_project", "history", "recycle_bin", "tutorial_start", "refresh"}
-					: new String[]{"new", "local_drafts", "import_project", "select_bees", "history", "recycle_bin", "tutorial_start", "refresh"};
-			screen.menu(x + 28, screen.footerY(), 24, "catalog_actions", actions,
-					value -> enabled(screen, value), value -> action(screen, value));
-		}
 	}
 
-	private void toolbar(BeeDesignerScreen screen) {
-		var font = DesignerFonts.body();
-		int y = screen.contentTop;
-		int end = screen.left + screen.contentWidth;
-		java.util.List<String> direct = new java.util.ArrayList<>();
-		String[] preferred = selecting ? new String[]{"export_selection_action", "select_bees"}
-				: new String[]{"new", "select_bees", "local_drafts", "import_project"};
-		int actionSpace = 30;
-		for (String action : preferred) {
-			Component label = action.equals("export_selection_action") ? Component.translatable("designer.catalog_export", DesignerCatalogSelection.LIMIT) : actionLabel(action);
-			int width = Math.max(36, font.width(label) + 14);
-			if (screen.contentWidth - actionSpace - width - 4 >= 108) {
-				direct.add(action);
-				actionSpace += width + 4;
-			}
-		}
-		int searchWidth = screen.contentWidth - actionSpace;
-		screen.searchField(y, searchWidth, query, value -> {
-			query = value;
-			searchAt = System.currentTimeMillis() + 350;
-		}).setTooltip(net.minecraft.client.gui.components.Tooltip.create(DesignerFormScreen.tr("catalog_guide")));
-		int x = screen.left + searchWidth + 4;
-		for (String value : direct) {
-			Component label = value.equals("export_selection_action") ? Component.translatable("designer.catalog_export", DesignerCatalogSelection.LIMIT) : actionLabel(value);
-			int width = Math.max(36, font.width(label) + 14);
-			Button button = value.equals("new") || value.equals("export_selection_action")
-					? screen.primaryButton(x, y, width, actionLabel(value), () -> action(screen, value))
-					: screen.button(x, y, width, actionLabel(value), () -> action(screen, value));
-			button.active = enabled(screen, value);
-			if (value.equals("export_selection_action")) {
-				exportSelection = button;
-			}
-			if (value.equals("select_bees")) {
-				button.setTooltip(net.minecraft.client.gui.components.Tooltip.create(DesignerFormScreen.tr("select_bees")));
-			}
-			x += width + 4;
-		}
-		String[] all = selecting
-				? new String[]{"export_selection_action", "select_visible", "clear_selection", "select_bees", "new", "local_drafts", "import_project", "history", "recycle_bin", "tutorial_start", "refresh"}
-				: new String[]{"new", "local_drafts", "import_project", "select_bees", "history", "recycle_bin", "tutorial_start", "refresh"};
-		String[] overflow = java.util.Arrays.stream(all).filter(value -> !direct.contains(value)).toArray(String[]::new);
-		screen.menu(end - 26, y, 26, "catalog_actions", overflow, value -> enabled(screen, value), value -> action(screen, value));
+	void prepareTutorial() {
+		cancelQuickSelection();
+		selecting = false;
+		pressed = false;
+		boxing = false;
+		selection.clear();
+	}
+
+	Rect2i guideTarget(BeeDesignerScreen screen, String action) {
+		return toolbar.bounds(screen, action);
 	}
 
 	private Component actionLabel(String action) {
@@ -202,7 +158,7 @@ final class DesignerLibraryPage {
 
 	private boolean enabled(BeeDesignerScreen screen, String action) {
 		return (!action.equals("history") || screen.canPublish)
-				&& (!action.equals("export_selection_action") || selection.size() > 0 && !selection.waiting());
+				&& (!action.equals("export_selection_action") || selection.size() > 0 && !selection.waiting() && quickSelection == null);
 	}
 
 	private void selectVisible(BeeDesignerScreen screen) {
@@ -226,16 +182,31 @@ final class DesignerLibraryPage {
 			case "refresh" -> request();
 			case "local_drafts" -> screen.changeDocument(() -> mc.setScreen(new DesignerDraftsScreen(screen)));
 			case "import_project" -> screen.changeDocument(() -> mc.setScreen(new DesignerImportScreen(screen)));
+			case "browse_instances" -> mc.setScreen(new DesignerInstanceScreen(screen));
 			case "history" -> mc.setScreen(new DesignerHistoryScreen(screen));
 			case "recycle_bin" -> screen.changeDocument(() -> mc.setScreen(new DesignerRecycleScreen(screen)));
 			case "tutorial_start" -> DesignerTutorialScreen.start(screen);
 			case "export_selection_action" -> mc.setScreen(new DesignerCollectionScreen(screen, List.copyOf(selection.ids()), screen.editingDocument()));
-			case "select_visible" -> selectVisible(screen);
+			case "quick_select" -> mc.setScreen(new DesignerChoiceScreen(screen, "quick_select",
+					new String[]{"select_all", "clear_selection", "select_pack_bees", "select_editor_bees", "select_editor_new", "select_editor_modified", "select_pending_bees", "select_visible"},
+					choice -> action(screen, choice)));
+			case "select_all", "select_pack_bees", "select_editor_bees", "select_editor_new", "select_editor_modified", "select_pending_bees" -> {
+				cancelQuickSelection();
+				quickSelection = new DesignerCatalogQuickSelection(value, query);
+				screen.status = "designer.catalog_selection_loading";
+				updateSelection(screen);
+			}
+			case "select_visible" -> {
+				cancelQuickSelection();
+				selectVisible(screen);
+			}
 			case "clear_selection" -> {
+				cancelQuickSelection();
 				selection.clear();
 				updateSelection(screen);
 			}
 			case "select_bees" -> {
+				cancelQuickSelection();
 				selecting = !selecting;
 				pressed = false;
 				boxing = false;
@@ -256,6 +227,7 @@ final class DesignerLibraryPage {
 	}
 
 	void request() {
+		cancelQuickSelection();
 		searchAt = 0;
 		selection.resetOrder();
 		pressed = false;
@@ -288,7 +260,7 @@ final class DesignerLibraryPage {
 		}
 		search.add("names", names);
 		JsonArray preferred = new JsonArray();
-		DesignerDraftIndex.pendingIds().forEach(preferred::add);
+		DesignerDraftIndex.pendingIds().stream().limit(128).forEach(preferred::add);
 		search.add("preferred", preferred);
 		DesignerDraftIndex.ensureLoaded();
 		requestedQuery = query;
@@ -305,7 +277,22 @@ final class DesignerLibraryPage {
 	}
 
 	void tick(BeeDesignerScreen screen) {
-		if (!selection.waiting() && screen.status.equals("designer.catalog_selection_loading")) {
+		if (quickSelection != null) {
+			quickSelection.tick();
+			if (!quickSelection.problem().isBlank()) {
+				screen.status = quickSelection.problem();
+				cancelQuickSelection();
+			} else if (quickSelection.complete()) {
+				if (selection.replace(quickSelection.selected())) {
+					screen.status = "";
+				} else {
+					screen.status = "designer.catalog_selection_limit";
+				}
+				cancelQuickSelection();
+				updateSelection(screen);
+			}
+		}
+		if (quickSelection == null && !selection.waiting() && screen.status.equals("designer.catalog_selection_loading")) {
 			screen.status = "";
 		}
 		if (searchAt != 0 && System.currentTimeMillis() >= searchAt) {
@@ -351,6 +338,9 @@ final class DesignerLibraryPage {
 	}
 
 	boolean receive(long sequence, JsonObject data) {
+		if (quickSelection != null && quickSelection.receive(sequence, data)) {
+			return false;
+		}
 		if (sequence != request || !requestedQuery.equals(query)) {
 			return false;
 		}
@@ -360,14 +350,16 @@ final class DesignerLibraryPage {
 		serverPages = data.get("pages").getAsInt();
 		pages.put(data.get("page").getAsInt(), data);
 		selection.resolve(this::idAt);
-		if (pages.size() > 64) {
+		if (pages.size() > (DesignerCatalogSelection.LIMIT + 31) / 32) {
 			pages.remove(pages.keySet().iterator().next());
 		}
 		return true;
 	}
 
 	boolean failed(long sequence, String message) {
-
+		if (quickSelection != null && quickSelection.failed(sequence, message)) {
+			return true;
+		}
 		if (sequence != request) {
 			return false;
 		}
@@ -386,6 +378,7 @@ final class DesignerLibraryPage {
 	}
 
 	private void choose(BeeDesignerScreen screen, int index, String id, boolean range, boolean additive) {
+		cancelQuickSelection();
 		boolean changed;
 		if (range) {
 			changed = selection.range(index, additive);
@@ -407,10 +400,7 @@ final class DesignerLibraryPage {
 				bee.selected(selecting && selection.contains(bee.beeId()));
 			}
 		}
-		if (exportSelection != null) {
-			exportSelection.setMessage(actionLabel("export_selection_action"));
-			exportSelection.active = selection.size() > 0 && !selection.waiting();
-		}
+		toolbar.update("export_selection_action", actionLabel("export_selection_action"), enabled(screen, "export_selection_action"));
 	}
 
 	boolean press(BeeDesignerScreen screen, double x, double y, int button) {
@@ -445,7 +435,7 @@ final class DesignerLibraryPage {
 	}
 
 	boolean gestureInProgress() {
-		return pressed;
+		return pressed || quickSelection != null;
 	}
 
 	boolean drag(BeeDesignerScreen screen, double x, double y) {
@@ -509,6 +499,12 @@ final class DesignerLibraryPage {
 	}
 
 	boolean key(BeeDesignerScreen screen, int key) {
+		if (key == GLFW.GLFW_KEY_ESCAPE && quickSelection != null) {
+			cancelQuickSelection();
+			screen.status = "";
+			updateSelection(screen);
+			return true;
+		}
 		if (key == GLFW.GLFW_KEY_ESCAPE && (pressed || selecting)) {
 			if (pressed) {
 				selection.cancelBox();
@@ -531,6 +527,13 @@ final class DesignerLibraryPage {
 			return true;
 		}
 		return false;
+	}
+
+	void cancelQuickSelection() {
+		if (quickSelection != null) {
+			quickSelection.cancel();
+			quickSelection = null;
+		}
 	}
 
 	void renderSelection(BeeDesignerScreen screen, GuiGraphics graphics) {

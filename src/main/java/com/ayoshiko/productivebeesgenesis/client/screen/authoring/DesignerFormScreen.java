@@ -59,6 +59,7 @@ public abstract class DesignerFormScreen extends Screen {
 	private static final DesignerWindowLayout WINDOW = new DesignerWindowLayout();
 	private final DesignerInventoryTray inventory = new DesignerInventoryTray();
 	private DesignerDropdown popup;
+	private boolean jeiDragging;
 	private boolean scrollbarDragging;
 	private double scrollbarOffset;
 	protected int layoutWidth;
@@ -681,6 +682,14 @@ public abstract class DesignerFormScreen extends Screen {
 		return control;
 	}
 
+	protected final Button namedMenu(int x, int y, int width, String label, String[] values, Predicate<String> enabled,
+			Consumer<String> selected) {
+		Button control = addRenderableWidget(new DesignerDropdown.Control(x, y, width, tr(label),
+				anchor -> openOptions(anchor, values[0], values, enabled, selected)));
+		control.setTooltip(Tooltip.create(tr(label)));
+		return control;
+	}
+
 	protected final Button menu(int x, int y, int width, String label, String[] values, Predicate<String> enabled,
 			Consumer<String> selected) {
 		Button control = addRenderableWidget(new DesignerTheme.Action(x, y, width, Component.literal("⋯"), anchor ->
@@ -697,7 +706,7 @@ public abstract class DesignerFormScreen extends Screen {
 			if (minecraft.screen == this) {
 				rebuild();
 			}
-		}, layoutWidth, layoutHeight);
+		}, new Rect2i(frameLeft + 4, frameTop + 4, frameWidth - 8, frameHeight - 8));
 	}
 
 	static Component option(String value) {
@@ -1099,7 +1108,7 @@ public abstract class DesignerFormScreen extends Screen {
 						(int) Math.round(autoScroll.originY()), autoScroll.direction());
 			}
 			DesignerTutorialScreen guide = DesignerTutorialScreen.current(this);
-			if (guide != null) {
+			if (guide != null && !jeiDragging) {
 				guide.render(this, graphics, (int) (mouseX / uiScale), (int) (mouseY / uiScale));
 			}
 		} finally {
@@ -1354,6 +1363,17 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	static Component statusMessage(String status) {
+		String[] migration = status.split("\\|", 3);
+		if (migration.length == 3 && migration[0].equals("designer.error.migration_invalid")) {
+			Component reason = statusMessage(migration[2]);
+			if (migration[2].startsWith("designer.error.operation_detail|")) {
+				reason = Component.literal(migration[2].substring("designer.error.operation_detail|".length()));
+			}
+			return Component.translatable(migration[0], migration[1], reason);
+		}
+		if (status.startsWith("designer.error.operation_detail|")) {
+			return Component.translatable("designer.error.operation_detail", status.substring("designer.error.operation_detail|".length()));
+		}
 		String[] parts = status.split("\\|", -1);
 		if (parts.length == 4 && parts[0].equals("designer.error.field_range")) {
 			return Component.translatable(parts[0], tr(parts[1]), parts[2], parts[3]);
@@ -1719,6 +1739,25 @@ public abstract class DesignerFormScreen extends Screen {
 				.filter(target -> target.area.getWidth() > 0 && target.area.getHeight() > 0).toList() : List.of();
 	}
 
+	final Rect2i ghostTargetBounds(Rect2i near) {
+		Rect2i nearest = null;
+		int distance = Integer.MAX_VALUE;
+		for (GhostTarget target : targets) {
+			Rect2i area = visibleTargetArea(target);
+			if (area.getWidth() <= 0 || area.getHeight() <= 0
+					|| near != null && (area.getX() < near.getX() || area.getX() + area.getWidth() > near.getX() + near.getWidth()
+							|| area.getY() >= near.getY() + near.getHeight() || area.getY() + area.getHeight() <= near.getY())) {
+				continue;
+			}
+			int offset = near == null ? area.getY() - contentTop : Math.abs(area.getY() - near.getY());
+			if (offset < distance) {
+				nearest = area;
+				distance = offset;
+			}
+		}
+		return nearest;
+	}
+
 	private Rect2i targetArea(GhostTarget target) {
 		for (RowView view : rowViews.values()) {
 			if (view.targets.contains(target)) {
@@ -1755,6 +1794,34 @@ public abstract class DesignerFormScreen extends Screen {
 
 	public Rect2i editorBounds() {
 		return screenArea(new Rect2i(frameLeft, frameTop, frameWidth, frameHeight));
+	}
+
+	public Rect2i popupBounds() {
+		return popup == null ? new Rect2i(0, 0, 0, 0) : screenArea(popup.bounds());
+	}
+
+	public void jeiDragging(boolean dragging) {
+		jeiDragging = dragging;
+		if (dragging) {
+			autoScroll.stop();
+		}
+	}
+
+	public boolean isJeiDragging() {
+		return jeiDragging;
+	}
+
+	final Rect2i controlBounds(AbstractWidget control) {
+		if (control == null || !control.visible || !children().contains(control)) {
+			return null;
+		}
+		int top = control.getY();
+		int bottom = control.getBottom();
+		if (scrollingControls.contains(control)) {
+			top = Math.max(contentTop, top);
+			bottom = Math.min(editorBottom(), bottom);
+		}
+		return bottom > top ? new Rect2i(control.getX(), top, control.getWidth(), bottom - top) : null;
 	}
 
 	public Rect2i inventoryBounds() {
@@ -1806,7 +1873,7 @@ public abstract class DesignerFormScreen extends Screen {
 			return true;
 		}
 		DesignerTutorialScreen guide = DesignerTutorialScreen.current(this);
-		if (guide != null && guide.click(this, x / uiScale, y / uiScale, button)) {
+		if (guide != null && !jeiDragging && guide.click(this, x / uiScale, y / uiScale, button)) {
 			return true;
 		}
 		if (transition.leaving()) {
@@ -2098,6 +2165,7 @@ public abstract class DesignerFormScreen extends Screen {
 
 	@Override
 	public void removed() {
+		jeiDragging = false;
 		autoScroll.stop();
 		autoScrollStoppedButton = -1;
 		transition.cancel();

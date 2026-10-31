@@ -39,6 +39,10 @@ final class DesignerImportScreen extends DesignerFormScreen {
 			}
 		})
 				.active = !reading));
+		if (projects.size() > 1) {
+			rows.add(new Row("", (x, y, w) -> primaryButton(x, y, w, tr("batch_import"), () ->
+					minecraft.setScreen(new DesignerBatchImportScreen(parent, this, projects))).active = !reading));
+		}
 		for (var entry : projects.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList()) {
 			JsonObject document = JsonParser.parseString(entry.getValue()).getAsJsonObject();
 			rows.add(new Row("", (x, y, w) -> addRenderableWidget(new DesignerBeeButton(x, y, w, entry.getKey(),

@@ -42,6 +42,10 @@ public final class BeeDesignerCompiler {
 	}
 
 	public static void validate(JsonObject document, MinecraftServer server) {
+		validate(document, server, Set.of());
+	}
+
+	static void validate(JsonObject document, MinecraftServer server, Set<ResourceLocation> batchBees) {
 		HolderLookup.Provider registries = server.registryAccess();
 		validateStructure(document);
 		ResourceLocation bee = ResourceLocation.parse(string(document, "id"));
@@ -81,7 +85,8 @@ public final class BeeDesignerCompiler {
 		}
 		if (definition.has("flowerBlock")) {
 			ResourceLocation block = ResourceLocation.parse(string(definition, "flowerBlock"));
-			if (!BuiltInRegistries.BLOCK.containsKey(block) || BuiltInRegistries.BLOCK.get(block) == Blocks.AIR) {
+			if (!BuiltInRegistries.BLOCK.containsKey(block) || BuiltInRegistries.BLOCK.get(block) == Blocks.AIR
+					&& (!definition.has("createComb") || definition.get("createComb").getAsBoolean())) {
 				throw new IllegalArgumentException("flowerBlock: unknown block " + block);
 			}
 		}
@@ -89,10 +94,11 @@ public final class BeeDesignerCompiler {
 			String tag = string(definition, "flowerTag");
 			ResourceLocation id = ResourceLocation.parse(tag.startsWith("!") ? tag.substring(1) : tag);
 			if (BeeDesignerDocument.text(definition, "flowerType", "blocks").equals("entity_types")) {
-				if (tag.startsWith("!") || BuiltInRegistries.ENTITY_TYPE.getTag(TagKey.create(BuiltInRegistries.ENTITY_TYPE.key(), id)).isEmpty()) {
+				if (BuiltInRegistries.ENTITY_TYPE.getTag(TagKey.create(BuiltInRegistries.ENTITY_TYPE.key(), id)).isEmpty()) {
 					throw new IllegalArgumentException("designer.error.flower_entity_tag|" + tag);
 				}
-			} else if (BuiltInRegistries.BLOCK.getTag(TagKey.create(BuiltInRegistries.BLOCK.key(), id)).isEmpty()) {
+			} else if (BuiltInRegistries.BLOCK.getTag(TagKey.create(BuiltInRegistries.BLOCK.key(), id)).isEmpty()
+					&& BuiltInRegistries.ITEM.getTag(TagKey.create(BuiltInRegistries.ITEM.key(), id)).isEmpty()) {
 				throw new IllegalArgumentException("flowerTag: unknown block tag " + id);
 			}
 		}
@@ -140,7 +146,7 @@ public final class BeeDesignerCompiler {
 				}
 			}
 		}
-		conditions(definition, "conditions", server, null);
+		conditions(definition, "conditions", server, bee, batchBees);
 		BeeCreator.create(bee, definition.deepCopy());
 		JsonObject recipes = document.getAsJsonObject("recipes");
 		if (recipes == null || recipes.size() > 64) {
@@ -153,12 +159,12 @@ public final class BeeDesignerCompiler {
 						|| !BeeDesignerReader.belongs(recipe, bee.toString())) {
 					throw new IllegalArgumentException("Recipe is not supported or does not belong to bee: " + entry.getKey());
 				}
-				conditions(recipe, "neoforge:conditions", server, bee);
+				conditions(recipe, "neoforge:conditions", server, bee, batchBees);
 				if (BeeDesignerMachineRecipes.host(recipe) != null) {
 					BeeDesignerMachineRecipes.recipeIdentity(recipe, entry.getKey());
 					BeeDesignerMachineRuntime.validate(recipe, server);
 				}
-				validateAmounts(recipe, registries);
+				validateAmounts(recipe, registries, BeeDesignerLegacyOutputs.unchanged(document, entry.getKey(), recipe));
 				if (BeeDesignerWorldConversions.supports(recipe.get("type").getAsString())) {
 					BeeDesignerWorldConversions.validate(recipe, bee.toString());
 				}
@@ -166,7 +172,7 @@ public final class BeeDesignerCompiler {
 				for (String field : new String[]{"parent1", "parent2", "source", "offspring", "bee"}) {
 					if (recipe.has(field) && recipe.get(field).isJsonPrimitive()) {
 						ResourceLocation reference = ResourceLocation.parse(recipe.get(field).getAsString());
-						if (!reference.equals(bee) && BeeReloadListener.INSTANCE.getData(reference) == null
+						if (!reference.equals(bee) && !batchBees.contains(reference) && BeeReloadListener.INSTANCE.getData(reference) == null
 								&& (!BuiltInRegistries.ENTITY_TYPE.containsKey(reference)
 								|| !BuiltInRegistries.ENTITY_TYPE.get(reference).is(net.minecraft.tags.EntityTypeTags.BEEHIVE_INHABITORS))) {
 							throw new IllegalArgumentException("designer.error.field_reference|" + field + "|" + reference);
@@ -229,6 +235,10 @@ public final class BeeDesignerCompiler {
 	}
 
 	static void validateAmounts(JsonObject recipe, HolderLookup.Provider registries) {
+		validateAmounts(recipe, registries, false);
+	}
+
+	private static void validateAmounts(JsonObject recipe, HolderLookup.Provider registries, boolean preserved) {
 		String type = string(recipe, "type");
 		if (type.startsWith("minecraft:crafting_") && recipe.has("result") && recipe.get("result").isJsonObject()) {
 			BeeDesignerEggs.validate(recipe.getAsJsonObject("result"), registries);
@@ -242,7 +252,8 @@ public final class BeeDesignerCompiler {
 				}
 				for (var value : outputs) {
 					var output = TagOutputRecipe.ChancedOutput.CODEC.parse(registries.createSerializationContext(JsonOps.INSTANCE), value).getOrThrow();
-					if (output.min() < 1 || output.max() < output.min() || output.max() > Integer.MAX_VALUE / 4
+					if (output.min() < 1 || output.max() < 1 || output.min() > Integer.MAX_VALUE / 4
+							|| output.max() < output.min() && !preserved || output.max() > Integer.MAX_VALUE / 4
 							|| output.ingredient().isEmpty() || output.ingredient().getItems().length == 0) {
 						throw new IllegalArgumentException("Invalid or empty item output");
 					}
@@ -253,7 +264,7 @@ public final class BeeDesignerCompiler {
 						}
 					}
 					if (raw.has("chance")) {
-						probability(number(raw.get("chance"), "chance"));
+						outputChance(number(raw.get("chance"), "chance"), preserved);
 					}
 					if (raw.get("item").isJsonObject()) {
 						JsonObject ingredient = raw.getAsJsonObject("item");
@@ -261,7 +272,7 @@ public final class BeeDesignerCompiler {
 							throw new IllegalArgumentException("Item components require an explicit component ingredient type");
 						}
 					}
-					probability(output.chance());
+					outputChance(output.chance(), preserved);
 				}
 			}
 			if (recipe.has("fluid")) {
@@ -288,7 +299,7 @@ public final class BeeDesignerCompiler {
 		}
 	}
 
-	private static void conditions(JsonObject json, String field, MinecraftServer server, ResourceLocation draftBee) {
+	private static void conditions(JsonObject json, String field, MinecraftServer server, ResourceLocation draftBee, Set<ResourceLocation> batchBees) {
 		if (!json.has(field)) {
 			return;
 		}
@@ -302,14 +313,32 @@ public final class BeeDesignerCompiler {
 						pair -> pair.getFirst().location(), pair -> pair.getSecond().stream().toList()));
 			}
 		};
+		JsonElement evaluated = json.get(field).deepCopy();
+		resolveBatchConditions(evaluated, draftBee, batchBees);
 		for (var condition : ICondition.LIST_CODEC.parse(server.registryAccess().createSerializationContext(JsonOps.INSTANCE),
-				json.get(field)).getOrThrow()) {
-			if (condition instanceof BeeExistsCondition exists && exists.beeName().equals(draftBee)) {
+				evaluated).getOrThrow()) {
+			if (condition instanceof BeeExistsCondition exists && (exists.beeName().equals(draftBee) || batchBees.contains(exists.beeName()))) {
 				continue;
 			}
 			if (!condition.test(context)) {
 				throw new IllegalArgumentException("A content condition is currently false; this revision cannot be activated");
 			}
+		}
+	}
+
+	private static void resolveBatchConditions(JsonElement value, ResourceLocation draftBee, Set<ResourceLocation> batchBees) {
+		if (value.isJsonArray()) {
+			value.getAsJsonArray().forEach(entry -> resolveBatchConditions(entry, draftBee, batchBees));
+		} else if (value.isJsonObject()) {
+			JsonObject object = value.getAsJsonObject();
+			if (BeeDesignerDocument.text(object, "type", "").equals("productivebees:bee_exists")) {
+				ResourceLocation bee = ResourceLocation.parse(string(object, "bee"));
+				if (bee.equals(draftBee) || batchBees.contains(bee)) {
+					object.remove("bee");
+					object.addProperty("type", "neoforge:true");
+				}
+			}
+			object.asMap().values().forEach(entry -> resolveBatchConditions(entry, draftBee, batchBees));
 		}
 	}
 
@@ -337,6 +366,13 @@ public final class BeeDesignerCompiler {
 		if (result != Math.rint(result) || result < min || result > max) {
 			throw new IllegalArgumentException("designer.error.field_range|" + field + "|" + min + "|" + max);
 		}
+	}
+
+	private static void outputChance(double chance, boolean preserved) {
+		if (preserved && Double.isFinite(chance) && Float.isFinite((float) chance) && chance >= 0) {
+			return;
+		}
+		probability(chance);
 	}
 
 	private static void probability(double chance) {
@@ -387,6 +423,10 @@ public final class BeeDesignerCompiler {
                     continue;
                 }
                 JsonObject active = BeeDesignerLifecycle.activeRecipe(document, source, retired);
+                if (active != null) {
+                    active = active.deepCopy();
+                    active.addProperty("productivebeesgenesis:designer_recipe", true);
+                }
 				putFile(files, "data/" + id.getNamespace() + "/recipe/" + id.getPath() + ".json", active == null
 						? "{\"type\":\"minecraft:crafting_shapeless\",\"neoforge:conditions\":[{\"type\":\"neoforge:false\"}]}" : active.toString());
 			}

@@ -11,6 +11,16 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("minecraft")
 class DesignerDraftSnapshotMinecraftTest {
 	@Test
+	void migrationFailureRetainsConcreteCauseAndLiteralSeparators() {
+		var migration = DesignerFormScreen.statusMessage("designer.error.migration_invalid|productivebees:aka_gem|designer.error.operation_detail|flowerItem: unknown item beebeeblock:aka_cube");
+		var translated = (net.minecraft.network.chat.contents.TranslatableContents) migration.getContents();
+		assertEquals("productivebees:aka_gem", translated.getArgs()[0]);
+		assertEquals("flowerItem: unknown item beebeeblock:aka_cube", ((net.minecraft.network.chat.Component) translated.getArgs()[1]).getString());
+		var detail = DesignerFormScreen.statusMessage("designer.error.operation_detail|host | material");
+		assertEquals("host | material", ((net.minecraft.network.chat.contents.TranslatableContents) detail.getContents()).getArgs()[0]);
+	}
+
+	@Test
 	void pendingJsonCapturesIndependentValuesWithoutChangingCurrentDocument() {
 		JsonObject document = BeeDesignerDocument.create("test:pending");
 		BeeDesignerScreen editor = new BeeDesignerScreen(true);

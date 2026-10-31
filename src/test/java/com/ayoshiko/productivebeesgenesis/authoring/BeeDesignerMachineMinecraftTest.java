@@ -350,6 +350,40 @@ class BeeDesignerMachineMinecraftTest {
 	}
 
 	@Test
+	void readingMiSourceKeepsUnifiedRuntimeMaterialsAndUnknownFields() {
+		JsonObject original = BeeDesignerMachineRecipes.create(Host.MI, "modern_industrialization:bee_craft", "test:machine", "minecraft:bee");
+		JsonObject input = original.getAsJsonArray("item_inputs").get(0).getAsJsonObject();
+		input.addProperty("custom_material", "preserved");
+		original.addProperty("custom_recipe", "preserved");
+		JsonObject runtime = original.deepCopy();
+		runtime.remove("custom_recipe");
+		runtime.getAsJsonArray("item_inputs").get(0).getAsJsonObject().remove("custom_material");
+		JsonObject rawMaterial = new JsonObject();
+		rawMaterial.addProperty("item", "minecraft:iron_block");
+		rawMaterial.addProperty("amount", 2);
+		original.getAsJsonArray("item_inputs").add(rawMaterial);
+		JsonObject unified = new JsonObject();
+		unified.addProperty("tag", "c:storage_blocks/iron");
+		unified.addProperty("amount", 2);
+		runtime.getAsJsonArray("item_inputs").add(unified);
+		JsonObject document = BeeDesignerDocument.create("test:machine");
+		document.getAsJsonObject("recipes").add("test:source", runtime);
+		BeeDesignerDocument.object(document, "machine_sources").add("test:source", new JsonObject());
+		PackResources pack = mock(PackResources.class);
+		when(pack.packId()).thenReturn("file/source-pack");
+		Resource resource = new Resource(pack, () -> new ByteArrayInputStream(original.toString().getBytes(StandardCharsets.UTF_8)));
+		var snapshot = new BeeDesignerReader.Snapshot(document, Map.of("test:source", resource), 0);
+		JsonObject restored = BeeDesignerReader.readSources(snapshot).getAsJsonObject("recipes").getAsJsonObject("test:source");
+		assertEquals("preserved", restored.get("custom_recipe").getAsString());
+		assertEquals("preserved", restored.getAsJsonArray("item_inputs").get(0).getAsJsonObject().get("custom_material").getAsString());
+		assertEquals(unified, restored.getAsJsonArray("item_inputs").get(1));
+		assertEquals(runtime.get("item_outputs"), restored.get("item_outputs"));
+		rawMaterial.addProperty("unmapped_extension", true);
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerReader.readSources(snapshot));
+		assertEquals(runtime, document.getAsJsonObject("recipes").get("test:source"));
+	}
+
+	@Test
 	void missingHostsRejectApplicationWithoutChangingRecipe() {
 		for (Host host : Host.values()) {
 			assertFalse(BeeDesignerMachineRuntime.problem(host).isEmpty());

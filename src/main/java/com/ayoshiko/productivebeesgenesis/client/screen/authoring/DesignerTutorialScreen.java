@@ -13,10 +13,10 @@ import java.util.List;
 
 /** 引导附着在真实页面；圈选具体控件，子页仍通过自身确认流程保管编辑。 */
 final class DesignerTutorialScreen {
-	private static final String[] STEPS = {"select", "appearance", "attributes", "acquisition", "outputs", "review", "portable", "files"};
-	private static final int[] PAGES = {0, 1, 2, 3, 4, 5, 5, 5};
-	private static final String[] LOCATIONS = {"", "names/zh_cn", "definition/flower_section", "machine_recipes", "production_nodes", "review_check_step", "review_portable", "generated_files"};
-	private static final String[] BUTTONS = {"search", "", "", "machine_add", "add_production", "check_generate", "collection_export", ""};
+	private static final String[] STEPS = {"workspace", "migration", "select", "appearance", "attributes", "jei", "acquisition", "outputs", "review", "portable", "files"};
+	private static final int[] PAGES = {0, 0, 0, 1, 2, 2, 3, 4, 5, 5, 5};
+	private static final String[] LOCATIONS = {"", "", "", "names/zh_cn", "definition/flower_section", "definition/flower_value", "machine_recipes", "production_nodes", "review_check_step", "review_portable", "generated_files"};
+	private static final String[] BUTTONS = {"new", "browse_instances", "search", "", "", "", "machine_add", "add_production", "check_generate", "collection_export", ""};
 	private final BeeDesignerScreen root;
 	private final DesignerGuideOverlay overlay = new DesignerGuideOverlay();
 	private int step;
@@ -39,6 +39,7 @@ final class DesignerTutorialScreen {
 			page.status = "designer.tutorial_open_editor";
 			return;
 		}
+		root.prepareTutorial();
 		root.tutorial = new DesignerTutorialScreen(root);
 		Minecraft.getInstance().setScreen(root);
 		root.tutorial.move(0);
@@ -65,14 +66,14 @@ final class DesignerTutorialScreen {
 			return;
 		}
 		step = Math.max(0, next);
-		awaitingBee = step > 0 && !ordinaryBee();
+		awaitingBee = PAGES[step] > 0 && !ordinaryBee();
 		shownAt = net.minecraft.Util.getMillis();
 		Minecraft.getInstance().setScreen(root);
 		root.tutorialPage(awaitingBee ? 0 : PAGES[step]);
 		if (!awaitingBee && !LOCATIONS[step].isEmpty()) {
 			root.focusLocation(LOCATIONS[step], false);
 		}
-		if (!awaitingBee && step == 7) {
+		if (!awaitingBee && STEPS[step].equals("files")) {
 			root.expandGroup("generated_files");
 			root.focusLocation("generated_files", false);
 		}
@@ -82,18 +83,34 @@ final class DesignerTutorialScreen {
 		var font = DesignerFonts.body();
 		var colors = DesignerTheme.colors();
 		boolean subpage = screen != root;
+		if (subpage && screen.editorBottom() - screen.contentTop < 100) {
+			card = null;
+			return;
+		}
 		String key = awaitingBee ? "select" : STEPS[step];
 		target = locate(screen, subpage);
-		int width = Math.max(190, Math.min(286, screen.frameWidth - 28));
 		String textKey = subpage ? "tutorial.live_subpage" : "tutorial.live." + key + ".body";
+		if (!subpage && screen.frameHeight < 192) {
+			renderCompact(screen, graphics, mouseX, mouseY, key, textKey, subpage);
+			return;
+		}
+		int width = Math.max(190, Math.min(286, screen.frameWidth - 28));
 		if (!bodyKey.equals(textKey) || bodyWidth != width) {
 			bodyKey = textKey;
 			bodyWidth = width;
 			body = font.split(DesignerFormScreen.tr(textKey), width - 28);
 		}
-		int lines = Math.min(body.size(), Math.max(1, (screen.frameHeight - 150) / 10));
+		int lines = body.size();
 		int height = 86 + lines * 10;
+		if (height > screen.footerY() - screen.frameTop - 38) {
+			renderCompact(screen, graphics, mouseX, mouseY, key, textKey, subpage);
+			return;
+		}
 		card = place(screen, width, height);
+		if (target != null && overlaps(card, target)) {
+			renderCompact(screen, graphics, mouseX, mouseY, key, textKey, subpage);
+			return;
+		}
 		int left = card.getX();
 		int top = card.getY();
 		buttonY = top + height - 30;
@@ -139,10 +156,52 @@ final class DesignerTutorialScreen {
 				advanceLabel = "tutorial_finish";
 			}
 			control(graphics, left + 2 * cell + 22, cell, advanceLabel, !awaitingBee, true, mouseX, mouseY);
-			int dotsX = left + width / 2 - 23;
+			int dotsX = left + (width - (STEPS.length - 1) * 7 - 6) / 2;
 			for (int index = 0; index < STEPS.length; index++) {
 				DesignerGuideOverlay.box(graphics, dotsX + index * 7, top + height - 7, index == step ? 6 : 3, 2, 1,
 						index <= step ? colors.accent() : colors.border());
+			}
+		} finally {
+			graphics.pose().popPose();
+		}
+	}
+
+	private void renderCompact(DesignerFormScreen screen, GuiGraphics graphics, int mouseX, int mouseY, String key,
+			String textKey, boolean subpage) {
+		int width = Math.min(286, screen.frameWidth - 12);
+		card = new Rect2i(screen.frameLeft + (screen.frameWidth - width) / 2, screen.frameTop + 4, width, 46);
+		int x = card.getX();
+		int y = card.getY();
+		buttonY = y + 23;
+		graphics.pose().pushPose();
+		graphics.pose().translate(0, 0, 850);
+		try {
+			var colors = DesignerTheme.colors();
+			if (target != null) {
+				overlay.focus(graphics, target, colors.accent(), 1);
+			}
+			DesignerGuideOverlay.box(graphics, x, y, width, 46, 7, colors.border());
+			DesignerGuideOverlay.box(graphics, x + 1, y + 1, width - 2, 44, 6, colors.panel());
+			var font = DesignerFonts.body();
+			String count = (step + 1) + "/" + STEPS.length;
+			Component details = DesignerFormScreen.tr("tutorial_details");
+			graphics.drawString(font, font.plainSubstrByWidth(DesignerFormScreen.tr("tutorial.live." + key + ".title").getString(),
+					width - font.width(count) - font.width(details) - 34), x + 10, y + 8, colors.text(), false);
+			graphics.drawString(font, details, x + width - font.width(count) - font.width(details) - 18, y + 8, colors.accent(), false);
+			graphics.drawString(font, count, x + width - font.width(count) - 10, y + 8, colors.muted(), false);
+			int cell = (width - 32) / 3;
+			control(graphics, x + 10, cell, "tutorial_skip", true, false, mouseX, mouseY);
+			control(graphics, x + cell + 16, cell, "back", step > 0, false, mouseX, mouseY);
+			String advanceLabel = "next_step";
+			if (subpage) {
+				advanceLabel = "done";
+			} else if (step + 1 == STEPS.length) {
+				advanceLabel = "tutorial_finish";
+			}
+			control(graphics, x + 2 * cell + 22, cell, advanceLabel, !awaitingBee, true, mouseX, mouseY);
+			if (mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + 21) {
+				graphics.renderTooltip(font, font.split(DesignerFormScreen.tr(textKey),
+						Math.min(300, screen.layoutWidth - 20)), mouseX, mouseY);
 			}
 		} finally {
 			graphics.pose().popPose();
@@ -195,13 +254,25 @@ final class DesignerTutorialScreen {
 
 	private Rect2i locate(DesignerFormScreen screen, boolean subpage) {
 		String key = awaitingBee ? "search" : BUTTONS[step];
+		if (!subpage && (awaitingBee || PAGES[step] == 0)) {
+			return root.tutorialCatalogTarget(key);
+		}
 		Rect2i row = !subpage && !awaitingBee && !LOCATIONS[step].isEmpty() ? screen.locationBounds(LOCATIONS[step]) : null;
-		if (!subpage && !awaitingBee && step == 2) {
+		if (!subpage && !awaitingBee && (STEPS[step].equals("attributes") || STEPS[step].equals("jei"))) {
 			for (String flower : new String[]{"flowerItem", "flowerBlock", "flowerTag", "flowerFluid", "flowerResource"}) {
 				Rect2i location = screen.locationBounds("definition/" + flower);
 				if (location != null) {
 					row = location;
 					break;
+				}
+			}
+		}
+		if (!subpage && !awaitingBee && STEPS[step].equals("jei")) {
+			row = screen.locationBounds("definition/flower_value");
+			if (row != null) {
+				Rect2i slot = screen.ghostTargetBounds(row);
+				if (slot != null) {
+					return slot;
 				}
 			}
 		}
@@ -219,7 +290,7 @@ final class DesignerTutorialScreen {
 			if (!subpage && !key.isEmpty() && widget.getMessage().getString().equals(DesignerFormScreen.tr(key).getString())) {
 				return bounds(widget);
 			}
-			if (subpage || !awaitingBee && step == 1 && widget instanceof EditBox || row != null) {
+			if (subpage || !awaitingBee && STEPS[step].equals("appearance") && widget instanceof EditBox || row != null) {
 				int offset = row == null ? widget.getY() - screen.contentTop : Math.abs(widget.getY() - row.getY());
 				if (row != null && (widget.getX() < row.getX() || widget.getRight() > row.getX() + row.getWidth())) {
 					continue;
@@ -251,7 +322,7 @@ final class DesignerTutorialScreen {
 		if (primary && enabled) {
 			foreground = DesignerPalette.contrast(background);
 		}
-		graphics.drawString(font, text, x + (width - font.width(text)) / 2, buttonY + 7, foreground, false);
+		graphics.drawString(font, text, x + (width - font.width(text)) / 2, DesignerFonts.centeredY(font, text, buttonY, 21), foreground, false);
 	}
 
 	boolean click(DesignerFormScreen screen, double x, double y, int button) {

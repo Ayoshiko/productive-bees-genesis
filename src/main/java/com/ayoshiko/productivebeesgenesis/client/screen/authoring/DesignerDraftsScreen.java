@@ -65,7 +65,7 @@ final class DesignerDraftsScreen extends DesignerFormScreen {
 				String date = entry.modified() == 0 ? tr("date_unknown").getString() : DATE.format(Instant.ofEpochMilli(entry.modified()));
 				rows.add(new Row("", (x, y, w) -> button(x, y, w, Component.translatable(
 						selected.contains(entry.id()) ? "designer.collection_unselect_named" : "designer.collection_select_named", name), () -> {
-					if (!selected.remove(entry.id()) && selected.size() < 128) {
+					if (!selected.remove(entry.id()) && selected.size() < com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCollection.MAX_BEES) {
 						selected.add(entry.id());
 					}
 					rebuild();

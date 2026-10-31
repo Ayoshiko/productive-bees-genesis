@@ -57,17 +57,17 @@ class DesignerCatalogSelectionTest {
 	void overLimitRangesAreAtomicAndRefreshCancelsPendingRanges() {
 		DesignerCatalogSelection selection = new DesignerCatalogSelection();
 		selection.toggle(0, "bee0");
-		assertFalse(selection.range(128, false));
+		assertFalse(selection.range(DesignerCatalogSelection.LIMIT, false));
 		assertEquals(Set.of("bee0"), selection.ids());
 		selection.beginBox(false);
-		assertFalse(selection.box(IntStream.range(0, 129).boxed().toList(), index -> "bee" + index));
+		assertFalse(selection.box(IntStream.rangeClosed(0, DesignerCatalogSelection.LIMIT).boxed().toList(), index -> "bee" + index));
 		assertEquals(Set.of("bee0"), selection.ids());
 		selection.cancelBox();
-		assertTrue(selection.range(127, false));
+		assertTrue(selection.range(DesignerCatalogSelection.LIMIT - 1, false));
 		assertTrue(selection.resolve(index -> "bee" + index));
-		assertEquals(128, selection.size());
-		assertFalse(selection.toggle(128, "bee128"));
-		assertEquals(128, selection.size());
+		assertEquals(DesignerCatalogSelection.LIMIT, selection.size());
+		assertFalse(selection.toggle(DesignerCatalogSelection.LIMIT, "overflow"));
+		assertEquals(DesignerCatalogSelection.LIMIT, selection.size());
 		selection.clear();
 		selection.toggle(2, "bee2");
 		selection.range(8, false);

@@ -47,7 +47,9 @@ class BeeDesignerLifecycleMinecraftTest {
 		var files = BeeDesignerCompiler.files(Map.of("test:retained", retired.toString()));
 		assertEquals(original.get("definition"), JsonParser.parseString(files.get("data/test/productivebees/retained.json")));
 		for (String recipe : new String[]{produce, centrifuge}) {
-			assertEquals(original.getAsJsonObject("recipes").get(recipe), JsonParser.parseString(recipeFile(files, recipe)));
+			JsonObject expected = original.getAsJsonObject("recipes").getAsJsonObject(recipe).deepCopy();
+			expected.addProperty("productivebeesgenesis:designer_recipe", true);
+			assertEquals(expected, JsonParser.parseString(recipeFile(files, recipe)));
 		}
 		assertTrue(recipeFile(files, egg).contains("neoforge:false"));
 		assertEquals(JsonParser.parseString("[\"test:another\"]"), JsonParser.parseString(recipeFile(files, nest)).getAsJsonObject().get("results"));
@@ -99,7 +101,9 @@ class BeeDesignerLifecycleMinecraftTest {
         assertTrue(recipeFile(removed, id).contains("neoforge:false"));
         var restored = BeeDesignerCompiler.files(Map.of("test:first_nest_bee", first.toString(),
                 "test:second_nest_bee", second.toString()));
-        assertEquals(source, JsonParser.parseString(recipeFile(restored, id)));
+        JsonObject expected = source.deepCopy();
+        expected.addProperty("productivebeesgenesis:designer_recipe", true);
+        assertEquals(expected, JsonParser.parseString(recipeFile(restored, id)));
         second.getAsJsonObject("recipes").getAsJsonObject(id).addProperty("chance", 0.5);
         assertThrows(IllegalArgumentException.class, () -> BeeDesignerCompiler.files(Map.of(
                 "test:first_nest_bee", first.toString(), "test:second_nest_bee", second.toString())));
@@ -178,7 +182,9 @@ class BeeDesignerLifecycleMinecraftTest {
 		assertEquals(before, retired.toString());
 		var files = BeeDesignerCompiler.files(Map.of("test:purged", purged.toString()));
 		assertEquals(source.get("definition"), JsonParser.parseString(files.get("data/test/productivebees/purged.json")));
-		assertEquals(source.getAsJsonObject("recipes").get(processing), JsonParser.parseString(recipeFile(files, processing)));
+		JsonObject expected = source.getAsJsonObject("recipes").getAsJsonObject(processing).deepCopy();
+		expected.addProperty("productivebeesgenesis:designer_recipe", true);
+		assertEquals(expected, JsonParser.parseString(recipeFile(files, processing)));
 		assertFalse(BeeDesignerLifecycle.deleted(BeeDesignerDocument.copyAs(purged, "test:purged_copy")));
 		assertDoesNotThrow(() -> BeeDesignerLifecycle.validateTransition(purged, BeeDesignerDocument.copyAs(purged, "test:purged_copy"), null));
 	}

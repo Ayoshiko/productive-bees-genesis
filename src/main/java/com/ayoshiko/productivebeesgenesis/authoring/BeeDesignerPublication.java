@@ -284,13 +284,11 @@ final class BeeDesignerPublication {
 			if (server.getRecipeManager().byKey(key).isEmpty() || resource.isEmpty() || !resource.get().sourcePackId().equals(packId)) {
 				throw new IllegalStateException("Recipe was not activated: " + recipe);
 			}
-			if (BeeDesignerMachineRecipes.host(source) != null || BeeDesignerMyriad.recipesOnly(document)) {
-				var ops = server.registryAccess().createSerializationContext(JsonOps.INSTANCE);
-				var expected = Recipe.CODEC.parse(ops, source).getOrThrow();
-				var actual = server.getRecipeManager().byKey(key).orElseThrow().value();
-				if (!Recipe.CODEC.encodeStart(ops, expected).getOrThrow().equals(Recipe.CODEC.encodeStart(ops, actual).getOrThrow())) {
-					throw new IllegalStateException("Machine recipe contents were overridden: " + recipe);
-				}
+			var ops = server.registryAccess().createSerializationContext(JsonOps.INSTANCE);
+			var expected = Recipe.CODEC.parse(ops, source).getOrThrow();
+			var actual = server.getRecipeManager().byKey(key).orElseThrow().value();
+			if (!Recipe.CODEC.encodeStart(ops, expected).getOrThrow().equals(Recipe.CODEC.encodeStart(ops, actual).getOrThrow())) {
+				throw new IllegalStateException("Recipe contents were overridden: " + recipe);
 			}
 		}
 		if (BeeDesignerLifecycle.deleted(ResourceLocation.parse(id)) != BeeDesignerLifecycle.deleted(document)) {

@@ -46,7 +46,10 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 		this.parent = parent;
 		editorParent = parent;
 		this.localDrafts = localDrafts;
-		selected = ids.stream().distinct().limit(BeeDesignerCollection.MAX_BEES).toList();
+		selected = ids.stream().distinct().toList();
+		if (selected.size() > BeeDesignerCollection.MAX_BEES) {
+			throw new IllegalArgumentException("designer.error.collection_count");
+		}
 		pending = new ArrayDeque<>(selected);
 		if (editing != null && selected.contains(BeeDesignerDocument.text(editing, "id", ""))) {
 			String id = editing.get("id").getAsString();
@@ -54,6 +57,14 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 			editingSnapshots.put(id, documents.get(id));
 			pending.remove(id);
 		}
+	}
+
+	DesignerCollectionScreen(DesignerFormScreen parent, Map<String, String> projects, String sourcePack) {
+		this(parent, List.copyOf(projects.keySet()), null, false);
+		documents.putAll(projects);
+		pending.clear();
+		credits.addProperty("pack", sourcePack);
+		started = true;
 	}
 
 	@Override
@@ -273,6 +284,16 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 				exported = path;
 				status = Component.translatable("designer.status.exported", path.toString()).getString();
 				rebuildIfVisible();
+				if (generation >= 0 && !localDrafts && minecraft.getSingleplayerServer() != null) {
+					List<String> registered = cy.jdkdigital.productivebees.setup.BeeReloadListener.INSTANCE.getData().keySet().stream().map(Object::toString).sorted().toList();
+					if (named.keySet().equals(java.util.Set.copyOf(registered)) && editingSnapshots.isEmpty()
+							&& selected.stream().noneMatch(DesignerDraftIndex::pending)) {
+						DesignerProjectFiles.saveRegisteredCatalog(named, registered, generation, () -> {}, message -> {
+							status = message;
+							rebuildIfVisible();
+						});
+					}
+				}
 			}, message -> {
 				writing = false;
 				status = message;

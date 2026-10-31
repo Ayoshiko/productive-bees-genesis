@@ -12,6 +12,8 @@ import java.util.List;
 
 /** JEI 只写入虚拟槽声明，资产与库存始终由游戏原菜单持有。 */
 final class DesignerJeiGuiHandler implements IGhostIngredientHandler<DesignerFormScreen> {
+	private DesignerFormScreen dragging;
+
 	static void register(IGuiHandlerRegistration registration) {
 		registration.addGuiScreenHandler(DesignerFormScreen.class, screen -> {
 			Rect2i bounds = screen.editorBounds();
@@ -24,7 +26,11 @@ final class DesignerJeiGuiHandler implements IGhostIngredientHandler<DesignerFor
 			@Override
 			public java.util.Collection<Rect2i> getGuiExtraAreas() {
 				var screen = net.minecraft.client.Minecraft.getInstance().screen;
-				return screen instanceof DesignerFormScreen designer ? List.of(designer.inventoryBounds()) : List.of();
+				if (screen instanceof DesignerFormScreen designer) {
+					Rect2i popup = designer.popupBounds();
+					return popup.getWidth() > 0 ? List.of(designer.inventoryBounds(), popup) : List.of(designer.inventoryBounds());
+				}
+				return List.of();
 			}
 		});
 		registration.addGhostIngredientHandler(DesignerFormScreen.class, new DesignerJeiGuiHandler());
@@ -32,7 +38,13 @@ final class DesignerJeiGuiHandler implements IGhostIngredientHandler<DesignerFor
 
 	@Override
 	public <I> List<Target<I>> getTargetsTyped(DesignerFormScreen screen, ITypedIngredient<I> ingredient, boolean start) {
-		return screen.ghostTargets().stream().filter(target -> target.accepts().test(ingredient.getIngredient()))
+		var targets = screen.ghostTargets().stream().filter(target -> target.accepts().test(ingredient.getIngredient())).toList();
+		if (start && !targets.isEmpty()) {
+			onComplete();
+			dragging = screen;
+			screen.jeiDragging(true);
+		}
+		return targets.stream()
 				.<Target<I>>map(target -> new Target<>() {
 					@Override
 					public Rect2i getArea() {
@@ -48,7 +60,10 @@ final class DesignerJeiGuiHandler implements IGhostIngredientHandler<DesignerFor
 
 	@Override
 	public void onComplete() {
-		// 每个虚拟槽已在 accept 内提交声明副本，没有延迟资产事务需要完成。
+		if (dragging != null) {
+			dragging.jeiDragging(false);
+			dragging = null;
+		}
 	}
 
 	private record Properties(Class<? extends Screen> screenClass, int guiLeft, int guiTop, int guiXSize,
