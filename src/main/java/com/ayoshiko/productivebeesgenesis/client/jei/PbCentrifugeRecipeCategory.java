@@ -1,13 +1,14 @@
 package com.ayoshiko.productivebeesgenesis.client.jei;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
+import com.ayoshiko.productivebeesgenesis.util.ChancedOutput;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
 import mezz.jei.api.helpers.IGuiHelper;
-import mezz.jei.api.neoforge.NeoForgeTypes;
+import mezz.jei.api.forge.ForgeTypes;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.RecipeType;
@@ -16,7 +17,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 
 import javax.annotation.Nonnull;
 
@@ -44,7 +45,7 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 
 	/** JEI分类背景纹理路径（复用PB原版纹理） */
 	private static final ResourceLocation BACKGROUND_TEXTURE =
-			ResourceLocation.fromNamespaceAndPath("productivebees", "textures/gui/jei/centrifuge_recipe.png");
+			new ResourceLocation("productivebees", "textures/gui/jei/centrifuge_recipe.png");
 
 	/** 背景宽度（与纹理区域一致） */
 	private static final int BACKGROUND_WIDTH = 126;
@@ -112,11 +113,6 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 	 */
 	@Override
 	public void setRecipe(IRecipeLayoutBuilder builder, CentrifugeRecipe recipe, IFocusGroup focuses) {
-		setRecipeLayout(builder, recipe, false);
-	}
-
-	/** 普通、热能和 Genesis 分类共用布局；热能分类仍按 PB 规则过滤蜂蜡。 */
-	public static void setRecipeLayout(IRecipeLayoutBuilder builder, CentrifugeRecipe recipe, boolean stripWax) {
 		// 输入槽
 		builder.addSlot(RecipeIngredientRole.INPUT, 5, 27)
 				.addItemStacks(Arrays.stream(recipe.ingredient.getItems()).toList())
@@ -127,14 +123,12 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 		int startY = 26;
 
 		// 物品输出：使用索引for循环，循环变量i在每次迭代中为effectively final，无需final快照
-		List<Map.Entry<ItemStack, TagOutputRecipe.ChancedOutput>> outputEntries =
-				recipe.getRecipeOutputs().entrySet().stream()
-						.filter(entry -> !stripWax || !entry.getKey().is(cy.jdkdigital.productivebees.init.ModTags.Common.WAXES))
-						.toList();
+		List<Map.Entry<ItemStack, ChancedOutput>> outputEntries =
+				new ArrayList<>(ChancedOutput.convert(recipe.getRecipeOutputs()).entrySet());
 		for (int i = 0; i < outputEntries.size(); i++) {
-			Map.Entry<ItemStack, TagOutputRecipe.ChancedOutput> entry = outputEntries.get(i);
+			Map.Entry<ItemStack, ChancedOutput> entry = outputEntries.get(i);
 			ItemStack stack = entry.getKey();
-			TagOutputRecipe.ChancedOutput value = entry.getValue();
+			ChancedOutput value = entry.getValue();
 
 			// 为每个可能的输出数量生成一个物品堆栈
 			List<ItemStack> innerList = new ArrayList<>();
@@ -149,7 +143,6 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 			int row = i / 3;
 			builder.addSlot(RecipeIngredientRole.OUTPUT, startX + (col * 18) + 1, startY + (row * 18) + 1)
 					.addItemStacks(innerList)
-					.setStandardSlotBackground()
 					.addRichTooltipCallback((recipeSlotView, tooltip) -> {
 						float chance = value.chance() * 100f;
 						if (chance < 100) {
@@ -165,15 +158,13 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 		}
 
 		// 流体输出
-		FluidStack fluid = recipe.getFluidOutputs();
+		FluidStack fluid = com.ayoshiko.productivebeesgenesis.util.PbRecipeOutputs.fluid(recipe);
 		if (!fluid.isEmpty()) {
 			int slotIndex = outputEntries.size();
 			int col = slotIndex % 3;
 			int row = slotIndex / 3;
 			builder.addSlot(RecipeIngredientRole.OUTPUT, startX + (col * 18) + 1, startY + (row * 18) + 1)
-					.addIngredient(NeoForgeTypes.FLUID_STACK, fluid)
-					.setFluidRenderer(Math.max(1000, fluid.getAmount()), false, 16, 16)
-					.setStandardSlotBackground()
+					.addIngredient(ForgeTypes.FLUID_STACK, fluid)
 					.addRichTooltipCallback((recipeSlotView, tooltip) ->
 							tooltip.add(Component.translatable("productivebees.centrifuge.tooltip.amount",
 									fluid.getAmount() + "mB")))

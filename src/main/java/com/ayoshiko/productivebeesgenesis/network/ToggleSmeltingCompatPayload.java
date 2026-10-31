@@ -1,10 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -17,20 +14,12 @@ import net.minecraft.resources.ResourceLocation;
 	 */
 public record ToggleSmeltingCompatPayload(
 		BlockPos pos
-) implements CustomPacketPayload {
+)  {
 
-	public static final CustomPacketPayload.Type<ToggleSmeltingCompatPayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "toggle_smelting_compat"));
-
-	public static final StreamCodec<ByteBuf, ToggleSmeltingCompatPayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, ToggleSmeltingCompatPayload::pos,
-					ToggleSmeltingCompatPayload::new
-			);
-
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static ToggleSmeltingCompatPayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new ToggleSmeltingCompatPayload(buf.readBlockPos());
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+    }
 }

@@ -4,9 +4,11 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.network.ToggleApiaryDirectEjectPayload;
-import com.ayoshiko.productivebeesgenesis.client.resource.GuiResourceSideConfig;
 import mekanism.client.gui.GuiMekanism;
+import mekanism.client.gui.element.GuiElement;
+import mekanism.client.gui.element.tab.GuiConfigTypeTab;
 import mekanism.client.gui.element.window.GuiSideConfiguration;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.lib.transmitter.TransmissionType;
@@ -14,12 +16,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.ScreenEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.TickEvent.ClientTickEvent;
+import net.minecraftforge.client.event.ScreenEvent;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 import org.lwjgl.glfw.GLFW;
 
 import java.lang.ref.WeakReference;
@@ -48,7 +50,8 @@ public final class ApiaryDirectEjectOverlay {
 	}
 
 	@SubscribeEvent
-	public static void onClientTick(ClientTickEvent.Pre event) {
+	public static void onClientTick(ClientTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.START) return;
 		Screen screen = Minecraft.getInstance().screen;
 		if (screen == null) return;
 		OverlayTarget target = findTarget(screen);
@@ -121,7 +124,7 @@ public final class ApiaryDirectEjectOverlay {
 				CENTRIFUGE_PRIORITY_BUTTON_Y_OFFSET);
 		if (aeLoaded && priorityButton != null && priorityButton.visible
 				&& priorityBounds.contains(event.getMouseX(), event.getMouseY())) {
-			PacketDistributor.sendToServer(new com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload(
+			ForgeNetwork.sendToServer(new com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload(
 					target.apiary().getBlockPos(),
 					com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload.OutputType
 							.APIARY_CENTRIFUGE_PRIORITY));
@@ -132,7 +135,7 @@ public final class ApiaryDirectEjectOverlay {
 		ButtonBounds directAeBounds = bounds(target, DIRECT_AE_BUTTON_X_OFFSET);
 		if (aeLoaded && directAeButton != null && directAeButton.visible && directAeButton.active
 				&& directAeBounds.contains(event.getMouseX(), event.getMouseY())) {
-			PacketDistributor.sendToServer(new com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload(
+			ForgeNetwork.sendToServer(new com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload(
 					target.apiary().getBlockPos(),
 					com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload.OutputType.APIARY_DIRECT));
 			event.setCanceled(true);
@@ -140,7 +143,7 @@ public final class ApiaryDirectEjectOverlay {
 		}
 		ButtonBounds bounds = bounds(target);
 		if (bounds.contains(event.getMouseX(), event.getMouseY())) {
-			PacketDistributor.sendToServer(new ToggleApiaryDirectEjectPayload(target.apiary().getBlockPos()));
+			ForgeNetwork.sendToServer(new ToggleApiaryDirectEjectPayload(target.apiary().getBlockPos()));
 			event.setCanceled(true);
 		}
 	}
@@ -168,12 +171,21 @@ public final class ApiaryDirectEjectOverlay {
 		if (!(container.getTileEntity() instanceof TileEntityMekApiary apiary)) return null;
 		for (GuiWindow window : gui.getWindows()) {
 			if (window instanceof GuiSideConfiguration<?> sideConfig) {
-				return new OverlayTarget(gui, sideConfig, apiary, GuiResourceSideConfig.nativeType(sideConfig));
+				return new OverlayTarget(gui, sideConfig, apiary, getCurrentType(sideConfig));
 			}
 		}
 		return null;
 	}
 
+	private static TransmissionType getCurrentType(GuiSideConfiguration<?> sideConfig) {
+		for (GuiElement child : sideConfig.children()) {
+			if (child instanceof GuiConfigTypeTab tab && !tab.visible) return tab.getTransmissionType();
+		}
+		for (GuiElement child : sideConfig.children()) {
+			if (child instanceof GuiConfigTypeTab tab) return tab.getTransmissionType();
+		}
+		return TransmissionType.ITEM;
+	}
 
 	private static ButtonBounds bounds(OverlayTarget target) {
 		return bounds(target, BUTTON_X_OFFSET);

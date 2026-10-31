@@ -9,7 +9,7 @@ import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
 import mekanism.api.tier.BaseTier;
 import mekanism.common.tier.FactoryTier;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
+import mekanism.api.providers.IBlockProvider;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -38,7 +38,7 @@ public class TileEntityEMExtraMekApiaryFactory extends TileEntityMekApiaryFactor
 	/** EME 工厂等级 — 在 presetVariables() 中从 BlockType 的 EMExtraAttributeTier 读取 */
 	protected EMExtraFactoryTier emeTier;
 
-	public TileEntityEMExtraMekApiaryFactory(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
+	public TileEntityEMExtraMekApiaryFactory(IBlockProvider blockProvider, BlockPos pos, BlockState state) {
 		super(blockProvider, pos, state);
 	}
 
@@ -55,7 +55,7 @@ public class TileEntityEMExtraMekApiaryFactory extends TileEntityMekApiaryFactor
 		super.presetVariables();
 		// 父类 presetVariables 会将 tier（FactoryTier）设为 null（EME 方块无 AttributeTier<FactoryTier>）
 		// 从 BlockType 读取 EME 等级
-		emeTier = EMExtraAttribute.getEMExtraTier(getBlockHolder(), EMExtraFactoryTier.class);
+		emeTier = EMExtraAttribute.getTier(getBlockState().getBlock(), EMExtraFactoryTier.class);
 	}
 
 	/**

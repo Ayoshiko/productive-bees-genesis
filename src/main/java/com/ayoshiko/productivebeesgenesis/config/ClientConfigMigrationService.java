@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.config;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import com.electronwill.nightconfig.toml.TomlParser;
 import com.electronwill.nightconfig.toml.TomlWriter;
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,8 +45,8 @@ public final class ClientConfigMigrationService {
 	 * 新键逐字段仍为默认值时才复制旧值，已存在的新值始终优先。写回使用临时文件和原子替换，
 	 * 并保留旧 saveName，确保回退到旧版本时窗口位置仍可读取。
 	 */
-	public static synchronized void onConfigLoading(net.neoforged.fml.config.ModConfig config) {
-		if (config == null || config.getType() != net.neoforged.fml.config.ModConfig.Type.CLIENT
+	public static synchronized void onConfigLoading(net.minecraftforge.fml.config.ModConfig config) {
+		if (config == null || config.getType() != net.minecraftforge.fml.config.ModConfig.Type.CLIENT
 				|| !ProductiveBeesGenesisConfigIds.MOD_ID.equals(config.getModId())
 				|| config.getSpec() != ModConfig.CLIENT_SPEC) {
 			return;
@@ -64,7 +64,7 @@ public final class ClientConfigMigrationService {
 		try {
 			CommentedConfig disk = legacySource(path);
 			if (disk == null) return;
-			CommentedConfig loaded = config.getLoadedConfig().config();
+			CommentedConfig loaded = config.getConfigData();
 			MigrationResult result = migrateWindowPositions(disk, loaded);
 			if (result.copiedValues() == 0) return;
 

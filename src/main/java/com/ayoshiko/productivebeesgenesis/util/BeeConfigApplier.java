@@ -6,8 +6,6 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.StringTag;
 import net.minecraft.util.FastColor;
 
 /**
@@ -34,7 +32,7 @@ public final class BeeConfigApplier {
 		// 同步获取 data 引用并修改，防止 TOCTOU 竞态
 		// （重载事件可能在 getData 之后、synchronized 之前替换数据，导致修改写入旧数据）
 		synchronized (BeeConfigApplier.class) {
-			CompoundTag data = BeeReloadListener.INSTANCE.getData(PBConstants.MYRIADCREATIONS_TYPE);
+			CompoundTag data = BeeReloadListener.INSTANCE.getData(PBConstants.MYRIADCREATIONS_TYPE_STRING);
 			if (data == null) {
 				// 不静默返回：记录警告便于排查 BeeReloadListener 未加载或类型未注册的问题
 				DevLog.warn("config_apply", "无法获取万象创世蜜蜂数据 (BeeReloadListener 未加载或类型 {} 未注册)，跳过配置覆盖",
@@ -47,43 +45,9 @@ public final class BeeConfigApplier {
 			data.putInt("secondaryColor", parseHexColor(config.secondaryColor.get()));
 			data.putInt("particleColor", parseHexColor(config.particleColor.get()));
 			data.putInt("glowColor", parseHexColor(config.glowColor.get()));
-			var appearance = config.beeAttributes();
-			data.putInt("tertiaryColor", appearance.tertiaryColor.get().isEmpty()
-					? data.getInt("primaryColor") : parseHexColor(appearance.tertiaryColor.get()));
-			data.putFloat("pollinatedSize", appearance.pollinatedSize.get() == 0
-					? config.size.get().floatValue() : appearance.pollinatedSize.get().floatValue());
-			data.putBoolean("useGlowLayer", appearance.useGlowLayer.get());
-			optional(data, "attackResponse", appearance.attackResponse.get().equals("none") ? "" : appearance.attackResponse.get());
-			data.putString("renderTransform", appearance.renderTransform.get());
-			ListTag immunity = new ListTag();
-			appearance.invulnerability.get().forEach(value -> immunity.add(StringTag.valueOf(value)));
-			data.put("invulnerability", immunity);
-			data.putString("renderer", appearance.renderer.get());
-			optional(data, "model", appearance.model.get());
-			optional(data, "animation", appearance.animation.get());
-			optional(data, "beeTexture", appearance.beeTexture.get());
-			data.putString("particleType", appearance.particleType.get());
-			optional(data, "nestingPreference", appearance.nestingPreference.get());
-			optional(data, "postPollination", appearance.postPollination.get().equals("none") ? "" : appearance.postPollination.get());
-			appearance.traits.forEach((key, value) -> data.putBoolean(key, value.get()));
 
 			// 授粉
-			for (String field : new String[]{"flowerItem", "flowerBlock", "flowerTag", "flowerFluid"}) {
-				data.remove(field);
-			}
-			data.putBoolean("inverseFlower", false);
-			data.putString("flowerType", appearance.flowerType.get());
-			if (!appearance.flowerTag.get().isEmpty()) {
-				String tag = appearance.flowerTag.get();
-				data.putString("flowerTag", tag.startsWith("!") ? tag.substring(1) : tag);
-				data.putBoolean("inverseFlower", tag.startsWith("!"));
-			} else if (!appearance.flowerBlock.get().isEmpty()) {
-				data.putString("flowerBlock", appearance.flowerBlock.get());
-			} else if (!appearance.flowerFluid.get().isEmpty()) {
-				data.putString("flowerFluid", appearance.flowerFluid.get());
-			} else {
-				data.putString("flowerItem", config.flowerItem.get());
-			}
+			data.putString("flowerItem", config.flowerItem.get());
 
 			// PB 属性
 			data.putString("weather_tolerance", config.weatherTolerance.get());
@@ -119,18 +83,10 @@ public final class BeeConfigApplier {
 			int r = Integer.parseInt(hexStr.substring(0, 2), 16);
 			int g = Integer.parseInt(hexStr.substring(2, 4), 16);
 			int b = Integer.parseInt(hexStr.substring(4, 6), 16);
-			return FastColor.ARGB32.color(r, g, b);
+			return FastColor.ARGB32.color(255, r, g, b);
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("解析颜色值 '{}' 失败，使用默认金色", hex, e);
 			return 0xFFFFD700; // 默认金色
-		}
-	}
-
-	private static void optional(CompoundTag data, String key, String value) {
-		if (value.isEmpty()) {
-			data.remove(key);
-		} else {
-			data.putString(key, value);
 		}
 	}
 }

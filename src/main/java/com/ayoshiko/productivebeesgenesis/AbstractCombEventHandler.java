@@ -5,7 +5,7 @@ import com.ayoshiko.productivebeesgenesis.mek.WeightedTypeSelector;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
@@ -17,9 +17,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
-import net.minecraft.world.item.crafting.RecipeInput;
-import net.neoforged.neoforge.items.IItemHandlerModifiable;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.Container;
+import net.minecraftforge.items.IItemHandlerModifiable;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
@@ -149,7 +149,7 @@ public abstract class AbstractCombEventHandler {
 			}
 			// 普通资源蜂的配方可能省略 bee_type 组件，PB 会按 ingredient 蜂种补全。
 			ItemStack testComb = THREAD_LOCAL_TEST_COMB.get();
-			testComb.set(ModDataComponents.BEE_TYPE.get(), beeType);
+			PbDataComponents.setBeeType(testComb, beeType);
 			return findCentrifugeRecipe(level, testComb);
 		} catch (Exception e) {
 			// M9: LogThrottle 节流（for 循环内高频调用，异常持续时每秒触发 N 次）
@@ -163,8 +163,8 @@ public abstract class AbstractCombEventHandler {
 	private static boolean findCentrifugeRecipe(ServerLevel level, ItemStack input) {
 		InventoryHandlerHelper.BlockEntityItemStackHandler handler = THREAD_LOCAL_HANDLER.get();
 		handler.setStackInSlot(InventoryHandlerHelper.INPUT_SLOT, input.copyWithCount(1));
-		RecipeHolder<CentrifugeRecipe> recipe = level.getRecipeManager()
-				.getRecipeFor(ModRecipeTypes.CENTRIFUGE_TYPE.get(), (RecipeInput) handler, level)
+		CentrifugeRecipe recipe = level.getRecipeManager()
+				.getRecipeFor(ModRecipeTypes.CENTRIFUGE_TYPE.get(), (Container) handler, level)
 				.orElse(null);
 		return recipe != null;
 	}
@@ -182,7 +182,7 @@ public abstract class AbstractCombEventHandler {
 	 */
 	public static boolean isBeeReloadListenerReady() {
 		try {
-			Map<ResourceLocation, ?> beeData = BeeReloadListener.INSTANCE.getData();
+			Map<String, ?> beeData = BeeReloadListener.INSTANCE.getData();
 			return beeData != null && !beeData.isEmpty();
 		} catch (Exception e) {
 			// M9: LogThrottle 节流，避免周期性检查异常时刷屏
@@ -284,7 +284,7 @@ public abstract class AbstractCombEventHandler {
 				ItemStack current = entry.getValue();
 				if (current.isEmpty()) {
 					if (selected == null && amount <= limit) selected = entry.getKey();
-				} else if (ItemStack.isSameItemSameComponents(current, output)
+				} else if (ItemStack.isSameItemSameTags(current, output)
 						&& amount <= limit - current.getCount()) {
 					selected = entry.getKey();
 					break;
@@ -303,7 +303,7 @@ public abstract class AbstractCombEventHandler {
 			for (var entry : staged.entrySet()) {
 				ItemStack current = entry.getValue();
 				if ((pass == 0) == current.isEmpty()
-						|| (!current.isEmpty() && !ItemStack.isSameItemSameComponents(current, template))
+						|| (!current.isEmpty() && !ItemStack.isSameItemSameTags(current, template))
 						|| !handler.isItemValid(entry.getKey(), template, false)) continue;
 				int limit = Math.min(handler.getSlotLimit(entry.getKey()), template.getMaxStackSize());
 				int added = Math.min(remaining, Math.max(0, limit - current.getCount()));

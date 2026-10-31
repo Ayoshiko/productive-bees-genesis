@@ -3,9 +3,9 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.common.item.HoneyTreat;
-import cy.jdkdigital.productivebees.util.GeneAttribute;
-import cy.jdkdigital.productivebees.util.GeneGroup;
-import cy.jdkdigital.productivebees.util.GeneValue;
+import cy.jdkdigital.productivebees.common.item.Gene;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.CompoundTag;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
@@ -157,29 +157,30 @@ class GeneTreatAutoFeeder {
 	 * <p>
 	 * 数量消耗不会使缓存失效；组件快照用于识别自动化原地替换基因数据的少见情况。
 	 * 同属性出现多次时只保留最高目标，后续扫描每只蜜蜂只做固定五次数组读取，
-	 * 不再重复执行 {@link GeneValue#byName(String)} 或遍历原始 {@link GeneGroup}。
+	 * 不再重复执行 PB gene parsing 或遍历原始 gene item NBT。
 	 */
 	private boolean prepareCachedTreat(ItemStack treat) {
-		if (treat != cachedTreatReference || !ItemStack.isSameItemSameComponents(treat, cachedTreatSnapshot)) {
+		if (treat != cachedTreatReference || !ItemStack.isSameItemSameTags(treat, cachedTreatSnapshot)) {
 			cachedTreatReference = treat;
 			cachedTreatSnapshot = treat.copyWithCount(1);
 			Arrays.fill(cachedTargetScores, -1);
 			cachedTreatHasType = false;
 			cachedTreatHasTargets = false;
-			List<GeneGroup> genes = HoneyTreat.getGenes(treat);
+			ListTag genes = HoneyTreat.getGenes(treat);
 			if (genes != null) {
 				for (int i = 0; i < genes.size(); i++) {
-					GeneGroup gene = genes.get(i);
-					GeneAttribute attribute = gene.attribute();
-					if (attribute == GeneAttribute.TYPE) {
+					CompoundTag geneTag = genes.getCompound(i);
+                    ItemStack gene = ItemStack.of(geneTag);
+                    GeneAttribute attribute = GeneAttribute.fromBeeAttribute(Gene.getAttribute(gene));
+					if (attribute == null && !Gene.getAttributeName(gene).isEmpty()) {
 						cachedTreatHasType = true;
 						continue;
 					}
 					if (attribute == null || !GeneAttributeRanking.isRankable(attribute)) continue;
-					Integer purity = gene.purity();
+					Integer purity = geneTag.contains("purity") ? geneTag.getInt("purity") : Gene.getPurity(gene);
 					if (purity == null || purity <= 0) continue;
-					GeneValue target = GeneValue.byName(gene.value());
-					if (target == null) continue;
+					Integer target = Gene.getValue(gene);
+                    if (target == null || target < 0 || target > attribute.maxValue) continue;
 					int index = attribute.ordinal();
 					int score = GeneAttributeRanking.desirability(attribute, target);
 					cachedTargetScores[index] = Math.max(cachedTargetScores[index], score);

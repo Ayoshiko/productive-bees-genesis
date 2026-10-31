@@ -1,8 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.logistics;
 
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.items.IItemHandler;
-import net.neoforged.neoforge.items.ItemHandlerHelper;
+import net.minecraftforge.items.IItemHandler;
+import net.minecraftforge.items.ItemHandlerHelper;
 
 /**
  * 物品推送助手，提供模拟容量与执行插入两个入口。
@@ -49,33 +49,5 @@ public final class ItemPushHelper {
 	public static ItemStack insert(IItemHandler target, ItemStack stack) {
 		if (target == null || stack.isEmpty()) return stack;
 		return ItemHandlerHelper.insertItemStacked(target, stack, false);
-	}
-
-	/** 每个能力调用独立结算；后续槽位异常不能抹掉之前已知的接收量。 */
-	public static ItemStack insert(IItemHandler target, ItemStack stack, OutputCustody custody, String destination) {
-		ItemStack remaining = stack.copy();
-		int slots;
-		try { slots = target.getSlots(); } catch (RuntimeException e) { return remaining; }
-		for (int pass = 0; pass < 2 && !remaining.isEmpty() && !custody.blocked(); pass++) {
-			for (int i = 0; i < slots && !remaining.isEmpty() && !custody.blocked(); i++) {
-				ItemStack current;
-				try { current = target.getStackInSlot(i); } catch (RuntimeException e) { return remaining; }
-				if (pass == 0 ? current.isEmpty() || !ItemStack.isSameItemSameComponents(current, remaining) : !current.isEmpty()) continue;
-				int slot = i;
-				ItemStack offered = remaining.copy();
-				int handed = custody.handoffItem(offered, destination + "/" + slot, () -> {
-					ItemStack rest = target.insertItem(slot, offered.copy(), false);
-					return accepted(offered, rest);
-				});
-				remaining.shrink(handed);
-			}
-		}
-		return remaining;
-	}
-
-	public static int accepted(ItemStack offered, ItemStack rest) {
-		if (rest == null || (!rest.isEmpty() && (!ItemStack.isSameItemSameComponents(offered, rest)
-				|| rest.getCount() > offered.getCount()))) throw new IllegalStateException("Invalid item receipt");
-		return offered.getCount() - (rest.isEmpty() ? 0 : rest.getCount());
 	}
 }

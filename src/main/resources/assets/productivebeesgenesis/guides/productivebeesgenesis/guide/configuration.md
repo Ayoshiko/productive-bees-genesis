@@ -29,17 +29,19 @@ navigation:
 - **万象创世过滤**：黑名单排除不想要的资源，白名单只保留指定资源。
 - **蜜蜂获得方式**：分别控制物品转化、繁殖、钓鱼和蜂巢自然生成。
 - **蜜蜂属性与产出**：改变工作条件和产量，服务器修改后所有玩家都会受影响。
-- **高倍加速**：每真实刻默认兑现 2048 个虚拟 tick，可调至 4096；银行默认暂存 8192，可调至 32768。银行只缓冲积压，高 MSPT 时仍自动降低兑现预算。已有配置保留原值。
 
 ### 机器设置
 
 这里控制蜂箱、离心机、AE2 联动、升级上限和外部物流。
 
-- **每轮耗电和时间**：机器设置 → 蜂箱或离心机 → 基础参数，建议先保持默认。
-- **流体分槽**：离心机 → 基础参数，保持开启。
-- **AE2 输出与 Applied Flux 供电**：对应机器 → AE2 集成。
-- **PB 升级数量**：对应机器 → PB 升级上限，不要一次拉满。
-- **相邻容器直出**：外部物流，普通管道线可开启。
+| 想调整什么 | 去哪里找 | 新手建议 |
+| --- | --- | --- |
+| 每轮耗电和时间 | 蜂箱/离心机 → 基础参数 | 先保持默认 |
+| 离心机流体分槽 | 离心机 → 基础参数 | 保持开启 |
+| AE2 物品/流体输出 | 对应机器 → AE2 集成 | 有 AE2 就保持开启 |
+| Applied Flux 供电优先 | 对应机器 → AE2 集成 | 有 Applied Flux 就保持优先 |
+| PB 升级数量 | 对应机器 → PB 升级上限 | 不要一次拉满 |
+| 相邻容器直出 | 外部物流 | 普通管道线可开启 |
 
 离心机的 AE2 主动取料有服务器总开关，但每台机器默认仍需要玩家在 AE2 输入窗口单独开启，避免刚接上线就大量抽空网络。
 
@@ -66,93 +68,3 @@ navigation:
 ## 什么时候才需要看原始键名
 
 只有整合包作者做批量分发、脚本替换或版本迁移时才需要。普通玩家直接使用中文配置界面即可。若你必须手改文件，请同时参考文件中的中文注释，并避免在服务器运行时保存不完整内容。
-
-## 自定义蜜蜂与扩展资源
-
-蜜蜂的颜色、采蜜物品、繁殖食物和获得方式使用 PB 的 JSON。Genesis 增加 FE、化学品、魔源等产物配方。**扩展蜂也支持 PB 繁殖、物品转化、巢穴生成和钓鱼。**
-
-### 下载后直接试用
-
-下载 [完整示例合集](https://github.com/Ayoshiko/productive-bees-genesis/releases/download/resource-bee-examples-1.1.0/resource-bees-all.zip)，里面有可运行文件、KubeJS 完整脚本和带注释参考。模组 JAR 不包含这些示例蜂。
-
-1. 把 resource-bees-datapack.zip 放进存档的 datapacks。
-2. 把 resource-bees-resourcepack.zip 放进 resourcepacks，并在资源包菜单启用。
-3. 重新进入世界，在 JEI 查看蜂蛋合成与蜜蜂用途。
-
-**带注释的 .jsonc 只供阅读，不能作为游戏 JSON 加载。** 直接修改无注释的 datapack 文件最方便。INSTALL.txt 是安装说明；EXAMPLES.json 列出每只蜂对应的文件。
-
-### 从铜能量蜂开始
-
-用空蜂笼、蜂蜜点心和铜锭合成铜能量蜂蛋。请只用空蜂笼，合成不会保护里面的蜜蜂。
-
-将蜂放进 Genesis 机械蜂箱，采蜜槽放铜锭，给蜂箱供电。它直接产 FE，不需要离心，采蜜铜锭不消耗。
-
-32 只示例蜂都有便捷蜂蛋合成，28 只扩展蜂还各有繁殖和转化配方。材料和产量可以按自己的玩法修改。
-
-### 做自己的蜂，需要改什么
-
-- **蜂种：** data/example/productivebees 中修改颜色、flowerItem 采蜜物品、breedingItem 繁殖食物。同种繁殖由 selfbreed 控制。
-- **获取：** data/example/recipe 中的 acquisition、bee_breeding、bee_conversion、bee_spawning、bee_fishing 分别对应合成、繁殖、转化、巢穴和钓鱼。
-- **产物：** resource_production 直接产资源；resource_centrifuging 从蜜脾产资源。amount 是带引号的正整数，chance 是 0～1 的数字。
-- **名称：** assets/productivebees/lang 的中英文文件。example:copper_energy 使用 entity.productivebees.copper_energy_bee。
-
-改名时一起改蜂种文件、所有配方中的蜂种 ID、加载条件和名称键。recipe 目录使用单数。详细 JSON 可复制 [README 教程](https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/README_zh.md#扩展资源蜜蜂)。
-
-### 繁殖、转化和其他获取
-
-繁殖配方修改 parent1、parent2 和 offspring；两只亲本分别喂它们自己的繁殖食物。转化配方修改 source、result、item 和 chance，再用指定物品对源蜜蜂操作。
-
-扩展铜能量蜂提供巢穴示例，水容器蜂提供河流钓鱼示例。它们使用普通 PB 配方类型，只是目标蜂种换成扩展蜂。
-
-引用示例亲本时，记得同时安装亲本文件，或改成整合包已有蜜蜂。使用可选模组的蜂还要修改 modid 加载条件。
-
-### PB 普通蜂与完整属性
-
-pb_copper 展示颜色、花粉、初始基因、体型、速度、攻击、繁殖食物、防水和防火。注释版逐项解释可修改字段。
-
-四种花源各有例子：pb_copper 用铜块，pb_redstone 用红石，pb_water 用水，pb_tag 用自定义标签。flowerBlock、flowerItem、flowerFluid、flowerTag 只选一种。**这些属性同样可以用于扩展蜂。**
-
-普通 PB 蜂配套蜂箱产蜜脾、离心出物品或液体的配方。createComb 只提供专属蜜脾外观，还要单独写产物配方。
-
-### 先产蜜脾，再产资源
-
-hydrogen 用铁锭采蜜。保留蜂种、hydrogen_honeycomb 和 hydrogen_centrifuging 三个文件：机械蜂箱产氢气蜜脾，Genesis 机械离心机产氢气。
-
-离心配方中改 kind、资源 id、amount 和 processing_time。20 游戏刻约一秒。蜜脾组件 productivebees:bee_type 必须与蜂种一致。
-
-energy 直接产 FE，energy_comb 先产蜜脾。mixed 同时产普通物品与 FE；combined 配合 include_pb_outputs 和普通 PB 离心配方同时出两种产物。
-
-### 其他资源的采蜜材料
-
-- source：魔源宝石；soul：灵魂沙。
-- air：压力表；emc：炼金煤炭。
-- experience：附魔之瓶；lightning：闪电坍缩矩阵。
-- ae_key：钻石，展示通用 AE2 资源键产物。
-
-只安装需要的例子。缺少所需模组时，对应蜂种和配方不会出现。各资源的完整字段见下载包和 README。
-
-### 装有资源的容器作为花源
-
-用 flowerResource 替换其他 flower 字段，填写 kind、资源 id 和最低 amount。container_hydrogen 要求至少 1000 mB 氢气，container_water 用水桶，container_energy 要求至少 1000 FE。
-
-container_ae_key 要求真实 ME 物品元件内至少有 16 颗钻石。**采蜜不消耗容器或内容**；空容器、错误资源和不足量不能工作。多个容器的数量不会相加。
-
-### 使用 KubeJS
-
-也可复制合集中的 kubejs 目录：data 是蜂种和标签，assets 是名称，server_scripts/genesis_resource_bees.js 注册全部获取与产物配方。
-
-数据包和完整脚本选一种安装，不要重复。已有配方修改后 /reload；新增蜂种后重新进入世界。带注释的参考文件不要放进 data。
-
-### 输出与侧面配置
-
-在 Mekanism 侧面配置中，化学品图标位于左侧 ENERGY 下方。其他资源从右侧扩展入口打开，用正方形图标选择，再设置输出面和自动弹出。
-
-FE 使用原生 ENERGY 页，工作电量和蜂产 FE 分开。ME 输出需要 AE2、对应资源桥、供电、频道和可接收存储。EMC 存入拥有者的 ProjectE 账户。
-
-资源面板显示产量和待输出库存，图标不能拿走。扩展资源生产使用 Genesis 机械蜂箱／离心机及其工厂。
-
-### 没有生效时
-
-找不到蜂种，先查依赖、目录和数据包启用状态；不采蜜，查材料、槽位开关和供电；无法繁殖或转化，查亲本／源蜂、食物和加载条件。
-
-有蜜脾没有资源，检查 Genesis 离心机和配方。显示名称键时启用资源包并按 F3+T。JSON 报错时检查注释、逗号、引号和字符串 amount。

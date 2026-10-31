@@ -6,10 +6,11 @@ import com.ayoshiko.productivebeesgenesis.network.SetAeInputFilterAmountPayload;
 import com.ayoshiko.productivebeesgenesis.util.Ae2AmountExpressionParser;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import mekanism.client.gui.element.text.GuiTextField;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
-import mekanism.client.render.IFancyFontRenderer.TextAlignment;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.TextAlignment;
 import mekanism.common.inventory.container.SelectedWindowData.WindowType;
 import mekanism.common.inventory.container.SelectedWindowData;
 import net.minecraft.client.gui.GuiGraphics;
@@ -18,7 +19,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 import org.jetbrains.annotations.NotNull;
 
 import java.math.BigDecimal;
@@ -26,7 +27,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 
 	/** MEK-styled editor for one exact AE input entry's pull amount or stock reserve. */
-final class GuiAeInputAmountConfig extends GuiWindow {
+final class GuiAeInputAmountConfig extends PinnableGuiWindow {
 
 	private static final int WINDOW_WIDTH = 184;
 	private static final int WINDOW_HEIGHT = 136;
@@ -90,7 +91,7 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 		}
 		updateStepLabels(false);
 
-		amountField = addChild(new GuiTextField(gui(), this, relativeX + 55, relativeY + 61, 76, 18));
+		amountField = addChild(new GuiTextField(gui(), relativeX + 55, relativeY + 61, 76, 18));
 		amountField.setInputValidator(GuiAeInputAmountConfig::isAmountCharacter);
 		// Reserve values use the full long range (up to 19 digits); leave room for
 		// AE2-style expressions while keeping the normal editor compact.
@@ -120,7 +121,7 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 								: "productivebeesgenesis.gui.ae_input_amount.reserve_title")
 						: (applyToAll ? "productivebeesgenesis.gui.ae_input_amount.title_all"
 								: "productivebeesgenesis.gui.ae_input_amount.title")), 5);
-		drawScaledScrollingString(guiGraphics,
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics,
 				Component.translatable(reserveMode ? "productivebeesgenesis.gui.ae_input_amount.reserve_range"
 						: "productivebeesgenesis.gui.ae_input_amount.range", maxAmount()),
 				55, 51, TextAlignment.LEFT, screenTextColor(), 116, 3, false, 0.75F);
@@ -177,9 +178,9 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 			return;
 		}
 		if (applyToAll) {
-			PacketDistributor.sendToServer(new SetAllAeInputFilterAmountPayload(pos, parsed.getAsLong(), reserveMode));
+			ForgeNetwork.sendToServer(new SetAllAeInputFilterAmountPayload(pos, parsed.getAsLong(), reserveMode));
 		} else {
-			PacketDistributor.sendToServer(new SetAeInputFilterAmountPayload(pos, slotIndex, parsed.getAsLong(), reserveMode));
+			ForgeNetwork.sendToServer(new SetAeInputFilterAmountPayload(pos, slotIndex, parsed.getAsLong(), reserveMode));
 		}
 		close();
 	}
@@ -226,13 +227,13 @@ final class GuiAeInputAmountConfig extends GuiWindow {
 	}
 
 	@Override
-	public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) {
+	public boolean mouseScrolled(double mouseX, double mouseY, double deltaY) {
 		if (amountField.isMouseOver(mouseX, mouseY) && deltaY != 0 &&
 				Ae2AmountExpressionParser.parse(amountField.getText()).isPresent()) {
 			adjustByWheel(deltaY);
 			return true;
 		}
-		return super.mouseScrolled(mouseX, mouseY, deltaX, deltaY);
+		return super.mouseScrolled(mouseX, mouseY, deltaY);
 	}
 
 	private static final class AmountButton extends MekanismButton {

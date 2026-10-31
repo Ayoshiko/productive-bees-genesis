@@ -64,7 +64,7 @@ public class MekGuiBlockItemDepthMixin {
 	 * 标志提前清掉，使外层的深度测试再也无法恢复（同一个泄漏的另一种触发方式）。
 	 */
 	@WrapOperation(
-		method = "renderFakeItem(Lnet/minecraft/world/item/ItemStack;III)V",
+		method = "renderFakeItem(Lnet/minecraft/world/item/ItemStack;II)V",
 		at = @At(
 			value = "INVOKE",
 			target = "Lnet/minecraft/client/gui/GuiGraphics;renderItem(Lnet/minecraft/world/entity/LivingEntity;"

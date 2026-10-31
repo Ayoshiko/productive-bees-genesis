@@ -265,11 +265,6 @@ class OptionalGuideCompatibilityTest {
 		String metadata = Files.readString(Path.of("src/main/templates/META-INF/neoforge.mods.toml"));
 		assertOptionalDependency(metadata, "guideme");
 		assertOptionalDependency(metadata, "patchouli");
-		String mixinPlugin = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/mixin/MixinConfigPlugin.java"));
-		assertTrue(mixinPlugin.contains(
-				"if (simpleName.equals(\"MyriadGuideHotkeyMixin\")) return isModLoaded(\"guideme\");"),
-				"GuideME 热键 Mixin 必须在缺失依赖时拒绝加载");
 
 		Path sourceRoot = Path.of("src/main/java");
 		try (var files = Files.walk(sourceRoot)) {
@@ -409,25 +404,9 @@ class OptionalGuideCompatibilityTest {
 		assertTrue(block.contains("ordering=\"AFTER\""), () -> modId + " 存在时应在其后加载");
 	}
 
-	@Test
-	@DisplayName("可选 API 检查拒绝类型引用，允许条件 Mixin 的字符串目标")
-	void optionalApiCheckDistinguishesTypesFromStrings() {
-		assertTrue(containsOptionalApiReference("import guideme.indices.ItemIndex;", "guideme."));
-		assertTrue(containsOptionalApiReference("private guideme.PageAnchor anchor;", "guideme."));
-		assertFalse(containsOptionalApiReference(
-				"@Mixin(targets = \"guideme.internal.hotkey.OpenGuideHotkey\")", "guideme."));
-		assertFalse(containsOptionalApiReference(
-				"String name = \"\\\"guideme.PageAnchor\\\"\";", "guideme."));
-	}
-
-	private static boolean containsOptionalApiReference(String source, String needle) {
-		// 字符串目标不会形成 JVM 类型链接；仍拒绝 import 和直接使用的限定类型。
-		return source.replaceAll("\"(?:\\\\.|[^\"\\\\])*\"", "\"\"").contains(needle);
-	}
-
 	private static boolean containsOptionalApiReference(Path path, String needle) {
 		try {
-			return containsOptionalApiReference(Files.readString(path), needle);
+			return Files.readString(path).contains(needle);
 		} catch (Exception exception) {
 			throw new IllegalStateException("无法检查生产源码: " + path, exception);
 		}

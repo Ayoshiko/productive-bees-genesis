@@ -54,7 +54,7 @@ final class AbstractMekCentrifugeFactorySetupHelper {
 	static IInventorySlotHolder createInitialInventory(@NotNull AbstractMekCentrifugeFactory factory,
 			@NotNull IContentsListener listener, @NotNull FactoryTier tier,
 			@NotNull MachineEnergyContainer<?> energyContainer, @NotNull SlotSetup addSlots) {
-		InventorySlotHelper builder = InventorySlotHelper.forSideWithConfig(factory);
+		InventorySlotHelper builder = InventorySlotHelper.forSideWithConfig(factory::getDirection, factory::getConfig);
 		TileEntityFactoryAccessor accessor = (TileEntityFactoryAccessor) factory;
 		addSlots.setup(builder, listener, () -> {
 			listener.onContentsChanged();

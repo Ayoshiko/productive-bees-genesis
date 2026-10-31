@@ -1,13 +1,13 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
+import cy.jdkdigital.productivebees.compat.jei.ingredients.BeeIngredient;
 import cy.jdkdigital.productivebees.common.recipe.BlockConversionRecipe;
 import cy.jdkdigital.productivebees.common.recipe.ItemConversionRecipe;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -42,11 +42,11 @@ import java.util.function.Supplier;
 public final class BeeConversionQueries {
 
 	/** 物品转化配方索引：蜜蜂类型键 → 配方列表 */
-	private static final Map<String, List<RecipeHolder<ItemConversionRecipe>>> ITEM_RECIPES_BY_BEE =
+	private static final Map<String, List<ItemConversionRecipe>> ITEM_RECIPES_BY_BEE =
 			new ConcurrentHashMap<>();
 
 	/** 方块转化配方索引：蜜蜂类型键 → 配方列表 */
-	private static final Map<String, List<RecipeHolder<BlockConversionRecipe>>> BLOCK_RECIPES_BY_BEE =
+	private static final Map<String, List<BlockConversionRecipe>> BLOCK_RECIPES_BY_BEE =
 			new ConcurrentHashMap<>();
 
 	/** 索引是否已构建（防重复全量遍历） */
@@ -88,9 +88,9 @@ public final class BeeConversionQueries {
 						&& level.getGameTime() - lastFailedTick < RETRY_INTERVAL_TICKS) {
 					return;
 				}
-				for (RecipeHolder<ItemConversionRecipe> holder :
+				for (ItemConversionRecipe holder :
 						level.getRecipeManager().getAllRecipesFor(ModRecipeTypes.ITEM_CONVERSION_TYPE.get())) {
-					ItemConversionRecipe recipe = holder.value();
+					ItemConversionRecipe recipe = holder;
 					if (recipe == null || recipe.bees == null) {
 						continue;
 					}
@@ -107,9 +107,9 @@ public final class BeeConversionQueries {
 						}
 					}
 				}
-				for (RecipeHolder<BlockConversionRecipe> holder :
+				for (BlockConversionRecipe holder :
 						level.getRecipeManager().getAllRecipesFor(ModRecipeTypes.BLOCK_CONVERSION_TYPE.get())) {
-					BlockConversionRecipe recipe = holder.value();
+					BlockConversionRecipe recipe = holder;
 					if (recipe == null || recipe.bees == null) {
 						continue;
 					}
@@ -222,19 +222,19 @@ public final class BeeConversionQueries {
 	 * @return 匹配的配方，无则 null
 	 */
 	@Nullable
-	public static RecipeHolder<ItemConversionRecipe> findItemConversionRecipe(
+	public static ItemConversionRecipe findItemConversionRecipe(
 			@Nonnull ResourceLocation beeType, @Nonnull ItemStack stack) {
 		if (stack.isEmpty() || beeType == null) {
 			return null;
 		}
 		String key = beeType.toString();
-		List<RecipeHolder<ItemConversionRecipe>> recipes = ITEM_RECIPES_BY_BEE.get(key);
+		List<ItemConversionRecipe> recipes = ITEM_RECIPES_BY_BEE.get(key);
 		if (recipes == null || recipes.isEmpty()) {
 			return null;
 		}
-		for (RecipeHolder<ItemConversionRecipe> holder : recipes) {
+		for (ItemConversionRecipe holder : recipes) {
 			try {
-				ItemConversionRecipe recipe = holder.value();
+				ItemConversionRecipe recipe = holder;
 				if (recipe == null || recipe.bees == null || recipe.ingredient == null) {
 					continue;
 				}
@@ -244,7 +244,7 @@ public final class BeeConversionQueries {
 			} catch (Exception e) {
 				// 单配方异常隔离：第三方畸形配方不影响其他配方与整体产出流程
 				LogThrottle.warn("bee_conversion_item_recipe",
-						"物品转化配方 {} 匹配时异常，已跳过该配方", holder.id(), e);
+						"物品转化配方 {} 匹配时异常，已跳过该配方", holder.getId(), e);
 			}
 		}
 		return null;
@@ -263,19 +263,19 @@ public final class BeeConversionQueries {
 	 * @return 匹配的配方，无则 null
 	 */
 	@Nullable
-	public static RecipeHolder<BlockConversionRecipe> findBlockConversionRecipe(
+	public static BlockConversionRecipe findBlockConversionRecipe(
 			@Nonnull ResourceLocation beeType, @Nullable BlockState state) {
 		if (state == null || beeType == null) {
 			return null;
 		}
 		String key = beeType.toString();
-		List<RecipeHolder<BlockConversionRecipe>> recipes = BLOCK_RECIPES_BY_BEE.get(key);
+		List<BlockConversionRecipe> recipes = BLOCK_RECIPES_BY_BEE.get(key);
 		if (recipes == null || recipes.isEmpty()) {
 			return null;
 		}
-		for (RecipeHolder<BlockConversionRecipe> holder : recipes) {
+		for (BlockConversionRecipe holder : recipes) {
 			try {
-				BlockConversionRecipe recipe = holder.value();
+				BlockConversionRecipe recipe = holder;
 				if (recipe == null || recipe.bees == null) {
 					continue;
 				}
@@ -298,7 +298,7 @@ public final class BeeConversionQueries {
 			} catch (Exception e) {
 				// 单配方异常隔离：第三方畸形配方不影响其他配方与整体产出流程
 				LogThrottle.warn("bee_conversion_block_recipe",
-						"方块转化配方 {} 匹配时异常，已跳过该配方", holder.id(), e);
+						"方块转化配方 {} 匹配时异常，已跳过该配方", holder.getId(), e);
 			}
 		}
 		return null;
@@ -315,7 +315,7 @@ public final class BeeConversionQueries {
 	 * @return 匹配的配方，无则 null
 	 */
 	@Nullable
-	public static RecipeHolder<BlockConversionRecipe> findBlockConversionRecipeForItem(
+	public static BlockConversionRecipe findBlockConversionRecipeForItem(
 			@Nonnull ResourceLocation beeType, @Nonnull ItemStack stack) {
 		if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem blockItem)) {
 			return null;
@@ -330,7 +330,7 @@ public final class BeeConversionQueries {
 	 * @param beeTypeKey 蜜蜂类型键字符串
 	 * @return true 如果匹配
 	 */
-	private static boolean matchesBee(List<Supplier<BeeIngredient>> bees, String beeTypeKey) {
+	private static boolean matchesBee(List<? extends Supplier<BeeIngredient>> bees, String beeTypeKey) {
 		for (Supplier<BeeIngredient> bee : bees) {
 			try {
 				BeeIngredient ingredient = bee.get();

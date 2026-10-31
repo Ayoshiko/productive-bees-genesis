@@ -58,8 +58,8 @@ class TickAccelBankWiringTest {
 	}
 
 	@Test
-	void defaultBatchCeilingLeavesRoomToDrain1024Acceleration() {
-		assertEquals(2048, TickAccelTracker.getMaxBatchTicks());
+	void defaultBatchCeilingIs1024() {
+		assertEquals(1024, TickAccelTracker.getMaxBatchTicks());
 	}
 
 	@Test
@@ -67,28 +67,8 @@ class TickAccelBankWiringTest {
 		TickAccelTracker tracker = new TickAccelTracker();
 		tracker.addVirtualTicks(4_096);
 
-		assertEquals(2_048, tracker.takeBatchTicks(TickAccelTracker.getMaxBatchTicks()));
-		assertEquals(2_048L, tracker.getPendingVirtualTicks());
-	}
-
-	@Test
-	void sustainedAccelerationDrainsExistingBacklogAndBoundedOverloadSurvivesStopping() {
-		var tracker = new TickAccelTracker();
-		tracker.addVirtualTicks(4096);
-		for (int tick = 0; tick < 4; tick++) {
-			tracker.addVirtualTicks(1024);
-			assertEquals(2048, tracker.takeBatchTicks(TickAccelTracker.getMaxBatchTicks()));
-		}
-		assertEquals(0, tracker.getPendingVirtualTicks());
-		for (int tick = 0; tick < 100; tick++) {
-			tracker.addVirtualTicks(1024);
-			tracker.takeBatchTicks(256);
-		}
-		assertEquals(8192 - 256, tracker.getPendingVirtualTicks());
-		long pending = tracker.getPendingVirtualTicks();
-		long drained = 0;
-		while (tracker.getPendingVirtualTicks() > 0) drained += tracker.takeBatchTicks(2048);
-		assertEquals(pending, drained);
+		assertEquals(1_024, tracker.takeBatchTicks(TickAccelTracker.getMaxBatchTicks()));
+		assertEquals(3_072L, tracker.getPendingVirtualTicks());
 	}
 
 	@Test

@@ -1,28 +1,23 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
-import java.util.UUID;
 
 /**
-	 * 客户端 → 服务端：万象创世过滤配置同步数据包
+	 * 客户端 → 服务端：万象创世过滤配置同步数据包（Task 12）
 	 * <p>
 	 * 多人游戏下客户端无法直接修改 SERVER 配置 — 客户端的 SERVER 配置只是
 	 * NeoForge 在配置阶段下发的只读同步副本。直接 {@code ConfigValue.set()} 仅修改
 	 * 客户端本地副本，不会同步到服务端，下次同步还会被覆盖。
 	 * <p>
-	 * 此数据包将 {@code DesignerFilterScreen} 的编辑结果发送到服务端，由服务端校验权限与
+	 * 此数据包将 {@code FilterListScreen} 的编辑结果发送到服务端，由服务端校验权限与
 	 * 数据后写入 SERVER 配置并持久化，再由 NeoForge 原生 {@code ConfigSync} 机制
 	 * 自动将变更同步到所有客户端（包括发起者）。
 	 * <p>
 	 * 数据量：服务端 bound 数据包上限 32 KiB，蜜蜂类型 ID 最长 256 字符，
-	 * 列表另受完整 JSON 的 28 KiB 预算约束，客户端提交前先检查总量。
+	 * 实际承载能力远超需求（列表上限 512 条）。
 	 * <p>
 	 * <b>输入校验</b>：单条字符串长度上限 {@value #MAX_STRING_LENGTH} 字符，
 	 * 超长时解码抛出异常，由网络层拒绝该数据包，防止恶意客户端发送超长字符串导致 OOM。
@@ -32,18 +27,10 @@ import java.util.UUID;
 	 */
 public record FilterConfigSyncPayload(
 		String filterModeName,
-		List<String> beeTypes,
-		UUID request,
-		String baseline,
-		boolean save,
-		int page,
-		long generation
-) implements CustomPacketPayload {
+		List<String> beeTypes
+)  {
 
 	/** 数据包类型标识（命名空间:productivebeesgenesis, 路径:filter_config_sync） */
-	public static final CustomPacketPayload.Type<FilterConfigSyncPayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "filter_config_sync"));
 
 	/** 蜜蜂类型列表上限 — 防止恶意/异常数据包导致 OOM */
 	private static final int MAX_BEE_TYPES = 512;
@@ -60,27 +47,6 @@ public record FilterConfigSyncPayload(
 	 * 单条字符串使用 {@code ByteBufCodecs.stringUtf8(MAX_STRING_LENGTH)} 限制解码上限，
 	 * 超过 {@value #MAX_STRING_LENGTH} 字符时解码抛出异常。
 	 */
-	public static final StreamCodec<ByteBuf, FilterConfigSyncPayload> STREAM_CODEC = new StreamCodec<>() {
-		@Override
-		public FilterConfigSyncPayload decode(ByteBuf buffer) {
-			return new FilterConfigSyncPayload(ByteBufCodecs.stringUtf8(MAX_STRING_LENGTH).decode(buffer),
-					ByteBufCodecs.stringUtf8(MAX_STRING_LENGTH).apply(ByteBufCodecs.list(MAX_BEE_TYPES)).decode(buffer),
-					new UUID(buffer.readLong(), buffer.readLong()), ByteBufCodecs.stringUtf8(64).decode(buffer),
-					buffer.readBoolean(), ByteBufCodecs.VAR_INT.decode(buffer), buffer.readLong());
-		}
-
-		@Override
-		public void encode(ByteBuf buffer, FilterConfigSyncPayload value) {
-			ByteBufCodecs.stringUtf8(MAX_STRING_LENGTH).encode(buffer, value.filterModeName);
-			ByteBufCodecs.stringUtf8(MAX_STRING_LENGTH).apply(ByteBufCodecs.list(MAX_BEE_TYPES)).encode(buffer, value.beeTypes);
-			buffer.writeLong(value.request.getMostSignificantBits());
-			buffer.writeLong(value.request.getLeastSignificantBits());
-			ByteBufCodecs.stringUtf8(64).encode(buffer, value.baseline);
-			buffer.writeBoolean(value.save);
-			ByteBufCodecs.VAR_INT.encode(buffer, value.page);
-			buffer.writeLong(value.generation);
-		}
-	};
 
 	/**
 	 * 紧凑构造器 — 防御性不可变拷贝
@@ -92,16 +58,11 @@ public record FilterConfigSyncPayload(
 		beeTypes = List.copyOf(beeTypes);
 	}
 
-	public FilterConfigSyncPayload(String mode, List<String> types) {
-		this(mode, types, UUID.randomUUID(), "", true);
-	}
-
-	public FilterConfigSyncPayload(String mode, List<String> types, UUID request, String baseline, boolean save) {
-		this(mode, types, request, baseline, save, -1, -1);
-	}
-
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static FilterConfigSyncPayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new FilterConfigSyncPayload(buf.readUtf(256), PacketIO.readList(buf, () -> buf.readUtf(256), 512));
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeUtf(filterModeName, 256);
+        PacketIO.writeList(buf, beeTypes, v -> { buf.writeUtf(v, 256); }, 512);
+    }
 }

@@ -1,10 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import net.minecraft.core.component.DataComponents;
+
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
+
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -34,10 +34,10 @@ public final class ItemStackBlockEntityDataHelper {
 	 */
 	@Nullable
 	public static CompoundTag readCustomBlockEntityData(@NotNull ItemStack stack) {
-		CustomData blockEntityData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+		CompoundTag blockEntityData = stack.getTagElement("BlockEntityTag");
 		if (blockEntityData == null) return null;
 		try {
-			return blockEntityData.copyTag();
+			return blockEntityData.copy();
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("读取 BLOCK_ENTITY_DATA 异常", e);
 			return null;

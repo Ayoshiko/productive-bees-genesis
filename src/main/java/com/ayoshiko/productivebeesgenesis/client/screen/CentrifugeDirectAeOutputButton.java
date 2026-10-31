@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;

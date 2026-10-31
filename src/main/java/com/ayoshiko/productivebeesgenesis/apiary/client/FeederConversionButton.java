@@ -4,10 +4,10 @@ import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.network.ToggleApiaryFeederConversionPayload;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 
 /**
  * 喂食槽转化开关按钮 — 与项目其他 per-tile 开关同款视觉语言
@@ -29,7 +29,7 @@ final class FeederConversionButton extends MekanismButton {
 	FeederConversionButton(IGuiWrapper gui, int x, int y, int width, int height, TileEntityMekApiary tile) {
 		super(gui, x, y, width, height, Component.literal("\u8F6C"), (element, mouseX, mouseY) -> {
 			if (element instanceof FeederConversionButton button) {
-				PacketDistributor.sendToServer(
+				ForgeNetwork.sendToServer(
 						new ToggleApiaryFeederConversionPayload(button.tile.getBlockPos()));
 				return true;
 			}

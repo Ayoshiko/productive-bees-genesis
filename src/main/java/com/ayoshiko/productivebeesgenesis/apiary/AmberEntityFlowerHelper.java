@@ -1,15 +1,13 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper.FlowerPreference;
-import com.mojang.serialization.MapCodec;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
+import net.minecraft.nbt.CompoundTag;
 
 import java.util.List;
 
@@ -24,9 +22,6 @@ import java.util.List;
  * 与 {@link FeederSlotManager} 的 blocks 类花朵路径语义一致。
  */
 final class AmberEntityFlowerHelper {
-
-	/** 实体 ID 编解码器（琥珀物品 ENTITY_DATA 组件的结构） */
-	private static final MapCodec<ResourceLocation> ENTITY_ID_CODEC = ResourceLocation.CODEC.fieldOf("id");
 
 	private AmberEntityFlowerHelper() {
 	}
@@ -46,7 +41,7 @@ final class AmberEntityFlowerHelper {
 			boolean inverse = pref.inverseFlower();
 			ResourceLocation expected;
 			try {
-				expected = ResourceLocation.parse(entityId);
+				expected = new ResourceLocation(entityId);
 			} catch (RuntimeException ignored2) {
 				return false;
 			}
@@ -67,7 +62,7 @@ final class AmberEntityFlowerHelper {
 		}
 		try {
 			TagKey<EntityType<?>> entityTag = TagKey.create(
-					BuiltInRegistries.ENTITY_TYPE.key(), ResourceLocation.parse(tagName));
+					BuiltInRegistries.ENTITY_TYPE.key(), new ResourceLocation(tagName));
 			return hasContainedEntityAmberMatching(slots, entityTag, inverse);
 		} catch (RuntimeException ignored3) {
 			return false;
@@ -91,38 +86,39 @@ final class AmberEntityFlowerHelper {
 	 * 为一次 Wanna Bee 生产批次构建有效 PB 琥珀的实体数据快照。
 	 * <br/>
 	 * 快照按槽位保留候选（相同琥珀占用多个槽位时仍具有对应权重），且直接复用
-	 * ItemStack 中不可变的 {@link CustomData}，不在扫描阶段复制实体 NBT。
+	 * 每个候选都复制 NBT，避免实例化实体时修改喂食槽中的原始数据。
 	 *
 	 * @param slots 喂食槽列表
 	 * @return 实体数据快照；无有效琥珀时返回空列表
 	 */
-	static List<CustomData> getAmberEntityDataSnapshot(List<FeederInventorySlot> slots) {
-		List<CustomData> candidates = null;
+	static List<CompoundTag> getAmberEntityDataSnapshot(List<FeederInventorySlot> slots) {
+		List<CompoundTag> candidates = null;
 		for (FeederInventorySlot slot : slots) {
 			if (!slot.isActive()) continue;
-			CustomData entityData = getAmberEntityData(slot.getStack());
+			CompoundTag entityData = getAmberEntityData(slot.getStack());
 			if (entityData == null || readEntityId(entityData) == null) continue;
 			if (candidates == null) candidates = new java.util.ArrayList<>(slots.size());
-			candidates.add(entityData);
+			candidates.add(entityData.copy());
 		}
 		return candidates == null ? List.of() : candidates;
 	}
 
-	private static CustomData getAmberEntityData(ItemStack stack) {
+	private static CompoundTag getAmberEntityData(ItemStack stack) {
 		if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem blockItem)) return null;
 		ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(blockItem.getBlock());
 		if (!"productivebees".equals(blockId.getNamespace()) || !"amber".equals(blockId.getPath())) return null;
-		// 兼容旧版本 ModBlocks.AMBER 判定："amber" 方块路径同样视为 WannaBee 的封存生物琥珀
-		CustomData entityData = stack.get(DataComponents.ENTITY_DATA);
-		return entityData == null || entityData.isEmpty() ? null : entityData;
+		CompoundTag blockEntityData = stack.getTagElement("BlockEntityTag");
+		if (blockEntityData == null || !blockEntityData.contains("EntityData", net.minecraft.nbt.Tag.TAG_COMPOUND)) return null;
+		CompoundTag entityData = blockEntityData.getCompound("EntityData");
+		return entityData.isEmpty() ? null : entityData;
 	}
 
 	private static ResourceLocation getAmberEntityId(ItemStack stack) {
-		CustomData entityData = getAmberEntityData(stack);
+		CompoundTag entityData = getAmberEntityData(stack);
 		return entityData == null ? null : readEntityId(entityData);
 	}
 
-	private static ResourceLocation readEntityId(CustomData entityData) {
-		return entityData.read(ENTITY_ID_CODEC).result().orElse(null);
+	private static ResourceLocation readEntityId(CompoundTag entityData) {
+		return ResourceLocation.tryParse(entityData.getString("entityType"));
 	}
 }

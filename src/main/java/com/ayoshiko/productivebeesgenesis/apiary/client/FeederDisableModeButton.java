@@ -4,11 +4,11 @@ import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.network.SetAllFeederSlotsDisabledPayload;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 
 import java.util.function.BooleanSupplier;
 
@@ -60,7 +60,7 @@ final class FeederDisableModeButton extends MekanismButton {
 	 */
 	private static void sendBatchRequest(TileEntityMekApiary tile) {
 		boolean disableAll = tile.getFeederSlotManager().hasAnyFlower();
-		PacketDistributor.sendToServer(
+		ForgeNetwork.sendToServer(
 				new SetAllFeederSlotsDisabledPayload(tile.getBlockPos(), disableAll));
 	}
 

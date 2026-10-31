@@ -2,11 +2,11 @@ package com.ayoshiko.productivebeesgenesis.util;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModItems;
-import net.minecraft.core.component.DataComponentPatch;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.Recipe;
 
 import javax.annotation.Nullable;
 
@@ -36,7 +36,7 @@ import java.util.Optional;
  * <b>线程安全</b>：{@link Collections#synchronizedMap} 提供防御性线程安全
  * （JEI 客户端查询与服务端 tick 可能并发访问 {@link #invalidate}）。
  * 缓存键对 configurable_honeycomb / configurable_comb_block 使用 {@code (Item, beeType)}
- * 计算轻量哈希，跳过 owo 组件哈希；所有路径都保留完整 {@link DataComponentPatch}
+ * 计算轻量哈希，跳过 owo 组件哈希；所有路径都保留完整 {@link CompoundTag}
  * 参与 equals，避免忽略自定义组件或仅依赖 int 哈希导致误命中。
  */
 public final class SharedPbRecipeCache {
@@ -48,21 +48,21 @@ public final class SharedPbRecipeCache {
 	 * 缓存键 — record 基于字段比较完整身份，并复用预计算哈希避免重复遍历组件。
 	 * <p>
 	 * 对 configurable_honeycomb / configurable_comb_block：用 {@code (Item, beeType)} 计算哈希，
-	 * 跳过全组件哈希计算。所有物品都保留 {@code (Item, DataComponentPatch)}
+	 * 跳过全组件哈希计算。所有物品都保留 {@code (Item, CompoundTag)}
 	 * 作为最终等价性依据，同 bee_type 但其他组件不同的蜜脾不会共用结果。
 	 */
 	private record CacheKey(Item item, @Nullable ResourceLocation beeType,
-			DataComponentPatch components, int cachedHash) {
+			CompoundTag components, int cachedHash) {
 		static CacheKey of(ItemStack stack) {
 			Item item = stack.getItem();
 			if (item == PbCombItemRefs.honeycomb() || item == PbCombItemRefs.combBlock()) {
 				// 轻量哈希：只用 bee_type 分桶；完整组件补丁仍参与 equals 消解碰撞。
-				ResourceLocation beeType = stack.get(PbDataComponents.beeType());
+				ResourceLocation beeType = PbDataComponents.getBeeType(stack);
 				int hash = 31 * item.hashCode() + (beeType == null ? 0 : beeType.hashCode());
-				return new CacheKey(item, beeType, stack.getComponentsPatch(), hash);
+				return new CacheKey(item, beeType, stack.hasTag() ? stack.getTag().copy() : new CompoundTag(), hash);
 			}
 			// 通用路径：哈希用于快速分桶，完整组件补丁用于最终等价性判断。
-			return new CacheKey(item, null, stack.getComponentsPatch(), ItemStack.hashItemAndComponents(stack));
+			return new CacheKey(item, null, stack.hasTag() ? stack.getTag().copy() : new CompoundTag(), java.util.Objects.hash(stack.getItem(), stack.getTag()));
 		}
 
 		@Override
@@ -77,10 +77,10 @@ public final class SharedPbRecipeCache {
 	 * Value 用 {@link Optional} 包装，支持缓存"无配方"结果（{@link Optional#empty()}），
 	 * 避免对没有配方的输入物品每 tick 重复全量遍历。
 	 */
-	private static final Map<CacheKey, Optional<RecipeHolder<CentrifugeRecipe>>> CACHE =
-			Collections.synchronizedMap(new LinkedHashMap<CacheKey, Optional<RecipeHolder<CentrifugeRecipe>>>(64, 0.75f, true) {
+	private static final Map<CacheKey, Optional<CentrifugeRecipe>> CACHE =
+			Collections.synchronizedMap(new LinkedHashMap<CacheKey, Optional<CentrifugeRecipe>>(64, 0.75f, true) {
 				@Override
-				protected boolean removeEldestEntry(Map.Entry<CacheKey, Optional<RecipeHolder<CentrifugeRecipe>>> eldest) {
+				protected boolean removeEldestEntry(Map.Entry<CacheKey, Optional<CentrifugeRecipe>> eldest) {
 					return size() > MAX_CACHE_SIZE;
 				}
 			});
@@ -96,7 +96,7 @@ public final class SharedPbRecipeCache {
 	 * @return {@code null}=未命中；{@code Optional.empty()}=命中"无配方"；{@code Optional.of}=命中具体配方
 	 */
 	@Nullable
-	public static Optional<RecipeHolder<CentrifugeRecipe>> get(ItemStack input) {
+	public static Optional<CentrifugeRecipe> get(ItemStack input) {
 		return CACHE.get(CacheKey.of(input));
 	}
 
@@ -106,7 +106,7 @@ public final class SharedPbRecipeCache {
 	 * @param input  输入物品
 	 * @param recipe 配方 Holder，null 表示无配方
 	 */
-	public static void put(ItemStack input, @Nullable RecipeHolder<CentrifugeRecipe> recipe) {
+	public static void put(ItemStack input, @Nullable CentrifugeRecipe recipe) {
 		CACHE.put(CacheKey.of(input), recipe != null ? Optional.of(recipe) : Optional.empty());
 	}
 

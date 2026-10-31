@@ -1,13 +1,13 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
+import cy.jdkdigital.productivebees.compat.jei.ingredients.BeeIngredient;
 import cy.jdkdigital.productivebees.common.recipe.AdvancedBeehiveRecipe;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
-import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
+import com.ayoshiko.productivebeesgenesis.util.ChancedOutput;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.level.Level;
 
 import javax.annotation.Nonnull;
@@ -38,8 +38,8 @@ final class BeeProduceQueries {
 	 * 从 O(N²) 降为 O(N)。
 	 */
 	private record AdvancedBeehiveRecipeIndex(
-			Map<String, RecipeHolder<AdvancedBeehiveRecipe>> byBeeType,
-			Map<ResourceLocation, List<RecipeHolder<AdvancedBeehiveRecipe>>> allByBeeType,
+			Map<String, AdvancedBeehiveRecipe> byBeeType,
+			Map<ResourceLocation, List<AdvancedBeehiveRecipe>> allByBeeType,
 			boolean complete) {
 		static final AdvancedBeehiveRecipeIndex EMPTY =
 				new AdvancedBeehiveRecipeIndex(Map.of(), Map.of(), false);
@@ -53,7 +53,7 @@ final class BeeProduceQueries {
 	private static final long INDEX_RETRY_TICKS = 20L;
 
 	/**
-	 * 配方输出表缓存 — 缓存 AdvancedBeehiveRecipe.getRecipeOutputs() 结果
+	 * 配方输出表缓存 — 缓存 ChancedOutput.convert(AdvancedBeehiveRecipe.getRecipeOutputs()) 结果
 	 * <br/>
 	 * PB 的 getRecipeOutputs() 每次新建 LinkedHashMap，缓存避免重复创建。
 	 * Key: 蜜蜂类型键 ResourceLocation；Value: 不可变的 ItemStack -> ChancedOutput 映射
@@ -69,24 +69,24 @@ final class BeeProduceQueries {
 	/** 蜂箱配方覆盖固定实体蜂与可配置蜂，不以离心机可处理性筛选。 */
 	static List<ResourceLocation> getBeeTypesWithProduce(Level level) {
 		ensureRecipeIndex(level);
-		return beehiveRecipeIndex.byBeeType.keySet().stream().map(ResourceLocation::parse).sorted().toList();
+		return beehiveRecipeIndex.byBeeType.keySet().stream().map(ResourceLocation::new).sorted().toList();
 	}
 
 	/** 万象枚举全部配方；普通蜂箱仍使用首条匹配配方，避免改变原有产量。 */
 	static List<ItemStack> getAllBeeProduce(Level level, ResourceLocation beeType) {
 		ensureRecipeIndex(level);
 		List<ItemStack> outputs = new ArrayList<>();
-		for (RecipeHolder<AdvancedBeehiveRecipe> holder : beehiveRecipeIndex.allByBeeType
+		for (AdvancedBeehiveRecipe holder : beehiveRecipeIndex.allByBeeType
 				.getOrDefault(beeType, List.of())) {
 			try {
-				for (var entry : holder.value().getRecipeOutputs().entrySet()) {
+				for (var entry : ChancedOutput.convert(holder.getRecipeOutputs()).entrySet()) {
 					if (entry.getValue().chance() > 0 && entry.getValue().max() >= 1 && !entry.getKey().isEmpty()) {
 						outputs.add(entry.getKey().copyWithCount(1));
 					}
 				}
 			} catch (RuntimeException e) {
 				markIndexIncomplete();
-				LogThrottle.warn("myriad_recipe_outputs", "读取万象蜜脾配方 {} 失败，将重试: {}", holder.id(), e.toString());
+				LogThrottle.warn("myriad_recipe_outputs", "读取万象蜜脾配方 {} 失败，将重试: {}", holder.getId(), e.toString());
 			}
 		}
 		return outputs;
@@ -137,12 +137,12 @@ final class BeeProduceQueries {
 
 			String beeTypeKey = BeeTypeNormalizer.resolveLoadedBeeType(beeType).toString();
 			// 2. 优先走索引（O(1)）
-			RecipeHolder<AdvancedBeehiveRecipe> matched = beehiveRecipeIndex.byBeeType.get(beeTypeKey);
+			AdvancedBeehiveRecipe matched = beehiveRecipeIndex.byBeeType.get(beeTypeKey);
 			if (matched == null) {
 				return Map.of();
 			}
 			// 返回配方原始输出表，不执行概率检查（由 BeeProduceBatchSampler 统一处理）
-			Map<ItemStack, ChancedOutput> outputs = matched.value().getRecipeOutputs();
+			Map<ItemStack, ChancedOutput> outputs = ChancedOutput.convert(matched.getRecipeOutputs());
 			// 缓存不可变视图，防止外部修改污染静态共享缓存
 			Map<ItemStack, ChancedOutput> immutable = Collections.unmodifiableMap(outputs);
 			recipeOutputsCache.put(beeType, immutable);
@@ -188,16 +188,16 @@ final class BeeProduceQueries {
 	 */
 	private static void rebuildBeehiveRecipeIndex(@Nonnull Level level) {
 		try {
-			List<RecipeHolder<AdvancedBeehiveRecipe>> recipes = level.getRecipeManager()
+			List<AdvancedBeehiveRecipe> recipes = level.getRecipeManager()
 					.getAllRecipesFor(ModRecipeTypes.ADVANCED_BEEHIVE_TYPE.get());
-			Map<String, RecipeHolder<AdvancedBeehiveRecipe>> newIndex = new HashMap<>(recipes.size() * 2);
-			Map<ResourceLocation, List<RecipeHolder<AdvancedBeehiveRecipe>>> allRecipes = new HashMap<>();
+			Map<String, AdvancedBeehiveRecipe> newIndex = new HashMap<>(recipes.size() * 2);
+			Map<ResourceLocation, List<AdvancedBeehiveRecipe>> allRecipes = new HashMap<>();
 			boolean complete = true;
-			for (RecipeHolder<AdvancedBeehiveRecipe> recipe : recipes) {
+			for (AdvancedBeehiveRecipe recipe : recipes) {
 				try {
 					// AdvancedBeehiveRecipe.ingredient 是 Supplier<BeeIngredient>，
 					// 通过 supplier.get() 获取 BeeIngredient 后调用 getBeeType() 提取 beeType
-					BeeIngredient ing = recipe.value().ingredient.get();
+					BeeIngredient ing = recipe.ingredient.get();
 					if (ing == null) {
 						complete = false;
 						continue;
@@ -211,7 +211,7 @@ final class BeeProduceQueries {
 					allRecipes.computeIfAbsent(beeType, ignored -> new ArrayList<>()).add(recipe);
 				} catch (Exception e) {
 					complete = false;
-					LogThrottle.warn("bee_recipe_index", "构建蜂箱配方索引时无法解析 {}，将重试: {}", recipe.id(), e.toString());
+					LogThrottle.warn("bee_recipe_index", "构建蜂箱配方索引时无法解析 {}，将重试: {}", recipe.getId(), e.toString());
 				}
 			}
 			// 原子替换：发布不可变快照

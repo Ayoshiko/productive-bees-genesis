@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.config.FactoryTierConfigService;
 import com.ayoshiko.productivebeesgenesis.config.FactoryTierKey;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import com.jerry.mekanism_extras.common.tier.ExtraFactoryTier;
 
 import java.util.Optional;
 import java.util.function.IntSupplier;

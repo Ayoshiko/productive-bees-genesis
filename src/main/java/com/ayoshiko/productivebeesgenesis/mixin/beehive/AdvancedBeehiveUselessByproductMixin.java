@@ -14,6 +14,7 @@ import net.minecraft.world.level.block.BeehiveBlock;
 import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -21,8 +22,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.List;
 
 /** Applies output filtering and essence conversion to Productive Bees advanced hives. */
-@Mixin(AdvancedBeehiveBlockEntity.class)
+@Mixin(value = AdvancedBeehiveBlockEntity.class, remap = false)
 public abstract class AdvancedBeehiveUselessByproductMixin {
+	@Shadow protected net.minecraftforge.common.util.LazyOptional<net.minecraftforge.items.IItemHandlerModifiable> inventoryHandler;
 
 	/**
 	 * 过滤无用副产物（花粉团）。
@@ -83,7 +85,7 @@ public abstract class AdvancedBeehiveUselessByproductMixin {
 		AdvancedBeehiveBlockEntity blockEntity = (AdvancedBeehiveBlockEntity) (Object) this;
 		if (releaseStatus == BeehiveBlockEntity.BeeReleaseStatus.HONEY_DELIVERED
 				&& EssenceConversionUpgradeHelper.hasUpgrade(blockEntity)) {
-			EssenceConversionUpgradeHelper.convertStored(level, blockEntity.inventoryHandler);
+			inventoryHandler.ifPresent(handler -> EssenceConversionUpgradeHelper.convertStored(level, handler));
 		}
 	}
 }

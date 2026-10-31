@@ -288,7 +288,7 @@ public final class BeeSelectionScreen extends Screen {
 	@Override
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		// v9-L2 修复：复用 renderBackground 避免重复 fill 调用
-		renderBackground(graphics, mouseX, mouseY, partialTick);
+		renderBackground(graphics);
 		// 标题
 		graphics.drawCenteredString(font, this.title, width / 2, 8, GuiColors.TEXT_TITLE);
 
@@ -330,7 +330,7 @@ public final class BeeSelectionScreen extends Screen {
 	 * 重写renderBackground — 阻止Screen默认半透明dirt背景渲染
 	 */
 	@Override
-	public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+	public void renderBackground(GuiGraphics graphics) {
 		graphics.fill(0, 0, width, height, GuiColors.BG_SCREEN_DARK);
 	}
 
@@ -378,11 +378,11 @@ public final class BeeSelectionScreen extends Screen {
 	}
 
 	@Override
-	public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+	public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
 		// v9-L3 修复：仅当鼠标在列表区域内时才处理滚动，避免悬停在按钮上时误滚列表
 		int listBottom = height - LIST_BOTTOM_MARGIN;
 		if (mouseY < LIST_TOP_Y || mouseY > listBottom) {
-			return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+			return super.mouseScrolled(mouseX, mouseY, scrollY);
 		}
 		if (scrollY > 0) {
 			state.setScrollOffset(state.getScrollOffset() - 1);

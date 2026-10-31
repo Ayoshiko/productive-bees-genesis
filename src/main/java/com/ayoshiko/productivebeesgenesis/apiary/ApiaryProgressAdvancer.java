@@ -33,14 +33,6 @@ final class ApiaryProgressAdvancer {
 	private ApiaryProgressAdvancer() {
 	}
 
-	/** 传统物品与资源分支共用同一周期长度，避免升级后进度语义分叉。 */
-	static int requiredTicks(BeeSlot slot, int fallback, float multiplier, boolean creative) {
-		int base = slot.getBaseMinOccupationTicks();
-		if (base <= 0) base = fallback;
-		float safe = SaturatingMath.positiveFiniteFloat(multiplier, 1.0f);
-		return creative ? 1 : Math.max(1, SaturatingMath.saturatingRoundToInt((double) base * safe));
-	}
-
 	static long advance(BeeSlot slot, int slotIndex, int tickMultiplier, long currentTick,
 			float timeMultiplier, boolean hasCreativeUpgrade, long beeEnergyCost, int stackProductionCount,
 			int cachedProcessingTime, ApiaryUpgradeHandler upgradeHandler, int[] pendingProductions,
@@ -60,7 +52,9 @@ final class ApiaryProgressAdvancer {
 		}
 		// 应用时间倍率（< 1.0 加速，> 1.0 减速）
 		// Task 4：CREATIVE 升级 — adjustedMinTicks=1，每 tick 产出（参考 MEK getTicksRequired 返回 0）
-		int adjustedMinTicks = requiredTicks(slot, cachedProcessingTime, timeMultiplier, hasCreativeUpgrade);
+		float safeTimeMultiplier = SaturatingMath.positiveFiniteFloat(timeMultiplier, 1.0f);
+		int adjustedMinTicks = hasCreativeUpgrade ? 1
+				: Math.max(1, SaturatingMath.saturatingRoundToInt((double) baseMinTicks * safeTimeMultiplier));
 		// 模块1：蜂箱速度调试日志 — 每 100 tick 采样一次，仅在 dev 模式开启时输出
 		// 外层 isEnabled() 守卫避免 dev 关闭时调用 DevLog.debug 的方法调用开销
 		// DevLog.debug 内部还会检查 apiary_speed feature 开关并做 1000ms 节流

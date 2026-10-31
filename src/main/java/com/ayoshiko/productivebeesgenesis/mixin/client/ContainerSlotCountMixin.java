@@ -27,7 +27,7 @@ public abstract class ContainerSlotCountMixin {
 	 * 只为本模组机器的 INPUT/OUTPUT 槽替换数量文字，同时保留原版耐久条等装饰。
 	 */
 	@WrapOperation(
-		method = "renderSlotContents",
+		method = "renderSlot(Lnet/minecraft/client/gui/GuiGraphics;Lnet/minecraft/world/inventory/Slot;)V",
 		at = @At(
 			value = "INVOKE",
 			target = "Lnet/minecraft/client/gui/GuiGraphics;renderItemDecorations("
@@ -38,8 +38,8 @@ public abstract class ContainerSlotCountMixin {
 	)
 	private void productivebeesgenesis$renderMachineSlotCount(GuiGraphics instance,
 			Font font, ItemStack stack, int x, int y, String countText,
-			Operation<Void> original, GuiGraphics methodGraphics, ItemStack methodStack,
-			Slot slot, String methodCountText) {
+			Operation<Void> original, GuiGraphics methodGraphics,
+			Slot slot) {
 		if (!productivebeesgenesis$isMachineInputOrOutput(slot)
 				|| countText != null || stack.isEmpty() || stack.getCount() < 2) {
 			original.call(instance, font, stack, x, y, countText);

@@ -3,9 +3,9 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import com.ayoshiko.productivebeesgenesis.network.ToggleApiaryDirectEjectPayload;
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 
 /** Mekanism 侧面配置 ITEM 页中的蜂箱快速直连切换按钮。 */
 final class ApiaryDirectEjectButton extends MekanismButton {
@@ -17,7 +17,7 @@ final class ApiaryDirectEjectButton extends MekanismButton {
 			ApiaryDirectEjectOverlay.OverlayTarget target) {
 		super(gui, x, y, SIZE, SIZE, Component.literal("D"), (element, mouseX, mouseY) -> {
 			if (element instanceof ApiaryDirectEjectButton button && button.target != null) {
-				PacketDistributor.sendToServer(new ToggleApiaryDirectEjectPayload(
+				ForgeNetwork.sendToServer(new ToggleApiaryDirectEjectPayload(
 						button.target.apiary().getBlockPos()));
 				return true;
 			}

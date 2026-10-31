@@ -75,7 +75,7 @@ public final class ItemStackMergeHelper {
 		Map<MergeKey, List<ItemStack>> groups = new HashMap<>();
 		for (ItemStack stack : stacks) {
 			if (stack.isEmpty()) continue;
-			MergeKey key = new MergeKey(stack.getItem(), stack.getComponents().hashCode());
+			MergeKey key = new MergeKey(stack.getItem(), com.ayoshiko.productivebeesgenesis.util.StackTags.hash(stack));
 			groups.computeIfAbsent(key, k -> new ArrayList<>()).add(stack);
 		}
 
@@ -114,7 +114,7 @@ public final class ItemStackMergeHelper {
 		Map<MergeKey, List<ItemStack>> groups = new HashMap<>();
 		for (ItemStack stack : stacks) {
 			if (stack.isEmpty()) continue;
-			MergeKey key = new MergeKey(stack.getItem(), stack.getComponents().hashCode());
+			MergeKey key = new MergeKey(stack.getItem(), com.ayoshiko.productivebeesgenesis.util.StackTags.hash(stack));
 			groups.computeIfAbsent(key, k -> new ArrayList<>()).add(stack);
 		}
 		if (groups.size() == stacks.size()) return stacks; // 无可聚合项，避免多余复制
@@ -140,7 +140,7 @@ public final class ItemStackMergeHelper {
 		}
 		ItemStack first = group.get(0);
 		for (int i = 1; i < group.size(); i++) {
-			if (!ItemStack.isSameItemSameComponents(first, group.get(i))) {
+			if (!ItemStack.isSameItemSameTags(first, group.get(i))) {
 				LogThrottle.warn("itemstack_hash_conflict",
 						"检测到 ItemStack 组件 hashCode 冲突，保留原始物品栈: item={}, groupSize={}",
 						first.getItem(), group.size());
@@ -215,7 +215,7 @@ public final class ItemStackMergeHelper {
 		// instead of merging incompatible components or dropping the whole group.
 		ItemStack first = group.get(0);
 		for (int i = 1; i < group.size(); i++) {
-			if (!ItemStack.isSameItemSameComponents(first, group.get(i))) {
+			if (!ItemStack.isSameItemSameTags(first, group.get(i))) {
 				LogThrottle.warn("itemstack_hash_conflict",
 						"检测到 ItemStack 组件 hashCode 冲突，保留原始物品栈: item={}, groupSize={}",
 						first.getItem(), group.size());

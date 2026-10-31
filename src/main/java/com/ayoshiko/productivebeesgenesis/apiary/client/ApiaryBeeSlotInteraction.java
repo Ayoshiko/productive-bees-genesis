@@ -8,9 +8,9 @@ import com.ayoshiko.productivebeesgenesis.network.ApiaryFeedBeePayload;
 import com.ayoshiko.productivebeesgenesis.network.ApiarySelectBeePayload;
 import cy.jdkdigital.productivebees.common.item.HoneyTreat;
 import cy.jdkdigital.productivebees.init.ModItems;
-import net.minecraft.core.component.DataComponents;
+
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 
 /**
  * 蜜蜂槽点击派发（纯静态，无状态）
@@ -36,7 +36,7 @@ final class ApiaryBeeSlotInteraction {
 	 */
 	static boolean handleSelect(TileEntityMekApiary tile, int slotIndex) {
 		int newSelection = tile.getClientSelectedBeeSlot() == slotIndex ? -1 : slotIndex;
-		PacketDistributor.sendToServer(new ApiarySelectBeePayload(tile.getBlockPos(), newSelection));
+		ForgeNetwork.sendToServer(new ApiarySelectBeePayload(tile.getBlockPos(), newSelection));
 		return true;
 	}
 
@@ -66,7 +66,7 @@ final class ApiaryBeeSlotInteraction {
 		if (beeSlot.isEmpty() || !(cursor.getItem() instanceof HoneyTreat) || !HoneyTreat.hasGene(cursor)) {
 			return false;
 		}
-		PacketDistributor.sendToServer(new ApiaryFeedBeePayload(tile.getBlockPos(), slotIndex));
+		ForgeNetwork.sendToServer(new ApiaryFeedBeePayload(tile.getBlockPos(), slotIndex));
 		return true;
 	}
 
@@ -74,7 +74,7 @@ final class ApiaryBeeSlotInteraction {
 	private static boolean handleSpawnEggOperation(TileEntityMekApiary tile, BeeSlot beeSlot,
 			ItemStack cursor, int slotIndex) {
 		if (!beeSlot.isEmpty() || !BeeSpawnEggHelper.isResourceBeeSpawnEgg(cursor)) return false;
-		PacketDistributor.sendToServer(new ApiaryCageOperationPayload(tile.getBlockPos(), slotIndex,
+		ForgeNetwork.sendToServer(new ApiaryCageOperationPayload(tile.getBlockPos(), slotIndex,
 				ApiaryCageOperationPayload.OperationType.INSERT_SPAWN_EGG));
 		return true;
 	}
@@ -101,7 +101,7 @@ final class ApiaryBeeSlotInteraction {
 			op = ApiaryCageOperationPayload.OperationType.INSERT;
 		}
 		if (op == null) return false;
-		PacketDistributor.sendToServer(new ApiaryCageOperationPayload(tile.getBlockPos(), slotIndex, op));
+		ForgeNetwork.sendToServer(new ApiaryCageOperationPayload(tile.getBlockPos(), slotIndex, op));
 		return true;
 	}
 
@@ -112,9 +112,9 @@ final class ApiaryBeeSlotInteraction {
 
 	/** 检查蜂笼是否装有蜜蜂（CUSTOM_DATA 含 entity 字段） */
 	private static boolean isFilledCage(ItemStack stack) {
-		var data = stack.get(DataComponents.CUSTOM_DATA);
+		var data = stack.getTag();
 		if (data == null) return false;
 		// copyTag() 必返回非 null CompoundTag，无需冗余 null 检查
-		return data.copyTag().contains("entity");
+		return data.contains("entity");
 	}
 }

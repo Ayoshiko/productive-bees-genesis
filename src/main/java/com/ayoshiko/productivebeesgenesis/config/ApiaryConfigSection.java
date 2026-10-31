@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 /**
  * 通用机械蜂箱配置段。
@@ -10,27 +10,27 @@ import net.neoforged.neoforge.common.ModConfigSpec;
  */
 public final class ApiaryConfigSection {
 
-	public final ModConfigSpec.LongValue apiaryEnergyPerTick;
-	public final ModConfigSpec.IntValue apiaryProcessingTime;
-	public final ModConfigSpec.IntValue apiaryFluidTankCapacity;
+	public final ForgeConfigSpec.LongValue apiaryEnergyPerTick;
+	public final ForgeConfigSpec.IntValue apiaryProcessingTime;
+	public final ForgeConfigSpec.IntValue apiaryFluidTankCapacity;
 
 	/** 蜂箱产物输出槽倍率。 */
 	public final FactoryTierConfigValues stackMultiplier;
 
-	public final ModConfigSpec.BooleanValue apiaryAeOutputEnabled;
-	public final ModConfigSpec.BooleanValue apiaryAeFluidOutputEnabled;
-	public final ModConfigSpec.BooleanValue apiaryAeEnergyInputEnabled;
-	public final ModConfigSpec.BooleanValue apiaryPreferAppliedFluxOverAeEnergy;
-	public final ModConfigSpec.BooleanValue apiaryAeNativeEnergyInputEnabled;
+	public final ForgeConfigSpec.BooleanValue apiaryAeOutputEnabled;
+	public final ForgeConfigSpec.BooleanValue apiaryAeFluidOutputEnabled;
+	public final ForgeConfigSpec.BooleanValue apiaryAeEnergyInputEnabled;
+	public final ForgeConfigSpec.BooleanValue apiaryPreferAppliedFluxOverAeEnergy;
+	public final ForgeConfigSpec.BooleanValue apiaryAeNativeEnergyInputEnabled;
 
-	public final ModConfigSpec.IntValue apiaryPbUpgradeProductivityMaxCount;
-	public final ModConfigSpec.IntValue apiaryPbUpgradeTimeMaxCount;
-	public final ModConfigSpec.IntValue apiaryPbUpgradeGeneSamplerMaxCount;
-	public final ModConfigSpec.IntValue apiaryPbUpgradeBlockMaxCount;
+	public final ForgeConfigSpec.IntValue apiaryPbUpgradeProductivityMaxCount;
+	public final ForgeConfigSpec.IntValue apiaryPbUpgradeTimeMaxCount;
+	public final ForgeConfigSpec.IntValue apiaryPbUpgradeGeneSamplerMaxCount;
+	public final ForgeConfigSpec.IntValue apiaryPbUpgradeBlockMaxCount;
 
 	private ApiaryConfigSection(
-			ModConfigSpec.Builder builder,
-			ModConfigSpec.Builder capacityBuilder) {
+			ForgeConfigSpec.Builder builder,
+			ForgeConfigSpec.Builder capacityBuilder) {
 		builder.comment("通用机械蜂箱设置").push("mek_apiary");
 
 		builder.comment("基础参数").push("basic");
@@ -97,8 +97,8 @@ public final class ApiaryConfigSection {
 	}
 
 	public static ApiaryConfigSection create(
-			ModConfigSpec.Builder builder,
-			ModConfigSpec.Builder capacityBuilder) {
+			ForgeConfigSpec.Builder builder,
+			ForgeConfigSpec.Builder capacityBuilder) {
 		return new ApiaryConfigSection(builder, capacityBuilder);
 	}
 }

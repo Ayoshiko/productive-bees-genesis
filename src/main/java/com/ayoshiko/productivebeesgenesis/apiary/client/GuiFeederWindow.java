@@ -5,8 +5,9 @@ import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElementHolder;
 import mekanism.client.gui.element.GuiInnerScreen;
-import mekanism.client.gui.element.button.GuiPinButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.GuiPinButton;
 import mekanism.client.gui.element.slot.GuiVirtualSlot;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.SelectedWindowData;
 import mekanism.common.inventory.container.slot.VirtualInventoryContainerSlot;
@@ -55,7 +56,7 @@ import java.util.List;
 	 *   <li>底部提示：y=gridBottom+4</li>
 	 * </ul>
 	 */
-public class GuiFeederWindow extends GuiWindow {
+public class GuiFeederWindow extends PinnableGuiWindow {
 
 	/** 喂食槽列数（3 或 5） */
 	private final int feederCols;
@@ -296,13 +297,13 @@ public class GuiFeederWindow extends GuiWindow {
 	 * 仅在窗口内且 paginated 时处理：scrollY &gt; 0 上一页，scrollY &lt; 0 下一页。
 	 */
 	@Override
-	public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+	public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
 		if (paginated && isMouseOver(mouseX, mouseY)) {
 			int dir = scrollY > 0 ? -1 : 1;
 			changePage(dir);
 			return true;
 		}
-		return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+		return super.mouseScrolled(mouseX, mouseY, scrollY);
 	}
 
 	@Override
@@ -316,10 +317,10 @@ public class GuiFeederWindow extends GuiWindow {
 		// 底部提示 — 禁用编辑模式优先；其次随转化开关切换文案
 		// （开启转化后原料会被消耗，避免与"物品不会被消耗"矛盾）
 		Component hint = Component.translatable(resolveHintKey());
-		int hintWidth = font().width(hint);
+		int hintWidth = getFont().width(hint);
 		int hintX = relativeX + (width - hintWidth) / 2;
 		int hintY = relativeY + height - FeederWindowLayoutSupport.HINT_HEIGHT + 2;
-		guiGraphics.drawString(font(), hint, hintX, hintY, 0xFF808080, false);
+		guiGraphics.drawString(getFont(), hint, hintX, hintY, 0xFF808080, false);
 	}
 
 	/**
@@ -365,7 +366,7 @@ public class GuiFeederWindow extends GuiWindow {
 		guiGraphics.pose().pushPose();
 		guiGraphics.pose().translate(startX, startY, 0);
 		guiGraphics.pose().scale(0.7F, 0.7F, 0.7F);
-		guiGraphics.drawString(font(), statsTitle, 0, 0, screenTextColor(), false);
+		guiGraphics.drawString(getFont(), statsTitle, 0, 0, screenTextColor(), false);
 		guiGraphics.pose().popPose();
 
 		// 槽位使用率
@@ -375,7 +376,7 @@ public class GuiFeederWindow extends GuiWindow {
 		guiGraphics.pose().pushPose();
 		guiGraphics.pose().translate(startX, textY, 0);
 		guiGraphics.pose().scale(0.6F, 0.6F, 0.6F);
-		guiGraphics.drawString(font(), slotsText, 0, 0, screenTextColor(), false);
+		guiGraphics.drawString(getFont(), slotsText, 0, 0, screenTextColor(), false);
 		guiGraphics.pose().popPose();
 
 		// 状态 — 全部格子被禁用时视为空闲（此时蜜蜂确实拿不到任何花朵）
@@ -388,7 +389,7 @@ public class GuiFeederWindow extends GuiWindow {
 		guiGraphics.pose().pushPose();
 		guiGraphics.pose().translate(startX, textY, 0);
 		guiGraphics.pose().scale(0.6F, 0.6F, 0.6F);
-		guiGraphics.drawString(font(), statusText, 0, 0, statusColor, false);
+		guiGraphics.drawString(getFont(), statusText, 0, 0, statusColor, false);
 		guiGraphics.pose().popPose();
 
 		// 页码（仅 paginated 时显示）
@@ -398,7 +399,7 @@ public class GuiFeederWindow extends GuiWindow {
 			guiGraphics.pose().pushPose();
 			guiGraphics.pose().translate(startX, textY, 0);
 			guiGraphics.pose().scale(0.6F, 0.6F, 0.6F);
-			guiGraphics.drawString(font(), pageLabel, 0, 0, screenTextColor(), false);
+			guiGraphics.drawString(getFont(), pageLabel, 0, 0, screenTextColor(), false);
 			guiGraphics.pose().popPose();
 
 			textY += 8;
@@ -406,7 +407,7 @@ public class GuiFeederWindow extends GuiWindow {
 			guiGraphics.pose().pushPose();
 			guiGraphics.pose().translate(startX, textY, 0);
 			guiGraphics.pose().scale(0.6F, 0.6F, 0.6F);
-			guiGraphics.drawString(font(), pageText, 0, 0, screenTextColor(), false);
+			guiGraphics.drawString(getFont(), pageText, 0, 0, screenTextColor(), false);
 			guiGraphics.pose().popPose();
 		}
 
@@ -419,7 +420,7 @@ public class GuiFeederWindow extends GuiWindow {
 		guiGraphics.pose().pushPose();
 		guiGraphics.pose().translate(startX, textY, 0);
 		guiGraphics.pose().scale(0.6F, 0.6F, 0.6F);
-		guiGraphics.drawString(font(), flowersTitle, 0, 0, screenTextColor(), false);
+		guiGraphics.drawString(getFont(), flowersTitle, 0, 0, screenTextColor(), false);
 		guiGraphics.pose().popPose();
 
 		textY += 8;
@@ -427,11 +428,11 @@ public class GuiFeederWindow extends GuiWindow {
 	for (int i = 0; i < maxFlowers; i++) {
 		ItemStack flower = flowerTypes.get(i);
 		// 模块 5 修复：截断过长花朵名称，避免超出信息面板边框
-		Component name = FeederWindowLayoutSupport.truncateFlowerName(font(), flower.getHoverName());
+		Component name = FeederWindowLayoutSupport.truncateFlowerName(getFont(), flower.getHoverName());
 		guiGraphics.pose().pushPose();
 		guiGraphics.pose().translate(startX, textY, 0);
 		guiGraphics.pose().scale(0.55F, 0.55F, 0.55F);
-		guiGraphics.drawString(font(), name, 0, 0, screenTextColor(), false);
+		guiGraphics.drawString(getFont(), name, 0, 0, screenTextColor(), false);
 		guiGraphics.pose().popPose();
 		textY += 7;
 	}
@@ -442,7 +443,7 @@ public class GuiFeederWindow extends GuiWindow {
 			guiGraphics.pose().pushPose();
 			guiGraphics.pose().translate(startX, textY, 0);
 			guiGraphics.pose().scale(0.55F, 0.55F, 0.55F);
-			guiGraphics.drawString(font(), more, 0, 0, 0xFF808080, false);
+			guiGraphics.drawString(getFont(), more, 0, 0, 0xFF808080, false);
 			guiGraphics.pose().popPose();
 		}
 	}

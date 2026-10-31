@@ -46,10 +46,10 @@ public class RecipeCacheManager<T> {
 			Item item = stack.getItem();
 			if (item == PbCombItemRefs.honeycomb() || item == PbCombItemRefs.combBlock()) {
 				// 轻量路径：只提取 bee_type，跳过 hashItemAndComponents
-				return new CacheKey(item, stack.get(PbDataComponents.beeType()), 0);
+				return new CacheKey(item, PbDataComponents.getBeeType(stack), 0);
 			}
 			// 通用路径：使用官方 hashItemAndComponents 覆盖物品与数据组件
-			return new CacheKey(item, null, ItemStack.hashItemAndComponents(stack));
+			return new CacheKey(item, null, java.util.Objects.hash(stack.getItem(), stack.getTag()));
 		}
 	}
 

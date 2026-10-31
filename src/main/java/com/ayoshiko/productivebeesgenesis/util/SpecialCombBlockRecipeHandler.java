@@ -2,7 +2,7 @@ package com.ayoshiko.productivebeesgenesis.util;
 
 import cy.jdkdigital.productivebees.common.item.CombBlockItem;
 import cy.jdkdigital.productivebees.init.ModBlocks;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -48,9 +48,9 @@ public final class SpecialCombBlockRecipeHandler {
 		// 1. configurable_comb 块 → configurable_honeycomb + 保留 bee_type
 		if (stack.getItem() instanceof CombBlockItem) {
 			ItemStack singleComb = new ItemStack((ItemLike) ModItems.CONFIGURABLE_HONEYCOMB.get());
-			ResourceLocation beeType = stack.get(ModDataComponents.BEE_TYPE.get());
+			ResourceLocation beeType = PbDataComponents.getBeeType(stack);
 			if (beeType != null) {
-				singleComb.set(ModDataComponents.BEE_TYPE.get(), beeType);
+				PbDataComponents.setBeeType(singleComb, beeType);
 			}
 			return singleComb;
 		}

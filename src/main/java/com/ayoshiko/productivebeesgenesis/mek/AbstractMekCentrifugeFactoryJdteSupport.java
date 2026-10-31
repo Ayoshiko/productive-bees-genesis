@@ -7,10 +7,9 @@ import java.util.function.Function;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
 import mekanism.api.recipes.inputs.IInputHandler;
-import mekanism.client.recipe_viewer.type.IRecipeViewerRecipeType;
+import mekanism.client.jei.MekanismJEIRecipeType;
 import mekanism.common.recipe.IMekanismRecipeTypeProvider;
 import mekanism.common.recipe.lookup.cache.InputRecipeCache.SingleItem;
-import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -91,14 +90,14 @@ final class AbstractMekCentrifugeFactoryJdteSupport {
 
 	/** Returns the SMELTING recipe type (delegates to {@link MekCentrifugeFactoryHelper}). */
 	@NotNull
-	static IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
+	static IMekanismRecipeTypeProvider<ItemStackToItemStackRecipe,
 			SingleItem<ItemStackToItemStackRecipe>> getRecipeType() {
 		return MekCentrifugeFactoryHelper.getSmeltingRecipeType();
 	}
 
 	/** Returns the SMELTING JEI recipe viewer type (delegates to {@link MekCentrifugeFactoryHelper}). */
 	@NotNull
-	static IRecipeViewerRecipeType<ItemStackToItemStackRecipe> recipeViewerType() {
+	static MekanismJEIRecipeType<ItemStackToItemStackRecipe> recipeViewerType() {
 		return MekCentrifugeFactoryHelper.getSmeltingRecipeViewerType();
 	}
 

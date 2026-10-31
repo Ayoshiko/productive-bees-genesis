@@ -9,7 +9,6 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 
 /**
@@ -62,15 +61,11 @@ class MekCentrifugeTickHandler {
 	/** AE2 tick 阶段异常日志冷却器（ms 模式，与 PB 异常分开节流避免相互覆盖） */
 	private final LogThrottle ae2ErrorThrottle = new LogThrottle();
 
-	/** 工作声音处理器 — 服务端按概率播放降噪后的离心机声（替代 Mekanism withSound 客户端循环，避免破坏后残留满音量循环） */
-	private final MekCentrifugeSoundHandler soundHandler;
-
 	MekCentrifugeTickHandler(TileEntityMekCentrifuge tile, PbRecipeProcessor pbProcessor,
 			TickAccelTracker tickAccelTracker) {
 		this.tile = tile;
 		this.pbProcessor = pbProcessor;
 		this.tickAccelTracker = tickAccelTracker;
-		this.soundHandler = new MekCentrifugeSoundHandler(tile);
 	}
 
 	/**
@@ -189,7 +184,7 @@ class MekCentrifugeTickHandler {
 
 		// super前保存能量，用于计算总消耗（SMELTING + PB），与工厂版逻辑保持一致
 		var energyContainer = tile.accessor().productivebeesgenesis$getEnergyContainer();
-		long energyBefore = energyContainer.getEnergy();
+		long energyBefore = com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(energyContainer.getEnergy());
 
 		// SMELTING 的首个真实 tick 与额外虚拟 tick 共享一次账本提交；
 		// PB 配方仍由 PbVirtualTickPlan 在自己的批次内一次扣能。
@@ -245,9 +240,6 @@ class MekCentrifugeTickHandler {
 		// AE2 则只补回本批实际消耗的差额。
 		tile.productivebeesgenesis$refillAe2EnergyAfterBatch();
 
-		// 机器激活时按概率播放降噪后的离心机工作声（替代 Mekanism withSound 客户端循环）
-		soundHandler.maybePlayWorkSound(tile.getActive());
-
 		return sendUpdatePacket;
 	}
 
@@ -301,7 +293,7 @@ class MekCentrifugeTickHandler {
 					|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
 			// 优化3：复用已查找的 PB 配方，避免 tryProcessPbRecipe 内部再次 findPbRecipe
 			// 万象创世路径下 preFoundRecipe 传 null（走 myriadHandler 特殊路径，不使用 PB 配方）
-			RecipeHolder<CentrifugeRecipe> preFoundRecipe = isMyriad ? null : pbProcessor.findPbRecipe(input);
+			CentrifugeRecipe preFoundRecipe = isMyriad ? null : pbProcessor.findPbRecipe(input);
 			boolean hasPbRecipe = isMyriad || preFoundRecipe != null;
 
 			if (hasPbRecipe) {

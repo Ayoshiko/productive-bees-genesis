@@ -1,37 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
-
 import net.minecraft.client.gui.screens.Screen;
-import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.config.ModConfig;
-import net.neoforged.neoforge.client.gui.ConfigurationScreen;
-import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
-
-/**
-	 * 自定义配置屏幕工厂
-	 * <br/>
-	 * 以 NeoForge {@link ConfigurationScreen} 为基础，保留其通用/客户端分类入口。
-	 * 对<b>服务端配置</b>使用自定义 {@link ServerConfigScreen} 作为中间页：
-	 * <ul>
-	 *   <li>“万象创世过滤” — 复用蜜蜂编辑器的过滤配置页面</li>
-	 *   <li>“其他服务端配置” — 打开 NeoForge 原生服务端分组列表</li>
-	 * </ul>
-	 */
-public final class CustomConfigScreenFactory implements IConfigScreenFactory {
-
-	@Override
-	public Screen createScreen(ModContainer container, Screen modListScreen) {
-		return new ConfigurationScreen(container, modListScreen, (screen, type, modConfig, title) -> {
-			if (type == ModConfig.Type.SERVER
-					&& modConfig.getSpec()
-					== com.ayoshiko.productivebeesgenesis.config.ModConfig.GAMEPLAY_SERVER_SPEC) {
-				return new ServerConfigScreen(screen, modConfig);
-			}
-			if (type == ModConfig.Type.SERVER
-					&& modConfig.getSpec()
-					== com.ayoshiko.productivebeesgenesis.config.ModConfig.CAPACITIES_SERVER_SPEC) {
-				return new FixedOrderConfigurationScreen(screen, type, modConfig, title);
-			}
-			return new ConfigurationScreen.ConfigurationSectionScreen(screen, type, modConfig, title);
-		});
-	}
+import net.minecraftforge.fml.ModContainer;
+public final class CustomConfigScreenFactory {
+ public Screen createScreen(ModContainer container, Screen parent) { return new ForgeConfigEditor(parent); }
 }

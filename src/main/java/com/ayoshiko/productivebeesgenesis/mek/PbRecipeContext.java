@@ -2,7 +2,6 @@ package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
@@ -10,7 +9,7 @@ import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 
 /**
 	 * PB配方处理上下文接口
@@ -26,12 +25,6 @@ import net.neoforged.neoforge.fluids.FluidStack;
 	 * MULTI 模式下工厂类重写这些方法,日志在工厂类中添加。
 	 */
 public interface PbRecipeContext {
-
-	/** 未知输入尚待核验时，普通、资源及已缓存熔炼配方均不得继续消费。 */
-	default boolean hasUnresolvedInput() {
-		return this instanceof IAe2InputHost host
-				&& host.productivebeesgenesis$getAe2StateHolder().getPendingItemBuffer().isBlocked();
-	}
 
 	/** Marks context-owned transient processing state for persistence. */
 	default void productivebeesgenesis$markForSave() {
@@ -359,7 +352,7 @@ public interface PbRecipeContext {
 	/**
 	 * 获取每tick操作次数（受速度升级影响）
 	 * <br/>
-	 * 对应 MekanismUtils.getOperationsPerTick(this, BASE_TICKS_REQUIRED, 1)，
+	 * 对应 com.ayoshiko.productivebeesgenesis.util.ForgeMachineOperations.getOperationsPerTick(this, BASE_TICKS_REQUIRED, 1)，
 	 * MU扩展下可大于1，未加载MU时返回1。
 	 */
 	int operationsPerTick();

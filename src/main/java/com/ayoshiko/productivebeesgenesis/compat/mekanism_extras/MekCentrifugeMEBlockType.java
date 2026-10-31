@@ -6,15 +6,16 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeUpgradeable;
-import com.jerry.mekextras.common.content.blocktype.ExtraMachine;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import com.jerry.mekanism_extras.common.block.attribute.ExtraAttributeTier;
+import com.jerry.mekanism_extras.common.block.attribute.ExtraAttributeUpgradeable;
+import com.jerry.mekanism_extras.common.content.blocktype.ExtraMachine;
+import com.jerry.mekanism_extras.common.tier.ExtraFactoryTier;
 import mekanism.common.block.attribute.Attributes;
 import mekanism.common.content.blocktype.FactoryType;
 import mekanism.common.content.blocktype.Machine;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
+import mekanism.common.registries.MekanismSounds;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -102,7 +103,7 @@ public final class MekCentrifugeMEBlockType {
 		// 能耗应用 1/5、容量应用 1/2 内置平衡系数，再按 ME 模式乘以 tier.processes。
 		// 使用离心机专属description key替代通用DESCRIPTION_FACTORY
 		// key格式：description.productivebeesgenesis.{tier小写}_extra_mek_centrifuge_factory
-		var builder = ExtraMachine.ExtraMachineBuilder
+		var builder = MEForgeMachineBuilder
 				.createExtraFactoryMachine(() -> ME_FACTORY_TILES.get(tier),
 				MekCentrifugeBlockType.descriptionLang(tier.getAdvanceTier().getLowerName() + "_extra_mek_centrifuge_factory"),
 							FactoryType.SMELTING)
@@ -116,7 +117,7 @@ public final class MekCentrifugeMEBlockType {
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
 				.withGui(() -> MEMenuTypeRegistration.ME_CENTRIFUGE_FACTORY)
-				// 不添加 withSound：工作声改由 MekCentrifugeSoundHandler 服务端播放（降噪 + 破坏后不残留满音量循环）
+				.withSound(MekanismSounds.ENERGIZED_SMELTER)
 				.with(new ExtraAttributeTier<>(tier));
 
 		// 移除ME Mixin注入的ExtraAttributeUpgradeable（指向ME原版工厂，不是离心机）

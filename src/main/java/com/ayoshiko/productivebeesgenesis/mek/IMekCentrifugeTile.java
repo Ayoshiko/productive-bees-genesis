@@ -134,6 +134,6 @@ public interface IMekCentrifugeTile {
 			return true;
 		}
 		// PB 蜜脾（带 BEE_TYPE 组件）
-		return input.has(PbDataComponents.beeType());
+		return (PbDataComponents.getBeeType(input) != null);
 	}
 }

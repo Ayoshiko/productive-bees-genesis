@@ -49,7 +49,7 @@ public final class JadeAe2StatusProvider
 
 	/** 插件唯一 ID — 用于 Jade 配置页面切换开关 */
 	static final ResourceLocation UID =
-			ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "ae2_status");
+			new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "ae2_status");
 
 	@Override
 	public ResourceLocation getUid() {

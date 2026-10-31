@@ -32,14 +32,13 @@ public final class EMEMenuTypeRegistration {
 	 * 注册 EME 扩展版离心机工厂 MenuType
 	 * <br/>
 	 * 使用 {@link ModMenuTypes#MENU_TYPES} 延迟注册器注册，
-	 * 必须在 {@link ModMenuTypes#register(net.neoforged.bus.api.IEventBus)} 之前调用。
+	 * 必须在 {@link ModMenuTypes#register(net.minecraftforge.eventbus.api.IEventBus)} 之前调用。
 	 */
 	public static void registerFactoryMenuType() {
 		String name = "emextra_mek_centrifuge_factory";
 		EME_CENTRIFUGE_FACTORY = new ContainerTypeRegistryObject<>(
-				net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, name));
-		ModMenuTypes.MENU_TYPES.registerMenu(name,
-				() -> MekanismContainerType.tile(TileEntityEMExtraMekCentrifugeFactory.class,
-						(id, inv, tile) -> new EMExtraMekCentrifugeFactoryContainer(EME_CENTRIFUGE_FACTORY, id, inv, tile)));
+				net.minecraftforge.registries.RegistryObject.create(new net.minecraft.resources.ResourceLocation(ProductiveBeesGenesis.MOD_ID, name), net.minecraft.core.registries.Registries.MENU, ProductiveBeesGenesis.MOD_ID));
+		ModMenuTypes.MENU_TYPES.register(name, TileEntityEMExtraMekCentrifugeFactory.class,
+						(id, inv, tile) -> new EMExtraMekCentrifugeFactoryContainer(EME_CENTRIFUGE_FACTORY, id, inv, tile));
 	}
 }

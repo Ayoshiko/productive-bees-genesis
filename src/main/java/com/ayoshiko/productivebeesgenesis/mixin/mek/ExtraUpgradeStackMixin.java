@@ -4,7 +4,7 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.mek.IFactoryPbDelegateAccess;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
-import com.jerry.mekextras.api.ExtraUpgrade;
+import com.jerry.mekanism_extras.api.ExtraUpgrade;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import mekanism.api.Upgrade;
@@ -72,7 +72,7 @@ public class ExtraUpgradeStackMixin {
 	 * @return STACK 升级在离心机工厂中的安装上限，或其他升级的原 maxStack
 	 */
 	@WrapOperation(
-		method = {"tickServer", "addUpgrades(Lmekanism/api/Upgrade;II)I"},
+		method = {"tickServer", "addUpgrades(Lmekanism/api/Upgrade;I)I"},
 		at = @At(value = "INVOKE", target = "Lmekanism/api/Upgrade;getMax()I"),
 		require = 0
 	)

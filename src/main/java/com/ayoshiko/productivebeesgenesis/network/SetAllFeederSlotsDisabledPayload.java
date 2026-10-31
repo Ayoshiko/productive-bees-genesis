@@ -1,11 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -24,23 +20,17 @@ import net.minecraft.resources.ResourceLocation;
 public record SetAllFeederSlotsDisabledPayload(
 		BlockPos pos,
 		boolean disabled
-) implements CustomPacketPayload {
+)  {
 
 	/** 数据包类型标识 */
-	public static final CustomPacketPayload.Type<SetAllFeederSlotsDisabledPayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "set_all_feeder_slots_disabled"));
 
 	/** 流编解码器 — 编解码 BlockPos + boolean */
-	public static final StreamCodec<ByteBuf, SetAllFeederSlotsDisabledPayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, SetAllFeederSlotsDisabledPayload::pos,
-					ByteBufCodecs.BOOL, SetAllFeederSlotsDisabledPayload::disabled,
-					SetAllFeederSlotsDisabledPayload::new
-			);
 
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static SetAllFeederSlotsDisabledPayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new SetAllFeederSlotsDisabledPayload(buf.readBlockPos(), buf.readBoolean());
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+        buf.writeBoolean(disabled);
+    }
 }

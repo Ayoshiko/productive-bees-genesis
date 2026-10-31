@@ -34,7 +34,7 @@ public class BakedModelMyriadCombBlock extends WrappedItemModel {
 	@Override
 	public void renderItem(ItemStack stack, ItemDisplayContext context, PoseStack poseStack,
 			MultiBufferSource buffers, int packedLight, int packedOverlay) {
-		ResourceLocation beeType = stack.get(PbDataComponents.beeType());
+		ResourceLocation beeType = PbDataComponents.getBeeType(stack);
 		if (PBConstants.MYRIADCREATIONS_TYPE.equals(beeType)) {
 			renderModelDirect(infinityCombBlockModel, stack, poseStack, buffers, packedLight, packedOverlay);
 		} else {

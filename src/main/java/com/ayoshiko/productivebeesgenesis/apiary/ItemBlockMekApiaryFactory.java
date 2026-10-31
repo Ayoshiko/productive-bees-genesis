@@ -2,7 +2,6 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.mek.OptionalFactoryItemSupport;
 import mekanism.common.block.attribute.Attribute;
-import mekanism.common.registries.MekanismDataComponents;
 import mekanism.common.tier.FactoryTier;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
@@ -37,7 +36,6 @@ public class ItemBlockMekApiaryFactory extends ItemBlockMekApiary {
 	 * 蜂箱工厂无 AttributeFactoryType，直接添加（所有蜂箱工厂方块都需要排序功能）。
 	 */
 	private static Item.Properties addSortingComponent(Item.Properties properties) {
-		properties.component(MekanismDataComponents.SORTING, false);
 		return properties;
 	}
 

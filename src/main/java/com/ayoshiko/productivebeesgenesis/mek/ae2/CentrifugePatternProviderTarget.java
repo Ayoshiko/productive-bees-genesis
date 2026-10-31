@@ -33,6 +33,13 @@ public final class CentrifugePatternProviderTarget implements PatternProviderTar
 		return storage instanceof CentrifugeExternalAeStorage centrifuge
 				? new CentrifugePatternProviderTarget(centrifuge, target) : target;
 	}
+	public static boolean containsBufferedInput(MEStorage storage, Set<AEKey> inputs) {
+		return storage instanceof CentrifugeExternalAeStorage centrifuge && centrifuge.containsPatternInput(inputs);
+	}
+	public static boolean rejectExternalPush(MEStorage storage, long amount, Actionable mode) {
+		return storage instanceof CentrifugeExternalAeStorage && mode == Actionable.MODULATE && amount > 0
+				&& CentrifugeDispatchScope.externalPushOverBudget();
+	}
 
 	/** {@inheritDoc} */
 	@Override

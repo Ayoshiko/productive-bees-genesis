@@ -8,8 +8,8 @@ import cy.jdkdigital.productivebees.init.ModTags;
 import cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
-import net.neoforged.neoforge.items.IItemHandlerModifiable;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraftforge.items.IItemHandlerModifiable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
@@ -50,9 +50,9 @@ public final class CentrifugeMixinHelper {
 		// try/catch 防止 shouldBlock 或 inventoryHandler 访问抛异常导致 PB 原方法崩溃
 		try {
 			if (!cir.getReturnValue()) return;
-			if (shouldBlock.apply(entity.inventoryHandler)) {
-				cir.setReturnValue(false);
-			}
+			((CentrifugeBlockEntityAccessor) entity).productivebeesgenesis$getInventoryHandler().ifPresent(handler -> {
+                if (shouldBlock.apply(handler)) cir.setReturnValue(false);
+            });
 		} catch (RuntimeException e) {
 			// 异常时不阻止机器运行（默认 false），让 PB 原逻辑继续
 			// DevLog 节流日志便于排查（高频 tick 路径，避免刷屏）
@@ -97,7 +97,7 @@ public final class CentrifugeMixinHelper {
 	 * @return 是否允许 PB 继续完成并扣除输入
 	 */
 	public static boolean appendRandomCombs(
-			RecipeHolder<CentrifugeRecipe> recipe,
+			CentrifugeRecipe recipe,
 			IItemHandlerModifiable invHandler,
 			RandomSource random,
 			CentrifugeBlockEntity entity,
@@ -105,16 +105,15 @@ public final class CentrifugeMixinHelper {
 		ItemStack input = invHandler.getStackInSlot(InventoryHandlerHelper.INPUT_SLOT);
 		if (!MyriadCreationsEventHandler.isMyriadCreationsItem(input)) return true;
 		if (recipe == null) return false;
-		int modifier = Math.min(input.getCount(), Math.min(64,
-				((CentrifugeBlockEntityAccessor) entity).productivebeesgenesis$getProductivityModifier()));
-		int repetitions = heated && input.is(ModTags.Common.STORAGE_BLOCK_HONEYCOMBS)
-				&& !recipe.value().ingredient.test(input) ? 4 : 1;
+		int modifier = 1; // PB 12 consumes one input per completeRecipeProcessing call.
+		int repetitions = heated && input.is(com.ayoshiko.productivebeesgenesis.util.ForgeBeeTags.STORAGE_BLOCK_HONEYCOMBS)
+				&& !recipe.ingredient.test(input) ? 4 : 1;
 		List<ItemStack> reserved = new ArrayList<>();
 		// 按 PB 最大可能副产物预留，避免随机蜜脾抢占蜡等配方产物的空间。
 		for (int i = 0; i < repetitions; i++) {
-			for (var entry : recipe.value().getRecipeOutputs().entrySet()) {
-				if (heated && entry.getKey().is(ModTags.Common.WAXES)) continue;
-				int amount = Math.multiplyExact(Math.max(0, entry.getValue().max()), modifier);
+			for (var entry : recipe.getRecipeOutputs().entrySet()) {
+				if (heated && entry.getKey().is(com.ayoshiko.productivebeesgenesis.util.ForgeBeeTags.WAXES)) continue;
+				int amount = Math.multiplyExact(Math.max(0, entry.getValue().getAsIntArray()[1]), modifier);
 				if (amount > 0) reserved.add(entry.getKey().copyWithCount(amount));
 			}
 		}

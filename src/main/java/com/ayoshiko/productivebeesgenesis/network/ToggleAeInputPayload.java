@@ -1,10 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -24,20 +21,12 @@ import net.minecraft.resources.ResourceLocation;
 	 */
 public record ToggleAeInputPayload(
 		BlockPos pos
-) implements CustomPacketPayload {
+)  {
 
-	public static final CustomPacketPayload.Type<ToggleAeInputPayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "toggle_ae_input"));
-
-	public static final StreamCodec<ByteBuf, ToggleAeInputPayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, ToggleAeInputPayload::pos,
-					ToggleAeInputPayload::new
-			);
-
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static ToggleAeInputPayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new ToggleAeInputPayload(buf.readBlockPos());
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+    }
 }

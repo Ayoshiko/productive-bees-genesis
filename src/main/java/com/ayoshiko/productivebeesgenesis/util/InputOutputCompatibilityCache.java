@@ -110,7 +110,7 @@ public final class InputOutputCompatibilityCache {
 
 		private static int coarseHash(ItemStack stack) {
 			if (stack.isEmpty()) return 0;
-			var beeType = stack.get(PbDataComponents.beeType());
+			var beeType = PbDataComponents.getBeeType(stack);
 			return 31 * System.identityHashCode(stack.getItem()) + (beeType == null ? 0 : beeType.hashCode());
 		}
 
@@ -119,10 +119,10 @@ public final class InputOutputCompatibilityCache {
 		@Override public boolean equals(Object object) {
 			if (object == this) return true;
 			return object instanceof StateKey other && hash == other.hash && inputCount == other.inputCount
-					&& ItemStack.isSameItemSameComponents(input, other.input)
-					&& ItemStack.isSameItemSameComponents(output, other.output)
-					&& ItemStack.isSameItemSameComponents(secondary, other.secondary)
-					&& ItemStack.isSameItemSameComponents(tertiary, other.tertiary);
+					&& ItemStack.isSameItemSameTags(input, other.input)
+					&& ItemStack.isSameItemSameTags(output, other.output)
+					&& ItemStack.isSameItemSameTags(secondary, other.secondary)
+					&& ItemStack.isSameItemSameTags(tertiary, other.tertiary);
 		}
 	}
 }

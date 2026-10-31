@@ -14,12 +14,13 @@ import mekanism.common.content.blocktype.FactoryType;
 import mekanism.common.content.blocktype.Machine;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.registration.impl.BlockRegistryObject;
+import mekanism.common.registries.MekanismSounds;
 import mekanism.common.tier.FactoryTier;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
-import net.neoforged.neoforge.registries.DeferredHolder;
+import net.minecraftforge.registries.RegistryObject;
 
 import java.util.List;
 import java.util.Map;
@@ -52,7 +53,7 @@ import java.util.function.Supplier;
 public final class MekCentrifugeBlockType {
 
 	/** 基础MEK离心机BlockType — 不设置AttributeTier，使Basic Tier Installer能正确升级（fromTier=null匹配） */
-	public static final BlockTypeTile<TileEntityMekCentrifuge> MEK_CENTRIFUGE = Machine.MachineBuilder
+	public static final BlockTypeTile<TileEntityMekCentrifuge> MEK_CENTRIFUGE = com.ayoshiko.productivebeesgenesis.util.ForgeMachineBuilder
 			.createMachine(() -> ModBlockEntitiesHolder.MEK_CENTRIFUGE, descriptionLang("mek_centrifuge"))
 			.withEnergyConfig(() -> MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(
 						ModConfig.SERVER.mekCentrifugeEnergyPerTick.get()),
@@ -61,7 +62,7 @@ public final class MekCentrifugeBlockType {
 			.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 			.with(Attributes.SECURITY)
 			.withGui(() -> ModMenuTypes.MEK_CENTRIFUGE)
-			// 不添加 withSound(ENERGIZED_SMELTER)：工作声改由 MekCentrifugeSoundHandler 服务端播放（降噪 + 破坏后不残留满音量循环）
+			.withSound(MekanismSounds.ENERGIZED_SMELTER)
 			.with(new AttributeUpgradeable(wrapAsBlockRegistryObject(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY)))
 			// 替换默认升级支持：MEKExtras加载时额外支持STACK/CREATIVE，始终支持SPEED/ENERGY/MUFFLING
 			.with(MekUpgradeSupport.forMachine())
@@ -105,7 +106,7 @@ public final class MekCentrifugeBlockType {
 	@SuppressWarnings("unchecked")
 	private static Machine.FactoryMachine<TileEntityMekCentrifugeFactory> createFactoryBlockType(
 			FactoryTier tier, mekanism.api.text.ILangEntry description) {
-		var builder = Machine.MachineBuilder
+		var builder = com.ayoshiko.productivebeesgenesis.util.ForgeMachineBuilder
 				.createFactoryMachine(() -> getFactoryTileEntityType(tier), description, FactoryType.SMELTING)
 				// Energy: 与Mekanism原版工厂一致，usage/storage 从 config 读取（不随等级变化）
 				// 原版Mekanism工厂所有等级（BASIC/ADVANCED/ELITE/ULTIMATE）使用相同的20000L存储
@@ -118,14 +119,14 @@ public final class MekCentrifugeBlockType {
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
 				.withGui(() -> ModMenuTypes.MEK_CENTRIFUGE_FACTORY)
-				// 不添加 withSound：工作声改由 MekCentrifugeSoundHandler 服务端播放（降噪 + 破坏后不残留满音量循环）
+				.withSound(MekanismSounds.ENERGIZED_SMELTER)
 				.with(new AttributeTier<>(tier));
 
 		// 移除FactoryMachine构造器添加的原版AttributeUpgradeable
 		builder.without(AttributeUpgradeable.class);
 		// 添加自定义AttributeUpgradeable，指向下一等级的离心机工厂
 		// CREATIVE是最高级，getNextTierBlock返回null，不添加（避免自指导致ItemMaxTierInstaller死循环）
-		DeferredHolder<Block, ?> nextTierBlock = getNextTierBlock(tier);
+		RegistryObject<?> nextTierBlock = getNextTierBlock(tier);
 		if (nextTierBlock != null) {
 			// 使用非匿名实例确保getClass()=AttributeUpgradeable.class
 			builder.with(new AttributeUpgradeable(wrapAsBlockRegistryObject(nextTierBlock)));
@@ -148,7 +149,7 @@ public final class MekCentrifugeBlockType {
 	 * 原实现返回 ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY（自指），
 	 * 导致 ItemMaxTierInstaller 的 while 循环无法终止，游戏卡死。
 	 */
-	private static DeferredHolder<Block, ?> getNextTierBlock(FactoryTier currentTier) {
+	private static RegistryObject<?> getNextTierBlock(FactoryTier currentTier) {
 		return switch (currentTier) {
 			case BASIC -> ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY;
 			case ADVANCED -> ModBlocks.ELITE_MEK_CENTRIFUGE_FACTORY;
@@ -173,7 +174,7 @@ public final class MekCentrifugeBlockType {
 	 * CREATIVE是最高级，返回null表示无下一级（与EME的INFINITE_MULTIVERSAL一致，不添加升级属性，
 	 * 避免AttributeUpgradeable自指导致ItemMaxTierInstaller的while循环死循环）。
 	 */
-	private static DeferredHolder<Block, ?> getEMNextTierBlock(FactoryTier currentTier) {
+	private static RegistryObject<?> getEMNextTierBlock(FactoryTier currentTier) {
 		String name = currentTier.name();
 		return switch (name) {
 			case "OVERCLOCKED" -> getEMFactoryBlock("quantum");
@@ -191,10 +192,9 @@ public final class MekCentrifugeBlockType {
 	 * EM工厂方块由ModBlocks在后续任务中注册，此处通过DeferredHolder.create按注册名创建延迟Holder。
 	 * Holder是懒解析的，方块注册后自动解析；注册名遵循 {tier}_mek_centrifuge_factory 命名约定。
 	 */
-	private static DeferredHolder<Block, ?> getEMFactoryBlock(String tierName) {
+	private static RegistryObject<?> getEMFactoryBlock(String tierName) {
 		String registryName = tierName + "_mek_centrifuge_factory";
-		return DeferredHolder.create(Registries.BLOCK,
-				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, registryName));
+		return RegistryObject.create(new ResourceLocation(ProductiveBeesGenesis.MOD_ID, registryName), Registries.BLOCK, ProductiveBeesGenesis.MOD_ID);
 	}
 
 	/**
@@ -203,10 +203,9 @@ public final class MekCentrifugeBlockType {
 	 * ME工厂方块由ModBlocks注册，此处通过DeferredHolder.create按注册名创建延迟Holder。
 	 * 注册名遵循 {tier}_extra_mek_centrifuge_factory 命名约定（使用ME的tier小写名）。
 	 */
-	public static DeferredHolder<Block, ?> getMEFactoryBlock(String tierName) {
+	public static RegistryObject<?> getMEFactoryBlock(String tierName) {
 		String registryName = tierName + "_extra_mek_centrifuge_factory";
-		return DeferredHolder.create(Registries.BLOCK,
-				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, registryName));
+		return RegistryObject.create(new ResourceLocation(ProductiveBeesGenesis.MOD_ID, registryName), Registries.BLOCK, ProductiveBeesGenesis.MOD_ID);
 	}
 
 	/**
@@ -215,10 +214,9 @@ public final class MekCentrifugeBlockType {
 	 * EME工厂方块由ModBlocks注册，此处通过DeferredHolder.create按注册名创建延迟Holder。
 	 * 注册名遵循 {tier}_emextra_mek_centrifuge_factory 命名约定（使用EME的tier小写名）。
 	 */
-	public static DeferredHolder<Block, ?> getEMEFactoryBlock(String tierName) {
+	public static RegistryObject<?> getEMEFactoryBlock(String tierName) {
 		String registryName = tierName + "_emextra_mek_centrifuge_factory";
-		return DeferredHolder.create(Registries.BLOCK,
-				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, registryName));
+		return RegistryObject.create(new ResourceLocation(ProductiveBeesGenesis.MOD_ID, registryName), Registries.BLOCK, ProductiveBeesGenesis.MOD_ID);
 	}
 
 	/**
@@ -229,13 +227,12 @@ public final class MekCentrifugeBlockType {
 	 * BlockRegistryObject需要block和item两个DeferredHolder，item部分通过block的注册名查找。
 	 */
 	@SuppressWarnings("unchecked")
-	public static Supplier<BlockRegistryObject<?, ?>> wrapAsBlockRegistryObject(DeferredHolder<Block, ?> blockHolder) {
+	public static Supplier<BlockRegistryObject<?, ?>> wrapAsBlockRegistryObject(RegistryObject<?> blockHolder) {
 		return () -> {
 			// 通过block的注册名创建item的DeferredHolder
-			DeferredHolder<Item, ?> itemHolder = DeferredHolder.create(
-					net.minecraft.core.registries.Registries.ITEM, blockHolder.getKey().location());
-			return new BlockRegistryObject<>((DeferredHolder<Block, Block>) blockHolder,
-					(DeferredHolder<Item, Item>) itemHolder);
+			RegistryObject<?> itemHolder = RegistryObject.create(blockHolder.getId(), net.minecraft.core.registries.Registries.ITEM, ProductiveBeesGenesis.MOD_ID);
+			return new BlockRegistryObject<>((RegistryObject<Block>) blockHolder,
+					(RegistryObject<Item>) itemHolder);
 		};
 	}
 

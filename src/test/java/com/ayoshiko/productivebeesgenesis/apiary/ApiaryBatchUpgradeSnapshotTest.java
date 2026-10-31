@@ -36,8 +36,7 @@ class ApiaryBatchUpgradeSnapshotTest {
 	@Test
 	@DisplayName("逐组处理的 processBatchProduce 不得再查询机器级升级状态")
 	void perGroupProcessingDoesNotQueryMachineLevelUpgrades() throws Exception {
-		String body = methodBody(Files.readString(Path.of(PROCESSOR)), "public void processBatchProduce(")
-				+ Files.readString(Path.of(APIARY + "BeeProductionGenerator.java"));
+		String body = methodBody(Files.readString(Path.of(PROCESSOR)), "public void processBatchProduce(");
 		// 这些取值一轮 flush 内恒定，必须由 ApiaryBatchUpgradeSnapshot 提供
 		for (String forbidden : List.of(
 				"upgradeHandler.getGeneSamplerCount()",
@@ -73,11 +72,9 @@ class ApiaryBatchUpgradeSnapshotTest {
 				"多花蜂判定必须作为参数传入");
 
 		String tickProcessor = Files.readString(Path.of(TICK_PROCESSOR));
-		String settlement = methodBody(tickProcessor, "private void settleProductionGroup(");
-		int perGroupChecks = settlement.split("MultiFlowerBeeAdapter\\.isMultiFlowerBee\\(", -1).length - 1;
-		assertEquals(1, perGroupChecks, "当前和保管周期共用的结算入口每组只判定一次多花蜂");
-		assertTrue(settlement.contains("upgrades, feederDependentProduce);"),
-				"该判定必须沿批量生成参数传入，不能在逐蜂生成内重算");
+		assertTrue(tickProcessor.contains("boolean feederDependentProduce = "
+						+ "MultiFlowerBeeAdapter.isMultiFlowerBee(typeKey);"),
+				"每个分组只允许在 flush 层判定一次多花蜂");
 	}
 
 	/** 截取指定方法的方法体（到下一个带 javadoc 的成员为止），避免把同文件其它方法算进来。 */
@@ -91,9 +88,9 @@ class ApiaryBatchUpgradeSnapshotTest {
 	@Test
 	@DisplayName("快照在输出空间检查之后、分组循环之前采集一次")
 	void snapshotIsCapturedOncePerFlushAfterOutputCheck() throws Exception {
-		String source = methodBody(Files.readString(Path.of(TICK_PROCESSOR)), "private void flushPendingProductions(");
+		String source = Files.readString(Path.of(TICK_PROCESSOR));
 		int captureIndex = source.indexOf("ApiaryBatchUpgradeSnapshot.capture(tile, upgradeHandler)");
-		int outputFullIndex = source.indexOf("if (slotManager.isOutputFull()");
+		int outputFullIndex = source.indexOf("if (slotManager.isOutputFull()) {\n\t\t\t// 输出已满");
 		int groupLoopIndex = source.indexOf(
 				"for (int groupIndex = 0; groupIndex < activePendingProductionGroupCount; groupIndex++)");
 		assertTrue(captureIndex > 0, "flush 层必须采集一次机器级快照");

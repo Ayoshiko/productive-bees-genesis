@@ -13,14 +13,14 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.component.CustomData;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.common.util.FakePlayer;
-import net.neoforged.neoforge.common.util.FakePlayerFactory;
+import net.minecraftforge.common.util.FakePlayer;
+import net.minecraftforge.common.util.FakePlayerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -74,14 +74,9 @@ public final class WannaBeeAmberAdapter {
 	 */
 	public static List<ItemStack> sampleBatches(ServerLevel level, BlockPos origin, FeederSlotManager feeder,
 			long[] productionCounts, float multiplier) {
-		return sampleBatches(level, origin, feeder, productionCounts, multiplier, false);
-	}
-
-	public static List<ItemStack> sampleBatches(ServerLevel level, BlockPos origin, FeederSlotManager feeder,
-			long[] productionCounts, float multiplier, boolean strict) {
 		if (level == null || origin == null || feeder == null || productionCounts == null
 				|| !Float.isFinite(multiplier) || multiplier <= 0.0F) return List.of();
-		List<CustomData> candidates = feeder.getAmberEntityDataSnapshot();
+		List<CompoundTag> candidates = feeder.getAmberEntityDataSnapshot();
 		if (candidates.isEmpty()) return List.of();
 
 		int[] eventCounts = new int[productionCounts.length];
@@ -102,7 +97,6 @@ public final class WannaBeeAmberAdapter {
 					LootPool pool = createLootPool(level, origin, candidates, random);
 					sampleRolls(level, aggregated, pool, rollCount, productivityLevel);
 				} catch (Exception e) {
-					if (strict) throw new IllegalStateException("Wanna Bee resource batch generation failed", e);
 					LogThrottle.warn("wanna_bee_amber_loot",
 							"Wanna Bee 无法读取封存生物战利品，跳过本次代表事件: origin={}", origin, e);
 				}
@@ -111,24 +105,20 @@ public final class WannaBeeAmberAdapter {
 
 		List<ItemStack> result = new ArrayList<>(aggregated.size());
 		for (AggregatedDrop drop : aggregated) {
-			long remaining = drop.count;
-			while (remaining > 0) {
-				int count = (int) Math.min(Integer.MAX_VALUE, remaining);
-				result.add(drop.template.copyWithCount(count));
-				remaining -= count;
-			}
+			int count = drop.count >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) drop.count;
+			if (count > 0) result.add(drop.template.copyWithCount(count));
 		}
 		return result;
 	}
 
-	private static LootPool createLootPool(ServerLevel level, BlockPos origin, List<CustomData> candidates,
+	private static LootPool createLootPool(ServerLevel level, BlockPos origin, List<CompoundTag> candidates,
 			ThreadLocalRandom random) {
-		CustomData entityData = candidates.get(random.nextInt(candidates.size()));
-		Entity entity = AmberBlockEntity.createEntity(level, entityData.copyTag());
+		CompoundTag entityData = candidates.get(random.nextInt(candidates.size()));
+		Entity entity = AmberBlockEntity.createEntity(level, entityData.copy());
 		if (!(entity instanceof Mob mob)) return LootPool.EMPTY;
 		Vec3 originCenter = Vec3.atCenterOf(origin);
 		mob.setPos(originCenter);
-		LootTable lootTable = level.getServer().reloadableRegistries().getLootTable(mob.getLootTable());
+		LootTable lootTable = level.getServer().getLootData().getLootTable(mob.getLootTable());
 		if (lootTable == LootTable.EMPTY) return LootPool.EMPTY;
 
 		FakePlayer fakePlayer = FakePlayerFactory.get(level, WANNA_BEE_PROFILE);
@@ -136,8 +126,8 @@ public final class WannaBeeAmberAdapter {
 				.withParameter(LootContextParams.LAST_DAMAGE_PLAYER, fakePlayer)
 				.withParameter(LootContextParams.DAMAGE_SOURCE, level.damageSources().generic())
 				.withParameter(LootContextParams.TOOL, new ItemStack(Items.DIAMOND_AXE))
-				.withOptionalParameter(LootContextParams.DIRECT_ATTACKING_ENTITY, fakePlayer)
-				.withOptionalParameter(LootContextParams.ATTACKING_ENTITY, fakePlayer)
+				.withOptionalParameter(LootContextParams.DIRECT_KILLER_ENTITY, fakePlayer)
+				.withOptionalParameter(LootContextParams.KILLER_ENTITY, fakePlayer)
 				.withParameter(LootContextParams.THIS_ENTITY, mob)
 				.withParameter(LootContextParams.ORIGIN, originCenter)
 				.create(LootContextParamSets.ENTITY);
@@ -148,7 +138,7 @@ public final class WannaBeeAmberAdapter {
 			int rollCount, int productivityLevel) {
 		if (pool.eligibleDrops.isEmpty()) return;
 		if (pool.eligibleDrops.size() == 1) {
-			ItemStack sampled = pool.eligibleDrops.getFirst();
+			ItemStack sampled = pool.eligibleDrops.get(0);
 			long amount = SaturatingMath.saturatingMultiply(
 					BeeProductivityGene.adjustStackCount(sampled.getCount(), productivityLevel), rollCount);
 			merge(aggregated, sampled, amount);
@@ -168,7 +158,7 @@ public final class WannaBeeAmberAdapter {
 	private static void merge(List<AggregatedDrop> aggregated, ItemStack sampled, long amount) {
 		if (amount <= 0) return;
 		for (AggregatedDrop existing : aggregated) {
-			if (ItemStack.isSameItemSameComponents(existing.template, sampled)) {
+			if (ItemStack.isSameItemSameTags(existing.template, sampled)) {
 				existing.count = SaturatingMath.saturatingAdd(existing.count, amount);
 				return;
 			}

@@ -28,11 +28,19 @@
 - **许可证**: Mojang EULA
 - **使用方式**: 本模组作为 Minecraft 的修改内容，遵循 Mojang 最终用户许可协议
 
-## NeoForge
+## Minecraft Forge
 
-- **项目**: NeoForge
+- **项目**: Minecraft Forge
 - **许可证**: LGPL-2.1
-- **使用方式**: 作为模组加载器
+- **使用方式**: 本分支使用 Forge 47.4.0 加载 Minecraft 1.20.1 模组
+- **源码**: https://github.com/MinecraftForge/MinecraftForge
+
+## MixinExtras
+
+- **项目**: MixinExtras 0.5.5
+- **许可证**: MIT License，原始声明保留在嵌套 JAR 的 `LICENSE_MixinExtras`
+- **使用方式**: `mixinextras-forge` 作为 jar-in-jar 运行库随 Forge 产物分发；common JAR 仅用于编译与注解处理
+- **源码**: https://github.com/LlamaLad7/MixinExtras
 
 ## Mekanism
 
@@ -139,10 +147,10 @@
 ## Just Dire Things Extras (JDTE)
 
 - **项目**: Just Dire Things Extras
-- **作者**: JustDireThings 社区
-- **许可证**: 以 Modrinth 页面声明为准（库内未附带独立许可证文本）
-- **使用方式**: 可选联动，编译期引用 `CoalescedAcceleratedMachine` 合并加速接口（`libs/jdte-0.5.9-alpha1.jar`，仅开发编译用，不分发给终端玩家）；运行时经 `MixinConfigPlugin` 条件应用，未安装 JDTE 时完全不加载相关代码
-- **来源**: https://modrinth.com/mod/just-dire-things-extras
+- **作者**: JDTE contributors
+- **许可证**: MIT License，移植快照保留声明于 `src/compatApi/LICENSE-JDTE`
+- **使用方式**: `src/compatApi/jdte` 的 `CoalescedAcceleratedMachine` 接口仅用于独立 source set 编译，不进入运行 classpath 或发行 JAR；运行时由 JDTE 提供接口，并经 `MixinConfigPlugin` 条件应用
+- **来源**: https://github.com/rulanup/JDTE/tree/ac1d813d010b6844746534a5a12c0c5b3251ff92
 
 ## KubeJS
 
@@ -158,19 +166,3 @@
 - **许可证**: MIT
 - **使用方式**: 可选联动，`RenderBlockBeLoadFixMixin` 修复建筑小工具渲染方块实体加载时序问题；未安装时经 `MixinConfigPlugin` 跳过该 Mixin
 - **来源**: https://modrinth.com/mod/building-gadgets-2
-
-## 蜂蜂应援手册书本原材质 / Handbook book texture
-
-- **作者 / Author**: gummyc_type2，beebeeblock-the-skyhive 作者。
-- **来源 / Source**: 用户提供的原始 `guide.png` 及作者信息。
-- **使用方式 / Use**: 资源蜜蜂编辑器手册使用原书本的像素形状、透明轮廓和书页，仅将封面换成黄色。
-- **感谢 / Thanks**: 感谢 gummyc_type2 提供原材质；游戏内设置页与中英文项目说明保留署名。
-- **原素材许可 / Original asset license**: 以原作者适用许可为准；本条记录作者、来源与换色范围。
-
-## 编辑器字体 / Editor fonts
-
-- **Noto Sans → Bee Designer Sans**: 原字体元数据为 Copyright 2015–2021 Google LLC；随附许可另保留 The Noto Project Authors 的版权声明。来源为 [官方 Regular TTF](https://github.com/notofonts/noto-fonts/blob/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf)。分发字体子集 `assets/productivebeesgenesis/font/designer_sans.ttf`，内部字体名改为 Bee Designer Sans，保留原版权和许可元数据；完整 SIL Open Font License 1.1 位于同目录 `notosans_ofl.txt`。
-- **Noto Sans SC → Bee Designer CJK**: © 2014–2021 Adobe；来源为 [官方 SC Regular OTF](https://github.com/notofonts/noto-cjk/blob/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf)。分发包含当前翻译、3,755 个 GB2312 一级常用汉字及中文标点的子集 `assets/productivebeesgenesis/font/designer_cjk.otf`，内部字体名改为 Bee Designer CJK，原版权和许可元数据保留。完整 SIL Open Font License 1.1 位于同目录 `notosanssc_ofl.txt`。
-- **JetBrains Mono → Bee Designer Mono**: Copyright 2020 The JetBrains Mono Project Authors；来源为 [官方 Regular TTF](https://github.com/JetBrains/JetBrainsMono/blob/master/fonts/ttf/JetBrainsMono-Regular.ttf)。分发等宽子集 `assets/productivebeesgenesis/font/designer_mono.ttf`，内部字体名改为 Bee Designer Mono，原版权和许可元数据保留。完整 SIL Open Font License 1.1 位于同目录 `jetbrainsmono_ofl.txt`。
-- **生成 / Generation**: `gradle/generate_designer_fonts.py` 使用固定 FontTools 4.68.0 与三份官方原文件的 SHA-256，保留所选字符、hinting 和横排所需的整形、字距及重音定位特性（ccmp、locl、kern、mark、mkmk、rlig、liga、clig、calt、curs），去除编辑器未使用的竖排及装饰替代特性，并改名派生字体。原始字体、工具和生成报告保存在忽略的 build 目录，只有精简字体与完整 OFL 随 JAR 分发；派生字体继续适用 SIL Open Font License 1.1。
-- **实现 / Implementation**: 编辑器自行维护 AWT 字素成形、设备尺寸栅格图集、距离场缩放、度量和输入选区。研究参考 [ModernUI-MC](https://github.com/BloCamLimb/ModernUI-MC) 与 [LDLib2](https://github.com/Low-Drag-MC/LDLib2) 的职责与缓存原则，不分发其字体实现代码，也不将它们作为本字体方案的运行依赖。裁剪外字符使用可用的系统逻辑矢量字体，其次使用 Minecraft 原生字形，不复制系统字体到 JAR。

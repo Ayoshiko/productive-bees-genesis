@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 	 * </ul>
 	 * 公共逻辑委托给 {@link CentrifugeMixinHelper}。
 	 */
-@Mixin(PoweredCentrifugeBlockEntity.class)
+@Mixin(value = PoweredCentrifugeBlockEntity.class, remap = false)
 public abstract class PoweredCentrifugeBlockEntityMixin {
 
 	/** canOperate RETURN — 能量充足但输出满时阻止启动（同时覆盖继承该门控的 Heated） */

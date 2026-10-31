@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.jei;
 
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
-import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
+import cy.jdkdigital.productivebees.compat.jei.ingredients.BeeIngredient;
 import mezz.jei.api.recipe.IRecipeManager;
 import mezz.jei.api.recipe.RecipeType;
 import net.minecraft.FieldsAreNonnullByDefault;

@@ -4,15 +4,14 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import cy.jdkdigital.productivebees.common.item.BeeCage;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
-import mekanism.api.security.IBlockSecurityUtils;
+import mekanism.common.util.SecurityUtils;
 import mekanism.common.inventory.slot.BasicInventorySlot;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 
 /** 潜行右键直接交付蜜蜂或小食；客户端只拦截动画，资产由服务端修改。 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
@@ -32,7 +31,7 @@ public final class ApiaryQuickInsertHandler {
 		event.setCancellationResult(InteractionResult.sidedSuccess(level.isClientSide));
 		if (level.isClientSide || player.isSpectator() || !player.mayBuild()
 				|| !level.mayInteract(player, event.getPos())
-				|| !IBlockSecurityUtils.INSTANCE.canAccess(player, level, event.getPos(), tile)) return;
+				|| !SecurityUtils.get().canAccess(player, tile)) return;
 		ItemStack stack = event.getItemStack();
 		if (ApiarySlotManager.isGeneTreat(stack)) {
 			try {
@@ -66,8 +65,8 @@ public final class ApiaryQuickInsertHandler {
 		}
 		ItemStack after = slot.getStack();
 		int inserted = ItemStack.matches(before, after) ? 0
-				: (before.isEmpty() || ItemStack.isSameItemSameComponents(before, held))
-				&& ItemStack.isSameItemSameComponents(after, held)
+				: (before.isEmpty() || ItemStack.isSameItemSameTags(before, held))
+				&& ItemStack.isSameItemSameTags(after, held)
 				? after.getCount() - before.getCount() : -1;
 		if (inserted < 0 || inserted > held.getCount()) {
 			throw new IllegalStateException("Gene-treat slot changed unexpectedly during quick insertion", failure);
@@ -80,8 +79,8 @@ public final class ApiaryQuickInsertHandler {
 	static boolean isCandidate(ItemStack stack) {
 		if (ApiarySlotManager.isGeneTreat(stack) || BeeSpawnEggHelper.isResourceBeeSpawnEgg(stack)) return true;
 		if (!(stack.getItem() instanceof BeeCage)) return false;
-		var data = stack.get(DataComponents.CUSTOM_DATA);
-		return data != null && data.copyTag().contains("entity");
+		var data = stack.getTag();
+		return data != null && data.contains("entity");
 	}
 
 	/** 与界面操作一致：选中的空槽优先，其余按顺序寻找。 */

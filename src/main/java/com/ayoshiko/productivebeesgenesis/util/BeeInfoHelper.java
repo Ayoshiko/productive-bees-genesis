@@ -2,10 +2,10 @@ package com.ayoshiko.productivebeesgenesis.util;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import cy.jdkdigital.productivebees.common.entity.bee.ProductiveBee;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
-import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
+import com.ayoshiko.productivebeesgenesis.util.ChancedOutput;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -57,14 +57,8 @@ public final class BeeInfoHelper {
 			String flowerItem,
 			String flowerFluid,
 			String flowerBlock,
-			boolean inverseFlower,
-			com.ayoshiko.productivebeesgenesis.apiary.ContainerFlower container
+			boolean inverseFlower
 	) {
-		public FlowerPreference(String flowerType, String flowerTag, String flowerItem, String flowerFluid,
-				String flowerBlock, boolean inverseFlower) {
-			this(flowerType, flowerTag, flowerItem, flowerFluid, flowerBlock, inverseFlower,
-					flowerFluid.isEmpty() ? null : com.ayoshiko.productivebeesgenesis.apiary.ContainerFlower.legacyFluid(flowerFluid));
-		}
 		/** flowerType 常量：方块型花朵（默认） */
 		public static final String TYPE_BLOCKS = "blocks";
 
@@ -82,7 +76,7 @@ public final class BeeInfoHelper {
 		 */
 		public boolean hasFlowerDefinition() {
 			return !flowerTag.isEmpty() || !flowerItem.isEmpty()
-					|| !flowerFluid.isEmpty() || !flowerBlock.isEmpty() || container != null;
+					|| !flowerFluid.isEmpty() || !flowerBlock.isEmpty();
 		}
 	}
 
@@ -119,12 +113,13 @@ public final class BeeInfoHelper {
 			return cached;
 		}
 		try {
-			Map<ResourceLocation, ?> beeData = BeeReloadListener.INSTANCE.getData();
+			Map<String, ?> beeData = BeeReloadListener.INSTANCE.getData();
 			if (beeData == null || beeData.isEmpty()) {
 				return List.of();
 			}
 			List<ResourceLocation> result = new ArrayList<>(beeData.size());
-			for (ResourceLocation beeType : beeData.keySet()) {
+			for (String typeName : beeData.keySet()) {
+				ResourceLocation beeType = new ResourceLocation(typeName);
 				if (!PBConstants.MYRIADCREATIONS_TYPE.equals(beeType)) {
 					result.add(beeType);
 				}
@@ -184,7 +179,7 @@ public final class BeeInfoHelper {
 	@Nonnull
 	public static Component getBeeDisplayName(@Nonnull ResourceLocation beeType) {
 		try {
-			String beeName = ProductiveBee.getBeeName(beeType);
+			String beeName = ProductiveBee.getBeeName(beeType.toString());
 			String translationKey = "entity." + PBConstants.PRODUCTIVE_BEES_MOD_ID + "." + beeName + "_bee";
 			return Component.translatable(translationKey);
 		} catch (Exception e) {
@@ -310,7 +305,7 @@ public final class BeeInfoHelper {
 				Item blockItem = ModItems.CONFIGURABLE_COMB_BLOCK.get();
 				if (blockItem != null) {
 					ItemStack stack = new ItemStack(blockItem);
-					stack.set(ModDataComponents.BEE_TYPE.get(), beeType);
+					PbDataComponents.setBeeType(stack, beeType);
 					return stack;
 				}
 				return new ItemStack(Items.HONEYCOMB);
@@ -327,7 +322,7 @@ public final class BeeInfoHelper {
 			Item combItem = ModItems.CONFIGURABLE_HONEYCOMB.get();
 			if (combItem != null) {
 				ItemStack stack = new ItemStack(combItem);
-				stack.set(ModDataComponents.BEE_TYPE.get(), beeType);
+				PbDataComponents.setBeeType(stack, beeType);
 				return stack;
 			}
 			return new ItemStack(Items.HONEYCOMB);
@@ -340,19 +335,19 @@ public final class BeeInfoHelper {
 
 	/** 特殊蜜蜂产物描述注册表：键为蜜蜂类型ID，值为产物翻译键（数据驱动，避免硬编码 switch） */
 	private static final Map<ResourceLocation, String> SPECIAL_BEE_PRODUCTS = Map.of(
-			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "lumber_bee"),
+			new ResourceLocation(PBConstants.PRODUCTIVE_BEES_MOD_ID, "lumber_bee"),
 					"productivebeesgenesis.config.product.lumber_bee",
-			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "quarry_bee"),
+			new ResourceLocation(PBConstants.PRODUCTIVE_BEES_MOD_ID, "quarry_bee"),
 					"productivebeesgenesis.config.product.quarry_bee",
-			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "dye_bee"),
+			new ResourceLocation(PBConstants.PRODUCTIVE_BEES_MOD_ID, "dye_bee"),
 					"productivebeesgenesis.config.product.dye_bee",
-			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "wanna"),
+			new ResourceLocation(PBConstants.PRODUCTIVE_BEES_MOD_ID, "wanna"),
 					"productivebeesgenesis.config.product.wanna",
-			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "farmer_bee"),
+			new ResourceLocation(PBConstants.PRODUCTIVE_BEES_MOD_ID, "farmer_bee"),
 					"productivebeesgenesis.config.product.farmer_bee",
-			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "collector_bee"),
+			new ResourceLocation(PBConstants.PRODUCTIVE_BEES_MOD_ID, "collector_bee"),
 					"productivebeesgenesis.config.product.collector_bee",
-			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "hoarder_bee"),
+			new ResourceLocation(PBConstants.PRODUCTIVE_BEES_MOD_ID, "hoarder_bee"),
 				"productivebeesgenesis.config.product.hoarder_bee");
 
 	/**
@@ -378,8 +373,8 @@ public final class BeeInfoHelper {
 	 */
 	public static boolean isBeeTypeExists(@Nonnull ResourceLocation beeType) {
 		try {
-			Map<ResourceLocation, ?> beeData = BeeReloadListener.INSTANCE.getData();
-			return beeData != null && beeData.containsKey(beeType);
+			Map<String, ?> beeData = BeeReloadListener.INSTANCE.getData();
+			return beeData != null && beeData.containsKey(beeType.toString());
 		} catch (RuntimeException e) {
 			// DevLog 节流日志便于排查（渲染路径，避免刷屏）
 			DevLog.warn("bee_info", "isBeeTypeExists 检查异常: {} - {}", beeType, e.toString());
@@ -409,7 +404,7 @@ public final class BeeInfoHelper {
 			return cached;
 		}
 		try {
-			CompoundTag nbt = BeeReloadListener.INSTANCE.getData(BeeTypeNormalizer.resolveLoadedBeeType(beeType));
+			CompoundTag nbt = BeeReloadListener.INSTANCE.getData(BeeTypeNormalizer.resolveLoadedBeeType(beeType).toString());
 			FlowerPreference preference;
 			if (nbt == null) {
 				preference = FlowerPreference.EMPTY;
@@ -424,11 +419,7 @@ public final class BeeInfoHelper {
 					nbt.getString("flowerItem"),
 					nbt.getString("flowerFluid"),
 					nbt.getString("flowerBlock"),
-					nbt.getBoolean("inverseFlower"),
-					nbt.contains(com.ayoshiko.productivebeesgenesis.apiary.ContainerFlower.NBT_KEY)
-							? com.ayoshiko.productivebeesgenesis.apiary.ContainerFlower.fromData(nbt)
-							: nbt.getString("flowerFluid").isEmpty() ? null
-							: com.ayoshiko.productivebeesgenesis.apiary.ContainerFlower.legacyFluid(nbt.getString("flowerFluid"))
+					nbt.getBoolean("inverseFlower")
 			);
 			}
 			// 缓存查询结果（含 EMPTY，避免重复查询不存在的蜜蜂类型）

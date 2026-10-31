@@ -8,7 +8,7 @@ import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.tile.base.TileEntityMekanism;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import com.ayoshiko.productivebeesgenesis.network.ForgePayloadContext;
 
 /** Handles the centrifuge smelting-compatibility toggle without linking the AE2 API. */
 final class SmeltingCompatPayloadHandler {
@@ -16,7 +16,7 @@ final class SmeltingCompatPayloadHandler {
 	private SmeltingCompatPayloadHandler() {
 	}
 
-	static void handle(ToggleSmeltingCompatPayload payload, IPayloadContext context) {
+	static void handle(ToggleSmeltingCompatPayload payload, ForgePayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
 		if (!(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
 				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) return;

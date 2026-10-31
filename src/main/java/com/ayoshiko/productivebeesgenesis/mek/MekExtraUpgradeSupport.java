@@ -4,7 +4,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-import com.jerry.mekextras.api.ExtraUpgrade;
+import com.jerry.mekanism_extras.api.ExtraUpgrade;
 import mekanism.api.Upgrade;
 import mekanism.common.block.attribute.AttributeUpgradeSupport;
 import mekanism.common.tile.base.TileEntityMekanism;
@@ -48,9 +48,9 @@ final class MekExtraUpgradeSupport {
 	static AttributeUpgradeSupport createMachineUpgrades() {
 		// 防御性检查：Mixin注入失败时安全降级
 		if (ExtraUpgrade.STACK == null || ExtraUpgrade.CREATIVE == null) {
-			return AttributeUpgradeSupport.DEFAULT_MACHINE_UPGRADES;
+			return com.ayoshiko.productivebeesgenesis.util.ForgeUpgradeSupport.DEFAULT_MACHINE_UPGRADES;
 		}
-		return AttributeUpgradeSupport.create(
+		return com.ayoshiko.productivebeesgenesis.util.ForgeUpgradeSupport.create(
 				Upgrade.SPEED, Upgrade.ENERGY, Upgrade.MUFFLING,
 				ExtraUpgrade.STACK, ExtraUpgrade.CREATIVE
 		);

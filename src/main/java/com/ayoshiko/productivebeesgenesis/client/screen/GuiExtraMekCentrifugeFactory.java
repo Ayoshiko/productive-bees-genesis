@@ -4,13 +4,14 @@ import com.ayoshiko.productivebeesgenesis.apiary.client.GuiPbUpgradeTab;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.TileEntityExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEFactoryLayoutHelper;
 import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
-import com.jerry.mekextras.client.gui.element.tab.ExtraGuiSortingTab;
+import com.jerry.mekanism_extras.client.gui.element.tab.ExtraGuiSortingTab;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import mekanism.client.gui.GuiConfigurableTile;
 import mekanism.client.gui.element.progress.GuiProgress;
 import mekanism.client.gui.element.tab.GuiEnergyTab;
 import mekanism.client.gui.element.tab.GuiRedstoneControlTab;
 import mekanism.client.gui.element.tab.GuiWarningTab;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.inventory.warning.IWarningTracker;
@@ -110,14 +111,14 @@ public class GuiExtraMekCentrifugeFactory
 		if (inputReturnButton != null) addRenderableWidget(inputReturnButton);
 		// Tab 显示条件基于 isMultiFluidModeSynced 同步值(选项 A 决策,放弃旧存档隐藏约束):
 		// GUI 构造期 tile.getLevel() 可能为 null,isMultiFluidMode() 会走 holder 类型判断导致 Tab 不显示
-		if (tile instanceof IMultiFluidTankHost host && host.isMultiFluidModeSynced()) {
-			multiFluidTanksTab = addRenderableWidget(new GuiMultiFluidTanksTab<>(this, host, () -> multiFluidTanksTab));
+		if (tile.isMultiFluidModeSynced()) {
+			multiFluidTanksTab = addRenderableWidget(new GuiMultiFluidTanksTab<>(this, tile, () -> multiFluidTanksTab));
 		}
 		// 初始化同步监听器 — 记录 GUI 构造期同步状态作为基准,watcher 在 containerTick 中检测变化动态添加/移除 Tab
 		// 解决首次打开 GUI 时同步数据未到达导致 Tab 不显示的竞态问题
-		if (tile instanceof IMultiFluidTankHost host) {
+		{
 			multiFluidTabWatcher = new MultiFluidTabSyncWatcher();
-			multiFluidTabWatcher.init(host.isMultiFluidModeSynced());
+			multiFluidTabWatcher.init(tile.isMultiFluidModeSynced());
 		}
 	}
 
@@ -130,8 +131,8 @@ public class GuiExtraMekCentrifugeFactory
 	@Override
 	public void containerTick() {
 		super.containerTick();
-		if (multiFluidTabWatcher != null && tile instanceof IMultiFluidTankHost host) {
-			multiFluidTabWatcher.tick(host, this::addMultiFluidTab, this::removeMultiFluidTabAndWindow);
+		if (multiFluidTabWatcher != null) {
+			multiFluidTabWatcher.tick(tile, this::addMultiFluidTab, this::removeMultiFluidTabAndWindow);
 		}
 	}
 
@@ -141,8 +142,8 @@ public class GuiExtraMekCentrifugeFactory
 	 * 由 watcher 在检测到 SINGLE→MULTI 变化时调用。addGuiElements 期若已添加则 multiFluidTanksTab 非 null,跳过。
 	 */
 	private void addMultiFluidTab() {
-		if (multiFluidTanksTab == null && tile instanceof IMultiFluidTankHost host) {
-			multiFluidTanksTab = addRenderableWidget(new GuiMultiFluidTanksTab<>(this, host, () -> multiFluidTanksTab));
+		if (multiFluidTanksTab == null) {
+			multiFluidTanksTab = addRenderableWidget(new GuiMultiFluidTanksTab<>(this, tile, () -> multiFluidTanksTab));
 		}
 	}
 
@@ -190,7 +191,7 @@ public class GuiExtraMekCentrifugeFactory
 	protected void addWarningTab(IWarningTracker warningTracker) {
 		// 警告 Tab 上移 Δ=-8(y=109→101),位于 ExtraGuiSortingTab(y=62,h=35,底部97)下方(间距4px)
 		// y 坐标链审计修复:原 move(-11)→y=98 与 ExtraGuiSortingTab 间距仅1px,改为 move(-8)→y=101 间距4px
-		GuiWarningTab tab = addRenderableWidget(new GuiWarningTab(this, warningTracker, true));
+		GuiWarningTab tab = addRenderableWidget(new GuiWarningTab(this, warningTracker, 109));
 		tab.move(0, -8);
 	}
 
@@ -210,7 +211,7 @@ public class GuiExtraMekCentrifugeFactory
 	@Override
 	protected void drawForegroundText(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY) {
 		renderTitleText(guiGraphics);
-		renderInventoryText(guiGraphics);
+		guiGraphics.drawString(getFont(), playerInventoryTitle, inventoryLabelX, inventoryLabelY, screenTextColor(), false);
 		super.drawForegroundText(guiGraphics, mouseX, mouseY);
 	}
 }

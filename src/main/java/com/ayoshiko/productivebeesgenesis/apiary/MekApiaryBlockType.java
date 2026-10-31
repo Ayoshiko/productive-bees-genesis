@@ -14,12 +14,12 @@ import mekanism.common.lib.transmitter.TransmissionType;
 /**
 	 * MEK通用机械蜂箱BlockType定义
 	 * <br/>
-	 * 参考MekCentrifugeBlockType模式，使用Machine.MachineBuilder构建基础机器BlockType。
+	 * 参考MekCentrifugeBlockType模式，使用com.ayoshiko.productivebeesgenesis.util.ForgeMachineBuilder构建基础机器BlockType。
 	 * 通过createMachine()自动添加以下Attribute（由Mekanism内部完成）：
 	 * <ul>
 	 *   <li>AttributeElectricMachine — 标识电力机器（自动）</li>
 	 *   <li>Attributes.ACTIVE_LIGHT — 活跃状态指示灯（自动）</li>
-	 *   <li>AttributeUpgradeSupport.DEFAULT_MACHINE_UPGRADES — 支持速度+能量+消音升级（自动，随后被替换）</li>
+	 *   <li>new AttributeUpgradeSupport(java.util.EnumSet.of(Upgrade.SPEED, Upgrade.ENERGY, Upgrade.MUFFLING)) — 支持速度+能量+消音升级（自动，随后被替换）</li>
 	 *   <li>AttributeGui — GUI关联（通过withGui添加）</li>
 	 * </ul>
 	 * <p>
@@ -40,7 +40,7 @@ public final class MekApiaryBlockType {
 	 * 生产周期由TileEntityMekApiary构造函数传入（200 ticks = 10秒，MEK原版标准）。
 	 * Task 4：移除 withSound(ENERGIZED_SMELTER)，工作声音改由 {@link ApiarySoundHandler} 播放 PB 蜜蜂嗡嗡声。
 	 */
-	public static final BlockTypeTile<TileEntityMekApiary> MEK_APIARY = Machine.MachineBuilder
+	public static final BlockTypeTile<TileEntityMekApiary> MEK_APIARY = com.ayoshiko.productivebeesgenesis.util.ForgeMachineBuilder
 			.createMachine(() -> ModBlockEntitiesHolder.MEK_APIARY, descriptionLang("mek_apiary"))
 			// 与离心机共用内置能耗/容量平衡；旧存档会由运行时容量归一化自动迁移。
 			.withEnergyConfig(() -> MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(

@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 /**
 	 * MEK离心机配置段 — 从 {@link ServerConfig} 抽取的独立配置段。
@@ -18,12 +18,12 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 public final class CentrifugeConfigSection {
 
 	// ========== MEK离心机基础配置 ==========
-	public final ModConfigSpec.LongValue mekCentrifugeEnergyPerTick;
-	public final ModConfigSpec.LongValue mekCentrifugeEnergyStorage;
-	public final ModConfigSpec.IntValue mekCentrifugeProcessingTime;
-	public final ModConfigSpec.IntValue mekCentrifugeFluidTankCapacity;
+	public final ForgeConfigSpec.LongValue mekCentrifugeEnergyPerTick;
+	public final ForgeConfigSpec.LongValue mekCentrifugeEnergyStorage;
+	public final ForgeConfigSpec.IntValue mekCentrifugeProcessingTime;
+	public final ForgeConfigSpec.IntValue mekCentrifugeFluidTankCapacity;
 	/** 多流体槽模式开关:false=单槽共享(默认),true=按流体类型动态分配独立槽位 */
-	public final ModConfigSpec.BooleanValue mekCentrifugeMultiFluidTank;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeMultiFluidTank;
 	/**
 	 * v2.0.9: 每种流体类型最大占用槽位数
 	 * <br/>
@@ -31,9 +31,9 @@ public final class CentrifugeConfigSection {
 	 * 0=自动计算为 Math.max(1, maxTanks/2),确保至少 2 种流体可共存;
 	 * >0=手动指定配额。
 	 */
-	public final ModConfigSpec.IntValue mekCentrifugeMaxTanksPerFluid;
-	public final ModConfigSpec.IntValue mekCentrifugeCombBlockMultiplier;
-	public final ModConfigSpec.IntValue mekCentrifugeMaxOpsPerTick;
+	public final ForgeConfigSpec.IntValue mekCentrifugeMaxTanksPerFluid;
+	public final ForgeConfigSpec.IntValue mekCentrifugeCombBlockMultiplier;
+	public final ForgeConfigSpec.IntValue mekCentrifugeMaxOpsPerTick;
 
 	// ========== 子配置段引用(组合关系,保持外部访问兼容)==========
 	/** 输出槽 + 输入槽堆叠倍率子段(stack_multiplier + input_stack_multiplier section) */
@@ -42,30 +42,30 @@ public final class CentrifugeConfigSection {
 	public final FluidTankMultiplierConfigSection fluidTankMultiplier;
 
 	// ========== AE2 集成 ==========
-	public final ModConfigSpec.BooleanValue mekCentrifugeAeOutputEnabled;
-	public final ModConfigSpec.BooleanValue mekCentrifugeAeFluidOutputEnabled;
-	public final ModConfigSpec.BooleanValue mekCentrifugeAeEnergyInputEnabled;
-	public final ModConfigSpec.BooleanValue mekCentrifugePreferAppliedFluxOverAeEnergy;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeAeOutputEnabled;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeAeFluidOutputEnabled;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeAeEnergyInputEnabled;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugePreferAppliedFluxOverAeEnergy;
 	/** 允许提取 AE2 原生能量；关闭后仅从 AppliedFlux FE 提取。 */
-	public final ModConfigSpec.BooleanValue mekCentrifugeAeNativeEnergyInputEnabled;
-	public final ModConfigSpec.BooleanValue mekCentrifugeAeInputEnabled;
-	public final ModConfigSpec.IntValue mekCentrifugeAeInputRatePerTick;
-	public final ModConfigSpec.IntValue mekCentrifugeAeInputIntervalTicks;
-	public final ModConfigSpec.IntValue mekCentrifugeAeInputMinPages;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeAeNativeEnergyInputEnabled;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeAeInputEnabled;
+	public final ForgeConfigSpec.IntValue mekCentrifugeAeInputRatePerTick;
+	public final ForgeConfigSpec.IntValue mekCentrifugeAeInputIntervalTicks;
+	public final ForgeConfigSpec.IntValue mekCentrifugeAeInputMinPages;
 
 	// ========== PB/ME 升级上限 ==========
-	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeProductivityMaxCount;
-	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeTimeMaxCount;
+	public final ForgeConfigSpec.IntValue mekCentrifugePbUpgradeProductivityMaxCount;
+	public final ForgeConfigSpec.IntValue mekCentrifugePbUpgradeTimeMaxCount;
 	/** 稳定性升级最大安装数量（仅离心机生效，对齐 PB 原版上限 7） */
-	public final ModConfigSpec.IntValue mekCentrifugePbUpgradeStabilityMaxCount;
-	public final ModConfigSpec.IntValue mekCentrifugeMaxStackUpgrades;
+	public final ForgeConfigSpec.IntValue mekCentrifugePbUpgradeStabilityMaxCount;
+	public final ForgeConfigSpec.IntValue mekCentrifugeMaxStackUpgrades;
 
 	// ========== 熔炉配方兼容（总开关） ==========
-	public final ModConfigSpec.BooleanValue mekCentrifugeSmeltingCompatEnabled;
+	public final ForgeConfigSpec.BooleanValue mekCentrifugeSmeltingCompatEnabled;
 
 	private CentrifugeConfigSection(
-			ModConfigSpec.Builder builder,
-			ModConfigSpec.Builder capacityBuilder) {
+			ForgeConfigSpec.Builder builder,
+			ForgeConfigSpec.Builder capacityBuilder) {
 		builder.comment("通用机械离心机设置").push("mek_centrifuge");
 		// ===== 基础参数 =====
 		builder.comment("基础参数").push("basic");
@@ -208,8 +208,8 @@ public final class CentrifugeConfigSection {
 	 * @return 已注册全部离心机配置项的实例
 	 */
 	public static CentrifugeConfigSection create(
-			ModConfigSpec.Builder builder,
-			ModConfigSpec.Builder capacityBuilder) {
+			ForgeConfigSpec.Builder builder,
+			ForgeConfigSpec.Builder capacityBuilder) {
 		return new CentrifugeConfigSection(builder, capacityBuilder);
 	}
 }

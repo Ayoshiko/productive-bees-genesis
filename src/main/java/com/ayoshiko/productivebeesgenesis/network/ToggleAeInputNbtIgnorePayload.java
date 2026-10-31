@@ -1,10 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -22,20 +19,12 @@ import net.minecraft.resources.ResourceLocation;
 	 */
 public record ToggleAeInputNbtIgnorePayload(
 		BlockPos pos
-) implements CustomPacketPayload {
+)  {
 
-	public static final CustomPacketPayload.Type<ToggleAeInputNbtIgnorePayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "toggle_ae_input_nbt_ignore"));
-
-	public static final StreamCodec<ByteBuf, ToggleAeInputNbtIgnorePayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, ToggleAeInputNbtIgnorePayload::pos,
-					ToggleAeInputNbtIgnorePayload::new
-			);
-
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static ToggleAeInputNbtIgnorePayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new ToggleAeInputNbtIgnorePayload(buf.readBlockPos());
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+    }
 }

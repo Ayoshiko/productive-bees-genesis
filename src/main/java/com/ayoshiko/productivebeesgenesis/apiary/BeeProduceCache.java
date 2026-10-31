@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
+import com.ayoshiko.productivebeesgenesis.util.ChancedOutput;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 

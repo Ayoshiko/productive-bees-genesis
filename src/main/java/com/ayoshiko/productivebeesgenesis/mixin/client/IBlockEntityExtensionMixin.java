@@ -4,8 +4,8 @@ import com.ayoshiko.productivebeesgenesis.client.render.cosmic.MyriadCombModelDa
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import cy.jdkdigital.productivebees.common.block.entity.CombBlockBlockEntity;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.client.model.data.ModelData;
-import net.neoforged.neoforge.common.extensions.IBlockEntityExtension;
+import net.minecraftforge.client.model.data.ModelData;
+import net.minecraftforge.common.extensions.IForgeBlockEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -14,26 +14,27 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /**
 	 * IBlockEntityExtension Mixin — 为蜜脾块方块提供 ModelData
 	 * <br/>
-	 * NeoForge 的 {@code getModelData()} 是 {@link IBlockEntityExtension} 接口的 default 方法，
+	 * NeoForge 的 {@code getModelData()} 是 {@link IForgeBlockEntity} 接口的 default 方法，
 	 * 不在 BlockEntity 类字节码中，因此必须 Mixin 接口本身而非具体子类。
 	 * <p>
 	 * 当目标 BlockEntity 是万象创世类型的 {@link CombBlockBlockEntity} 时，将 combType 传递给 BakedModel，
 	 * 使对应蜜脾块方块可以切换为无尽创世蜜脾块的纹理。
 	 * 其他 BlockEntity 不受影响，继续返回默认的 {@link ModelData#EMPTY}。
 	 */
-@Mixin(IBlockEntityExtension.class)
-public interface IBlockEntityExtensionMixin {
+@Mixin(value = CombBlockBlockEntity.class, remap = false)
+public abstract class IBlockEntityExtensionMixin implements IForgeBlockEntity {
 
 	// remap = false：getModelData() 是 NeoForge IBlockEntityExtension 的 default 方法，非原生 MC 方法，无需 SRG 重映射
-	@Inject(method = "getModelData", at = @At("HEAD"), cancellable = true, remap = false)
-	private void productivebeesgenesis$getModelData(CallbackInfoReturnable<ModelData> cir) {
+	@Override
+	public ModelData getModelData() {
 		if ((Object) this instanceof CombBlockBlockEntity self) {
-			ResourceLocation combType = self.getCombType();
+			ResourceLocation combType = ResourceLocation.tryParse(self.getCombType());
 			if (PBConstants.MYRIADCREATIONS_TYPE.equals(combType)) {
-				cir.setReturnValue(ModelData.builder()
+				return ModelData.builder()
 						.with(MyriadCombModelData.COMB_TYPE, combType)
-						.build());
+						.build();
 			}
 		}
+		return ModelData.EMPTY;
 	}
 }

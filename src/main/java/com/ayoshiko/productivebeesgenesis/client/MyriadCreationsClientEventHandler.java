@@ -4,12 +4,12 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.RenderLivingEvent;
-import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
-import net.neoforged.neoforge.event.tick.LevelTickEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.client.event.RenderLivingEvent;
+import net.minecraftforge.event.entity.EntityJoinLevelEvent;
+import net.minecraftforge.event.TickEvent.LevelTickEvent;
 
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -85,7 +85,8 @@ public final class MyriadCreationsClientEventHandler extends AbstractClientCombE
 	// ========== 事件订阅：委托给单例模板方法 ==========
 
 	@SubscribeEvent
-	public static void onClientTick(LevelTickEvent.Post event) {
+	public static void onClientTick(LevelTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
 		INSTANCE.handleClientTick(event);
 	}
 

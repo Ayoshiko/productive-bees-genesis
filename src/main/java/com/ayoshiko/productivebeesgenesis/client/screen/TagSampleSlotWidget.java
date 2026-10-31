@@ -3,10 +3,10 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.slot.SlotType;
-import mekanism.client.gui.tooltip.TooltipUtils;
-import mekanism.client.recipe_viewer.interfaces.IRecipeViewerGhostTarget.IGhostIngredientConsumer;
-import mekanism.client.recipe_viewer.interfaces.IRecipeViewerGhostTarget.IGhostItemConsumer;
-import mekanism.client.recipe_viewer.interfaces.IRecipeViewerGhostTarget;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.TooltipUtils;
+import mekanism.client.jei.interfaces.IJEIGhostTarget.IGhostIngredientConsumer;
+import mekanism.client.jei.interfaces.IJEIGhostTarget.IGhostItemConsumer;
+import mekanism.client.jei.interfaces.IJEIGhostTarget;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -31,13 +31,13 @@ import java.util.function.Consumer;
  *       {@code InteractionStrategy} 放行物品栏点击，若窗口用 {@code NONE}，
  *       {@code GuiWindow.mouseClicked} 会无条件返回 true 吞掉窗口外全部点击，
  *       玩家根本拿不起背包里的物品（本类只能拿到空光标）——这正是「只能从 JEI 拖」的根因。</li>
- *   <li>JEI/配方查看器拖拽 —— {@link IRecipeViewerGhostTarget}。</li>
+ *   <li>JEI/配方查看器拖拽 —— {@link IJEIGhostTarget}。</li>
  *   <li>空光标点空槽 = 取主手物品 —— 兜底路径：窗口把物品栏遮住时也能取样，
  *       无需先挪窗口，也不依赖任何配方查看器。</li>
  * </ul>
  * 必须重写 {@code mouseClicked}，{@code GuiElement} 不会调用 {@code onClick}。
  */
-final class TagSampleSlotWidget extends GuiElement implements IRecipeViewerGhostTarget {
+final class TagSampleSlotWidget extends GuiElement implements IJEIGhostTarget {
 
 	static final int SIZE = 18;
 	private static final String LANG_PREFIX = "productivebeesgenesis.gui.ae_input_tag_filter.sample.";
@@ -73,25 +73,25 @@ final class TagSampleSlotWidget extends GuiElement implements IRecipeViewerGhost
 	}
 
 	@Override
-	public boolean mouseClicked(double mouseX, double mouseY, int button) {
-		if (!isMouseOver(mouseX, mouseY) || (button != 0 && button != 1)) return false;
+	public mekanism.client.gui.element.GuiElement mouseClickedNested(double mouseX, double mouseY, int button) {
+		if (!isMouseOver(mouseX, mouseY) || (button != 0 && button != 1)) return null;
 		ItemStack carried = gui().getCarriedItem();
 		if (!carried.isEmpty()) {
 			accept(carried);
-			return true;
+			return this;
 		}
 		if (!sample.isEmpty()) {
 			setSample(ItemStack.EMPTY);
 			if (onChanged != null) onChanged.accept(ItemStack.EMPTY);
-			return true;
+			return this;
 		}
 		// 空光标 + 空槽：退回主手物品，保证窗口遮住物品栏时仍可取样
 		ItemStack held = mainHandItem();
 		if (!held.isEmpty()) {
 			accept(held);
-			return true;
+			return this;
 		}
-		return false;
+		return null;
 	}
 
 	private static ItemStack mainHandItem() {
@@ -127,8 +127,8 @@ final class TagSampleSlotWidget extends GuiElement implements IRecipeViewerGhost
 
 		@Nullable
 		@Override
-		public ItemStack supportedTarget(Object ingredient) {
-			return ingredient instanceof ItemStack stack && !stack.isEmpty() ? stack : null;
+		public boolean supportsIngredient(Object ingredient) {
+			return ingredient instanceof ItemStack stack && !stack.isEmpty();
 		}
 
 		@Override

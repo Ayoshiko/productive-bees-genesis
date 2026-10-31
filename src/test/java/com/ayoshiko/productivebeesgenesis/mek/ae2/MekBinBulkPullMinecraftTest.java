@@ -42,16 +42,15 @@ class MekBinBulkPullMinecraftTest {
 		assertEquals(15_626, handler.calls); // 对照：普通 AE2 抽取仍按 64 件逐组循环。
 		for (int i = 0; i < 3; i++) {
 			handler.calls = 0;
-			assertEquals(10_000_000, BulkItemPullScope.extract(key.toStack(1),
-					() -> storage.extract(key, 10_000_000, Actionable.MODULATE, IActionSource.empty())));
+			assertEquals(10_000_000, Ae2InputPuller.extractFromNetwork(storage, key, 10_000_000, IActionSource.empty()));
 			assertEquals(2, handler.calls); // 一次批量取出，AE2 再以零请求结束循环。
 			assertEquals(Integer.MAX_VALUE, bin.getCount());
 		}
-		assertEquals(Integer.MAX_VALUE, BulkItemPullScope.extract(key.toStack(1),
-				() -> storage.extract(key, Integer.MAX_VALUE, Actionable.MODULATE, IActionSource.empty())));
+		assertEquals(Integer.MAX_VALUE, Ae2InputPuller.extractFromNetwork(
+				storage, key, Integer.MAX_VALUE, IActionSource.empty()));
 		assertEquals(Integer.MAX_VALUE, bin.getCount());
-		assertEquals(0, BulkItemPullScope.extract(new ItemStack(Items.DIAMOND),
-				() -> storage.extract(AEItemKey.of(Items.DIAMOND), 1000, Actionable.MODULATE, IActionSource.empty())));
+		assertEquals(0, Ae2InputPuller.extractFromNetwork(storage, AEItemKey.of(Items.DIAMOND),
+				1000, IActionSource.empty()));
 		assertEquals(64, bin.extractItem(1000, Action.EXECUTE, AutomationType.EXTERNAL).getCount());
 	}
 
@@ -64,13 +63,11 @@ class MekBinBulkPullMinecraftTest {
 		var handler = new CountingHandler(bin);
 		var storage = ExternalStorageFacade.of(handler);
 		var key = AEItemKey.of(Items.RAW_IRON);
-		assertEquals(80_000, BulkItemPullScope.extract(key.toStack(1),
-				() -> storage.extract(key, 80_000, Actionable.MODULATE, IActionSource.empty())));
+		assertEquals(80_000, Ae2InputPuller.extractFromNetwork(storage, key, 80_000, IActionSource.empty()));
 		assertEquals(20_000, bin.getCount());
 		assertEquals(1, changes.get());
 		assertEquals(2, handler.calls);
-		assertEquals(20_000, BulkItemPullScope.extract(key.toStack(1),
-				() -> storage.extract(key, 80_000, Actionable.MODULATE, IActionSource.empty())));
+		assertEquals(20_000, Ae2InputPuller.extractFromNetwork(storage, key, 80_000, IActionSource.empty()));
 		assertTrue(bin.isEmpty());
 		assertEquals(2, changes.get());
 	}

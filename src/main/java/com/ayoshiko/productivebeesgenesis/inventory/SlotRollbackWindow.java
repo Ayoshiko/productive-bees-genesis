@@ -80,7 +80,7 @@ public final class SlotRollbackWindow {
 			return 0;
 		}
 		// 只有与本槽刚被取走的物品完全同类型才认；数量由 credit 另行约束
-		if (!ItemStack.isSameItemSameComponents(sample, stack)) return 0;
+		if (!ItemStack.isSameItemSameTags(sample, stack)) return 0;
 		return remaining;
 	}
 

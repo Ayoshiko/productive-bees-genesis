@@ -5,11 +5,11 @@ import com.ayoshiko.productivebeesgenesis.mek.GenesisMachineTicker;
 import com.ayoshiko.productivebeesgenesis.init.ModBlockEntities;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import com.jerry.mekanism_extras.common.tier.ExtraFactoryTier;
 import mekanism.common.capabilities.Capabilities;
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
 import mekanism.common.tile.base.TileEntityMekanism;
-import net.neoforged.neoforge.registries.DeferredBlock;
+import net.minecraftforge.registries.RegistryObject;
 
 /**
 	 * Mekanism Extras (ME) 方块实体注册隔离类
@@ -23,8 +23,8 @@ import net.neoforged.neoforge.registries.DeferredBlock;
 	 * 注册结果填充到 {@link MekCentrifugeMEBlockType#ME_FACTORY_TILES} 和
 	 * {@link MekApiaryMEBlockType#ME_APIARY_FACTORY_TILES}，供 BlockType 的懒加载 Supplier 使用。
 	 * <p>
-	 * 适配说明：{@link ModBlocks#getMEFactoryBlock(Object)} 返回通配类型 {@code DeferredBlock<?>}，
-	 * 本类调用 mekBuilder 时由 Mekanism API 接受 {@code DeferredHolder<Block, ?>}，无需强制类型转换。
+	 * 适配说明：{@link ModBlocks#getMEFactoryBlock(Object)} 返回通配类型 {@code RegistryObject<?>}，
+	 * 本类调用 mekBuilder 时由 Mekanism API 接受 {@code RegistryObject<?>}，无需强制类型转换。
 	 */
 public final class MEBlockEntityRegistration {
 
@@ -44,17 +44,17 @@ public final class MEBlockEntityRegistration {
 			return;
 		}
 		for (ExtraFactoryTier tier : ExtraFactoryTier.values()) {
-			DeferredBlock<?> deferredBlock = ModBlocks.getMEFactoryBlock(tier);
+			RegistryObject<?> deferredBlock = ModBlocks.getMEFactoryBlock(tier);
 			if (deferredBlock == null) {
 				ProductiveBeesGenesis.LOGGER.warn("ME工厂方块未注册，跳过TileEntity注册: {}", tier.name());
 				continue;
 			}
 			TileEntityTypeRegistryObject<TileEntityExtraMekCentrifugeFactory> tileType =
-					ModBlockEntities.BLOCK_ENTITIES.mekBuilder(deferredBlock,
-							(pos, state) -> new TileEntityExtraMekCentrifugeFactory(deferredBlock, pos, state))
+					ModBlockEntities.BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(deferredBlock).get(),
+							(pos, state) -> new TileEntityExtraMekCentrifugeFactory(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(deferredBlock).get(), pos, state))
 							.serverTicker(GenesisMachineTicker::tickServer)
 							.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-							.withSimple(Capabilities.CONFIG_CARD)
+
 							.build();
 			MekCentrifugeMEBlockType.ME_FACTORY_TILES.put(tier, tileType);
 		}
@@ -74,17 +74,17 @@ public final class MEBlockEntityRegistration {
 			return;
 		}
 		for (ExtraFactoryTier tier : ExtraFactoryTier.values()) {
-			DeferredBlock<?> deferredBlock = ModBlocks.getMEApiaryFactoryBlock(tier);
+			RegistryObject<?> deferredBlock = ModBlocks.getMEApiaryFactoryBlock(tier);
 			if (deferredBlock == null) {
 				ProductiveBeesGenesis.LOGGER.warn("ME 蜂箱工厂方块未注册，跳过 TileEntity 注册: {}", tier.name());
 				continue;
 			}
 			TileEntityTypeRegistryObject<TileEntityExtraMekApiaryFactory> tileType =
-					ModBlockEntities.BLOCK_ENTITIES.mekBuilder(deferredBlock,
-							(pos, state) -> new TileEntityExtraMekApiaryFactory(deferredBlock, pos, state))
+					ModBlockEntities.BLOCK_ENTITIES.builder(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(deferredBlock).get(),
+							(pos, state) -> new TileEntityExtraMekApiaryFactory(com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlockType.wrapAsBlockRegistryObject(deferredBlock).get(), pos, state))
 							.serverTicker(GenesisMachineTicker::tickServer)
 							.clientTicker((level, pos, state, tile) -> TileEntityMekanism.tickClient(level, pos, state, tile))
-							.withSimple(Capabilities.CONFIG_CARD)
+
 							.build();
 			MekApiaryMEBlockType.ME_APIARY_FACTORY_TILES.put(tier, tileType);
 		}

@@ -76,7 +76,7 @@ final class ApiaryContainerTrackers {
 		// cannot observe changes made to a hidden page, which otherwise leaves stale client stacks.
 		for (BasicInventorySlot outputSlot : tile.getOutputSlots()) {
 			container.track(SyncableItemStack.create(
-					outputSlot::getStack, outputSlot::setStackUnchecked));
+					outputSlot::getStack, stack -> ((com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor) outputSlot).productivebeesgenesis$setStackUnchecked(stack)));
 		}
 	}
 }

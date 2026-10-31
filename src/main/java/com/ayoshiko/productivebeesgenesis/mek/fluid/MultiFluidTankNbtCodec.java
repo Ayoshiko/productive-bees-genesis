@@ -9,7 +9,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 
 /**
 	 * 多流体槽 NBT 序列化/反序列化 Codec
@@ -52,7 +52,7 @@ public final class MultiFluidTankNbtCodec {
 			FluidStack fluid = tank.getFluid();
 			if (!fluid.isEmpty()) {
 				CompoundTag entry = new CompoundTag();
-				entry.put("fluidStack", fluid.save(provider));
+				entry.put("fluidStack", fluid.writeToNBT(new CompoundTag()));
 				list.add(entry);
 			}
 		}
@@ -94,7 +94,7 @@ public final class MultiFluidTankNbtCodec {
 		ListTag list = root.getList("tanks", Tag.TAG_COMPOUND);
 		for (int i = 0; i < list.size(); i++) {
 			CompoundTag entry = list.getCompound(i);
-			FluidStack stack = FluidStack.parseOptional(provider, entry.getCompound("fluidStack"));
+			FluidStack stack = FluidStack.loadFluidStackFromNBT(entry.getCompound("fluidStack"));
 			if (stack.isEmpty()) {
 				continue; // 解析失败跳过,不影响其他槽位
 			}

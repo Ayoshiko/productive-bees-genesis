@@ -212,7 +212,7 @@ public class ApiarySlotManager {
 	IInventorySlotHolder buildInventory(IContentsListener listener,
 										IContentsListener recipeCacheListener,
 										IContentsListener recipeCacheUnpauseListener) {
-		InventorySlotHelper builder = InventorySlotHelper.forSideWithConfig(tile);
+		InventorySlotHelper builder = InventorySlotHelper.forSideWithConfig(tile::getDirection, tile::getConfig);
 
 		// 通过 LayoutHelper 计算槽位坐标（支持初始版和工厂版）
 		int imageWidth = ApiaryGuiLayoutHelper.getImageWidth(beeCols, outputCols);
@@ -298,7 +298,7 @@ public class ApiarySlotManager {
 	IFluidTankHolder buildFluidTanks(IContentsListener listener,
 			IContentsListener recipeCacheListener,
 			IContentsListener recipeCacheUnpauseListener) {
-		FluidTankHelper helper = FluidTankHelper.forSideWithConfig(tile);
+		FluidTankHelper helper = FluidTankHelper.forSideWithConfig(tile::getDirection, tile::getConfig);
 		// 验证器：仅接受 PB 蜂蜜流体，拒绝其他流体自动化注入
 		fluidTank = BasicFluidTank.create(fluidTankCapacity,
 				stack -> stack.getFluid() == ModFluids.HONEY.get(),

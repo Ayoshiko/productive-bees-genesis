@@ -1,0 +1,33 @@
+{
+  "conditions": [
+    {
+      "type": "forge:mod_loaded",
+      "modid": "mekanism"
+    }
+  ],
+  "type": "productivebeesgenesis:apiary_shaped",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "mekanism:alloys/reinforced"
+    },
+    "C": {
+      "tag": "forge:circuits/elite"
+    },
+    "I": {
+      "tag": "forge:ingots/gold"
+    },
+    "P": {
+      "item": "productivebeesgenesis:advanced_mek_apiary_factory"
+    }
+  },
+  "pattern": [
+    "ACA",
+    "IPI",
+    "ACA"
+  ],
+  "result": {
+    "count": 1,
+    "item": "productivebeesgenesis:elite_mek_apiary_factory"
+  }
+}

@@ -129,7 +129,7 @@ class CentrifugeInputReturnCompatibilityTest {
 		assertFalse(ae2.contains("remainingLimit"));
 		assertFalse(ae2.contains("maxItems"));
 		assertTrue(ae2.contains("int requested = Math.max(0, current.getCount())"));
-		int aeSimulateInsert = ae2.indexOf("holder, storage, key, requested, Actionable.SIMULATE");
+		int aeSimulateInsert = ae2.indexOf("storage.insert(key, requested, Actionable.SIMULATE");
 		int aeSimulateExtract = ae2.indexOf("slot.shrinkStack(requestedExtract, Action.SIMULATE)");
 		assertTrue(aeSimulateInsert >= 0 && aeSimulateExtract > aeSimulateInsert,
 				"AE2 路径必须先模拟网络接收量，再探测源槽可提取量");
@@ -150,7 +150,7 @@ class CentrifugeInputReturnCompatibilityTest {
 		String puller = Files.readString(Path.of(
 				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java"));
 		int autoReturn = puller.indexOf("Ae2CentrifugeInputReturnService.returnUnprocessableInputs");
-		int pullSwitch = puller.indexOf("if (!inputPullEnabled || holder.getPendingItemBuffer().isBlocked()) return;");
+		int pullSwitch = puller.indexOf("if (!inputPullEnabled) return;");
 		assertTrue(autoReturn >= 0 && pullSwitch > autoReturn,
 				"熔炼兼容关闭后的输入清理必须先于新输入拉取开关");
 		assertTrue(puller.contains("holder.getPendingItemBuffer().hasRetryableItems(currentTick)"));

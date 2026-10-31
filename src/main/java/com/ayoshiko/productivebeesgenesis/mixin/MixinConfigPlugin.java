@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mixin;
 
-import com.ayoshiko.productivebeesgenesis.resource.PbResourceMixinContract;
-import net.neoforged.fml.loading.FMLLoader;
+import net.minecraftforge.fml.loading.FMLLoader;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
@@ -51,8 +50,6 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	private static final String EME_MOD_ID = "emextras";
 	/** AE2(AppliedEnergistics2)的 modId */
 	private static final String AE2_MOD_ID = "ae2";
-	/** Mek Energistics 的 modId */
-	private static final String MEKENERGISTICS_MOD_ID = "mekenergistics";
 	/** Building Gadgets 2 的 modId */
 	private static final String BUILDING_GADGETS_MOD_ID = "buildinggadgets2";
 	/** Just Enough Items 的 modId（JEI 拖拽预览层级标记） */
@@ -64,7 +61,7 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	/**
 	 * 引用 ME 类的 Mixin 简单类名集合（@Mixin 目标或类体 import 了 ME 的类）
 	 * <br/>
-	 * ExtraUpgradeStackMixin 引用 {@link com.jerry.mekextras.api.ExtraUpgrade}（ME API 类），
+	 * ExtraUpgradeStackMixin 引用 {@link com.jerry.mekanism_extras.api.ExtraUpgrade}（ME API 类），
 	 * 仅在 ME 加载时应用。其 @Mixin 目标是 Mekanism 的 TileComponentUpgrade（始终可加载），
 	 * 但类体中的 ExtraUpgrade.STACK 比较要求 ME 已加载，否则 NoClassDefFoundError。
 	 * <p>
@@ -85,11 +82,6 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"GuiUpgradeWindowMixin",
 			"ExtraFactoryInputInventorySlotMixin",
 			"ExtraFactoryOutputInventorySlotMixin"
-	);
-
-	/** 资源事务要求整组入口齐全；版本与字节码预检通过后使用严格注入。 */
-	private static final Set<String> JDTE_RESOURCE_MIXINS = Set.of(
-		"JdteBioFactoryResourceMixin"
 	);
 
 	/** 仅依赖 JDTE 的合并加速 Mixin。 */
@@ -159,27 +151,14 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	private static final Set<String> AE2_CREATE_MIXINS = Set.of("CreateBottomlessBulkPullMixin");
 	private static final Set<String> AE2_INFINITY_CELL_MIXINS = Set.of("InfinityCellKeySupplierMixin");
 
-	/** 引用 mekenergistics 类的 Mixin 简单类名集合（目标类仅当该 mod 加载时存在） */
-	private static final Set<String> MEKENERGISTICS_MIXINS = Set.of(
-			"MekEnergisticsInstallerGuardMixin",
-			"MekEnergisticsTargetResolverGuardMixin"
-	);
-
-	/** 新样板入口引用 AE2 API，独立门控以保留既有安装器兼容条件。 */
-	private static final Set<String> MEKENERGISTICS_AE2_MIXINS = Set.of(
-			"MekEnergisticsPatternGuardMixin"
-	);
-
 	/** 引用 buildinggadgets2 类的 Mixin 简单类名集合（目标类仅当该 mod 加载时存在） */
 	private static final Set<String> BUILDING_GADGETS_MIXINS = Set.of(
 			"RenderBlockBeLoadFixMixin"
 	);
 
-	/** JEI 拖拽及 PB 配方布局修正，仅在 JEI 存在时加载。 */
+	/** 仅引用 JEI GhostIngredientDrag 的客户端 Mixin。 */
 	private static final Set<String> JEI_MIXINS = Set.of(
-			"JeiGhostIngredientDragMixin",
-			"PbContainerFlowerJeiMixin",
-			"PbCentrifugeJeiLayoutMixin"
+			"JeiGhostIngredientDragMixin"
 	);
 
 	/**
@@ -198,7 +177,6 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		static final boolean CREATE_LOADED = isModLoaded("create");
 		static final boolean ME_INFINITY_CELL_LOADED = isModLoaded("meinfinitycell");
 		/** Mek Energistics 是否加载（Mixin 阶段检测，仅计算一次） */
-		static final boolean MEKENERGISTICS_LOADED = isModLoaded(MEKENERGISTICS_MOD_ID);
 		/** Building Gadgets 2 是否加载（Mixin 阶段检测，仅计算一次） */
 		static final boolean BUILDING_GADGETS_LOADED = isModLoaded(BUILDING_GADGETS_MOD_ID);
 		/** JEI 是否加载（Mixin 阶段检测，仅计算一次） */
@@ -309,18 +287,6 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
 		String simpleName = simpleClassName(mixinClassName);
-		if (simpleName.equals("DesignerGeckoBeeModelMixin")) {
-			return isModLoaded("geckolib");
-		}
-		if (simpleName.equals("MyriadGuideHotkeyMixin")) return isModLoaded("guideme");
-		if (simpleName.equals("PbResourceProductionMixin") || simpleName.equals("PbResourceMixedOutputMixin")) {
-			return PbResourceMixinContract.supported();
-		}
-		if (JDTE_RESOURCE_MIXINS.contains(simpleName)) {
-			return Holder.JDTE_LOADED && FMLLoader.getLoadingModList().getMods().stream()
-					.anyMatch(mod -> mod.getModId().equals("jdte") && mod.getVersion().toString().equals("0.6.1.0"))
-					&& com.ayoshiko.productivebeesgenesis.resource.JdteResourceMixinContract.supported();
-		}
 		if (AE2_CREATE_MIXINS.contains(simpleName)) {
 			return Holder.AE2_LOADED && Holder.CREATE_LOADED;
 		}
@@ -350,12 +316,6 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		// AE2 + EME Mixin — 目标类继承 EME 基类，需两者同时加载
 		if (AE2_EME_MIXINS.contains(simpleName)) {
 			return Holder.AE2_LOADED && Holder.EME_LOADED;
-		}
-		if (MEKENERGISTICS_AE2_MIXINS.contains(simpleName)) {
-			return Holder.MEKENERGISTICS_LOADED && Holder.AE2_LOADED;
-		}
-		if (MEKENERGISTICS_MIXINS.contains(simpleName)) {
-			return Holder.MEKENERGISTICS_LOADED;
 		}
 		if (BUILDING_GADGETS_MIXINS.contains(simpleName)) {
 			return Holder.BUILDING_GADGETS_LOADED;
@@ -387,6 +347,6 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 
 	@Override
 	public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-		// MixinExtras 的晚期变换在此回调之后执行；完整性由注入数量要求与加载后行为测试确认。
+		// 无后置处理
 	}
 }

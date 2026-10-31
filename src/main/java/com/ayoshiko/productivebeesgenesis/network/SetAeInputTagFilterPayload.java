@@ -1,11 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -27,24 +23,14 @@ public record SetAeInputTagFilterPayload(
 		BlockPos pos,
 		String whitelist,
 		String blacklist
-) implements CustomPacketPayload {
+)  {
 
-	public static final CustomPacketPayload.Type<SetAeInputTagFilterPayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "set_ae_input_tag_filter"));
-
-	public static final StreamCodec<ByteBuf, SetAeInputTagFilterPayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, SetAeInputTagFilterPayload::pos,
-					ByteBufCodecs.stringUtf8(NetworkSecurityConstants.MAX_TAG_EXPRESSION_LENGTH),
-					SetAeInputTagFilterPayload::whitelist,
-					ByteBufCodecs.stringUtf8(NetworkSecurityConstants.MAX_TAG_EXPRESSION_LENGTH),
-					SetAeInputTagFilterPayload::blacklist,
-					SetAeInputTagFilterPayload::new
-			);
-
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static SetAeInputTagFilterPayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new SetAeInputTagFilterPayload(buf.readBlockPos(), buf.readUtf(512), buf.readUtf(512));
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+        buf.writeUtf(whitelist, 512);
+        buf.writeUtf(blacklist, 512);
+    }
 }

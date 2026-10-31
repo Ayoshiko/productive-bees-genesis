@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.item;
 
-import cy.jdkdigital.productivelib.common.item.UpgradeItem;
+import cy.jdkdigital.productivebees.common.item.UpgradeItem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
@@ -22,7 +22,7 @@ public final class GeneSamplerPluginItem extends UpgradeItem {
 	}
 
 	@Override
-	public void appendHoverText(ItemStack stack, Item.TooltipContext context,
+	public void appendHoverText(ItemStack stack, net.minecraft.world.level.Level context,
 			List<Component> tooltip, TooltipFlag flag) {
 		tooltip.add(Component.translatable(summaryKey).withStyle(ChatFormatting.GRAY));
 		tooltip.add(Component.translatable(limitKey).withStyle(ChatFormatting.DARK_GRAY));

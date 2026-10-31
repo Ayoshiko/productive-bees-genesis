@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.mek.BatchProbabilitySampler;
 import com.ayoshiko.productivebeesgenesis.mek.SampleUniformSum;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
+import com.ayoshiko.productivebeesgenesis.util.ChancedOutput;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;

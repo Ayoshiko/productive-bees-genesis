@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.compat.kubejs;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import dev.latvian.mods.kubejs.event.KubeEvent;
+import dev.latvian.mods.kubejs.event.EventJS;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
@@ -63,15 +63,22 @@ import java.util.Map;
 	 * })
 	 * }</pre>
 	 */
-public class MyriadBeeRegisterEventJS implements KubeEvent {
+public class MyriadBeeRegisterEventJS extends EventJS {
 
 	private final Map<ResourceLocation, JsonElement> recipeJsons;
+	private final java.util.Set<ResourceLocation> removed;
 
 	/**
 	 * @param recipeJsons 原版配方 JSON 映射（来自 beforeRecipeLoading 钩子）
 	 */
 	public MyriadBeeRegisterEventJS(Map<ResourceLocation, JsonElement> recipeJsons) {
+		this(recipeJsons, new java.util.HashSet<>());
+	}
+
+	public MyriadBeeRegisterEventJS(Map<ResourceLocation, JsonElement> recipeJsons,
+			java.util.Set<ResourceLocation> removed) {
 		this.recipeJsons = recipeJsons;
+		this.removed = removed;
 	}
 
 	// ==================== 繁殖配方 ====================
@@ -230,11 +237,7 @@ public class MyriadBeeRegisterEventJS implements KubeEvent {
 
 		// ingredient 使用 PB 的 component 类型，绑定蜜蜂类型到 configurable_honeycomb
 		JsonObject ingredient = new JsonObject();
-		ingredient.addProperty("type", "productivebees:component");
-		JsonObject components = new JsonObject();
-		components.addProperty("productivebees:bee_type", input);
-		ingredient.add("components", components);
-		ingredient.addProperty("items", "productivebees:configurable_honeycomb");
+		ingredient = MyriadBeeJsonSerializer.beeTypeIngredient("productivebees:configurable_honeycomb", input);
 		json.add("ingredient", ingredient);
 
 		// outputs 数组，每个产出根据 # 前缀决定 tag 或 item
@@ -246,9 +249,13 @@ public class MyriadBeeRegisterEventJS implements KubeEvent {
 
 		// 流体产出
 		JsonObject fluid = new JsonObject();
-		fluid.addProperty("amount", fluidAmount);
 		fluid.addProperty("fluid", fluidType);
-		json.add("fluid", fluid);
+		if (fluidAmount > 0) {
+			JsonObject fluidResult = new JsonObject();
+			fluidResult.add("fluid", fluid);
+			fluidResult.addProperty("amount", fluidAmount);
+			outputsArr.add(fluidResult);
+		}
 
 		json.addProperty("processingTime", processingTime);
 		putRecipe(id, json);
@@ -322,7 +329,7 @@ public class MyriadBeeRegisterEventJS implements KubeEvent {
 		// result 对象
 		JsonObject resultObj = new JsonObject();
 		resultObj.addProperty("count", 1);
-		resultObj.addProperty("id", result);
+		resultObj.addProperty("item", result);
 		json.add("result", resultObj);
 
 		putRecipe(id, json);
@@ -339,7 +346,9 @@ public class MyriadBeeRegisterEventJS implements KubeEvent {
 		if (id == null || id.isBlank()) {
 			throw new IllegalArgumentException("配方 ID 不能为空");
 		}
-		recipeJsons.remove(ResourceLocation.parse(id));
+		ResourceLocation key = new ResourceLocation(id);
+		recipeJsons.remove(key);
+		removed.add(key);
 	}
 
 	// ==================== 内部工具方法 ====================
@@ -352,7 +361,9 @@ public class MyriadBeeRegisterEventJS implements KubeEvent {
 		if (id == null || id.isBlank()) {
 			throw new IllegalArgumentException("配方 ID 不能为空");
 		}
-		recipeJsons.put(ResourceLocation.parse(id), json);
+		ResourceLocation key = new ResourceLocation(id);
+		removed.remove(key);
+		recipeJsons.put(key, json);
 	}
 
 	/**

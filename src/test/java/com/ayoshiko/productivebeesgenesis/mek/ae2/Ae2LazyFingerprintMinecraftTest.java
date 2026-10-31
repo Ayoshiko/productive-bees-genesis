@@ -54,7 +54,7 @@ class Ae2LazyFingerprintMinecraftTest {
 			verify(cache).get(key, registries);
 			return 7L;
 		});
-		assertEquals(7, Ae2OutputCommitter.pushBatchKey(key, 20, List.of(entry), network, source, ledger, new com.ayoshiko.productivebeesgenesis.logistics.OutputCustody(() -> {})));
+		assertEquals(7, Ae2OutputCommitter.pushBatchKey(key, 20, List.of(entry), network, source, ledger));
 		assertEquals(13, slot.getCount());
 		assertTrue(ledger.snapshot().isEmpty());
 		assertEquals("exact-iron-fingerprint", entry.fingerprint());

@@ -1,11 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.Optional;
@@ -38,16 +34,12 @@ public record SetAeInputFilterEntryPayload(
 		boolean isBlock,
 		int slotIndex,
 		OperationType operation
-) implements CustomPacketPayload {
+)  {
 
 	public SetAeInputFilterEntryPayload(BlockPos pos, Optional<ResourceLocation> beeType, boolean isBlock,
 			int slotIndex, OperationType operation) {
 		this(pos, beeType, Optional.empty(), isBlock, slotIndex, operation);
 	}
-
-	public static final CustomPacketPayload.Type<SetAeInputFilterEntryPayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "set_ae_input_filter_entry"));
 
 	/**
 	 * beeType 编解码器 — 显式限制 256 字节，防止恶意客户端发送超长字符串占用内存。
@@ -57,31 +49,6 @@ public record SetAeInputFilterEntryPayload(
 	 * 由 namespace:path 组成，256 字节足够覆盖合法值），再通过 map 在 String 与
 	 * ResourceLocation 间转换。
 	 */
-	private static final StreamCodec<ByteBuf, ResourceLocation> BEE_TYPE_CODEC =
-			ByteBufCodecs.stringUtf8(256).map(
-					// tryParse 而非 parse：非法字符串返回 null（由 Optional 包装为空），
-					// 避免解码阶段抛 ResourceLocationException 导致网络层断开连接
-					str -> ResourceLocation.tryParse(str),
-					rl -> rl.toString()
-			);
-
-	public static final StreamCodec<ByteBuf, SetAeInputFilterEntryPayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, SetAeInputFilterEntryPayload::pos,
-					ByteBufCodecs.optional(BEE_TYPE_CODEC), SetAeInputFilterEntryPayload::beeType,
-					ByteBufCodecs.optional(ByteBufCodecs.stringUtf8(NetworkSecurityConstants.MAX_AE_ITEM_FINGERPRINT_LENGTH)),
-					SetAeInputFilterEntryPayload::directKey,
-					ByteBufCodecs.BOOL, SetAeInputFilterEntryPayload::isBlock,
-					ByteBufCodecs.INT, SetAeInputFilterEntryPayload::slotIndex,
-					ByteBufCodecs.idMapper(OperationType::fromOrdinal, OperationType::ordinal),
-					SetAeInputFilterEntryPayload::operation,
-					SetAeInputFilterEntryPayload::new
-			);
-
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
 
 	/** 操作类型枚举 */
 	public enum OperationType {
@@ -111,4 +78,16 @@ public record SetAeInputFilterEntryPayload(
 			return ordinal >= 0 && ordinal < VALUES.length ? VALUES[ordinal] : ADD;
 		}
 	}
+
+    public static SetAeInputFilterEntryPayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new SetAeInputFilterEntryPayload(buf.readBlockPos(), buf.readBoolean() ? java.util.Optional.ofNullable(ResourceLocation.tryParse(buf.readUtf(256))) : java.util.Optional.empty(), buf.readBoolean() ? java.util.Optional.ofNullable(buf.readUtf(4096)) : java.util.Optional.empty(), buf.readBoolean(), buf.readVarInt(), buf.readEnum(OperationType.class));
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+        buf.writeBoolean(beeType.isPresent()); beeType.ifPresent(v -> { buf.writeUtf(v.toString(), 256); });
+        buf.writeBoolean(directKey.isPresent()); directKey.ifPresent(v -> { buf.writeUtf(v, 4096); });
+        buf.writeBoolean(isBlock);
+        buf.writeVarInt(slotIndex);
+        buf.writeEnum(operation);
+    }
 }

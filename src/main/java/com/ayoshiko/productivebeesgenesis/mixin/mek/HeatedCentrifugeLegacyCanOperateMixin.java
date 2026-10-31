@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 	 * PB 13.14.0 将 {@code canOperate()} 提升为从 PoweredCentrifugeBlockEntity 继承，
 	 * 该 Mixin 由配置插件仅在目标类实际声明旧方法时应用。
 	 */
-@Mixin(HeatedCentrifugeBlockEntity.class)
+@Mixin(value = HeatedCentrifugeBlockEntity.class, remap = false)
 public abstract class HeatedCentrifugeLegacyCanOperateMixin {
 
 	/** 旧版热能离心机的输出空间检查。 */

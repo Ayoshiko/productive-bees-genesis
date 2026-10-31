@@ -15,9 +15,8 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
@@ -50,13 +49,13 @@ public class PbRecipeProcessor {
 
 	/** PB离心配方缓存 — 每进程独立 */
 	@Nullable
-	private final RecipeHolder<CentrifugeRecipe>[] cachedPbRecipes;
+	private final CentrifugeRecipe[] cachedPbRecipes;
 
 	/** 多流体预留阶段的同 tick 输入快照；只用于复用已完成的配方查找。 */
 	private final ItemStack[] reservedPbInputs;
 	/** 多流体预留阶段的配方结果，null 表示该输入已确认没有 PB 配方。 */
 	@Nullable
-	private final RecipeHolder<CentrifugeRecipe>[] reservedPbRecipes;
+	private final CentrifugeRecipe[] reservedPbRecipes;
 	/** 多流体预留阶段复用的唯一流体类型缓冲，避免同流体按进程重复查映射。 */
 	private final FluidStack[] reservedFluidTypes;
 
@@ -66,8 +65,6 @@ public class PbRecipeProcessor {
 	/** 输出聚合器数组（每进程独立，批量插入减少 listener 触发次数） */
 	private final PbRecipeCompleter[] recipeCompleters;
 	private final boolean[] emptyFactoryProcesses;
-	/** 无法可靠定位到进程的已付产物保留整个外层原文，不能让后续条目覆盖它。 */
-	private Tag invalidCommittedPending;
 
 	/** 万象创世处理器（持有共享数组引用） */
 	private final MyriadCreationsHandler myriadHandler;
@@ -134,9 +131,9 @@ public class PbRecipeProcessor {
 		this.emptyFactoryProcesses = new boolean[processes];
 		this.pbProcessingTime = new int[processes];
 		this.smeltingCache = new SmeltingRecipeCache(processes);
-		this.cachedPbRecipes = new RecipeHolder[processes];
+		this.cachedPbRecipes = new CentrifugeRecipe[processes];
 		this.reservedPbInputs = new ItemStack[processes];
-		this.reservedPbRecipes = new RecipeHolder[processes];
+		this.reservedPbRecipes = new CentrifugeRecipe[processes];
 		this.reservedFluidTypes = new FluidStack[processes];
 		this.energyCache = new PbRecipeEnergyCache(context);
 		// 子组件：查找器自拥有缓存；输出聚合器自拥有 pending 缓冲；
@@ -194,7 +191,7 @@ public class PbRecipeProcessor {
 	/** 刷新能量和操作数缓存（入口调用一次，替代原 tryProcessPbRecipe 内的每次刷新；升级变更下次入口自动失效） */
 	public void refreshEnergyAndOpsCache(PbRecipeContext context) {
 		cachedEnergyPerTick = MekExtrasUpgradeSemantics.energyPerTick(
-				context.hasCreativeUpgrade(), context.energyContainer().getEnergyPerTick());
+				context.hasCreativeUpgrade(), com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(context.energyContainer().getEnergyPerTick()));
 		cachedOperationsPerTick = context.operationsPerTick();
 	}
 
@@ -269,7 +266,7 @@ public class PbRecipeProcessor {
 
 	/** 读取已验证命中的本 tick PB 配方结果；调用方应先检查 {@link #hasReservedPbRecipe}。 */
 	@Nullable
-	RecipeHolder<CentrifugeRecipe> getReservedPbRecipe(int processIndex) {
+	CentrifugeRecipe getReservedPbRecipe(int processIndex) {
 		return processIndex < 0 || processIndex >= reservedPbRecipes.length
 				? null : reservedPbRecipes[processIndex];
 	}
@@ -282,17 +279,8 @@ public class PbRecipeProcessor {
 		reservedPbRecipeCacheVersion = Long.MIN_VALUE;
 	}
 
-	/** 扩展资源与已付费工作独立于 PB 物品配方；不伪造一个空产物配方。 */
-	public boolean acceptsResourceInput(ItemStack input) { return MekResourceCentrifuge.accepts(context, input); }
-	public boolean allowsNewResourceInput(ItemStack input) {
-		return context instanceof net.minecraft.world.level.block.entity.BlockEntity host
-				&& com.ayoshiko.productivebeesgenesis.resource.ResourceInputAdmission.allows(host, input);
-	}
-	public boolean hasResourceWork(int lane) { return invalidCommittedPending != null || MekResourceCentrifuge.hasWork(context, lane); }
-
 	/** 检查指定进程的输入是否有SMELTING配方（委托 SmeltingRecipeCache，带缓存优化） */
 	public boolean hasSmeltingRecipe(int process, ItemStack input) {
-		if (acceptsResourceInput(input) || hasResourceWork(process)) return false;
 		checkRecipeVersion();
 		return smeltingCache.hasSmeltingRecipe(process, input, context::containsSmeltingInput);
 	}
@@ -310,12 +298,12 @@ public class PbRecipeProcessor {
 	}
 
 	/** 尝试PB离心配方处理（单进程，接受外部预查找的 PB 配方） */
-	public boolean tryProcessPbRecipe(int processIndex, RecipeHolder<CentrifugeRecipe> preFoundRecipe) {
+	public boolean tryProcessPbRecipe(int processIndex, CentrifugeRecipe preFoundRecipe) {
 		return tryProcessPbRecipe(processIndex, preFoundRecipe, Long.MAX_VALUE);
 	}
 
 	/** Processes one lane without allowing it to consume another lane's reserved energy. */
-	public boolean tryProcessPbRecipe(int processIndex, RecipeHolder<CentrifugeRecipe> preFoundRecipe,
+	public boolean tryProcessPbRecipe(int processIndex, CentrifugeRecipe preFoundRecipe,
 			long energyBudget) {
 		try {
 			return tryProcessPbRecipeInternal(processIndex, preFoundRecipe, energyBudget);
@@ -331,17 +319,16 @@ public class PbRecipeProcessor {
 		}
 	}
 
-	private boolean tryProcessPbRecipeInternal(int processIndex, RecipeHolder<CentrifugeRecipe> preFoundRecipe,
+	private boolean tryProcessPbRecipeInternal(int processIndex, CentrifugeRecipe preFoundRecipe,
 			long energyBudget) {
 		try {
 			Level level = context.level();
 			if (level == null || level.isClientSide) return false;
-			if (!context.canFunction() || context.hasUnresolvedInput() || invalidCommittedPending != null) return false;
+			if (!context.canFunction()) return false;
 
 			// 配方重载检测：版本号变更时清空 SMELTING 和 PB 配方缓存
 			checkRecipeVersion();
 			PbRecipeCompleter completer = recipeCompleters[processIndex];
-			if (MekResourceCentrifuge.suspended(context, processIndex)) return false;
 			if (completer.hasCommittedPendingOutputs()
 					&& !completer.flushPendingPbOutputs(processIndex)) {
 				pbProcessing[processIndex] = false;
@@ -350,7 +337,7 @@ public class PbRecipeProcessor {
 
 			// 能量/操作数/流体槽满载缓存由入口统一刷新（Task 1.3 CREATIVE 兜底 + Task 4 暂停语义）
 			long currentGameTime = level.getGameTime();
-			long availableEnergy = Math.min(context.energyContainer().getEnergy(), Math.max(0L, energyBudget));
+			long availableEnergy = Math.min(com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(context.energyContainer().getEnergy()), Math.max(0L, energyBudget));
 
 			ItemStack input = context.inputSlot(processIndex).getStack();
 			if (input.isEmpty()) {
@@ -362,18 +349,6 @@ public class PbRecipeProcessor {
 
 		int virtualTicks = Math.max(1, tickMultiplier);
 		tickMultiplier = 1;
-
-		var resourceResult = MekResourceCentrifuge.tick(context, processIndex, virtualTicks, energyBudget,
-				(paid, required, working) -> {
-					pbOperatingTicks[processIndex] = paid;
-					pbProcessingTime[processIndex] = required;
-				}, completer, recipeFinder);
-		if (resourceResult != com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.Result.UNMANAGED) {
-			boolean working = resourceResult == com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.Result.WORKING;
-			pbProcessing[processIndex] = working;
-			context.setPbActiveState(working, processIndex);
-			return working;
-		}
 
 		// 万象创世蜜脾/蜜脾块 — 委托给万象处理器（走特殊路径，不走PB CentrifugeRecipe）
 		if (MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
@@ -389,7 +364,7 @@ public class PbRecipeProcessor {
 			// SMELTING配方检查已在调用方完成（缓存优化），此处直接查找PB配方
 		// 优先使用调用方预查找的配方（基础离心机 MekCentrifugeTickHandler 已查找过），
 		// 避免重复查找并减少 inputRecipeCache 单条目缓存的竞争压力
-		RecipeHolder<CentrifugeRecipe> pbRecipe = preFoundRecipe != null ? preFoundRecipe : recipeFinder.findPbRecipe(input);
+		CentrifugeRecipe pbRecipe = preFoundRecipe != null ? preFoundRecipe : recipeFinder.findPbRecipe(input);
 		if (pbRecipe == null) {
 			clearPbState(processIndex);
 			context.setPbActiveState(false, processIndex);
@@ -408,7 +383,7 @@ public class PbRecipeProcessor {
 				}
 			}
 
-			CentrifugeRecipe recipeValue = pbRecipe.value();
+			CentrifugeRecipe recipeValue = pbRecipe;
 			// 计算并存储PB配方处理时间（同步到客户端用于进度条显示）
 			int processingTime = energyCache.getPbProcessingTime(recipeValue);
 			pbProcessingTime[processIndex] = processingTime;
@@ -424,14 +399,17 @@ public class PbRecipeProcessor {
 				lastMaxOpsRefreshTick = currentGameTime;
 			}
 			int maxOpsPerTick = cachedMaxOpsPerTick;
+			int baseOps = (maxOpsPerTick > 0 && operationsPerTick > 1)
+					? Math.min(operationsPerTick, maxOpsPerTick)
+					: operationsPerTick;
 			// PB 原版产量升级同时提供并行：4/8/16/32，单次最多并行 64 个输入。
 			// 现有 productivityModifier 仍保留产量倍率，两者语义独立。
 			int productivityParallel = Math.max(1, context.productivityParallelModifier());
 			// MEK/STACK 与 PB 原版并行在同一个处理周期内聚合。JDTE 的倍率代表
 			// 虚拟 tick 数，由 PbVirtualTickPlan 推进进度和完成周期，不能直接乘到
 			// 单次完成的并行数，否则少量输入会失去加速效果。
-			int effectiveOps = CentrifugeFactoryCommonLogic.parallelOperations(
-					operationsPerTick, productivityParallel, maxOpsPerTick);
+			int effectiveOps = SaturatingMath.saturatingToInt(
+					SaturatingMath.saturatingMultiply(baseOps, productivityParallel));
 
 			int modifier = context.productivityModifier();
 
@@ -515,7 +493,7 @@ public class PbRecipeProcessor {
 			// Task 4: 使用复合判断,与初始化保持一致
 			cachedFluidTankFull = context.areAllFluidTanksFull() && !context.canAllocateNewFluidTank();
 			if (tickPlan.energyUsed() > 0L) {
-				context.energyContainer().extract(tickPlan.energyUsed(), Action.EXECUTE, AutomationType.INTERNAL);
+				com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.extractFe(context.energyContainer(), tickPlan.energyUsed(), Action.EXECUTE, AutomationType.INTERNAL);
 			}
 
 			return true;
@@ -539,10 +517,8 @@ public class PbRecipeProcessor {
 	 * @return true 表示 pending 已全部写出
 	 */
 	public boolean drainCommittedPendingOutputs(int processIndex) {
-		if (invalidCommittedPending != null) return false;
 		if (processIndex < 0 || processIndex >= recipeCompleters.length) return false;
 		PbRecipeCompleter completer = recipeCompleters[processIndex];
-		if (MekResourceCentrifuge.suspended(context, processIndex)) return false;
 		if (!completer.hasCommittedPendingOutputs()) return false;
 		return completer.flushPendingPbOutputs(processIndex);
 	}
@@ -564,7 +540,7 @@ public class PbRecipeProcessor {
 
 	/** 查找匹配输入物品的PB离心配方 — 委托给 {@link PbRecipeFinder}，保留为公共方法供外部调用方使用 */
 	@Nullable
-	public RecipeHolder<CentrifugeRecipe> findPbRecipe(ItemStack input) {
+	public CentrifugeRecipe findPbRecipe(ItemStack input) {
 		return recipeFinder.findPbRecipe(input);
 	}
 
@@ -636,10 +612,6 @@ public class PbRecipeProcessor {
 	public void saveAdditional(CompoundTag nbt, HolderLookup.Provider provider) {
 		PbRecipeProcessorStateHelper.saveAdditional(nbt, pbOperatingTicks, pbProcessing, pbProcessingTime);
 		myriadHandler.saveAdditional(nbt);
-		if (invalidCommittedPending != null) {
-			nbt.put(NBT_COMMITTED_PENDING, invalidCommittedPending.copy());
-			return;
-		}
 		ListTag pendingList = new ListTag();
 		for (int i = 0; i < recipeCompleters.length; i++) {
 			CompoundTag pending = recipeCompleters[i].saveCommittedPending(provider);
@@ -656,29 +628,14 @@ public class PbRecipeProcessor {
 		java.util.Arrays.fill(emptyFactoryProcesses, false);
 		PbRecipeProcessorStateHelper.loadAdditional(nbt, pbOperatingTicks, pbProcessing, pbProcessingTime);
 		myriadHandler.loadAdditional(nbt);
-		for (PbRecipeCompleter completer : recipeCompleters) completer.loadCommittedPending(new CompoundTag(), provider);
-		invalidCommittedPending = null;
-		Tag raw = nbt.get(NBT_COMMITTED_PENDING);
-		if (raw == null) return;
-		try {
-			if (!(raw instanceof ListTag pendingList)
-					|| !pendingList.isEmpty() && pendingList.getElementType() != Tag.TAG_COMPOUND)
-				throw new IllegalArgumentException("Invalid committed output list");
-			var seen = new java.util.BitSet(recipeCompleters.length);
-			for (Tag value : pendingList) {
-				var pending = (CompoundTag) value;
-				if (!pending.contains("process", Tag.TAG_INT)) throw new IllegalArgumentException("Invalid pending process type");
-				int process = pending.getInt("process");
-				if (process < 0 || process >= recipeCompleters.length || seen.get(process))
-					throw new IllegalArgumentException("Invalid or duplicate pending process");
-				seen.set(process);
-			}
-			for (Tag value : pendingList) {
-				var pending = (CompoundTag) value;
-				recipeCompleters[pending.getInt("process")].loadCommittedPending(pending, provider);
-			}
-		} catch (RuntimeException invalid) {
-			invalidCommittedPending = raw.copy();
+		for (PbRecipeCompleter completer : recipeCompleters) completer.resetPendingRecipe();
+		if (!nbt.contains(NBT_COMMITTED_PENDING, Tag.TAG_LIST)) return;
+		ListTag pendingList = nbt.getList(NBT_COMMITTED_PENDING, Tag.TAG_COMPOUND);
+		for (int i = 0; i < pendingList.size(); i++) {
+			CompoundTag pending = pendingList.getCompound(i);
+			int process = pending.getInt("process");
+			if (process < 0 || process >= recipeCompleters.length) continue;
+			recipeCompleters[process].loadCommittedPending(pending, provider);
 		}
 	}
 }

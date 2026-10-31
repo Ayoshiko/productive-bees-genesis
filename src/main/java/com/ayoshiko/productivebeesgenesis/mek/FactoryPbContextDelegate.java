@@ -103,7 +103,7 @@ public class FactoryPbContextDelegate {
 		delegate.setUpdateSortingListener(updateSortingListener);
 		delegate.setUnpauseCallback(process -> {
 			if (process >= 0 && process < recipeCacheLookupMonitors.length) {
-				recipeCacheLookupMonitors[process].unpause();
+				recipeCacheLookupMonitors[process].onContentsChanged();
 			}
 		});
 		return delegate;

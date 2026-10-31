@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
 import com.ayoshiko.productivebeesgenesis.util.WrenchCapabilityHelper;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeState;
@@ -13,18 +12,16 @@ import mekanism.common.block.states.BlockStateHelper;
 import mekanism.common.content.blocktype.BlockType;
 import mekanism.common.content.blocktype.BlockTypeTile;
 import mekanism.common.lib.security.ISecurityTile;
-import mekanism.common.network.to_client.security.PacketSyncSecurity;
+import mekanism.common.network.to_client.PacketSecurityUpdate;
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tile.base.TileEntityUpdateable;
 import mekanism.common.util.WorldUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -38,7 +35,7 @@ import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -124,12 +121,12 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 	@Nullable
 	@Override
 	public BlockState getStateForPlacement(BlockPlaceContext context) {
-		return BlockStateHelper.getStateForPlacement(super.getStateForPlacement(context), context);
+		return BlockStateHelper.getStateForPlacement(this, super.getStateForPlacement(context), context);
 	}
 
 	/** 邻居方块变化时通知TileEntity更新红石状态 — 参考Mekanism BlockTile */
 	@Override
-	protected void neighborChanged(BlockState state, Level world, BlockPos pos, Block neighborBlock,
+	public void neighborChanged(BlockState state, Level world, BlockPos pos, Block neighborBlock,
 									BlockPos neighborPos, boolean isMoving) {
 		if (!world.isClientSide) {
 			TileEntityMekanism tile = WorldUtils.getTileEntity(TileEntityMekanism.class, world, pos);
@@ -139,62 +136,28 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 		}
 	}
 
-	/** 右键空手 — 打开GUI */
+	/** Forge 1.20 combines held-item and empty-hand interactions in Block.use. */
 	@Override
-	protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
-												Player player, BlockHitResult hitResult) {
-		if (level.getBlockEntity(pos) instanceof TileEntityMekanism tile) {
-			if (level.isClientSide) {
+	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player,
+			InteractionHand hand, BlockHitResult hitResult) {
+		TileEntityMekanism tile = WorldUtils.getTileEntity(TileEntityMekanism.class, level, pos);
+		if (tile == null) return InteractionResult.PASS;
+		if (level.isClientSide) return InteractionResult.SUCCESS;
+		if (!mekanism.common.util.SecurityUtils.get().canAccess(player, tile)) return InteractionResult.FAIL;
+		ItemStack stack = player.getItemInHand(hand);
+		if (WrenchCapabilityHelper.canUseAsWrench(stack)) {
+			if (player.isShiftKeyDown()) {
+				if (tile.getRadiationScale() > 0) return InteractionResult.FAIL;
+				WorldUtils.dismantleBlock(state, level, pos, tile);
 				return InteractionResult.SUCCESS;
 			}
-			return tile.openGui(player);
+			return switch (tile.tryWrench(state, player, hand, hitResult)) {
+                case DISMANTLED, SUCCESS -> InteractionResult.SUCCESS;
+                case NO_SECURITY -> InteractionResult.FAIL;
+                case PASS -> InteractionResult.PASS;
+            };
 		}
-		return InteractionResult.PASS;
-	}
-
-	/**
-	 * 右键物品 — 扳手拆卸/旋转
-	 * <br/>
-	 * 模块 1 修复（v2.4 最终版）：客户端通过 {@link WrenchCapabilityHelper} 判定扳手后返回 SUCCESS
-	 * 阻止 GUI 打开，服务端委托 {@code tile.tryWrench} 处理（与 MEK 原版 {@code BlockTile.useItemOn} 一致）。
-	 * tryWrench 通过 {@link mekanism.common.tags.MekanismTags.Items#CONFIGURATORS} 标签判定扳手，
-	 * 该标签引用 {@code c:tools/wrench}，AE2/OmniTools 扳手均在此标签中。
-	 * <ul>
-	 *   <li>shift+右键：tryWrench → tryWrenchDismantle → dismantleBlock → 拆卸</li>
-	 *   <li>右键（非shift）：tryWrench → tryWrenchRotate → 旋转方向</li>
-	 * </ul>
-	 * 详见 {@link com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock#useItemOn} 的完整说明。
-	 */
-	@Override
-	protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
-			BlockPos pos, Player player, InteractionHand hand,
-			BlockHitResult hitResult) {
-		if (stack.isEmpty()) {
-			return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
-		}
-		TileEntityMekanism tile = WorldUtils.getTileEntity(TileEntityMekanism.class, level, pos);
-		if (tile == null) {
-			return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
-		}
-		boolean isWrench = WrenchCapabilityHelper.canUseAsWrench(stack);
-		// 客户端：扳手返回 SUCCESS 阻止 GUI 打开，非扳手走默认交互
-		if (level.isClientSide) {
-			if (isWrench) {
-				return ItemInteractionResult.SUCCESS;
-			}
-			return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
-		}
-		// 服务端：shift+扳手优先拆卸，直接返回 SUCCESS 阻止 omnitools 的 Item.useOn 拦截
-		// 详见 MekApiaryBlock.useItemOn 的根因说明
-		if (player.isShiftKeyDown() && isWrench) {
-			if (tile.getRadiationScale() <= 0) {
-				WorldUtils.dismantleBlock(state, level, pos, tile, player, stack);
-				return ItemInteractionResult.SUCCESS;
-			}
-			return ItemInteractionResult.FAIL;
-		}
-		// 非 shift 场景委托 tryWrench 处理旋转
-		return tile.tryWrench(state, player, stack).getInteractionResult();
+		return tile.openGui(player);
 	}
 
 	/**
@@ -218,7 +181,7 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 	 * 此路径统一了镐子挖掘和扳手拆卸的数据保存方式，确保两者 NBT 结构一致、物品栏可合并。
 	 */
 	@Override
-	protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
+	public List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
 		List<ItemStack> drops = super.getDrops(state, params);
 		if (params.getOptionalParameter(LootContextParams.BLOCK_ENTITY) instanceof TileEntityUpdateable updateable) {
 			// getDrops 幂等防护：二次调用时数据已清空，跳过重复序列化（防异常场景读到空数据）
@@ -229,9 +192,9 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 				for (ItemStack drop : drops) {
 					if (drop.is(this.asItem())) {
 						// vanilla 标准路径：saveToItem 同时设置 BLOCK_ENTITY_DATA 和 DataComponents
-						updateable.saveToItem(drop, provider);
+						updateable.saveToItem(drop);
 						if (updateable instanceof TileEntityMekanism mekanismTile && mekanismTile.getCustomName() != null) {
-							drop.set(DataComponents.CUSTOM_NAME, mekanismTile.getCustomName());
+							drop.setHoverName(mekanismTile.getCustomName());
 						}
 					}
 				}
@@ -251,18 +214,14 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 			@Nullable LivingEntity placer, ItemStack stack) {
 		super.setPlacedBy(level, pos, state, placer, stack);
 		if (level.getBlockEntity(pos) instanceof TileEntityUpdateable updateable) {
-			updateable.onAdded();
 			// 设置安全系统拥有者（参考BlockMekanism.setPlacedBy）
 			if (updateable instanceof ISecurityTile securityTile
 					&& securityTile.getOwnerUUID() == null && placer != null) {
 				securityTile.setOwnerUUID(placer.getUUID());
 				if (!level.isClientSide && placer instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
 					// Task 6：定向发送给放置者，避免全服广播（安全拥有者仅需放置者客户端同步）
-					PacketDistributor.sendToPlayer(serverPlayer, new PacketSyncSecurity(placer.getUUID()));
+					ForgeNetwork.sendToPlayer(serverPlayer, new PacketSecurityUpdate(placer.getUUID()));
 				}
-			}
-			if (!level.isClientSide && ResourceHiveHost.existing(updateable) != null) {
-				ResourceHiveHost.ensureMechanical(updateable);
 			}
 		}
 	}
@@ -275,7 +234,7 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 	 * 槽位清空由 {@code getDrops} 中的 {@code saveAllItemsForDrop} 在 {@code saveToItem} 后执行。
 	 */
 	@Override
-	protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
+	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
 		if (state.hasBlockEntity() && !state.is(newState.getBlock())) {
 			TileEntityUpdateable tile = WorldUtils.getTileEntity(TileEntityUpdateable.class, level, pos);
 			if (tile != null) {

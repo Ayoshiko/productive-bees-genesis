@@ -5,16 +5,6 @@
   "pages": [
     {
       "type": "patchouli:text",
-      "title": "资源侧面设置",
-      "text": "打开 Mekanism 侧面配置。化学品在左侧 ENERGY 下方；其他资源从右侧入口打开，用正方形图标选择。设置输出面后可开自动弹出。FE 使用原生 ENERGY 页，输入给机器供电，输出提供蜜蜂产出的 FE。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "配置卡与机器升级",
-      "text": "设置会随机器保存和升级保留。MEK 配置卡 Shift 右键读取，普通右键粘贴到兼容机器。配置卡复制侧面和自动弹出设置。"
-    },
-    {
-      "type": "patchouli:text",
       "title": "先用默认设置",
       "text": "第一次游玩不需要翻配置文件，也不用记英文键名。在模组列表中选择“资源蜜蜂：创世”，点击配置即可看到中文分类。普通玩家通常只会用到玩法、机器和客户端画面这三页。"
     },
@@ -27,11 +17,6 @@
       "type": "patchouli:text",
       "title": "全部花源与平衡预设",
       "text": "玩法设置中的“蜂箱生产全部花源”（apiaryProduceAllFlowers）默认关闭，悖论无限预设开启。开启后，多花源蜜蜂一轮分别生产喂食槽中所有不同的有效花源；空槽、禁用槽和重复花源不增加次数，独立流体不按花源数倍增。想单独调整时，先切换并保存为“自定义”；切换时会继承原预设实际生效的值。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "高倍加速预算",
-      "text": "玩法设置中，每真实刻默认兑现 2048 个虚拟 tick，上限 4096；银行默认暂存 8192，上限 32768。更大银行只缓冲积压，不直接提高产速；高 MSPT 时仍降低兑现预算。已有配置保留旧值。"
     },
     {
       "type": "patchouli:text",
@@ -52,123 +37,6 @@
       "type": "patchouli:text",
       "title": "整合包作者",
       "text": "只有批量分发、脚本替换或迁移旧配置时才需要查看原始键名。世界玩法、机器和容量设置保存在存档的服务器配置目录中；请以当前配置界面和新生成文件的中文注释为准。"
-    },
-    {
-      "type": "patchouli:link",
-      "url": "https://github.com/Ayoshiko/productive-bees-genesis/releases/download/resource-bee-examples-1.1.0/resource-bees-all.zip",
-      "link_text": "下载全部示例 ZIP",
-      "text": "适用于 MC 1.21.1、PB 13.14、Genesis 1.1.0。包含可运行数据包、名称包、KubeJS 脚本和注释版。示例蜂不在模组 JAR 中。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "自定义蜜蜂",
-      "text": "用 PB JSON 设置颜色、采蜜材料、繁殖食物和获得方式。Genesis 增加 FE、化学品、魔源等产物。扩展蜂同样支持 PB 繁殖、转化、巢穴生成和钓鱼。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "先试铜能量蜂",
-      "text": "用空蜂笼、蜂蜜点心、铜锭合成蜂蛋。只用空蜂笼。把蜂放进已供电的 Genesis 机械蜂箱，采蜜槽放铜锭，即可直接产 FE。采蜜铜锭不消耗。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "选择想要的例子",
-      "text": "32 只蜂都有蜂蛋合成，28 只扩展蜂另有繁殖和转化。pb_copper、pb_redstone、pb_water、pb_tag 展示普通 PB 配置。EXAMPLES.json 列出每只蜂的文件和获取材料。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "安装数据与名称",
-      "text": "数据包 ZIP 放进存档 datapacks；名称资源包 ZIP 放进 resourcepacks 并启用。增加蜂种后重新进入世界。修改已有配方用 /reload，修改名称用 F3+T。缺少可选模组时，对应例子不加载。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "注释版不能运行",
-      "text": "reference-only 的 .jsonc 含 // 注释，只供阅读，不能直接作为游戏 JSON 加载。改后缀也不行。对照注释版修改 datapack 中的无注释 .json 最方便。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "1. 蜂种与花源",
-      "text": "data/example/productivebees 中，primaryColor 和 secondaryColor 改颜色；flowerItem 改采蜜物品；breedingItem 改繁殖食物。selfbreed 允许同种繁殖。两种食物可以不同。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "2. 繁殖与转化",
-      "text": "bee_breeding 修改 parent1、parent2、offspring，分别喂亲本自己的繁殖食物。bee_conversion 修改 source、result、item、chance，用指定物品对源蜜蜂转化。普通蜂与扩展蜂用法相同。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "3. 巢穴与钓鱼",
-      "text": "bee_spawning 修改巢穴 ingredient、蜂种 results 和 biomes。bee_fishing 修改 bee、biomes、chance。扩展铜能量蜂有巢穴示例，水容器蜂有河流钓鱼示例。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "4. 资源产物",
-      "text": "resource_production 直接产资源，resource_centrifuging 从蜜脾产资源。改 bee、kind、资源 id 和 amount。amount 必须是带引号的正整数；chance 是 0～1 的数字。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "5. 名称与改名",
-      "text": "assets/productivebees/lang 提供中英文名称。example:copper_energy 对应 entity.productivebees.copper_energy_bee。改名时一起修改蜂种路径、所有配方蜂种 ID、加载条件和语言键。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "PB 完整属性",
-      "text": "pb_copper 展示花粉颜色、初始基因、体型、速度、攻击、繁殖、防水和防火。花源只选 flowerBlock、flowerItem、flowerFluid、flowerTag 中一种。这些字段也能用于扩展蜂。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "蜜脾离心路线",
-      "text": "hydrogen 用铁锭采蜜，保留蜂种、honeycomb 和 centrifuging 三份文件。createComb 只启用专属蜜脾，还需蜂箱产物配方。蜜脾 bee_type 组件必须匹配蜂种。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "离心数量与时间",
-      "text": "氢气例子 kind 为 chemical，id 为 mekanism:hydrogen，amount 为字符串 100。processing_time 为 20 游戏刻，约一秒。PB 普通离心使用 processingTime，注意字段不同。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "其他资源",
-      "text": "魔源蜂采魔源宝石，灵魂蜂采灵魂沙，空气蜂采压力表，EMC 蜂采炼金煤炭，经验蜂采附魔之瓶，闪电蜂采坍缩矩阵。ae_key 示例产钻石。对应模组必须已安装。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "普通与扩展一起产",
-      "text": "mixed 同时保留 PB 蜂箱配方和直接资源配方。combined 使用 include_pb_outputs: true，并保留同蜂种 PB 离心配方，同时产物品与 FE。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "容器作为花源",
-      "text": "flowerResource 替换其他花源字段。kind 为 chemical、id 为 mekanism:hydrogen、amount 为字符串 1000，表示需要至少 1000 mB 氢气。放入装有氢气的罐，空罐不满足条件。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "可重复使用的容器",
-      "text": "采蜜不会消耗容器或里面的资源。水例子用水桶，FE 例子用充电容器，ME 例子用存有至少 16 颗钻石的真实物品元件。多个容器或采蜜槽的数量不会相加。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "KubeJS 安装方式",
-      "text": "复制合集中的 kubejs 目录：data 放蜂种与标签，assets 放名称，完整 server_scripts 脚本注册获取和产物配方。数据包与完整脚本选择一种，勿重复安装。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "使用与输出",
-      "text": "扩展资源使用 Genesis 机械蜂箱、离心机及工厂。FE 用 ENERGY 输出面；化学品在左侧 ENERGY 下方；其他资源从右侧扩展入口选择。资源面板可看产量和待输出库存。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "ME 与 EMC",
-      "text": "ME 需要 AE2、供电、频道、对应资源桥和存储。化学品可用 Applied Mekanistics，FE 可用 Applied Flux。EMC 自动存入机器拥有者的 ProjectE 账户。"
-    },
-    {
-      "type": "patchouli:text",
-      "title": "没生效时",
-      "text": "找不到蜂，查依赖、目录、数据包开关并重新进世界。不采蜜，查材料与供电。繁殖转化失败，查蜂种 ID、食物和条件。名称显示键名，启用资源包并 F3+T。"
-    },
-    {
-      "type": "patchouli:link",
-      "url": "https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/README_zh.md#扩展资源蜜蜂",
-      "link_text": "打开完整注册教程",
-      "text": "README 提供可复制 JSON、所有资源类型的字段和文件链接。下载包的注释版逐项解释可修改内容。"
     }
   ]
 }

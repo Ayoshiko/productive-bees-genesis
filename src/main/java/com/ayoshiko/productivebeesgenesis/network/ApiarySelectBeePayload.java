@@ -1,11 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -26,23 +22,17 @@ import net.minecraft.resources.ResourceLocation;
 public record ApiarySelectBeePayload(
 		BlockPos pos,
 		int slotIndex
-) implements CustomPacketPayload {
+)  {
 
 	/** 数据包类型标识 */
-	public static final CustomPacketPayload.Type<ApiarySelectBeePayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "apiary_select_bee"));
 
 	/** 流编解码器 — 编解码 BlockPos + int */
-	public static final StreamCodec<ByteBuf, ApiarySelectBeePayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, ApiarySelectBeePayload::pos,
-					ByteBufCodecs.INT, ApiarySelectBeePayload::slotIndex,
-					ApiarySelectBeePayload::new
-			);
 
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static ApiarySelectBeePayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new ApiarySelectBeePayload(buf.readBlockPos(), buf.readVarInt());
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+        buf.writeVarInt(slotIndex);
+    }
 }

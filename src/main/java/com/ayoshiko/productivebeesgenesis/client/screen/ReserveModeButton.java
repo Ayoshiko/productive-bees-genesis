@@ -2,7 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
@@ -55,16 +55,16 @@ final class ReserveModeButton extends MekanismButton {
 	}
 
 	@Override
-	public boolean mouseClicked(double mouseX, double mouseY, int button) {
-		if (!visible || !active || !isMouseOver(mouseX, mouseY)) return false;
+	public mekanism.client.gui.element.GuiElement mouseClickedNested(double mouseX, double mouseY, int button) {
+		if (!visible || !active || !isMouseOver(mouseX, mouseY)) return null;
 		if (button == 0) {
 			configureCallback.run();
-			return true;
+			return this;
 		}
 		if (button == 1) {
 			toggleCallback.run();
-			return true;
+			return this;
 		}
-		return false;
+		return null;
 	}
 }

@@ -38,11 +38,11 @@ public final class MultiFlowerBeeAdapter {
 	 * 不含 wanna_bee：战利品表逻辑复杂（需读取琥珀中实体），机械蜂箱无实体架构差异大，单独任务处理。
 	 */
 	private static final Map<ResourceLocation, MultiFlowerStrategy> STRATEGIES = Map.of(
-			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "lumber_bee"),
+			new ResourceLocation(PBConstants.PRODUCTIVE_BEES_MOD_ID, "lumber_bee"),
 			new LumberStrategy(),
-			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "quarry_bee"),
+			new ResourceLocation(PBConstants.PRODUCTIVE_BEES_MOD_ID, "quarry_bee"),
 			new QuarryStrategy(),
-			ResourceLocation.fromNamespaceAndPath(PBConstants.PRODUCTIVE_BEES_MOD_ID, "dye_bee"),
+			new ResourceLocation(PBConstants.PRODUCTIVE_BEES_MOD_ID, "dye_bee"),
 			new DyeStrategy()
 	);
 
@@ -181,7 +181,7 @@ public final class MultiFlowerBeeAdapter {
 					if (!output.isEmpty()) outputs.add(output);
 				}
 			}
-			return outputs.isEmpty() ? feeder.getAllItemsFromFeeder(ModTags.Common.DYES) : outputs;
+			return outputs.isEmpty() ? feeder.getAllItemsFromFeeder(net.minecraftforge.common.Tags.Items.DYES) : outputs;
 		}
 
 		@Override
@@ -197,13 +197,13 @@ public final class MultiFlowerBeeAdapter {
 				if (!dye.isEmpty()) return dye;
 			}
 			// 2. 向后兼容：喂食槽直接放入染料时产出该染料
-			return feeder.getRandomItemFromFeeder(ModTags.Common.DYES);
+			return feeder.getRandomItemFromFeeder(net.minecraftforge.common.Tags.Items.DYES);
 		}
 
 		@Override
 		public boolean hasValidFlower(FeederSlotManager feeder) {
 			return feeder.containsBlockInFeeder(net.minecraft.tags.BlockTags.FLOWERS, null)
-					|| feeder.containsItemInFeeder(ModTags.Common.DYES);
+					|| feeder.containsItemInFeeder(net.minecraftforge.common.Tags.Items.DYES);
 		}
 	}
 }

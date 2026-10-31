@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 	 * <b>类加载安全</b>：本公共门面不在字段或方法签名中引用 MEKExtras 类型，
 	 * 只有加载守卫通过后才进入隔离兼容类。
 	 *
-	 * @see com.jerry.mekextras.mixin.MixinMachineEnergyContainer#mekanism_Extras$extraRecalculateUpgrades
+	 * @see com.jerry.mekanism_extras.mixin.MixinMachineEnergyContainer#mekanism_Extras$extraRecalculateUpgrades
 	 */
 public final class MekCreativeEnergyHelper {
 	private static final AtomicBoolean FAILURE_LOGGED = new AtomicBoolean();

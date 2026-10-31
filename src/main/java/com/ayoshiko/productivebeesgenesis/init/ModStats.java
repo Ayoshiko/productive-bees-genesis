@@ -5,9 +5,9 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.stats.StatFormatter;
 import net.minecraft.stats.Stats;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.registries.RegistryObject;
+import net.minecraftforge.registries.DeferredRegister;
 
 /**
 	 * 模组统计注册
@@ -19,19 +19,19 @@ public final class ModStats {
 			DeferredRegister.create(Registries.CUSTOM_STAT, ProductiveBeesGenesis.MOD_ID);
 
 	/** 与MEK离心机交互次数 */
-	public static final DeferredHolder<ResourceLocation, ResourceLocation> INTERACT_WITH_MEK_CENTRIFUGE =
+	public static final RegistryObject<ResourceLocation> INTERACT_WITH_MEK_CENTRIFUGE =
 			CUSTOM_STATS.register("interact_with_mek_centrifuge", () ->
-					ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "interact_with_mek_centrifuge"));
+					new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "interact_with_mek_centrifuge"));
 
 	/** MEK离心机处理物品次数 */
-	public static final DeferredHolder<ResourceLocation, ResourceLocation> MEK_CENTRIFUGE_ITEMS_PROCESSED =
+	public static final RegistryObject<ResourceLocation> MEK_CENTRIFUGE_ITEMS_PROCESSED =
 			CUSTOM_STATS.register("mek_centrifuge_items_processed", () ->
-					ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "mek_centrifuge_items_processed"));
+					new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "mek_centrifuge_items_processed"));
 
 	/** MEK离心机消耗能量总计（FE） */
-	public static final DeferredHolder<ResourceLocation, ResourceLocation> MEK_CENTRIFUGE_ENERGY_USED =
+	public static final RegistryObject<ResourceLocation> MEK_CENTRIFUGE_ENERGY_USED =
 			CUSTOM_STATS.register("mek_centrifuge_energy_used", () ->
-					ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "mek_centrifuge_energy_used"));
+					new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "mek_centrifuge_energy_used"));
 
 	private ModStats() {}
 

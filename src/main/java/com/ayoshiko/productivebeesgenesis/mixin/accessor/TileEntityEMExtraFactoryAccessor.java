@@ -40,7 +40,7 @@ public interface TileEntityEMExtraFactoryAccessor {
 
 	/** 暴露lastUsage setter — 用于更新包含PB处理的能量消耗 */
 	@Accessor("lastUsage")
-	void productivebeesgenesis$setLastUsage(long value);
+	void productivebeesgenesis$setLastUsage(mekanism.api.math.FloatingLong value);
 
 	/**
 	 * 暴露sorting字段getter — 用于writeSustainedData/collectImplicitComponents

@@ -19,8 +19,8 @@ import mekanism.common.tile.base.TileEntityMekanism;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.network.PacketDistributor;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
+import com.ayoshiko.productivebeesgenesis.network.ForgePayloadContext;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,14 +43,14 @@ final class Ae2FilterPayloadHandlers {
 	}
 
 	/** Applies one direct-entry pull amount or network-stock reserve after validating the active container. */
-	static void handleSetAeInputFilterAmount(SetAeInputFilterAmountPayload payload, IPayloadContext context) {
+	static void handleSetAeInputFilterAmount(SetAeInputFilterAmountPayload payload, ForgePayloadContext context) {
 		if (payload.slotIndex() < 0
 				|| payload.slotIndex() >= NetworkSecurityConstants.MAX_AE_INPUT_FILTER_SLOTS
 				|| payload.amount() < 0L
 				|| payload.amount() > (payload.reserve()
 						? Ae2InputFilter.MAX_DIRECT_RESERVE_AMOUNT : Ae2InputFilter.getMaxDirectAmount())) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
 				"ae2_input_filter_amount_pos_mismatch")) return;
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_filter_amount",
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
@@ -76,11 +76,11 @@ final class Ae2FilterPayloadHandlers {
 	 * <br/>
 	 * 由全局齿轮按钮（无需标记物品）调用，安全校验与单条数量编辑一致。
 	 */
-	static void handleSetAllAeInputFilterAmount(SetAllAeInputFilterAmountPayload payload, IPayloadContext context) {
+	static void handleSetAllAeInputFilterAmount(SetAllAeInputFilterAmountPayload payload, ForgePayloadContext context) {
 		if (payload.amount() < 0L || payload.amount() > (payload.reserve()
 				? Ae2InputFilter.MAX_DIRECT_RESERVE_AMOUNT : Ae2InputFilter.getMaxDirectAmount())) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
 				"ae2_input_all_amount_pos_mismatch")) return;
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_all_amount",
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
@@ -106,9 +106,9 @@ final class Ae2FilterPayloadHandlers {
 
 	/** 服务端处理：切换过滤后所有允许蜜脾的全量无限拉取。 */
 	static void handleToggleAllAeInputFilterUnlimited(ToggleAllAeInputFilterUnlimitedPayload payload,
-			IPayloadContext context) {
+			ForgePayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
 				"ae2_input_all_unlimited_pos_mismatch")) return;
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_all_unlimited",
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
@@ -127,9 +127,9 @@ final class Ae2FilterPayloadHandlers {
 
 	/** Toggles the filter-level global stock mode without changing unlimited-pull flags. */
 	static void handleToggleAllAeInputFilterNetworkStock(
-			ToggleAllAeInputFilterNetworkStockPayload payload, IPayloadContext context) {
+			ToggleAllAeInputFilterNetworkStockPayload payload, ForgePayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
 				"ae2_input_all_network_stock_pos_mismatch")) return;
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_all_network_stock",
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
@@ -154,7 +154,7 @@ final class Ae2FilterPayloadHandlers {
 	 * V15：ADD 使用 setEntryAt 直接覆盖目标位置（位置固定语义，不做交换），REMOVE 使用 removeEntryAt（仅清空不移位）。
 	 * 修改后调用 markForSave 持久化，并推送 SyncAeInputFilterEntriesPayload 同步完整条目列表到客户端。
 	 */
-	static void handleSetAeInputFilterEntry(SetAeInputFilterEntryPayload payload, IPayloadContext context) {
+	static void handleSetAeInputFilterEntry(SetAeInputFilterEntryPayload payload, ForgePayloadContext context) {
 		// slotIndex 边界校验：防止恶意客户端发送越界索引导致数组访问异常
 		if (payload.slotIndex() < 0 || payload.slotIndex() >= NetworkSecurityConstants.MAX_AE_INPUT_FILTER_SLOTS) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
@@ -164,7 +164,7 @@ final class Ae2FilterPayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击（特别重要：CLEAR 操作可清空他人过滤器）
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
 				"ae2_input_filter_entry_pos_mismatch")) {
 			return;
 		}
@@ -209,7 +209,7 @@ final class Ae2FilterPayloadHandlers {
 		}
 		AEItemKey directKey = null;
 		if (directFingerprint != null && !directFingerprint.isBlank()) {
-			directKey = Ae2ItemFingerprint.decode(directFingerprint, serverPlayer.registryAccess());
+			directKey = Ae2ItemFingerprint.decode(directFingerprint, serverPlayer.level().registryAccess());
 			if (directKey == null) return;
 			if (CombFuzzyMatcher.isCombItem(directKey)) {
 				ResourceLocation actualBeeType = CombFuzzyMatcher.getBeeType(directKey);
@@ -249,7 +249,7 @@ final class Ae2FilterPayloadHandlers {
 
 	/** 重新编码为规范指纹（不信任客户端串的写法）；空串或超长返回 null 表示拒绝该请求。 */
 	private static String canonicalFingerprint(ServerPlayer player, AEItemKey key) {
-		return Ae2ItemFingerprint.encodeBounded(key, player.registryAccess(),
+		return Ae2ItemFingerprint.encodeBounded(key, player.level().registryAccess(),
 				NetworkSecurityConstants.MAX_AE_ITEM_FINGERPRINT_LENGTH);
 	}
 
@@ -269,7 +269,7 @@ final class Ae2FilterPayloadHandlers {
 	 * 精确模式开启时区分蜜脾和蜜脾块（同种 beeType 但物品类型不同），
 	 * 关闭时同种 beeType 的蜜脾和蜜脾块一起拉取。
 	 */
-	static void handleToggleAeInputPreciseMode(ToggleAeInputPreciseModePayload payload, IPayloadContext context) {
+	static void handleToggleAeInputPreciseMode(ToggleAeInputPreciseModePayload payload, ForgePayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}
@@ -277,7 +277,7 @@ final class Ae2FilterPayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
 				"ae2_input_precise_mode_pos_mismatch")) {
 			return;
 		}
@@ -321,7 +321,7 @@ final class Ae2FilterPayloadHandlers {
 	 * 此 handler 仅负责推送最新过滤器状态，确保客户端 Screen 显示与服务端一致。
 	 * 客户端 Screen 通过 {@link SyncAeInputFilterEntriesPayload} 接收推送并刷新本地副本。
 	 */
-	static void handleOpenAeInputConfig(OpenAeInputConfigPayload payload, IPayloadContext context) {
+	static void handleOpenAeInputConfig(OpenAeInputConfigPayload payload, ForgePayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}
@@ -329,7 +329,7 @@ final class Ae2FilterPayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
 				"ae2_input_config_pos_mismatch")) {
 			return;
 		}
@@ -376,9 +376,9 @@ final class Ae2FilterPayloadHandlers {
 		int changed = 0;
 		try {
 			KeyCounter inventory = cachedNetworkInventory(host);
-			changed = Ae2LegacyCombEntryUpgrade.upgrade(filter, inventory, player.registryAccess(),
+			changed = Ae2LegacyCombEntryUpgrade.upgrade(filter, inventory, player.level().registryAccess(),
 					NetworkSecurityConstants.MAX_AE_ITEM_FINGERPRINT_LENGTH);
-			changed += Ae2CombKeyAlignment.realign(filter, inventory, player.registryAccess(),
+			changed += Ae2CombKeyAlignment.realign(filter, inventory, player.level().registryAccess(),
 					NetworkSecurityConstants.MAX_AE_ITEM_FINGERPRINT_LENGTH);
 		} catch (LinkageError | RuntimeException error) {
 			// 维护失败不能影响配置窗口本身：照常同步当前状态，下次打开再试；
@@ -403,7 +403,7 @@ final class Ae2FilterPayloadHandlers {
 	 * 客户端先 clearEntries，再按 index 调用 setEntryAtIndex 保留位置固定语义。
 	 * 同时同步 preciseMode 和 filterMode。
 	 */
-	static void handleSyncAeInputFilterEntries(SyncAeInputFilterEntriesPayload payload, IPayloadContext context) {
+	static void handleSyncAeInputFilterEntries(SyncAeInputFilterEntriesPayload payload, ForgePayloadContext context) {
 		if (context.player().level() == null) {
 			return;
 		}
@@ -541,7 +541,7 @@ final class Ae2FilterPayloadHandlers {
 
 	static void syncFilterToClient(BlockEntity be, ServerPlayer player) {
 		SyncAeInputFilterEntriesPayload payload = createFilterSyncPayload(be);
-		if (payload != null) PacketDistributor.sendToPlayer(player, payload);
+		if (payload != null) ForgeNetwork.sendToPlayer(player, payload);
 	}
 
 	public static void syncFilterToClients(BlockEntity be) {
@@ -550,6 +550,6 @@ final class Ae2FilterPayloadHandlers {
 		// Task 6：定向发送给跟踪该区块的玩家，避免全服广播
 		net.minecraft.server.level.ServerLevel serverLevel = (net.minecraft.server.level.ServerLevel) be.getLevel();
 		net.minecraft.world.level.ChunkPos chunkPos = new net.minecraft.world.level.ChunkPos(be.getBlockPos());
-		PacketDistributor.sendToPlayersTrackingChunk(serverLevel, chunkPos, payload);
+		ForgeNetwork.sendToPlayersTrackingChunk(serverLevel, chunkPos, payload);
 	}
 }

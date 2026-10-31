@@ -2,9 +2,9 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-import com.jerry.mekextras.common.content.blocktype.ExtraFactory;
-import com.jerry.mekextras.common.content.blocktype.ExtraMachine;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import com.jerry.mekanism_extras.common.content.blocktype.ExtraFactory;
+import com.jerry.mekanism_extras.common.content.blocktype.ExtraMachine;
+import com.jerry.mekanism_extras.common.tier.ExtraFactoryTier;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeUpgradeable;
 import mekanism.common.block.attribute.AttributeFactoryType;
 import mekanism.common.content.blocktype.BlockType;
@@ -14,7 +14,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
-import net.neoforged.neoforge.registries.DeferredHolder;
+import net.minecraftforge.registries.RegistryObject;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -70,17 +70,16 @@ public abstract class ExtraFactoryForEMEMixin extends BlockType {
 			return;
 		}
 		// 添加EMExtraAttributeUpgradeable指向ABSOLUTE_OVERCLOCKED离心机工厂
-		DeferredHolder<Block, ?> blockHolder = DeferredHolder.create(Registries.BLOCK,
-				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
-						"absolute_overclocked_emextra_mek_centrifuge_factory"));
+		RegistryObject<?> blockHolder = RegistryObject.create(new ResourceLocation(ProductiveBeesGenesis.MOD_ID,
+						"absolute_overclocked_emextra_mek_centrifuge_factory"), Registries.BLOCK, ProductiveBeesGenesis.MOD_ID);
 		// 防御性检查：blockHolder.getKey() 在注册表尚未完成初始化时可能返回 null
 		var key = blockHolder.getKey();
 		if (key == null) return;
-		DeferredHolder<Item, ?> itemHolder = DeferredHolder.create(
-				net.minecraft.core.registries.Registries.ITEM, key.location());
+		RegistryObject<?> itemHolder = RegistryObject.create(
+				key.location(), net.minecraft.core.registries.Registries.ITEM, ProductiveBeesGenesis.MOD_ID);
 		@SuppressWarnings("unchecked")
 		Supplier<BlockRegistryObject<?, ?>> broSupplier = () -> new BlockRegistryObject<>(
-				(DeferredHolder<Block, Block>) blockHolder, (DeferredHolder<Item, Item>) itemHolder);
+				(RegistryObject<Block>) blockHolder, (RegistryObject<Item>) itemHolder);
 		this.add(new EMExtraAttributeUpgradeable(broSupplier));
 	}
 }

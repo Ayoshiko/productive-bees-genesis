@@ -21,8 +21,8 @@ public final class BulkItemPullScope {
 		try {
 			return operation.getAsLong();
 		} finally {
-			// 保留无资产的线程条目，避免每次无限拉取重建 ThreadLocalMap.Entry。
-			TARGET.set(previous);
+			if (previous == null) TARGET.remove();
+			else TARGET.set(previous);
 		}
 	}
 
@@ -35,6 +35,6 @@ public final class BulkItemPullScope {
 	public static boolean matchesTarget(ItemStack stack) {
 		ItemStack target = TARGET.get();
 		return target != null && !target.isEmpty()
-				&& ItemStack.isSameItemSameComponents(target, stack);
+				&& ItemStack.isSameItemSameTags(target, stack);
 	}
 }

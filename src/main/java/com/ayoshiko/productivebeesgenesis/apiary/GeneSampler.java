@@ -2,8 +2,6 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import cy.jdkdigital.productivebees.ProductiveBeesConfig;
 import cy.jdkdigital.productivebees.common.item.Gene;
-import cy.jdkdigital.productivebees.util.GeneAttribute;
-import cy.jdkdigital.productivebees.util.GeneValue;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
@@ -28,8 +26,8 @@ public class GeneSampler {
 	private static final int MAX_EXACT_EVENTS = 128;
 	private static final int PURITY_COUNT = 4;
 	private static final GeneAttribute[] ATTRIBUTES = GeneAttribute.values();
-	private static final GeneValue[] GENE_VALUES = GeneValue.values();
-	private static final int COUNTS_PER_ATTRIBUTE = GENE_VALUES.length * PURITY_COUNT;
+	private static final int VALUE_COUNT = 4;
+	private static final int COUNTS_PER_ATTRIBUTE = VALUE_COUNT * PURITY_COUNT;
 
 	/** 固定域计数器替代每次命中新建 Map key；最大仅 6×19×4 个 long。 */
 	private final long[] sampledCounts = new long[ATTRIBUTES.length * COUNTS_PER_ATTRIBUTE];
@@ -106,12 +104,8 @@ public class GeneSampler {
 				|| samplerCount <= 0 || level == null) return;
 
 		float chance = resolveChance(samplerCount, level);
-		generateGeneSamplesInto(output, sources, beeTypeKey, chance, level.getRandom(), typeOnly, fullPurity);
-	}
-
-	private void generateGeneSamplesInto(List<ItemStack> output, SampleBatch sources,
-			ResourceLocation beeTypeKey, float chance, RandomSource random, boolean typeOnly, boolean fullPurity) {
 		if (chance <= 0.0F) return;
+		RandomSource random = level.getRandom();
 		try {
 			if (sources.totalProduceCount <= MAX_EXACT_EVENTS) {
 				generateExactSamples(sources, chance, random, typeOnly, fullPurity);
@@ -122,59 +116,6 @@ public class GeneSampler {
 			emitSamples(output, beeTypeKey.toString(), fullPurity);
 		} finally {
 			clearAccumulator();
-		}
-	}
-
-	/** 资源事务只捕获输入；抽样仍调用上面同一套已用算法，不另写基因概率与插件规则。 */
-	public static Snapshot snapshot(net.minecraft.nbt.CompoundTag beeData, ResourceLocation type,
-			int samplers, boolean typeOnly, boolean fullPurity) {
-		float chance = samplers <= 0 || (beeData != null && beeData.getInt("Age") < 0) ? 0
-				: (float) Math.max(0, Math.min(1, ProductiveBeesConfig.UPGRADES.samplerChance.get() * samplers));
-		return new Snapshot(GeneSampleProfile.fromBeeData(beeData), type, chance, typeOnly, fullPurity);
-	}
-
-	public static final class Snapshot {
-		private final GeneSampleProfile profile;
-		private final ResourceLocation type;
-		private final float chance;
-		private final boolean typeOnly, fullPurity;
-		private final List<ItemStack> possible;
-		private final GeneSampler sampler = new GeneSampler();
-		private final SampleBatch batch = new SampleBatch();
-
-		private Snapshot(GeneSampleProfile profile, ResourceLocation type, float chance,
-				boolean typeOnly, boolean fullPurity) {
-			this.profile = profile;
-			this.type = java.util.Objects.requireNonNull(type);
-			this.chance = chance;
-			this.typeOnly = typeOnly;
-			this.fullPurity = fullPurity;
-			var candidates = new ArrayList<ItemStack>();
-			if (chance > 0) for (var attribute : ATTRIBUTES) {
-				if (typeOnly && attribute != GeneAttribute.TYPE) continue;
-				String value = attribute == GeneAttribute.TYPE ? type.toString() : profile.value(attribute).getSerializedName();
-				for (int purity = 1; purity <= (fullPurity ? 1 : PURITY_COUNT); purity++) {
-					candidates.add(Gene.getStack(attribute, value, 1, fullPurity ? 100 : purity));
-				}
-			}
-			possible = List.copyOf(candidates);
-		}
-
-		public boolean active() { return !possible.isEmpty(); }
-		public List<ItemStack> possible() { return possible.stream().map(ItemStack::copy).toList(); }
-
-		/** 同一冻结输入与种子产生同一批结果；周期数不再乘生产力轮数。 */
-		public List<ItemStack> sample(long cycles, long seed) {
-			if (cycles < 0 || cycles > Integer.MAX_VALUE) throw new IllegalArgumentException("Invalid sampling batch");
-			if (cycles == 0 || !active()) return List.of();
-			batch.add(profile, cycles);
-			try {
-				var output = new ArrayList<ItemStack>();
-				sampler.generateGeneSamplesInto(output, batch, type, chance, RandomSource.create(seed), typeOnly, fullPurity);
-				return output;
-			} finally {
-				batch.clear();
-			}
 		}
 	}
 
@@ -271,7 +212,7 @@ public class GeneSampler {
 	private void addSample(GeneSampleProfile profile, GeneAttribute attribute,
 			int purityIndex, long count) {
 		if (count <= 0) return;
-		int valueIndex = attribute == GeneAttribute.TYPE ? 0 : profile.value(attribute).ordinal();
+		int valueIndex = attribute == GeneAttribute.TYPE ? 0 : profile.value(attribute);
 		int index = attribute.ordinal() * COUNTS_PER_ATTRIBUTE
 				+ valueIndex * PURITY_COUNT + purityIndex;
 		long previous = sampledCounts[index];
@@ -289,11 +230,12 @@ public class GeneSampler {
 			int valueIndex = attributeOffset / PURITY_COUNT;
 			int purity = fullPurity ? 100 : attributeOffset % PURITY_COUNT + 1;
 			GeneAttribute attribute = ATTRIBUTES[attributeIndex];
-			String value = attribute == GeneAttribute.TYPE
-					? beeType : GENE_VALUES[valueIndex].getSerializedName();
+
 			while (count > 0L) {
 				int stackCount = (int) Math.min(count, Integer.MAX_VALUE);
-				output.add(Gene.getStack(attribute, value, stackCount, purity));
+				output.add(attribute == GeneAttribute.TYPE
+                            ? Gene.getStack(beeType, 0, stackCount, purity)
+                            : Gene.getStack(attribute.beeAttribute, valueIndex, stackCount, purity));
 				count -= stackCount;
 			}
 		}

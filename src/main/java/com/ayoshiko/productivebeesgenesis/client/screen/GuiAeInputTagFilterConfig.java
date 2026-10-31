@@ -5,17 +5,18 @@ import com.ayoshiko.productivebeesgenesis.network.SetAeInputTagFilterPayload;
 import com.ayoshiko.productivebeesgenesis.util.tagfilter.TagExpressionParser;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import mekanism.client.gui.element.text.GuiTextField;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
-import mekanism.client.render.IFancyFontRenderer.TextAlignment;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.TextAlignment;
 import mekanism.common.inventory.container.SelectedWindowData.WindowType;
 import mekanism.common.inventory.container.SelectedWindowData;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -39,7 +40,7 @@ import org.jetbrains.annotations.NotNull;
  * 玩家因此无法从背包里拿起物品，样品槽就只能靠 JEI 拖拽填充。CONTAINER 放行
  * 玩家物品栏区域的点击（MEK 默认策略），拿起物品后即可点入样品槽。
  */
-final class GuiAeInputTagFilterConfig extends GuiWindow implements TagExpressionEditor {
+final class GuiAeInputTagFilterConfig extends PinnableGuiWindow implements TagExpressionEditor {
 
 	private static final int WINDOW_WIDTH = 230;
 	private static final int FIELD_X = 10;
@@ -73,9 +74,9 @@ final class GuiAeInputTagFilterConfig extends GuiWindow implements TagExpression
 		// CONTAINER：放行玩家物品栏点击，样品槽才能接收背包里的物品（见类注释）
 		this.interactionStrategy = InteractionStrategy.CONTAINER;
 
-		whitelistField = addChild(new GuiTextField(gui(), this,
+		whitelistField = addChild(new GuiTextField(gui(),
 				relativeX + FIELD_X, relativeY + WHITELIST_Y, FIELD_WIDTH, FIELD_HEIGHT));
-		blacklistField = addChild(new GuiTextField(gui(), this,
+		blacklistField = addChild(new GuiTextField(gui(),
 				relativeX + FIELD_X, relativeY + BLACKLIST_Y, FIELD_WIDTH, FIELD_HEIGHT));
 		configureField(whitelistField, tagFilter == null ? "" : tagFilter.getWhitelistSource());
 		configureField(blacklistField, tagFilter == null ? "" : tagFilter.getBlacklistSource());
@@ -127,7 +128,7 @@ final class GuiAeInputTagFilterConfig extends GuiWindow implements TagExpression
 	}
 
 	private void drawLabel(GuiGraphics guiGraphics, String key, int y, float scale) {
-		drawScaledScrollingString(guiGraphics, Component.translatable(key), FIELD_X, y,
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, Component.translatable(key), FIELD_X, y,
 				TextAlignment.LEFT, titleTextColor(), FIELD_WIDTH, 0, false, scale);
 	}
 
@@ -145,7 +146,7 @@ final class GuiAeInputTagFilterConfig extends GuiWindow implements TagExpression
 	}
 
 	private void save() {
-		PacketDistributor.sendToServer(new SetAeInputTagFilterPayload(
+		ForgeNetwork.sendToServer(new SetAeInputTagFilterPayload(
 				pos, whitelistField.getText(), blacklistField.getText()));
 		// 本地先行应用，避免等待服务端回包造成的一拍闪烁；服务端回包会覆盖为归一化文本
 		if (tagFilter != null) tagFilter.apply(whitelistField.getText(), blacklistField.getText());

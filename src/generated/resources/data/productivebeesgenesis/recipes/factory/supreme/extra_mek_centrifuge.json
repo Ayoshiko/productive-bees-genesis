@@ -1,0 +1,33 @@
+{
+  "conditions": [
+    {
+      "type": "forge:mod_loaded",
+      "modid": "mekanism_extras"
+    }
+  ],
+  "type": "productivebeesgenesis:apiary_shaped",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "mekanism_extras:alloys/thermonuclear"
+    },
+    "C": {
+      "tag": "forge:circuits/supreme"
+    },
+    "I": {
+      "tag": "forge:ingots/netherite"
+    },
+    "P": {
+      "item": "productivebeesgenesis:absolute_extra_mek_centrifuge_factory"
+    }
+  },
+  "pattern": [
+    "ACA",
+    "IPI",
+    "ACA"
+  ],
+  "result": {
+    "count": 1,
+    "item": "productivebeesgenesis:supreme_extra_mek_centrifuge_factory"
+  }
+}

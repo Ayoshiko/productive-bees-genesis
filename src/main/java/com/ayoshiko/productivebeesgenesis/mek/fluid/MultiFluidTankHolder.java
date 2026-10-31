@@ -8,7 +8,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.material.Fluid;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -57,9 +57,9 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 		 * @return 流体类型标识
 		 */
 		static FluidKey of(FluidStack stack) {
-			boolean componentsEmpty = stack.isComponentsPatchEmpty();
+			boolean componentsEmpty = !stack.hasTag();
 			return new FluidKey(stack.getFluid(), componentsEmpty,
-					componentsEmpty ? 0 : stack.getComponents().hashCode());
+					componentsEmpty ? 0 : com.ayoshiko.productivebeesgenesis.util.StackTags.hash(stack));
 		}
 	}
 

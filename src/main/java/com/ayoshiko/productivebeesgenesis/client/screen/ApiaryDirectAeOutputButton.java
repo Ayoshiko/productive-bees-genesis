@@ -3,9 +3,9 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload;
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 
 /** Toggles whether freshly generated apiary products try AE before local output slots. */
 final class ApiaryDirectAeOutputButton extends MekanismButton {
@@ -19,7 +19,7 @@ final class ApiaryDirectAeOutputButton extends MekanismButton {
 			if (element instanceof ApiaryDirectAeOutputButton button && button.target != null
 					&& (button.target.apiary().productivebeesgenesis$isAeItemOutputEnabled()
 							|| button.target.apiary().productivebeesgenesis$isAeFluidOutputEnabled())) {
-				PacketDistributor.sendToServer(new CycleAeOutputPayload(
+				ForgeNetwork.sendToServer(new CycleAeOutputPayload(
 						button.target.apiary().getBlockPos(), CycleAeOutputPayload.OutputType.APIARY_DIRECT));
 				return true;
 			}

@@ -1,8 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.compat.mekanism_extras;
 
 import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
-import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
-import com.jerry.mekextras.common.tier.ExtraFactoryTier;
+import com.jerry.mekanism_extras.common.block.attribute.ExtraAttributeTier;
+import com.jerry.mekanism_extras.common.tier.ExtraFactoryTier;
 import mekanism.common.block.attribute.Attribute;
 import net.minecraft.world.level.block.Block;
 

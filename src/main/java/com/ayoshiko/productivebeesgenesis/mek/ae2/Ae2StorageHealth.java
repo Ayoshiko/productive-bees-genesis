@@ -27,10 +27,4 @@ final class Ae2StorageHealth {
 	static boolean isPathological(long costNanos) {
 		return costNanos > PATHOLOGICAL_OPERATION_NANOS;
 	}
-
-	/** 已成功的提取只按成本延迟；不累积拒收指数，窗口最多一秒。 */
-	static long successfulExtractDelay(long costNanos) {
-		if (!isPathological(costNanos)) return 0L;
-		return Math.min(500_000_000L, costNanos) * 2L;
-	}
 }

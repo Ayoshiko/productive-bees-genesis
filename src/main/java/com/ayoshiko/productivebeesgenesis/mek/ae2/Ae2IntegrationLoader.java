@@ -109,7 +109,7 @@ public final class Ae2IntegrationLoader {
 	private static boolean detectAe2() {
 		// 1. 优先通过 FML 检测
 		try {
-			return net.neoforged.fml.loading.FMLLoader.getLoadingModList().getModFileById("ae2") != null;
+			return net.minecraftforge.fml.loading.FMLLoader.getLoadingModList().getModFileById("ae2") != null;
 		} catch (LinkageError | RuntimeException t) {
 			// FML 不可用（如测试环境），回退到反射检测（节流日志便于排查）
 			LogThrottle.warn("ae2_detect_fml",

@@ -1,0 +1,33 @@
+{
+  "conditions": [
+    {
+      "type": "forge:mod_loaded",
+      "modid": "evolvedmekanism"
+    }
+  ],
+  "type": "productivebeesgenesis:apiary_shaped",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "evolvedmekanism:alloys/hypercharged"
+    },
+    "C": {
+      "tag": "forge:circuits/overclocked"
+    },
+    "I": {
+      "tag": "forge:ingots/uranium"
+    },
+    "P": {
+      "item": "productivebeesgenesis:ultimate_mek_centrifuge_factory"
+    }
+  },
+  "pattern": [
+    "ACA",
+    "IPI",
+    "ACA"
+  ],
+  "result": {
+    "count": 1,
+    "item": "productivebeesgenesis:overclocked_mek_centrifuge_factory"
+  }
+}

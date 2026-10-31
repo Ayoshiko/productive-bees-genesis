@@ -2,9 +2,9 @@ package com.ayoshiko.productivebeesgenesis.config;
 
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.world.level.storage.LevelResource;
-import net.neoforged.fml.loading.FMLPaths;
-import net.neoforged.neoforge.common.ModConfigSpec;
-import net.neoforged.neoforge.server.ServerLifecycleHooks;
+import net.minecraftforge.fml.loading.FMLPaths;
+import net.minecraftforge.common.ForgeConfigSpec;
+import net.minecraftforge.server.ServerLifecycleHooks;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,7 +24,7 @@ public final class ServerConfigMigrationService {
 			"ProductiveBeesGenesis/ConfigMigration");
 	private static final LevelResource SERVER_CONFIG_DIRECTORY = new LevelResource("serverconfig");
 
-	private static final IdentityHashMap<ModConfigSpec, net.neoforged.fml.config.ModConfig> LOADED_CONFIGS =
+	private static final IdentityHashMap<ForgeConfigSpec, net.minecraftforge.fml.config.ModConfig> LOADED_CONFIGS =
 			new IdentityHashMap<>();
 	private static boolean attempted;
 	private static boolean reloadRequired;
@@ -36,8 +36,8 @@ public final class ServerConfigMigrationService {
 	 * 记录一个已加载的服务端配置；三个规格均就绪后最多执行一次迁移。
 	 * 客户端同步配置没有文件路径，会自动跳过磁盘迁移。
 	 */
-	public static synchronized void onConfigLoading(net.neoforged.fml.config.ModConfig config) {
-		if (config == null || !(config.getSpec() instanceof ModConfigSpec spec)
+	public static synchronized void onConfigLoading(net.minecraftforge.fml.config.ModConfig config) {
+		if (config == null || !(config.getSpec() instanceof ForgeConfigSpec spec)
 				|| !ModConfig.isServerSpec(spec)) {
 			return;
 		}
@@ -172,7 +172,7 @@ public final class ServerConfigMigrationService {
 				if (target.config() == null) return null;
 				result.add(new MigrationTarget(
 						target.fileName(), target.spec(), target.config().getFullPath(),
-						target.config().getLoadedConfig().config()));
+						target.config().getConfigData()));
 			}
 			return List.copyOf(result);
 		} catch (IllegalStateException exception) {
@@ -245,7 +245,7 @@ public final class ServerConfigMigrationService {
 	private static boolean isPristine(MigrationTarget target) {
 		if (!Files.exists(target.path())) return true;
 		CommentedConfig current = target.current();
-		for (ModConfigSpec.ConfigValue<?> value : ConfigTraversal.configValues(target.spec())) {
+		for (ForgeConfigSpec.ConfigValue<?> value : ConfigTraversal.configValues(target.spec())) {
 			Object configured = ConfigTraversal.readValue(value, current);
 			if (!Objects.deepEquals(configured, value.getDefault())) return false;
 		}
@@ -262,7 +262,7 @@ public final class ServerConfigMigrationService {
 	/** 已加载配置的实际路径与本次迁移目标是否不一致（NeoForge 绑定在全局 config 目录）。 */
 	private static boolean loadedPathsDiverge(MigrationScope scope) {
 		for (MigrationTarget target : scope.targets()) {
-			net.neoforged.fml.config.ModConfig config = LOADED_CONFIGS.get(target.spec());
+			net.minecraftforge.fml.config.ModConfig config = LOADED_CONFIGS.get(target.spec());
 			if (config == null) return true;
 			try {
 				if (!samePath(config.getFullPath(), target.path())) return true;
@@ -275,10 +275,10 @@ public final class ServerConfigMigrationService {
 
 	private static void applyInMemory(MigrationPlan plan, boolean force) {
 		for (PlannedTarget target : plan.targets()) {
-			net.neoforged.fml.config.ModConfig config = LOADED_CONFIGS.get(target.target().spec());
+			net.minecraftforge.fml.config.ModConfig config = LOADED_CONFIGS.get(target.target().spec());
 			if (config == null) continue;
 			if (!force && !samePath(config.getFullPath(), target.target().path())) continue;
-			CommentedConfig loaded = config.getLoadedConfig().config();
+			CommentedConfig loaded = config.getConfigData();
 			loaded.clear();
 			loaded.clearComments();
 			loaded.putAll(target.content());
@@ -293,8 +293,8 @@ public final class ServerConfigMigrationService {
 
 	record RuntimeTarget(
 			String fileName,
-			ModConfigSpec spec,
-			net.neoforged.fml.config.ModConfig config) {
+			ForgeConfigSpec spec,
+			net.minecraftforge.fml.config.ModConfig config) {
 		RuntimeTarget {
 			Objects.requireNonNull(fileName, "fileName");
 			Objects.requireNonNull(spec, "spec");
@@ -304,7 +304,7 @@ public final class ServerConfigMigrationService {
 
 	record MigrationTarget(
 			String fileName,
-			ModConfigSpec spec,
+			ForgeConfigSpec spec,
 			Path path,
 			CommentedConfig current) {
 		MigrationTarget {

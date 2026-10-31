@@ -1,10 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -15,21 +12,16 @@ import net.minecraft.resources.ResourceLocation;
  *
  * @param pos 离心机方块坐标
  */
-public record ReturnCentrifugeInputPayload(BlockPos pos) implements CustomPacketPayload {
+public record ReturnCentrifugeInputPayload(BlockPos pos)  {
 
 	/** 数据包类型标识。 */
-	public static final CustomPacketPayload.Type<ReturnCentrifugeInputPayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "return_centrifuge_input"));
 
 	/** 数据包编解码器。 */
-	public static final StreamCodec<ByteBuf, ReturnCentrifugeInputPayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, ReturnCentrifugeInputPayload::pos,
-					ReturnCentrifugeInputPayload::new);
 
-	@Override
-	public Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static ReturnCentrifugeInputPayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new ReturnCentrifugeInputPayload(buf.readBlockPos());
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+    }
 }

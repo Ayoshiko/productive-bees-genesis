@@ -5,13 +5,13 @@ import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModFluids;
 import cy.jdkdigital.productivebees.init.ModTags;
-import cy.jdkdigital.productivelib.common.block.entity.IUpgradeableBlockEntity;
+import cy.jdkdigital.productivelib.common.block.entity.UpgradeableBlockEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -21,7 +21,7 @@ import java.util.Set;
 public final class UselessByproductUpgradeHelper {
 
 	public static final ResourceLocation POLLEN_PUFF_ID =
-			ResourceLocation.fromNamespaceAndPath("the_bumblezone", "pollen_puff");
+			new ResourceLocation("the_bumblezone", "pollen_puff");
 	/** 只保存注册表物品的不可变集合；跨调用共享，标签重载和停服时释放。 */
 	private static volatile Set<Item> waxItems;
 
@@ -32,7 +32,7 @@ public final class UselessByproductUpgradeHelper {
 		if (blockEntity instanceof IPbUpgradeProvider provider) {
 			return provider.getPbUpgradeInstalledCount(PbUpgradeType.USELESS_BYPRODUCT) > 0;
 		}
-		if (blockEntity instanceof IUpgradeableBlockEntity upgradeable) {
+		if (blockEntity instanceof UpgradeableBlockEntity upgradeable) {
 			return upgradeable.getUpgradeCount(ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get()) > 0;
 		}
 		return false;
@@ -53,7 +53,7 @@ public final class UselessByproductUpgradeHelper {
 	private static synchronized Set<Item> resolveWaxItems() {
 		if (waxItems == null) {
 			Set<Item> items = Collections.newSetFromMap(new IdentityHashMap<>());
-			BuiltInRegistries.ITEM.getTag(ModTags.Common.WAXES).ifPresent(
+			BuiltInRegistries.ITEM.getTag(com.ayoshiko.productivebeesgenesis.util.ForgeBeeTags.WAXES).ifPresent(
 					tag -> tag.forEach(holder -> items.add(holder.value())));
 			waxItems = Collections.unmodifiableSet(items);
 		}

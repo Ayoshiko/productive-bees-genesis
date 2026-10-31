@@ -1,10 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.resource.ResourceInputAdmission;
-import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
@@ -60,20 +57,17 @@ final class ApiaryCentrifugeAcceptanceCache {
 			targetsRef = targetList;
 			recipeVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
 		}
-		int componentHash = stack.getComponents().hashCode();
+		int componentHash = com.ayoshiko.productivebeesgenesis.util.StackTags.hash(stack);
 		for (int i = 0; i < size; i++) {
 			// int 预筛：hash 不同必然不是同一产物，跳过昂贵的组件深比较
 			if (componentHashes[i] != componentHash) continue;
-			if (ItemStack.isSameItemSameComponents(stacks[i], stack)) return availableTargets(stack, targetList, targetMasks[i]);
+			if (ItemStack.isSameItemSameTags(stacks[i], stack)) return targetMasks[i];
 		}
 		long acceptedTargets = 0L;
 		int targetCount = Math.min(targetList.size(), Long.SIZE);
 		for (int i = 0; i < targetCount; i++) {
 			try {
-				var target = targetList.get(i);
-				boolean resourceRecipe = target.blockEntity.getLevel() instanceof ServerLevel level
-						&& ResourceRuntime.recipes(level.getServer()).centrifuge(stack) != null;
-				if (resourceRecipe || target.centrifuge.productivebeesgenesis$isValidInput(stack)) {
+				if (targetList.get(i).centrifuge.productivebeesgenesis$isValidInput(stack)) {
 					acceptedTargets |= 1L << i;
 				}
 			} catch (Exception | LinkageError e) {
@@ -88,17 +82,7 @@ final class ApiaryCentrifugeAcceptanceCache {
 			targetMasks[size] = acceptedTargets;
 			size++;
 		}
-		return availableTargets(stack, targetList, acceptedTargets);
-	}
-
-	private static long availableTargets(ItemStack stack, List<ApiaryDirectEjectTargets.Target> targets, long matching) {
-		for (int i = 0; i < targets.size() && i < Long.SIZE; i++) {
-			if ((matching & (1L << i)) == 0L) continue;
-			if (!ResourceInputAdmission.allows(targets.get(i).blockEntity, stack)) {
-				matching &= ~(1L << i);
-			}
-		}
-		return matching;
+		return acceptedTargets;
 	}
 
 	/** 丢弃全部记忆（拓扑、路由或配方变化时调用）。 */

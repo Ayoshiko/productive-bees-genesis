@@ -1,15 +1,15 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import mekanism.api.MekanismItemAbilities;
+import net.minecraftforge.common.ToolAction;
 import mekanism.common.util.MekanismUtils;
-import net.minecraft.core.component.DataComponents;
+
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
+
 
 import java.util.Set;
 
@@ -35,21 +35,21 @@ public final class WrenchCapabilityHelper {
 
 	/** 通用扳手标签 c:tools/wrench */
 	private static final TagKey<Item> WRENCH_TAG = TagKey.create(
-			Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "tools/wrench"));
+			Registries.ITEM, new ResourceLocation("c", "tools/wrench"));
 
 	/** 兜底匹配的扳手物品 ID（前 3 步判定失败时的最终保险） */
 	private static final Set<ResourceLocation> EXPLICIT_WRENCH_IDS = Set.of(
-			ResourceLocation.fromNamespaceAndPath("ae2", "certus_quartz_wrench"),
-			ResourceLocation.fromNamespaceAndPath("ae2", "nether_quartz_wrench"),
-			ResourceLocation.fromNamespaceAndPath("ae2", "network_tool"),
-			ResourceLocation.fromNamespaceAndPath("omnitools", "omni_wrench"),
-			ResourceLocation.fromNamespaceAndPath("omnitools", "omni_vajra"));
+			new ResourceLocation("ae2", "certus_quartz_wrench"),
+			new ResourceLocation("ae2", "nether_quartz_wrench"),
+			new ResourceLocation("ae2", "network_tool"),
+			new ResourceLocation("omnitools", "omni_wrench"),
+			new ResourceLocation("omnitools", "omni_vajra"));
 
 	/** OmniTools 在 ME 光束兼容模式下写入 ItemStack 的自定义数据键。 */
 	private static final String OMNITOOLS_MODE_TAG = "ToolMode";
 	private static final String OMNITOOLS_LINK_MODE = "link";
 	private static final ResourceLocation OMNITOOLS_WRENCH_ID =
-			ResourceLocation.fromNamespaceAndPath("omnitools", "omni_wrench");
+			new ResourceLocation("omnitools", "omni_wrench");
 
 	private WrenchCapabilityHelper() {
 		// 工具类禁止实例化
@@ -74,7 +74,7 @@ public final class WrenchCapabilityHelper {
 			return true;
 		}
 		// 3. WRENCH_DISMANTLE ItemAbility 检测
-		if (stack.canPerformAction(MekanismItemAbilities.WRENCH_DISMANTLE)) {
+		if (stack.canPerformAction(ToolAction.get("wrench_dismantle"))) {
 			return true;
 		}
 		// 4. 显式物品 ID 兜底（AE2 / OmniTools 等）
@@ -100,7 +100,6 @@ public final class WrenchCapabilityHelper {
 		if (!OMNITOOLS_WRENCH_ID.equals(itemId)) {
 			return false;
 		}
-		CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
-		return OMNITOOLS_LINK_MODE.equals(customData.copyTag().getString(OMNITOOLS_MODE_TAG));
+		return stack.hasTag() && OMNITOOLS_LINK_MODE.equals(stack.getTag().getString(OMNITOOLS_MODE_TAG));
 	}
 }

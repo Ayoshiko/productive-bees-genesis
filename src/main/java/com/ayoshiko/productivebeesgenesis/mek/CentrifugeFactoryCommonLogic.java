@@ -43,7 +43,6 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -83,10 +82,9 @@ public final class CentrifugeFactoryCommonLogic {
 	/** 校验输入物品是否有效（同时查找 SMELTING 和 PB 配方），带缓存 */
 	public static boolean isItemValidForSlot(@Nullable Level level, @NotNull ItemStack stack,
 			@NotNull InputValidationCache cache, @NotNull PbRecipeProcessor pbProcessor,
-			@NotNull IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
+			@NotNull IMekanismRecipeTypeProvider<ItemStackToItemStackRecipe,
 					SingleItem<ItemStackToItemStackRecipe>> recipeType, boolean allowSmelting) {
 		if (level == null) return false;
-		if (pbProcessor.acceptsResourceInput(stack)) return pbProcessor.allowsNewResourceInput(stack);
 		// Clear cached validation when the smelting-compat switch changes (O(1) flag compare per probe)
 		cache.setSmeltingAllowed(allowSmelting);
 		return cache.getResult(level, stack,
@@ -109,7 +107,6 @@ public final class CentrifugeFactoryCommonLogic {
 			@Nullable IInventorySlot tertiaryOutputSlot,
 			@NotNull InputOutputCompatibilityCache cache, @NotNull PbRecipeProcessor pbProcessor,
 			@NotNull BooleanSupplier superChecker) {
-		if (pbProcessor.acceptsResourceInput(fallbackInput)) return true;
 		return cache.get(level, fallbackInput, outputSlot.getStack(),
 				secondaryOutputSlot == null ? ItemStack.EMPTY : secondaryOutputSlot.getStack(),
 				tertiaryOutputSlot == null ? ItemStack.EMPTY : tertiaryOutputSlot.getStack(),
@@ -129,7 +126,6 @@ public final class CentrifugeFactoryCommonLogic {
 			return null;
 		}
 		ItemStack input = (ItemStack) inputHandlers[cacheIndex].getInput();
-		if (pbProcessor.hasResourceWork(cacheIndex) || pbProcessor.acceptsResourceInput(input)) return null;
 		if (!input.isEmpty() && (MyriadCreationsEventHandler.isMyriadCreationsItem(input)
 				|| pbProcessor.findPbRecipe(input) != null)) {
 			return null;
@@ -520,15 +516,6 @@ public final class CentrifugeFactoryCommonLogic {
 
 	// ===== PB 上下文计算 =====
 
-	public static int parallelOperations(int operations, int productivityParallel, int maximumOperations) {
-		int base = Math.max(1, operations);
-		if (maximumOperations > 0) {
-			base = Math.min(base, maximumOperations);
-		}
-		return SaturatingMath.saturatingToInt(
-				SaturatingMath.saturatingMultiply(base, Math.max(1, productivityParallel)));
-	}
-
 	/** 计算每刻操作数 — STACK 升级提供 2^stackUpgrades 倍并行 */
 	public static int operationsPerTick(@NotNull TileEntityMekanism tile, int baseTicksRequired) {
 		int maxOps = 1;
@@ -537,7 +524,7 @@ public final class CentrifugeFactoryCommonLogic {
 			// Saturate instead of int-shifting: CUSTOM profiles may allow 32 levels.
 			maxOps = SaturatingMath.saturatingPowerOfTwo(stackUpgrades);
 		}
-		int speedAdjustedOps = MekanismUtils.getOperationsPerTick(tile, baseTicksRequired, maxOps);
+		int speedAdjustedOps = com.ayoshiko.productivebeesgenesis.util.ForgeMachineOperations.getOperationsPerTick(tile, baseTicksRequired, maxOps);
 		return MekExtrasUpgradeSemantics.operationsPerTick(
 				MekUpgradeSupport.hasCreativeUpgrade(tile), maxOps, speedAdjustedOps);
 	}

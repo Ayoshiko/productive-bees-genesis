@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiInnerScreen;
 import mekanism.client.gui.element.scroll.GuiScrollList;
-import mekanism.client.render.IFancyFontRenderer.TextAlignment;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.TextAlignment;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
@@ -116,7 +116,7 @@ final class TagListWidget extends GuiScrollList {
 		super.renderForeground(guiGraphics, mouseX, mouseY);
 		List<TagPickerState.Row> current = rows.get();
 		if (current.isEmpty()) {
-			drawScaledScrollingString(guiGraphics, emptyText.get(), 0, 2, TextAlignment.CENTER,
+			com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, emptyText.get(), 0, 2, TextAlignment.CENTER,
 					GuiColors.TEXT_DARK_GRAY, barXShift, 2, false, TEXT_SCALE);
 			return;
 		}
@@ -128,7 +128,7 @@ final class TagListWidget extends GuiScrollList {
 			TagPickerState.Row row = current.get(index);
 			Component text = Component.literal(
 					(row.inExpression() ? CHECKED_PREFIX : UNCHECKED_PREFIX) + row.literal());
-			drawScaledScrollingString(guiGraphics, text, 0, 2 + ROW_HEIGHT * i, TextAlignment.LEFT,
+			com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, text, 0, 2 + ROW_HEIGHT * i, TextAlignment.LEFT,
 					row.inExpression() ? GuiColors.TEXT_NAME_ADDED_GREEN : GuiColors.TEXT_LIGHT_GRAY,
 					barXShift, 2, false, TEXT_SCALE);
 		}
@@ -137,7 +137,7 @@ final class TagListWidget extends GuiScrollList {
 	/** 鼠标所在的可见行序号（不是候选下标）；不在行区域返回 -1。 */
 	private int hoveredRow(double mouseX, double mouseY) {
 		if (mouseX < getX() + 1 || mouseX >= getX() + barXShift - 1) return -1;
-		if (mouseY < getY() + 1 || mouseY >= getBottom() - 1) return -1;
+		if (mouseY < getY() + 1 || mouseY >= (getY() + getHeight()) - 1) return -1;
 		int row = (int) ((mouseY - getY() - 1) / ROW_HEIGHT);
 		return row >= 0 && row < getFocusedElements() ? row : -1;
 	}

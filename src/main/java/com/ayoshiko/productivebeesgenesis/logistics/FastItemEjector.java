@@ -7,7 +7,7 @@ import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.item.CursedTransporterItemHandler;
-import mekanism.common.lib.inventory.HandlerTransitRequest;
+import mekanism.common.lib.inventory.TileTransitRequest;
 import mekanism.common.lib.inventory.TransitRequest;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.tile.base.TileEntityMekanism;
@@ -18,7 +18,7 @@ import mekanism.common.tile.component.config.slot.ISlotInfo;
 import mekanism.common.tile.component.config.slot.InventorySlotInfo;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.items.IItemHandler;
+import net.minecraftforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
@@ -59,7 +59,6 @@ public final class FastItemEjector {
 
 	/** 目标解析与能力缓存 */
 	private final NeighborItemTargets targets;
-	private final TileEntityMekanism owner;
 
 	/** 每个输出面独立计费，避免慢目标阻塞其它方向的普通容器。 */
 	private final NeighborItemTransferState[] transferStates = new NeighborItemTransferState[6];
@@ -77,7 +76,6 @@ public final class FastItemEjector {
 	private final SameTickFailureGate sameTickGate = new SameTickFailureGate();
 
 	/** 逻辑运输管道请求使用的槽位视图，实例复用以避免每次包装列表。 */
-	private final SlotListItemHandler transporterSource = new SlotListItemHandler();
 	private int transporterCursor;
 
 	/**
@@ -85,7 +83,6 @@ public final class FastItemEjector {
 	 */
 	public FastItemEjector(TileEntityMekanism tile) {
 		this.targets = new NeighborItemTargets(tile);
-		this.owner = tile;
 	}
 
 	/** 侧面配置变更时调用。 */
@@ -108,7 +105,7 @@ public final class FastItemEjector {
 	 */
 	public void tick(TileEntityMekanism tile, TileComponentEjector ejector,
 			@Nullable ConfigInfo itemConfig, long gameTime, long outputVersion, boolean hasOutput) {
-		if (OutputCustody.of(owner).blocked() || itemConfig == null || !ejector.isEjecting(itemConfig, TransmissionType.ITEM)) return;
+		if (itemConfig == null || !ejector.isEjecting(itemConfig, TransmissionType.ITEM)) return;
 		if (!hasOutput) {
 			consecutiveIdleTicks = 0;
 			clearBackoff();
@@ -125,7 +122,7 @@ public final class FastItemEjector {
 		for (DataType dataType : itemConfig.getSupportedDataTypes()) {
 			if (!dataType.canOutput()) continue;
 			ISlotInfo slotInfo = itemConfig.getSlotInfo(dataType);
-			if (!(slotInfo instanceof InventorySlotInfo inventorySlotInfo) || slotInfo.isEmpty()) continue;
+			if (!(slotInfo instanceof InventorySlotInfo inventorySlotInfo)) continue;
 			List<IInventorySlot> slots = inventorySlotInfo.getSlots();
 			if (slots.isEmpty()) continue;
 			for (Direction side : sides) {
@@ -133,11 +130,10 @@ public final class FastItemEjector {
 						tile.getDirection(), side)) != dataType) {
 					continue; // 该方向配置的是别的 DataType，槽位集合不同
 				}
-				IItemHandler target;
-			try { target = targets.handler(side); } catch (RuntimeException error) { continue; }
+				IItemHandler target = targets.handler(side);
 				if (target == null) continue;
 				if (target instanceof CursedTransporterItemHandler) {
-					moved += pushToTransporter(tile, ejector, slots, target);
+					moved += pushToTransporter(tile, ejector, slots, side);
 					continue;
 				}
 				moved += pushSlots(slots, transferState(side, target), gameTime);
@@ -160,25 +156,25 @@ public final class FastItemEjector {
 
 	/** 通过 Mekanism 公共路由协议向逻辑运输管道发送一种物品。 */
 	private long pushToTransporter(TileEntityMekanism tile, TileComponentEjector ejector,
-			List<IInventorySlot> slots, IItemHandler target) {
-		var custody = OutputCustody.of(owner);
-		if (custody.blocked()) return 0;
-		for (int offset = 0; offset < slots.size(); offset++) {
-			int index = RoundRobinSlotTraversal.index(transporterCursor, offset, slots.size());
-			IInventorySlot slot = slots.get(index);
-			ItemStack taken = slot.extractItem(slot.getCount(), Action.EXECUTE, AutomationType.EXTERNAL);
-			if (taken.isEmpty()) continue;
-			transporterCursor = RoundRobinSlotTraversal.advance(index, slots.size());
-			var request = TransitRequest.simple(taken.copy());
-			int handed = custody.handoffItem(taken, "transporter", () -> {
-				var response = request.eject(tile, target, 0, ignored -> ejector.getOutputColor());
-				return response.isEmpty() ? 0 : response.getSendingAmount();
-			});
-			ItemStack rest = taken.copyWithCount(taken.getCount() - handed);
-			if (!rest.isEmpty()) returnHome(slots, slot, rest);
-			return handed;
+			List<IInventorySlot> slots, Direction side) {
+		TileTransitRequest request = new TileTransitRequest(tile, side);
+		transporterCursor = EjectItemMapBuilder.build(request, slots, transporterCursor);
+		if (request.isEmpty()) return 0L;
+		try {
+			if (tile.getLevel() == null || !tile.getLevel().hasChunkAt(tile.getBlockPos().relative(side))) return 0L;
+			if (!(tile.getLevel().getBlockEntity(tile.getBlockPos().relative(side)) instanceof
+					mekanism.common.tile.transmitter.TileEntityLogisticalTransporterBase transporter)) return 0L;
+			TransitRequest.TransitResponse response = transporter.getTransmitter().insert(
+					tile, request, ejector.getOutputColor(), true, 0);
+			if (response.isEmpty()) return 0L;
+			int sendingAmount = response.getSendingAmount();
+			response.useAll();
+			return sendingAmount;
+		} catch (Exception exception) {
+			LogThrottle.warn("fast_eject_transporter",
+					"逻辑运输管道路由异常，已停止本次发送: {}", exception.toString());
+			return 0L;
 		}
-		return 0;
 	}
 
 	/**
@@ -200,7 +196,7 @@ public final class FastItemEjector {
 
 	public int pushDirect(TileComponentEjector ejector, @Nullable ConfigInfo itemConfig,
 			ItemStack stack, int amount, long gameTime) {
-		if (OutputCustody.of(owner).blocked() || stack.isEmpty() || amount <= 0 || itemConfig == null) return 0;
+		if (stack.isEmpty() || amount <= 0 || itemConfig == null) return 0;
 		if (!ejector.isEjecting(itemConfig, TransmissionType.ITEM)) return 0;
 		List<Direction> sides = targets.outputSides(itemConfig);
 		if (sides.isEmpty()) return 0;
@@ -208,9 +204,8 @@ public final class FastItemEjector {
 		int total = amount;
 		int inserted = 0;
 		for (Direction side : sides) {
-			if (inserted >= total || OutputCustody.of(owner).blocked()) break;
-			IItemHandler target;
-			try { target = targets.handler(side); } catch (RuntimeException error) { continue; }
+			if (inserted >= total) break;
+			IItemHandler target = targets.handler(side);
 			// 逻辑运输管道必须从真实输出槽构建 TransitRequest；未入槽产物先回落输出槽，
 			// 再由逐刻快速通道按颜色与路由协议发送。
 			if (target == null || target instanceof CursedTransporterItemHandler) continue;
@@ -221,7 +216,7 @@ public final class FastItemEjector {
 			ItemStack offered = stack.copyWithCount(want);
 			long started = System.nanoTime();
 			try {
-				ItemStack leftover = ItemPushHelper.insert(target, offered, OutputCustody.of(owner), side.toString());
+				ItemStack leftover = ItemPushHelper.insert(target, offered);
 				int accepted = Math.max(0, want - (leftover.isEmpty() ? 0 : leftover.getCount()));
 				inserted += accepted;
 				if (accepted == 0) state.rememberRejected(offered, gameTime);
@@ -244,7 +239,7 @@ public final class FastItemEjector {
 		int start = RoundRobinSlotTraversal.normalize(state.slotCursor, slotCount);
 		long moved = 0L;
 		for (int offset = 0; offset < slotCount; offset++) {
-			if (OutputCustody.of(owner).blocked() || !state.budget.canAttempt(gameTime, false)) break;
+			if (!state.budget.canAttempt(gameTime, false)) break;
 			int slotIndex = RoundRobinSlotTraversal.index(start, offset, slotCount);
 			state.slotCursor = RoundRobinSlotTraversal.advance(slotIndex, slotCount);
 			IInventorySlot slot = slots.get(slotIndex);
@@ -262,7 +257,7 @@ public final class FastItemEjector {
 				}
 				ItemStack taken = slot.extractItem(accepted, Action.EXECUTE, AutomationType.EXTERNAL);
 				if (taken.isEmpty()) continue;
-				ItemStack leftover = ItemPushHelper.insert(state.target, taken, OutputCustody.of(owner), "neighbor");
+				ItemStack leftover = ItemPushHelper.insert(state.target, taken);
 				moved += taken.getCount() - (leftover.isEmpty() ? 0 : leftover.getCount());
 				if (!leftover.isEmpty()) returnHome(slots, slot, leftover);
 			} finally {
@@ -278,17 +273,18 @@ public final class FastItemEjector {
 	 * 先放回原槽（刚抽走必然有空间），再尝试同组其它槽；使用 INTERNAL 以通过输出槽的
 	 * 「仅内部可插入」谓词。
 	 */
-	private void returnHome(List<IInventorySlot> slots, IInventorySlot source, ItemStack leftover) {
-		ItemStack remaining = leftover.copy();
-		for (int i = -1; i < slots.size() && !remaining.isEmpty(); i++) {
-			IInventorySlot slot = i < 0 ? source : slots.get(i);
-			if (slot == null || i >= 0 && slot == source) continue;
-			ItemStack offered = remaining.copy();
-			int handed = OutputCustody.of(owner).handoffItem(offered, "return-home", () ->
-					ItemPushHelper.accepted(offered, slot.insertItem(offered.copy(), Action.EXECUTE, AutomationType.INTERNAL)));
-			remaining.shrink(handed);
+	private static void returnHome(List<IInventorySlot> slots, IInventorySlot source, ItemStack leftover) {
+		ItemStack remaining = source.insertItem(leftover, Action.EXECUTE, AutomationType.INTERNAL);
+		for (int i = 0; i < slots.size() && !remaining.isEmpty(); i++) {
+			IInventorySlot slot = slots.get(i);
+			if (slot == null || slot == source) continue;
+			remaining = slot.insertItem(remaining, Action.EXECUTE, AutomationType.INTERNAL);
 		}
-		if (!remaining.isEmpty()) OutputCustody.of(owner).retainItem(remaining, "return-home-full");
+		if (!remaining.isEmpty()) {
+			LogThrottle.warn("fast_eject_return",
+					"目标容器的模拟与执行结果不一致，且产物无法放回输出槽: {} x{}",
+					remaining.getItem(), remaining.getCount());
+		}
 	}
 
 	private NeighborItemTransferState transferState(Direction side, IItemHandler target) {

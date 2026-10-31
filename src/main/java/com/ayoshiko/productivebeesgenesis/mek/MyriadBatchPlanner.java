@@ -230,7 +230,7 @@ public final class MyriadBatchPlanner {
 				for (int i = 0; i < slotCount; i++) {
 					IInventorySlot slot = slots.get(i);
 					if (slot == null || (!empty[i] && (slotTemplates[i] == null
-							|| !ItemStack.isSameItemSameComponents(slotTemplates[i], key)))) continue;
+							|| !ItemStack.isSameItemSameTags(slotTemplates[i], key)))) continue;
 					int remaining = safeGetSlotLimit(slot, key) - slotCounts[i];
 					if (remaining <= 0) continue;
 					// 相同模板/数量的模拟请求可跨槽复用；仍逐槽检查内部插入权限。
@@ -553,7 +553,7 @@ public final class MyriadBatchPlanner {
 		ItemStack cached = TEMPLATE_CACHE.get(key);
 		if (cached != null) return cached;
 		ItemStack template = new ItemStack(baseItem);
-		template.set(PbDataComponents.beeType(), beeType);
+		PbDataComponents.setBeeType(template, beeType);
 		if (TEMPLATE_CACHE.size() < TEMPLATE_CACHE_CAPACITY) TEMPLATE_CACHE.put(key, template);
 		return template;
 	}

@@ -16,6 +16,7 @@ import mekanism.client.gui.element.slot.SlotType;
 import mekanism.client.gui.element.tab.GuiEnergyTab;
 import mekanism.client.gui.element.tab.GuiRedstoneControlTab;
 import mekanism.client.gui.element.tab.GuiWarningTab;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.inventory.warning.IWarningTracker;
@@ -156,7 +157,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 
 		addRenderableWidget(new GuiEnergyTab(this, tile.getEnergyContainer(),
 				new EnergyUsageDisplaySmoother(() -> tile.getActive()
-						? tile.getEnergyContainer().getEnergyPerTick() : 0L)));
+						? com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(tile.getEnergyContainer().getEnergyPerTick()) : 0L)));
 
 		feederTab = addRenderableWidget(new GuiFeederTab(this, tile, () -> feederTab));
 		pbUpgradeTab = addRenderableWidget(new GuiPbUpgradeTab<>(this, tile, () -> pbUpgradeTab));
@@ -212,7 +213,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	 */
 	@Override
 	protected void addWarningTab(IWarningTracker warningTracker) {
-		GuiWarningTab tab = addRenderableWidget(new GuiWarningTab(this, warningTracker, true));
+		GuiWarningTab tab = addRenderableWidget(new GuiWarningTab(this, warningTracker, 109));
 		int warningDeltaY = ApiaryGuiLayoutHelper.getWarningTabDeltaY(getBeeRows());
 		if (warningDeltaY != 0) {
 			tab.move(0, warningDeltaY);
@@ -256,7 +257,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	@Override
 	protected void drawForegroundText(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY) {
 		renderTitleText(guiGraphics);
-		renderInventoryText(guiGraphics);
+		guiGraphics.drawString(getFont(), playerInventoryTitle, inventoryLabelX, inventoryLabelY, screenTextColor(), false);
 		if (outputPageControls != null && menu instanceof IPagedOutputContainer paged) {
 			outputPageControls.renderPageText(guiGraphics, font, paged);
 		}
@@ -277,7 +278,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 	 */
 	protected void renderBeeVisuals(GuiGraphics guiGraphics, int mouseX, int mouseY) {
 		boolean compactMode = getBeeRows() >= ApiaryGuiLayoutHelper.COMPACT_MODE_THRESHOLD;
-		beeVisuals.render(guiGraphics, tile, beeGeometry(), font(), compactMode);
+		beeVisuals.render(guiGraphics, tile, beeGeometry(), getFont(), compactMode);
 	}
 
 	/**

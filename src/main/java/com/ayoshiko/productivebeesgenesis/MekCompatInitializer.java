@@ -107,7 +107,7 @@ final class MekCompatInitializer {
 			return null;
 		}
 		try {
-			Class<?> tierClass = Class.forName("com.jerry.mekextras.common.tier.ExtraFactoryTier");
+			Class<?> tierClass = Class.forName("com.jerry.mekanism_extras.common.tier.ExtraFactoryTier");
 			Object meAbsoluteTier = tierClass.getField("ABSOLUTE").get(null);
 			if (meAbsoluteTier == null) {
 				return null;

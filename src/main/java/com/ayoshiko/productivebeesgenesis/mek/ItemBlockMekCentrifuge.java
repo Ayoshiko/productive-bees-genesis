@@ -6,19 +6,13 @@ import com.ayoshiko.productivebeesgenesis.util.ItemStackBlockEntityDataHelper;
 import com.ayoshiko.productivebeesgenesis.util.NumberFormatter;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
-import mekanism.api.security.IItemSecurityUtils;
 import mekanism.api.text.EnumColor;
 import mekanism.common.MekanismLang;
-import mekanism.common.attachments.component.UpgradeAware;
-import mekanism.common.attachments.containers.energy.EnergyContainersBuilder;
-import mekanism.common.attachments.containers.fluid.AttachedFluids;
-import mekanism.common.attachments.containers.item.AttachedItems;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeFactoryType;
 import mekanism.common.block.attribute.AttributeUpgradeSupport;
 import mekanism.common.block.attribute.Attributes.AttributeInventory;
 import mekanism.common.item.block.ItemBlockTooltip;
-import mekanism.common.registries.MekanismDataComponents;
 import mekanism.common.tier.FactoryTier;
 import mekanism.common.util.text.BooleanStateDisplay.YesNo;
 import mekanism.common.util.text.UpgradeDisplay;
@@ -30,7 +24,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -64,13 +58,11 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 	private static Item.Properties addFactoryComponents(MekCentrifugeBlock<?, ?> block, Item.Properties properties) {
 		// 原版/EM/ME工厂使用AttributeFactoryType
 		if (Attribute.has(block, AttributeFactoryType.class)) {
-			properties.component(MekanismDataComponents.SORTING, false);
 			// EJECTOR和SIDE_CONFIG已在machineItemProperties中设置，此处不再覆盖
 			// 避免覆盖离心机专用侧面配置（MEK_CENTRIFUGE_SIDE_CONFIG包含流体右侧输出）
 		}
 		// EME工厂使用EMExtraAttributeFactoryType — 仅在 EME 已加载时检查，避免 NoClassDefFoundError
 		else if (OptionalFactoryItemSupport.hasEmeFactoryType(block)) {
-			properties.component(MekanismDataComponents.SORTING, false);
 			// EJECTOR和SIDE_CONFIG已在machineItemProperties中设置，此处不再覆盖
 		}
 		return properties;
@@ -124,7 +116,7 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 	 * 数据来源：getDrops()写入BLOCK_ENTITY_DATA的saveCustomDataForItem()NBT。
 	 */
 	@Override
-	protected void addStats(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
+	protected void addStats(@NotNull ItemStack stack, @NotNull net.minecraft.world.level.Level context,
 							@NotNull List<Component> tooltip, @NotNull TooltipFlag flag) {
 		super.addStats(stack, context, tooltip, flag);
 		CompoundTag customNbt = ItemStackBlockEntityDataHelper.readCustomBlockEntityData(stack);
@@ -155,23 +147,10 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 	 * super 失败（被 try-catch 吞掉）时调用 addMekUpgradesDetails 独立渲染升级信息。
 	 */
 	@Override
-	protected void addDetails(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
+	protected void addDetails(@NotNull ItemStack stack, @NotNull net.minecraft.world.level.Level context,
 			@NotNull List<Component> tooltip, @NotNull TooltipFlag flag) {
-		// Mekanism's implementation rebuilds attachment-backed fluid tanks through the
-		// registered creator. Factory items may carry N tanks while older creators only
-		// describe one, so read the immutable attachment data directly instead.
-		IItemSecurityUtils.INSTANCE.addSecurityTooltip(stack, tooltip);
-		addTypeDetails(stack, context, tooltip, flag);
+		super.addDetails(stack, context, tooltip, flag);
 		addCentrifugeFluidDetails(stack, context, tooltip);
-		if (Attribute.has(getBlock(), AttributeInventory.class)) {
-			AttachedItems attachedItems = stack.get(MekanismDataComponents.ATTACHED_ITEMS);
-			boolean hasInventory = attachedItems != null
-					&& attachedItems.containers().stream().anyMatch(item -> !item.isEmpty());
-			tooltip.add(MekanismLang.HAS_INVENTORY.translateColored(
-					EnumColor.AQUA, EnumColor.GRAY, YesNo.of(hasInventory, true)));
-		}
-		addMekUpgradesDetails(stack, tooltip);
-		// 追加离心机专属 Shift 详情 — 各 PB 升级类型安装数量
 		addCentrifugeSpecificDetails(stack, tooltip);
 	}
 
@@ -192,17 +171,7 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 	 * @param tooltip  tooltip 列表
 	 */
 	private void addMekUpgradesDetails(@NotNull ItemStack stack, @NotNull List<Component> tooltip) {
-		try {
-			if (!Attribute.has(getBlock(), AttributeUpgradeSupport.class)) return;
-			UpgradeAware upgradeAware = stack.get(MekanismDataComponents.UPGRADES);
-			if (upgradeAware == null) return;
-			for (Map.Entry<Upgrade, Integer> entry : upgradeAware.upgrades().entrySet()) {
-				tooltip.add(UpgradeDisplay.of(entry.getKey(), entry.getValue()).getTextComponent());
-			}
-		} catch (Exception e) {
-			// 防御：UPGRADES 组件缺失或格式异常时跳过，不影响其他 tooltip 渲染
-			ProductiveBeesGenesis.LOGGER.warn("渲染离心机 MEK 升级 tooltip 时异常", e);
-		}
+		// Standard upgrades are rendered by the inherited Mekanism NBT tooltip.
 	}
 
 	/**
@@ -252,7 +221,7 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 	 *   <li>异常：由 addDetails 外层 try-catch 兜底，仅记录警告日志</li>
 	 * </ul>
 	 */
-	private void addCentrifugeFluidDetails(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
+	private void addCentrifugeFluidDetails(@NotNull ItemStack stack, @NotNull net.minecraft.world.level.Level context,
 			@NotNull List<Component> tooltip) {
 		CompoundTag customNbt = ItemStackBlockEntityDataHelper.readCustomBlockEntityData(stack);
 		List<FluidStack> storedFluids = new java.util.ArrayList<>();
@@ -262,16 +231,8 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 			ListTag list = root.getList("tanks", Tag.TAG_COMPOUND);
 			for (int i = 0; i < list.size(); i++) {
 				CompoundTag entry = list.getCompound(i);
-				FluidStack fluid = FluidStack.parseOptional(context.registries(), entry.getCompound("fluidStack"));
+				FluidStack fluid = FluidStack.loadFluidStackFromNBT(entry.getCompound("fluidStack"));
 				if (!fluid.isEmpty()) storedFluids.add(fluid);
-			}
-		}
-		if (storedFluids.isEmpty()) {
-			AttachedFluids attachedFluids = stack.get(MekanismDataComponents.ATTACHED_FLUIDS);
-			if (attachedFluids != null) {
-				for (FluidStack fluid : attachedFluids.containers()) {
-					if (!fluid.isEmpty()) storedFluids.add(fluid);
-				}
 			}
 		}
 		if (storedFluids.isEmpty()) return;
@@ -281,7 +242,7 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 		for (FluidStack fluid : storedFluids) {
 			tooltip.add(Component.literal(" ")
 					.append(Component.translatable("tooltip.productivebeesgenesis.fluid_entry",
-							fluid.getHoverName(), fluid.getAmount()))
+							fluid.getDisplayName(), fluid.getAmount()))
 					.withStyle(ChatFormatting.GRAY));
 		}
 	}
@@ -312,7 +273,7 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 	 * 由外层 try-catch 兜底，仅记录警告日志而不影响客户端 tooltip 渲染。
 	 */
 	@Override
-	protected void addTypeDetails(@NotNull ItemStack stack, @NotNull Item.TooltipContext context,
+	protected void addTypeDetails(@NotNull ItemStack stack, @NotNull net.minecraft.world.level.Level context,
 			@NotNull List<Component> tooltip, @NotNull TooltipFlag flag) {
 		try {
 			// 原版/EM/ME工厂
@@ -334,7 +295,4 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 	}
 
 	/** 公开父类protected方法，供MekCentrifugeContainerRegistrar调用 */
-	public EnergyContainersBuilder buildDefaultEnergyContainers(EnergyContainersBuilder builder) {
-		return addDefaultEnergyContainers(builder);
-	}
 }

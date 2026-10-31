@@ -13,7 +13,7 @@ import cy.jdkdigital.productivebees.ProductiveBeesConfig;
 	 * </ul>
 	 * 玩家修改 PB 配置文件后，本模组蜂箱/离心机的升级效果会同步生效。
 	 * <p>
-	 * 性能：{@code ModConfigSpec.DoubleValue.get()} 是内存值读取（config 加载时解析一次），
+	 * 性能：{@code ForgeConfigSpec.DoubleValue.get()} 是内存值读取（config 加载时解析一次），
 	 * 开销约等于 volatile 读，可在升级倍率计算路径直接调用；上游倍率已有 100-tick 缓存。
 	 * <p>
 	 * 线程安全：PB 配置在服务端/客户端各自持有同步值，get() 线程安全。
@@ -77,14 +77,7 @@ public final class PbUpgradeConfig {
 	 * @return 配置值；配置未就绪或异常时回退 0.15（PB 默认）
 	 */
 	public static float stabilityChanceIncrease() {
-		try {
-			var upgrades = ProductiveBeesConfig.UPGRADES;
-			if (upgrades == null) {
-				return DEFAULT_STABILITY_BONUS;
-			}
-			return (float) upgrades.stabilityChanceIncrease.get().doubleValue();
-		} catch (RuntimeException e) {
-			return DEFAULT_STABILITY_BONUS;
-		}
+		// PB 12 has no stability configuration; Genesis retains the PB 13 default.
+		return DEFAULT_STABILITY_BONUS;
 	}
 }

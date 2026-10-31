@@ -20,8 +20,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
-import net.neoforged.neoforge.registries.DeferredBlock;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraftforge.registries.RegistryObject;
+import net.minecraftforge.registries.DeferredRegister;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,68 +41,68 @@ import java.util.concurrent.ConcurrentHashMap;
 	 */
 public final class ModBlocks {
 
-	public static final DeferredRegister.Blocks BLOCKS =
-			DeferredRegister.createBlocks(ProductiveBeesGenesis.MOD_ID);
+	public static final DeferredRegister<net.minecraft.world.level.block.Block> BLOCKS =
+			DeferredRegister.create(net.minecraftforge.registries.ForgeRegistries.BLOCKS, ProductiveBeesGenesis.MOD_ID);
 
 	/** 基础MEK离心机 */
-	public static final DeferredBlock<MekCentrifugeBlock<TileEntityMekCentrifuge,
+	public static final RegistryObject<MekCentrifugeBlock<TileEntityMekCentrifuge,
 		BlockTypeTile<TileEntityMekCentrifuge>>> MEK_CENTRIFUGE =
 			BLOCKS.register("mek_centrifuge", () -> new MekCentrifugeBlock<>(MekCentrifugeBlockType.MEK_CENTRIFUGE));
 
 	/** MEK通用机械蜂箱 — 基础机器版本，生产周期1200 ticks */
-	public static final DeferredBlock<MekApiaryBlock<TileEntityMekApiary, BlockTypeTile<TileEntityMekApiary>>> MEK_APIARY =
+	public static final RegistryObject<MekApiaryBlock<TileEntityMekApiary, BlockTypeTile<TileEntityMekApiary>>> MEK_APIARY =
 			BLOCKS.register("mek_apiary", () -> new MekApiaryBlock<>(MekApiaryBlockType.MEK_APIARY));
 
 	/** 通用机械蜂箱 — 基础工厂版（5蜜蜂/9输出/128,000 FE） */
-	public static final DeferredBlock<MekApiaryBlock<TileEntityMekApiaryFactory,
+	public static final RegistryObject<MekApiaryBlock<TileEntityMekApiaryFactory,
 		BlockTypeTile<TileEntityMekApiaryFactory>>> BASIC_MEK_APIARY_FACTORY =
 			BLOCKS.register("basic_mek_apiary_factory",
 					() -> new MekApiaryBlock<>(MekApiaryFactoryBlockType.BASIC_MEK_APIARY_FACTORY));
 
 	/** 通用机械蜂箱 — 高级工厂版（10蜜蜂/12输出/256,000 FE） */
-	public static final DeferredBlock<MekApiaryBlock<TileEntityMekApiaryFactory,
+	public static final RegistryObject<MekApiaryBlock<TileEntityMekApiaryFactory,
 		BlockTypeTile<TileEntityMekApiaryFactory>>> ADVANCED_MEK_APIARY_FACTORY =
 			BLOCKS.register("advanced_mek_apiary_factory",
 					() -> new MekApiaryBlock<>(MekApiaryFactoryBlockType.ADVANCED_MEK_APIARY_FACTORY));
 
 	/** 通用机械蜂箱 — 精英工厂版（15蜜蜂/15输出/512,000 FE） */
-	public static final DeferredBlock<MekApiaryBlock<TileEntityMekApiaryFactory,
+	public static final RegistryObject<MekApiaryBlock<TileEntityMekApiaryFactory,
 		BlockTypeTile<TileEntityMekApiaryFactory>>> ELITE_MEK_APIARY_FACTORY =
 			BLOCKS.register("elite_mek_apiary_factory",
 					() -> new MekApiaryBlock<>(MekApiaryFactoryBlockType.ELITE_MEK_APIARY_FACTORY));
 
 	/** 通用机械蜂箱 — 终极工厂版（20蜜蜂/18输出/1,024,000 FE） */
-	public static final DeferredBlock<MekApiaryBlock<TileEntityMekApiaryFactory,
+	public static final RegistryObject<MekApiaryBlock<TileEntityMekApiaryFactory,
 		BlockTypeTile<TileEntityMekApiaryFactory>>> ULTIMATE_MEK_APIARY_FACTORY =
 			BLOCKS.register("ultimate_mek_apiary_factory",
 					() -> new MekApiaryBlock<>(MekApiaryFactoryBlockType.ULTIMATE_MEK_APIARY_FACTORY));
 
 	/** 基础工厂 */
-	public static final DeferredBlock<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
+	public static final RegistryObject<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
 		Machine.FactoryMachine<TileEntityMekCentrifugeFactory>>> BASIC_MEK_CENTRIFUGE_FACTORY =
 			BLOCKS.register("basic_mek_centrifuge_factory",
 					() -> new MekCentrifugeBlock<>(MekCentrifugeBlockType.BASIC_MEK_CENTRIFUGE_FACTORY));
 
 	/** 高级工厂 */
-	public static final DeferredBlock<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
+	public static final RegistryObject<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
 		Machine.FactoryMachine<TileEntityMekCentrifugeFactory>>> ADVANCED_MEK_CENTRIFUGE_FACTORY =
 			BLOCKS.register("advanced_mek_centrifuge_factory",
 					() -> new MekCentrifugeBlock<>(MekCentrifugeBlockType.ADVANCED_MEK_CENTRIFUGE_FACTORY));
 
 	/** 精英工厂 */
-	public static final DeferredBlock<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
+	public static final RegistryObject<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
 		Machine.FactoryMachine<TileEntityMekCentrifugeFactory>>> ELITE_MEK_CENTRIFUGE_FACTORY =
 			BLOCKS.register("elite_mek_centrifuge_factory",
 					() -> new MekCentrifugeBlock<>(MekCentrifugeBlockType.ELITE_MEK_CENTRIFUGE_FACTORY));
 
 	/** 终极工厂 */
-	public static final DeferredBlock<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
+	public static final RegistryObject<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
 		Machine.FactoryMachine<TileEntityMekCentrifugeFactory>>> ULTIMATE_MEK_CENTRIFUGE_FACTORY =
 			BLOCKS.register("ultimate_mek_centrifuge_factory",
 					() -> new MekCentrifugeBlock<>(MekCentrifugeBlockType.ULTIMATE_MEK_CENTRIFUGE_FACTORY));
 
 	/** 无尽·创世蜜脾块 — 自定义蜜脾方块，属性参考PB蜜脾块 */
-	public static final DeferredBlock<Block> INFINITY_CREATION_COMB_BLOCK =
+	public static final RegistryObject<Block> INFINITY_CREATION_COMB_BLOCK =
 			BLOCKS.register("infinitycreation_comb_block", () -> new Block(BlockBehaviour.Properties.of()
 					.mapColor(MapColor.COLOR_PURPLE)
 					.sound(SoundType.WOOD)
@@ -116,40 +116,40 @@ public final class ModBlocks {
 	 * 使用具体泛型类型（与原版4等级一致），确保ModBlockEntities的类型推断正确。
 	 * 使用ConcurrentHashMap保证线程安全（填充与查询可能并发）。
 	 */
-	public static final Map<FactoryTier, DeferredBlock<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
+	public static final Map<FactoryTier, RegistryObject<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
 		Machine.FactoryMachine<TileEntityMekCentrifugeFactory>>>> EM_FACTORIES = new ConcurrentHashMap<>();
 
 	/**
 	 * ME工厂方块映射 — 由registerMEFactories()在ME加载时填充
 	 * <br/>
 	 * Key=ExtraFactoryTier（ME独立枚举，运行时由 compat 包写入），Value=对应的DeferredBlock。
-	 * 使用通配类型 {@code Map<Object, DeferredBlock<?>>} 避免主注册类编译期依赖 ME 的类
+	 * 使用通配类型 {@code Map<Object, RegistryObject<?>>} 避免主注册类编译期依赖 ME 的类
 	 * （ExtraFactoryTier/ExtraMachine/TileEntityExtraMekCentrifugeFactory 等）。
 	 * 实际的具体泛型类型在 compat 包的隔离类中通过强制转换恢复，仅在 ME 加载时被调用。
 	 * 使用ConcurrentHashMap保证线程安全。
 	 */
-	public static final Map<Object, DeferredBlock<?>> ME_FACTORIES = new ConcurrentHashMap<>();
+	public static final Map<Object, RegistryObject<?>> ME_FACTORIES = new ConcurrentHashMap<>();
 
 	/**
 	 * EME工厂方块映射 — 由registerEMEFactories()在EME加载时填充
 	 * <br/>
 	 * Key=EMExtraFactoryTier（EME 独立枚举，编译时不存在），Value=对应的DeferredBlock。
-	 * 使用通配类型 {@code Object}/{@code DeferredBlock<?>}，避免主注册类编译期依赖 EME 类。
+	 * 使用通配类型 {@code Object}/{@code RegistryObject<?>}，避免主注册类编译期依赖 EME 类。
 	 * 实际填充由 {@link EMECompatLoader#registerCentrifugeBlocks()} 委托
 	 * {@link com.ayoshiko.productivebeesgenesis.compat.emextras.EMEBlockRegistration} 完成。
 	 * 使用ConcurrentHashMap保证线程安全。
 	 */
-	public static final Map<Object, DeferredBlock<?>> EME_FACTORIES = new ConcurrentHashMap<>();
+	public static final Map<Object, RegistryObject<?>> EME_FACTORIES = new ConcurrentHashMap<>();
 
 	/**
 	 * ME 蜂箱工厂方块映射 — 由 registerMEApiaryFactories() 在 ME 加载时填充
 	 * <br/>
 	 * Key=ExtraFactoryTier（ME 独立枚举，运行时由 compat 包写入），Value=对应的 DeferredBlock。
-	 * 使用通配类型 {@code Map<Object, DeferredBlock<?>>} 避免主注册类编译期依赖 ME 的类。
+	 * 使用通配类型 {@code Map<Object, RegistryObject<?>>} 避免主注册类编译期依赖 ME 的类。
 	 * 实际的具体泛型类型在 compat 包的隔离类中通过强制转换恢复。
 	 * 使用 ConcurrentHashMap 保证线程安全。
 	 */
-	public static final Map<Object, DeferredBlock<?>> ME_APIARY_FACTORIES = new ConcurrentHashMap<>();
+	public static final Map<Object, RegistryObject<?>> ME_APIARY_FACTORIES = new ConcurrentHashMap<>();
 
 	/**
 	 * EM 蜂箱工厂方块映射 — 由 registerEMApiaryFactories() 在 EM 加载时填充
@@ -159,19 +159,19 @@ public final class ModBlocks {
 	 * 因为 EM 通过 Mixin 扩展 FactoryTier 枚举，不使用独立的 TileEntity 类。
 	 * 使用 ConcurrentHashMap 保证线程安全。
 	 */
-	public static final Map<FactoryTier, DeferredBlock<MekApiaryBlock<TileEntityMekApiaryFactory,
+	public static final Map<FactoryTier, RegistryObject<MekApiaryBlock<TileEntityMekApiaryFactory,
 		BlockTypeTile<TileEntityMekApiaryFactory>>>> EM_APIARY_FACTORIES = new ConcurrentHashMap<>();
 
 	/**
 	 * EME 蜂箱工厂方块映射 — 由 registerEMEApiaryFactories() 在 EME 加载时填充
 	 * <br/>
 	 * Key=EMExtraFactoryTier（EME 独立枚举，编译时不存在），Value=对应的 DeferredBlock。
-	 * 使用通配类型 {@code Object}/{@code DeferredBlock<?>}，避免主注册类编译期依赖 EME 类。
+	 * 使用通配类型 {@code Object}/{@code RegistryObject<?>}，避免主注册类编译期依赖 EME 类。
 	 * 实际填充由 {@link EMECompatLoader#registerApiaryBlocks()} 委托
 	 * {@link com.ayoshiko.productivebeesgenesis.compat.emextras.EMEBlockRegistration} 完成。
 	 * 使用 ConcurrentHashMap 保证线程安全。
 	 */
-	public static final Map<Object, DeferredBlock<?>> EME_APIARY_FACTORIES = new ConcurrentHashMap<>();
+	public static final Map<Object, RegistryObject<?>> EME_APIARY_FACTORIES = new ConcurrentHashMap<>();
 
 	private ModBlocks() {}
 
@@ -199,7 +199,7 @@ public final class ModBlocks {
 				continue;
 			}
 			// 注册EM工厂方块，使用与原版相同的MekCentrifugeBlock模式
-			DeferredBlock<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
+			RegistryObject<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
 				Machine.FactoryMachine<TileEntityMekCentrifugeFactory>>> deferredBlock =
 					BLOCKS.register(registryName, () -> new MekCentrifugeBlock<>(blockType));
 			EM_FACTORIES.put(tier, deferredBlock);
@@ -212,7 +212,7 @@ public final class ModBlocks {
 	 * @param tier EM工厂等级（OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE）
 	 * @return 对应的DeferredBlock，不存在时返回null
 	 */
-	public static DeferredBlock<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
+	public static RegistryObject<MekCentrifugeBlock<TileEntityMekCentrifugeFactory,
 		Machine.FactoryMachine<TileEntityMekCentrifugeFactory>>> getEMFactoryBlock(FactoryTier tier) {
 		return EM_FACTORIES.get(tier);
 	}
@@ -243,7 +243,7 @@ public final class ModBlocks {
 	 * @param tier ME工厂等级（ABSOLUTE/SUPREME/COSMIC/INFINITE），运行时类型为 ExtraFactoryTier
 	 * @return 对应的DeferredBlock，不存在时返回null
 	 */
-	public static DeferredBlock<?> getMEFactoryBlock(Object tier) {
+	public static RegistryObject<?> getMEFactoryBlock(Object tier) {
 		return ME_FACTORIES.get(tier);
 	}
 
@@ -269,7 +269,7 @@ public final class ModBlocks {
 	 * @param tier EME工厂等级（运行时为 EMExtraFactoryTier，主注册类不依赖具体类型）
 	 * @return 对应的 DeferredBlock（通配类型），不存在时返回 null
 	 */
-	public static DeferredBlock<?> getEMEFactoryBlock(Object tier) {
+	public static RegistryObject<?> getEMEFactoryBlock(Object tier) {
 		return EME_FACTORIES.get(tier);
 	}
 
@@ -298,7 +298,7 @@ public final class ModBlocks {
 				ProductiveBeesGenesis.LOGGER.warn("EM 蜂箱工厂 BlockType 未初始化，跳过方块注册: {}", tier.name());
 				continue;
 			}
-			DeferredBlock<MekApiaryBlock<TileEntityMekApiaryFactory, BlockTypeTile<TileEntityMekApiaryFactory>>> deferredBlock =
+			RegistryObject<MekApiaryBlock<TileEntityMekApiaryFactory, BlockTypeTile<TileEntityMekApiaryFactory>>> deferredBlock =
 					BLOCKS.register(registryName, () -> new MekApiaryBlock<>(blockType));
 			EM_APIARY_FACTORIES.put(tier, deferredBlock);
 		}
@@ -310,7 +310,7 @@ public final class ModBlocks {
 	 * @param tier EM 工厂等级（OVERCLOCKED/QUANTUM/DENSE/MULTIVERSAL/CREATIVE）
 	 * @return 对应的 DeferredBlock，不存在时返回 null
 	 */
-	public static DeferredBlock<MekApiaryBlock<TileEntityMekApiaryFactory,
+	public static RegistryObject<MekApiaryBlock<TileEntityMekApiaryFactory,
 		BlockTypeTile<TileEntityMekApiaryFactory>>> getEMApiaryFactoryBlock(FactoryTier tier) {
 		return EM_APIARY_FACTORIES.get(tier);
 	}
@@ -339,7 +339,7 @@ public final class ModBlocks {
 	 * @param tier ME 工厂等级（ABSOLUTE/SUPREME/COSMIC/INFINITE），运行时类型为 ExtraFactoryTier
 	 * @return 对应的 DeferredBlock，不存在时返回 null
 	 */
-	public static DeferredBlock<?> getMEApiaryFactoryBlock(Object tier) {
+	public static RegistryObject<?> getMEApiaryFactoryBlock(Object tier) {
 		return ME_APIARY_FACTORIES.get(tier);
 	}
 
@@ -365,7 +365,7 @@ public final class ModBlocks {
 	 * @param tier EME 工厂等级（运行时为 EMExtraFactoryTier，主注册类不依赖具体类型）
 	 * @return 对应的 DeferredBlock（通配类型），不存在时返回 null
 	 */
-	public static DeferredBlock<?> getEMEApiaryFactoryBlock(Object tier) {
+	public static RegistryObject<?> getEMEApiaryFactoryBlock(Object tier) {
 		return EME_APIARY_FACTORIES.get(tier);
 	}
 }

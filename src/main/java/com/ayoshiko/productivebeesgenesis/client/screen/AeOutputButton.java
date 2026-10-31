@@ -3,10 +3,10 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload;
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import mekanism.common.lib.transmitter.TransmissionType;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 
 /**
 	 * AE2 输出切换按钮 — 注入到 MEK 侧面配置窗口
@@ -79,6 +79,6 @@ public class AeOutputButton extends MekanismButton {
 		CycleAeOutputPayload.OutputType outputType = target.type() == TransmissionType.FLUID
 				? CycleAeOutputPayload.OutputType.FLUID
 				: CycleAeOutputPayload.OutputType.ITEM;
-		PacketDistributor.sendToServer(new CycleAeOutputPayload(target.tile().getBlockPos(), outputType));
+		ForgeNetwork.sendToServer(new CycleAeOutputPayload(target.tile().getBlockPos(), outputType));
 	}
 }

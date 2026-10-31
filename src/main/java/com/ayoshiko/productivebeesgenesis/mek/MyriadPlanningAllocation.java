@@ -88,7 +88,7 @@ final class MyriadPlanningAllocation {
 		if (matches[left] == null) matches[left] = new byte[size()];
 		byte match = matches[left][right];
 		if (match == 0) {
-			match = (byte) (ItemStack.isSameItemSameComponents(templates[right], templates[left]) ? 1 : -1);
+			match = (byte) (ItemStack.isSameItemSameTags(templates[right], templates[left]) ? 1 : -1);
 			matches[left][right] = match;
 		}
 		return match == 1;

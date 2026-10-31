@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.compat.mekanism_extras;
 
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
-import com.jerry.mekextras.api.mixin.IMixinMachineEnergyContainer;
+import com.jerry.mekanism_extras.api.IMixinMachineEnergyContainer;
 import mekanism.api.Upgrade;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 
@@ -14,8 +14,8 @@ public final class MECreativeEnergySupport {
 	public static void applyCreativeMaxEnergy(MachineEnergyContainer<?> energyContainer) {
 		if (energyContainer instanceof IMixinMachineEnergyContainer mixin) {
 			mixin.mekanism_Extras$extraUpdateMaxEnergy();
-			if (energyContainer.getMaxEnergy() == Long.MAX_VALUE) {
-				energyContainer.setEnergy(Long.MAX_VALUE);
+			if (energyContainer.getMaxEnergy().equals(mekanism.api.math.FloatingLong.MAX_VALUE)) {
+				energyContainer.setEnergy(mekanism.api.math.FloatingLong.MAX_VALUE);
 			}
 		}
 	}

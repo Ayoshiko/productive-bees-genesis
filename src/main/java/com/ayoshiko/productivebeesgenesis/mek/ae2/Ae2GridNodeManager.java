@@ -395,14 +395,9 @@ public final class Ae2GridNodeManager {
 	 * <p>
 	 * Task 12：重写 {@link #onGridChanged} 失效 {@link Ae2OutputStateHolder} 中的
 	 * cachedGrid/cachedStorage/cachedMeStorage 三个缓存，避免持有旧网格的存储服务引用。
-	 * 节点状态通知使频道与供电恢复不再等待旧状态缓存到期。
+	 * onInWorldConnectionChanged/onOwnerChanged/onStateChanged 仍使用默认实现。
 	 */
 	private static final class CentrifugeGridNodeListener implements IGridNodeListener<IAe2OutputHostBase> {
-		@Override
-		public void onStateChanged(IAe2OutputHostBase host, IGridNode node, State reason) {
-			var holder = host.productivebeesgenesis$getAe2StateHolder();
-			if (holder != null) holder.onNodeStateChanged();
-		}
 
 		@Override
 		public void onSaveChanges(IAe2OutputHostBase host, IGridNode node) {

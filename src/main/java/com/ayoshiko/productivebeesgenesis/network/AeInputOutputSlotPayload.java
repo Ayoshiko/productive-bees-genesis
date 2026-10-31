@@ -1,11 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -27,22 +23,15 @@ public record AeInputOutputSlotPayload(
 		int slotIndex,
 		boolean shift,
 		boolean rightClick
-) implements CustomPacketPayload {
+)  {
 
-	public static final CustomPacketPayload.Type<AeInputOutputSlotPayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "ae_input_output_slot"));
-
-	public static final StreamCodec<ByteBuf, AeInputOutputSlotPayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, AeInputOutputSlotPayload::pos,
-					ByteBufCodecs.VAR_INT, AeInputOutputSlotPayload::slotIndex,
-					ByteBufCodecs.BOOL, AeInputOutputSlotPayload::shift,
-					ByteBufCodecs.BOOL, AeInputOutputSlotPayload::rightClick,
-					AeInputOutputSlotPayload::new);
-
-	@Override
-	public Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
+    public static AeInputOutputSlotPayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new AeInputOutputSlotPayload(buf.readBlockPos(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean());
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+        buf.writeVarInt(slotIndex);
+        buf.writeBoolean(shift);
+        buf.writeBoolean(rightClick);
+    }
 }

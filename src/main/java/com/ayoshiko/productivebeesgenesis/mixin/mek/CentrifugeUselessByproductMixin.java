@@ -8,11 +8,11 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import cy.jdkdigital.productivebees.common.block.entity.CentrifugeBlockEntity;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.item.crafting.RecipeHolder;
+
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.IFluidHandler;
-import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
+import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fluids.capability.IFluidHandler;
+import net.minecraftforge.fluids.capability.templates.FluidTank;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -23,7 +23,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.List;
 
 /** Applies Productive Bees byproduct filtering and essence conversion to centrifuges. */
-@Mixin(CentrifugeBlockEntity.class)
+@Mixin(value = CentrifugeBlockEntity.class, remap = false)
 public abstract class CentrifugeUselessByproductMixin {
 
 	@ModifyArg(
@@ -59,8 +59,8 @@ public abstract class CentrifugeUselessByproductMixin {
 	}
 
 	@ModifyVariable(
-			method = "completeRecipeProcessing(Lnet/minecraft/world/item/crafting/RecipeHolder;"
-					+ "Lnet/neoforged/neoforge/items/IItemHandlerModifiable;Lnet/minecraft/util/RandomSource;ZI)V",
+			method = "completeRecipeProcessing(Lcy/jdkdigital/productivebees/common/recipe/CentrifugeRecipe;"
+					+ "Lnet/minecraftforge/items/IItemHandlerModifiable;Lnet/minecraft/util/RandomSource;Z)V",
 			at = @At("HEAD"),
 			argsOnly = true,
 			ordinal = 0
@@ -81,10 +81,10 @@ public abstract class CentrifugeUselessByproductMixin {
 	 * 最坏回到「不过滤蜂蜜」的原版行为，而不是启动崩溃。
 	 */
 	@WrapOperation(
-			method = "completeRecipeProcessing(Lnet/minecraft/world/item/crafting/RecipeHolder;Lnet/neoforged/neoforge/items/IItemHandlerModifiable;Lnet/minecraft/util/RandomSource;ZI)V",
+			method = "completeRecipeProcessing(Lcy/jdkdigital/productivebees/common/recipe/CentrifugeRecipe;Lnet/minecraftforge/items/IItemHandlerModifiable;Lnet/minecraft/util/RandomSource;Z)V",
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/neoforged/neoforge/fluids/capability/templates/FluidTank;fill(Lnet/neoforged/neoforge/fluids/FluidStack;Lnet/neoforged/neoforge/fluids/capability/IFluidHandler$FluidAction;)I",
+					target = "Lnet/minecraftforge/fluids/capability/templates/FluidTank;fill(Lnet/minecraftforge/fluids/FluidStack;Lnet/minecraftforge/fluids/capability/IFluidHandler$FluidAction;)I",
 					remap = false
 			),
 			require = 0
@@ -101,14 +101,14 @@ public abstract class CentrifugeUselessByproductMixin {
 
 	/** 在资源蜜蜂离心机完成配方输出后，转换已聚合的物品产物。 */
 	@Inject(
-			method = "completeRecipeProcessing(Lnet/minecraft/world/item/crafting/RecipeHolder;"
-					+ "Lnet/neoforged/neoforge/items/IItemHandlerModifiable;Lnet/minecraft/util/RandomSource;ZI)V",
+			method = "completeRecipeProcessing(Lcy/jdkdigital/productivebees/common/recipe/CentrifugeRecipe;"
+					+ "Lnet/minecraftforge/items/IItemHandlerModifiable;Lnet/minecraft/util/RandomSource;Z)V",
 			at = @At("TAIL")
 	)
 	private void productivebeesgenesis$convertEssence(
-			RecipeHolder<CentrifugeRecipe> recipe,
-			net.neoforged.neoforge.items.IItemHandlerModifiable inventory,
-			RandomSource random, boolean stripWax, int productivityModifier, CallbackInfo ci) {
+			CentrifugeRecipe recipe,
+			net.minecraftforge.items.IItemHandlerModifiable inventory,
+			RandomSource random, boolean stripWax, CallbackInfo ci) {
 		CentrifugeBlockEntity blockEntity = (CentrifugeBlockEntity) (Object) this;
 		if (EssenceConversionUpgradeHelper.hasUpgrade(blockEntity)) {
 			EssenceConversionUpgradeHelper.convertStored(blockEntity.getLevel(), inventory);
@@ -117,14 +117,14 @@ public abstract class CentrifugeUselessByproductMixin {
 
 	/** 在资源蜜蜂离心机完成配方输出后，将粗矿按 Mekanism 熔炼配方转换为锭。 */
 	@Inject(
-			method = "completeRecipeProcessing(Lnet/minecraft/world/item/crafting/RecipeHolder;"
-					+ "Lnet/neoforged/neoforge/items/IItemHandlerModifiable;Lnet/minecraft/util/RandomSource;ZI)V",
+			method = "completeRecipeProcessing(Lcy/jdkdigital/productivebees/common/recipe/CentrifugeRecipe;"
+					+ "Lnet/minecraftforge/items/IItemHandlerModifiable;Lnet/minecraft/util/RandomSource;Z)V",
 			at = @At("TAIL")
 	)
 	private void productivebeesgenesis$convertRawOre(
-			RecipeHolder<CentrifugeRecipe> recipe,
-			net.neoforged.neoforge.items.IItemHandlerModifiable inventory,
-			RandomSource random, boolean stripWax, int productivityModifier, CallbackInfo ci) {
+			CentrifugeRecipe recipe,
+			net.minecraftforge.items.IItemHandlerModifiable inventory,
+			RandomSource random, boolean stripWax, CallbackInfo ci) {
 		CentrifugeBlockEntity blockEntity = (CentrifugeBlockEntity) (Object) this;
 		if (RawOreSmeltingUpgradeHelper.hasUpgrade(blockEntity)) {
 			RawOreSmeltingUpgradeHelper.convertStored(blockEntity.getLevel(), inventory);

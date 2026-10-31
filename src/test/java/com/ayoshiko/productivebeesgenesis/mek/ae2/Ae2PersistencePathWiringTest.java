@@ -66,7 +66,7 @@ class Ae2PersistencePathWiringTest {
 		String codec = read(AE2 + "Ae2PerTileStateNbtCodec.java");
 		assertTrue(codec.contains("filter.save(filterTag)"));
 		assertTrue(codec.contains("tag.put(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER, filterTag)"));
-		// 读取与隔离行为由 Ae2FilterPersistenceMinecraftTest 校验，不限定中间调用的语法。
+		assertTrue(codec.contains("filter.load(tag.getCompound(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER))"));
 		// 无 filter 子标签的旧存档必须重置为干净状态，而不是沿用构造期残留
 		assertTrue(codec.contains("filter.resetPersistentState()"));
 		// 剩余物所有权记录是运行时状态，刻意与配置分离（配置卡不得复制别人的欠账）

@@ -4,7 +4,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
 
@@ -122,22 +122,22 @@ public final class SingleIngredientCraftingIndex {
 	 */
 	@Nonnull
 	private static Map<Item, ItemStack> buildIndex(@Nonnull Level level) {
-		List<RecipeHolder<CraftingRecipe>> recipes =
+		List<CraftingRecipe> recipes =
 				level.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING);
 		Map<Item, ItemStack> index = new HashMap<>();
-		for (RecipeHolder<CraftingRecipe> holder : recipes) {
+		for (CraftingRecipe holder : recipes) {
 			try {
-				List<Ingredient> ingredients = holder.value().getIngredients();
+				List<Ingredient> ingredients = holder.getIngredients();
 				if (ingredients.size() != 1) continue;
 				ItemStack[] candidates = ingredients.get(0).getItems();
 				if (candidates.length == 0) continue;
-				ItemStack result = holder.value().getResultItem(level.registryAccess());
+				ItemStack result = holder.getResultItem(level.registryAccess());
 				if (result.isEmpty()) continue;
 				// putIfAbsent 保留“首个匹配配方胜出”的原语义
 				index.putIfAbsent(candidates[0].getItem(), result);
 			} catch (RuntimeException e) {
 				LogThrottle.warn("single_ingredient_crafting_index_skip",
-						"单原料合成配方索引：跳过无法解析的配方 {}", holder.id());
+						"单原料合成配方索引：跳过无法解析的配方 {}", holder.getId());
 			}
 		}
 		return Map.copyOf(index);

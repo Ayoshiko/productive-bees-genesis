@@ -1,0 +1,33 @@
+{
+  "conditions": [
+    {
+      "type": "forge:mod_loaded",
+      "modid": "evolvedmekanism"
+    }
+  ],
+  "type": "productivebeesgenesis:apiary_shaped",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "evolvedmekanism:alloys/singular"
+    },
+    "C": {
+      "tag": "forge:circuits/dense"
+    },
+    "I": {
+      "tag": "forge:ingots/bronze"
+    },
+    "P": {
+      "item": "productivebeesgenesis:quantum_mek_centrifuge_factory"
+    }
+  },
+  "pattern": [
+    "ACA",
+    "IPI",
+    "ACA"
+  ],
+  "result": {
+    "count": 1,
+    "item": "productivebeesgenesis:dense_mek_centrifuge_factory"
+  }
+}

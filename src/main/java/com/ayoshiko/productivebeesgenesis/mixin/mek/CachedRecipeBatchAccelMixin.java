@@ -53,7 +53,7 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	// ===== @Shadow：CachedRecipe 私有成员（仅快速路径使用） =====
 
 	@Shadow
-	private boolean pausedForErrors;
+	private java.util.Set<CachedRecipe.OperationTracker.RecipeError> errors;
 
 	@Shadow
 	private BooleanSupplier canHolderFunction;
@@ -68,13 +68,13 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	private Runnable onFinish;
 
 	@Shadow
-	private LongSupplier perTickEnergy;
+	private mekanism.api.math.FloatingLongSupplier perTickEnergy;
 
 	@Shadow
-	private LongSupplier storedEnergy;
+	private mekanism.api.math.FloatingLongSupplier storedEnergy;
 
 	@Shadow
-	private LongConsumer useEnergy;
+	private mekanism.api.math.FloatingLongConsumer useEnergy;
 
 	@Shadow
 	private IntSupplier baselineMaxOperations;
@@ -226,31 +226,31 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	 */
 	@ModifyExpressionValue(method = "calculateOperationsThisTick",
 			at = @At(value = "INVOKE",
-					target = "Lmekanism/api/math/MathUtils;clampToInt(J)I"))
+					target = "Lmekanism/api/math/FloatingLong;divideToInt(Lmekanism/api/math/FloatingLong;)I"))
 	private int productivebeesgenesis$priceFullRecipeTick(int linearAffordableOperations) {
 		if (!productivebeesgenesis$marginalEnergyPricing) {
 			BatchEnergyLedger ledger = productivebeesgenesis$effectiveEnergyLedger();
-			long energyPerOperation = perTickEnergy.getAsLong();
+			long energyPerOperation = com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(perTickEnergy.get());
 			if (ledger == null || energyPerOperation <= 0L) return linearAffordableOperations;
-			long affordable = ledger.available(storedEnergy.getAsLong()) / energyPerOperation;
+			long affordable = ledger.available(com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(storedEnergy.get())) / energyPerOperation;
 			return affordable >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) affordable;
 		}
 		int factor = productivebeesgenesis$activeCoalesceFactor;
 		if (factor > 1) {
 			// 合并调用：先算「单虚拟刻可承担量」再乘回倍数。直接对总操作数套边际曲线是错的 ——
 			// 曲线次线性，会让 1024 倍加速几乎不耗电。
-			return ZeroTickBatchMath.affordableCoalescedOperations(perTickEnergy.getAsLong(),
+			return ZeroTickBatchMath.affordableCoalescedOperations(com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(perTickEnergy.get()),
 					productivebeesgenesis$zeroTickCoalesce.base(),
 					productivebeesgenesis$availableStoredEnergy(), factor);
 		}
 		return MekCentrifugeEnergyScaling.affordableOperations(
-				perTickEnergy.getAsLong(), Math.max(0, baselineMaxOperations.getAsInt()),
+				com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(perTickEnergy.get()), Math.max(0, baselineMaxOperations.getAsInt()),
 				productivebeesgenesis$availableStoredEnergy());
 	}
 
 	@Unique
 	private long productivebeesgenesis$availableStoredEnergy() {
-		long stored = storedEnergy.getAsLong();
+		long stored = com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(storedEnergy.get());
 		BatchEnergyLedger ledger = productivebeesgenesis$effectiveEnergyLedger();
 		return ledger == null ? stored : ledger.available(stored);
 	}
@@ -262,7 +262,7 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		if (ledger != null) {
 			ledger.add(amount);
 		} else {
-			useEnergy.accept(amount);
+			useEnergy.accept(com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.fromFe(amount));
 		}
 	}
 
@@ -298,7 +298,7 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	private void productivebeesgenesis$chargeFullRecipeTick(int operations, CallbackInfo ci) {
 		BatchEnergyLedger ledger = productivebeesgenesis$effectiveEnergyLedger();
 		if (!productivebeesgenesis$marginalEnergyPricing && ledger == null) return;
-		long energyPerTick = perTickEnergy.getAsLong();
+		long energyPerTick = com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(perTickEnergy.get());
 		if (energyPerTick > 0L && operations > 0) {
 			if (!productivebeesgenesis$marginalEnergyPricing) {
 				ledger.add(SaturatingMath.saturatingMultiply(energyPerTick, operations));
@@ -351,12 +351,12 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		}
 		productivebeesgenesis$awaitingFinalOperations = false;
 		// 配方被错误暂停或持有者不可用（红石等）：终止批量，交给原版逻辑维护错误/激活状态
-		if (pausedForErrors || !canHolderFunction.getAsBoolean()) {
+		if (!errors.isEmpty() || !canHolderFunction.getAsBoolean()) {
 			productivebeesgenesis$batchTicksLeft = 0;
 			productivebeesgenesis$batchFastOps = 0;
 			return;
 		}
-		long energyPerTick = perTickEnergy.getAsLong();
+		long energyPerTick = com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(perTickEnergy.get());
 		int ticksRequired = requiredTicks.getAsInt();
 		// 能量预算：storedEnergy 可支撑的虚拟 tick 数（与原版 capAtMaxForEnergy 语义一致）
 		int ticksToRun = ticksLeft;

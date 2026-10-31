@@ -5,9 +5,11 @@ import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload;
-import com.ayoshiko.productivebeesgenesis.client.resource.GuiResourceSideConfig;
 import mekanism.client.gui.GuiMekanism;
+import mekanism.client.gui.element.GuiElement;
+import mekanism.client.gui.element.tab.GuiConfigTypeTab;
 import mekanism.client.gui.element.window.GuiSideConfiguration;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.lib.transmitter.TransmissionType;
@@ -16,12 +18,12 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.ScreenEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.TickEvent.ClientTickEvent;
+import net.minecraftforge.client.event.ScreenEvent;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 import org.lwjgl.glfw.GLFW;
 
 import java.lang.ref.WeakReference;
@@ -42,7 +44,8 @@ public final class CentrifugeDirectAeOutputOverlay {
 	}
 
 	@SubscribeEvent
-	public static void onClientTick(ClientTickEvent.Pre event) {
+	public static void onClientTick(ClientTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.START) return;
 		// AE2 未加载时不注入按钮：服务端 payload 注册被守卫跳过，
 		// 点击会触发 UnsupportedOperationException（Issue #8 客户端对称修复）
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
@@ -55,7 +58,7 @@ public final class CentrifugeDirectAeOutputOverlay {
 					sideConfig.getRelativeX() + BUTTON_X_OFFSET,
 					sideConfig.getRelativeY() + BUTTON_Y_OFFSET,
 					Component.literal("A"),
-					t -> PacketDistributor.sendToServer(new CycleAeOutputPayload(t.tile().getBlockPos(),
+					t -> ForgeNetwork.sendToServer(new CycleAeOutputPayload(t.tile().getBlockPos(),
 							CycleAeOutputPayload.OutputType.CENTRIFUGE_DIRECT)), target);
 			sideConfig.children().add(button);
 			BUTTONS.put(sideConfig, new WeakReference<>(button));
@@ -83,7 +86,7 @@ public final class CentrifugeDirectAeOutputOverlay {
 		int y = target.gui().getGuiTop() + target.sideConfig().getRelativeY() + BUTTON_Y_OFFSET;
 		if (event.getMouseX() < x || event.getMouseX() >= x + BUTTON_SIZE
 				|| event.getMouseY() < y || event.getMouseY() >= y + BUTTON_SIZE) return;
-		PacketDistributor.sendToServer(new CycleAeOutputPayload(target.tile().getBlockPos(),
+		ForgeNetwork.sendToServer(new CycleAeOutputPayload(target.tile().getBlockPos(),
 				CycleAeOutputPayload.OutputType.CENTRIFUGE_DIRECT));
 		event.setCanceled(true);
 	}
@@ -100,10 +103,19 @@ public final class CentrifugeDirectAeOutputOverlay {
 		if (!(tile instanceof IMekCentrifugeTile)) return null;
 		for (GuiWindow window : gui.getWindows()) {
 			if (window instanceof GuiSideConfiguration<?> sideConfig) {
-				return new AeInputOverlay.OverlayTarget(gui, sideConfig, tile, GuiResourceSideConfig.nativeType(sideConfig));
+				return new AeInputOverlay.OverlayTarget(gui, sideConfig, tile, currentType(sideConfig));
 			}
 		}
 		return null;
 	}
 
+	private static TransmissionType currentType(GuiSideConfiguration<?> sideConfig) {
+		for (GuiElement child : sideConfig.children()) {
+			if (child instanceof GuiConfigTypeTab tab && !tab.visible) return tab.getTransmissionType();
+		}
+		for (GuiElement child : sideConfig.children()) {
+			if (child instanceof GuiConfigTypeTab tab) return tab.getTransmissionType();
+		}
+		return TransmissionType.ITEM;
+	}
 }

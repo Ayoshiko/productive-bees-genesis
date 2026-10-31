@@ -23,7 +23,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -196,16 +196,16 @@ class MekCentrifugeSaveHandler {
 	private void serializeDropSlots(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		// 输出槽列表（主+副1+副2）
 		ListTag outputList = new ListTag();
-		outputList.add(tile.accessor().productivebeesgenesis$getOutputSlot().serializeNBT(provider));
-		outputList.add(tile.slotManager().getSecondaryOutputSlot().serializeNBT(provider));
-		outputList.add(tile.slotManager().getTertiaryOutputSlot().serializeNBT(provider));
+		outputList.add(tile.accessor().productivebeesgenesis$getOutputSlot().serializeNBT());
+		outputList.add(tile.slotManager().getSecondaryOutputSlot().serializeNBT());
+		outputList.add(tile.slotManager().getTertiaryOutputSlot().serializeNBT());
 		nbt.put(MekCentrifugeNbtKeys.NBT_KEY_DROP_OUTPUT_SLOTS, outputList);
 		// 输入槽
 		nbt.put(MekCentrifugeNbtKeys.NBT_KEY_DROP_INPUT_SLOT,
-				tile.accessor().productivebeesgenesis$getInputSlot().serializeNBT(provider));
+				tile.accessor().productivebeesgenesis$getInputSlot().serializeNBT());
 		// 能量槽
 		nbt.put(MekCentrifugeNbtKeys.NBT_KEY_DROP_ENERGY_SLOT,
-				tile.accessor().productivebeesgenesis$getEnergySlot().serializeNBT(provider));
+				tile.accessor().productivebeesgenesis$getEnergySlot().serializeNBT());
 	}
 
 	/**
@@ -231,18 +231,18 @@ class MekCentrifugeSaveHandler {
 					tile.slotManager().getTertiaryOutputSlot()
 			};
 			for (int i = 0; i < outputList.size() && i < outputSlots.length; i++) {
-				outputSlots[i].deserializeNBT(provider, outputList.getCompound(i));
+				outputSlots[i].deserializeNBT(outputList.getCompound(i));
 			}
 		}
 		// 输入槽
 		if (nbt.contains(MekCentrifugeNbtKeys.NBT_KEY_DROP_INPUT_SLOT, Tag.TAG_COMPOUND)) {
 			tile.accessor().productivebeesgenesis$getInputSlot().deserializeNBT(
-					provider, nbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_DROP_INPUT_SLOT));
+					nbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_DROP_INPUT_SLOT));
 		}
 		// 能量槽
 		if (nbt.contains(MekCentrifugeNbtKeys.NBT_KEY_DROP_ENERGY_SLOT, Tag.TAG_COMPOUND)) {
 			tile.accessor().productivebeesgenesis$getEnergySlot().deserializeNBT(
-					provider, nbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_DROP_ENERGY_SLOT));
+					nbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_DROP_ENERGY_SLOT));
 		}
 	}
 
@@ -263,7 +263,7 @@ class MekCentrifugeSaveHandler {
 		FluidStack fluid = tile.fluidOutputTank().getFluid();
 		if (fluid.isEmpty()) return null;
 		CompoundTag fluidNbt = new CompoundTag();
-		fluidNbt.put("Fluid", fluid.save(provider));
+		fluidNbt.put("Fluid", fluid.writeToNBT(new CompoundTag()));
 		return fluidNbt;
 	}
 
@@ -282,7 +282,7 @@ class MekCentrifugeSaveHandler {
 		if (!nbt.contains(MekCentrifugeNbtKeys.NBT_KEY_CENTRIFUGE_FLUID, Tag.TAG_COMPOUND)) return;
 		CompoundTag fluidNbt = nbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_CENTRIFUGE_FLUID);
 		if (!fluidNbt.contains("Fluid", Tag.TAG_COMPOUND)) return;
-		FluidStack fluid = FluidStack.parseOptional(provider, fluidNbt.getCompound("Fluid"));
+		FluidStack fluid = FluidStack.loadFluidStackFromNBT(fluidNbt.getCompound("Fluid"));
 		if (!fluid.isEmpty()) {
 			tile.fluidOutputTank().insert(fluid, Action.EXECUTE, AutomationType.INTERNAL);
 		}

@@ -9,8 +9,7 @@ import mekanism.common.inventory.container.MekanismContainer;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -34,7 +33,7 @@ final class PbRecipeProcessorStateHelper {
 	static void reserveActiveFluidOutputTypes(@NotNull PbRecipeContext context,
 			@NotNull List<IInventorySlot> inputSlots, @NotNull PbRecipeFinder recipeFinder,
 			@NotNull ItemStack[] cachedInputs,
-			@NotNull RecipeHolder<CentrifugeRecipe>[] cachedRecipes,
+			@NotNull CentrifugeRecipe[] cachedRecipes,
 			@NotNull FluidStack[] reservedFluidTypes) {
 		int reservedTypeCount = 0;
 		int reservationLimit = Math.min(context.fluidOutputTankCount(), reservedFluidTypes.length);
@@ -49,15 +48,15 @@ final class PbRecipeProcessorStateHelper {
 					|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input)) {
 				continue;
 			}
-			RecipeHolder<CentrifugeRecipe> recipe = recipeFinder.findPbRecipe(input);
+			CentrifugeRecipe recipe = recipeFinder.findPbRecipe(input);
 			if (i < cachedRecipes.length) cachedRecipes[i] = recipe;
 			if (recipe == null || reservedTypeCount >= reservationLimit) continue;
-			var fluid = recipe.value().getFluidOutputs();
+			var fluid = com.ayoshiko.productivebeesgenesis.util.PbRecipeOutputs.fluid(recipe);
 			if (!fluid.isEmpty() && !(context.suppressesUselessByproducts()
 					&& UselessByproductUpgradeHelper.isHoney(fluid))) {
 				boolean alreadyReserved = false;
 				for (int reservedIndex = 0; reservedIndex < reservedTypeCount; reservedIndex++) {
-					if (FluidStack.isSameFluidSameComponents(reservedFluidTypes[reservedIndex], fluid)) {
+					if (com.ayoshiko.productivebeesgenesis.util.ForgeFluidStacks.isSameFluid(reservedFluidTypes[reservedIndex], fluid)) {
 						alreadyReserved = true;
 						break;
 					}
@@ -71,7 +70,7 @@ final class PbRecipeProcessorStateHelper {
 
 	/** 清除指定进程的PB处理状态（同时关闭该进程的激活位，避免进度箭头残留） */
 	static void clearPbState(int processIndex, boolean[] pbProcessing, int[] pbOperatingTicks,
-			int[] pbProcessingTime, @Nullable RecipeHolder<CentrifugeRecipe>[] cachedPbRecipes,
+			int[] pbProcessingTime, @Nullable CentrifugeRecipe[] cachedPbRecipes,
 			@NotNull PbRecipeCompleter completer, @NotNull PbRecipeContext context) {
 		// 防御性：移除 pbProcessing 守卫，无条件清零所有 PB 状态字段
 		// 避免守卫导致 pbOperatingTicks/cachedPbRecipes 残留（与 resetPbState 行为统一）
@@ -87,7 +86,7 @@ final class PbRecipeProcessorStateHelper {
 
 	/** 强制重置指定进程的 PB 处理状态（不调用 setPbActiveState，供基础机器 SMELTING 检查命中时使用） */
 	static void resetPbState(int processIndex, boolean[] pbProcessing, int[] pbOperatingTicks,
-			int[] pbProcessingTime, @Nullable RecipeHolder<CentrifugeRecipe>[] cachedPbRecipes,
+			int[] pbProcessingTime, @Nullable CentrifugeRecipe[] cachedPbRecipes,
 			@NotNull PbRecipeCompleter completer) {
 		pbProcessing[processIndex] = false;
 		pbOperatingTicks[processIndex] = 0;

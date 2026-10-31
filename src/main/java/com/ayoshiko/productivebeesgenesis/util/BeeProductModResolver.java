@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
-import cy.jdkdigital.productivebees.init.ModDataComponents;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModFluids;
 import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
@@ -11,10 +11,10 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
+import net.minecraftforge.fluids.FluidStack;
+
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -33,7 +33,7 @@ import java.util.Map;
 public final class BeeProductModResolver {
 
 	private static final TagKey<Item> WAXES_TAG = TagKey.create(
-			Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "waxes"));
+			Registries.ITEM, new ResourceLocation("c", "waxes"));
 
 	/**
 	 * 产物归属缓存上限
@@ -85,12 +85,12 @@ public final class BeeProductModResolver {
 	@Nonnull
 	private static BeeProductModProfile resolveUncached(Level level, ResourceLocation beeType) {
 		try {
-			RecipeHolder<CentrifugeRecipe> holder = findCentrifugeRecipe(level, beeType);
+			CentrifugeRecipe holder = findCentrifugeRecipe(level, beeType);
 			if (holder == null) {
 				return BeeProductModProfile.fallback(PBConstants.PRODUCTIVE_BEES_MOD_ID);
 			}
 
-			CentrifugeRecipe recipe = holder.value();
+			CentrifugeRecipe recipe = holder;
 			List<String> itemNamespaces = resolveItemNamespaces(recipe);
 			String fluidNamespace = resolveFluidNamespace(recipe);
 			return BeeProductModProfile.create(
@@ -102,8 +102,8 @@ public final class BeeProductModResolver {
 	}
 
 	@Nullable
-	private static RecipeHolder<CentrifugeRecipe> findCentrifugeRecipe(Level level, ResourceLocation beeType) {
-		RecipeHolder<CentrifugeRecipe> indexed = CentrifugeRecipeIndex.get(beeType);
+	private static CentrifugeRecipe findCentrifugeRecipe(Level level, ResourceLocation beeType) {
+		CentrifugeRecipe indexed = CentrifugeRecipeIndex.get(beeType);
 		if (indexed != null) {
 			return indexed;
 		}
@@ -111,10 +111,10 @@ public final class BeeProductModResolver {
 		// The index is normally rebuilt on TagsUpdatedEvent. This fallback also covers a GUI
 		// opened during initial synchronization and recipes added by unusual reload pipelines.
 		ItemStack comb = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
-		comb.set(ModDataComponents.BEE_TYPE.get(), beeType);
-		for (RecipeHolder<CentrifugeRecipe> holder : level.getRecipeManager()
+		PbDataComponents.setBeeType(comb, beeType);
+		for (CentrifugeRecipe holder : level.getRecipeManager()
 				.getAllRecipesFor(ModRecipeTypes.CENTRIFUGE_TYPE.get())) {
-			if (holder.value().ingredient.test(comb)) {
+			if (holder.ingredient.test(comb)) {
 				return holder;
 			}
 		}
@@ -137,7 +137,7 @@ public final class BeeProductModResolver {
 
 	@Nullable
 	private static String resolveFluidNamespace(CentrifugeRecipe recipe) {
-		FluidStack output = recipe.getFluidOutputs();
+		FluidStack output = PbRecipeOutputs.fluid(recipe);
 		if (output.isEmpty()) {
 			output = firstFluid(recipe.fluidOutput);
 		}
@@ -148,14 +148,8 @@ public final class BeeProductModResolver {
 		return fluidId != null ? fluidId.getNamespace() : null;
 	}
 
-	private static FluidStack firstFluid(@Nullable SizedFluidIngredient ingredient) {
-		if (ingredient == null) {
-			return FluidStack.EMPTY;
-		}
-		for (FluidStack stack : ingredient.getFluids()) {
-			return stack.copyWithAmount(ingredient.amount());
-		}
-		return FluidStack.EMPTY;
+	private static FluidStack firstFluid(@Nullable com.mojang.datafixers.util.Pair<String, Integer> ingredient) {
+		return PbRecipeOutputs.fluid(ingredient);
 	}
 
 	/** Clears product ownership after recipes or tags change. */

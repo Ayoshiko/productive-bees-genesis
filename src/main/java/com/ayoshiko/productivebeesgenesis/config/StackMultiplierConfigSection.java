@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 /** 离心机输入槽和输出槽的等级倍率配置。 */
 public final class StackMultiplierConfigSection {
@@ -10,7 +10,7 @@ public final class StackMultiplierConfigSection {
 	/** 输入槽倍率。 */
 	public final FactoryTierConfigValues inputStack;
 
-	private StackMultiplierConfigSection(ModConfigSpec.Builder builder) {
+	private StackMultiplierConfigSection(ForgeConfigSpec.Builder builder) {
 		builder.comment(
 				"输出槽堆叠倍率（按离心机等级）",
 				"基础堆叠 64/槽；单槽容量 = 64 × 倍率；工厂总容量按进程数和输出槽数量计算",
@@ -34,7 +34,7 @@ public final class StackMultiplierConfigSection {
 		builder.pop();
 	}
 
-	public static StackMultiplierConfigSection create(ModConfigSpec.Builder builder) {
+	public static StackMultiplierConfigSection create(ForgeConfigSpec.Builder builder) {
 		return new StackMultiplierConfigSection(builder);
 	}
 }

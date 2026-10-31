@@ -23,10 +23,11 @@ import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElementHolder;
 import mekanism.client.gui.element.GuiInnerScreen;
-import mekanism.client.gui.element.button.GuiPinButton;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.GuiPinButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
-import mekanism.client.render.IFancyFontRenderer.TextAlignment;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.TextAlignment;
 import mekanism.common.inventory.container.SelectedWindowData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -35,7 +36,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Optional;
@@ -50,7 +51,7 @@ import java.util.Optional;
 	 * take items from / put items back into the ME network directly, matching the
 	 * ProxiedStorageInv behaviour of AE2LT (gear on top, marker row, output row).
 	 */
-public final class GuiAeInputConfig extends GuiWindow {
+public final class GuiAeInputConfig extends PinnableGuiWindow {
 
 	private final IAe2InputHost host;
 	private final BlockPos pos;
@@ -96,42 +97,42 @@ public final class GuiAeInputConfig extends GuiWindow {
 		int btnX = 8;
 		toggleBtn = addChild(new CtrlButton(gui(), relativeX + btnX,
 				AeInputConfigLayout.controlY(relativeY), AeInputConfigLayout.TOGGLE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT,
-				"I", (e, mx, my) -> { PacketDistributor.sendToServer(new ToggleAeInputPayload(pos)); return true; }));
+				"I", (e, mx, my) -> { ForgeNetwork.sendToServer(new ToggleAeInputPayload(pos)); return true; }));
 		toggleBtn.setTooltip(Tooltip.create(
 				Component.translatable("productivebeesgenesis.gui.ae_input_config.toggle.tooltip")));
 		btnX += AeInputConfigLayout.TOGGLE_BTN_WIDTH + 2;
 		nbtBtn = addChild(new CtrlButton(gui(), relativeX + btnX,
 				AeInputConfigLayout.controlY(relativeY),
 				AeInputConfigLayout.TOGGLE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT, "N",
-				(e, mx, my) -> { PacketDistributor.sendToServer(new ToggleAeInputNbtIgnorePayload(pos)); return true; }));
+				(e, mx, my) -> { ForgeNetwork.sendToServer(new ToggleAeInputNbtIgnorePayload(pos)); return true; }));
 		nbtBtn.setTooltip(Tooltip.create(
 				Component.translatable("productivebeesgenesis.gui.ae_input_config.nbt_ignore.tooltip")));
 		btnX += AeInputConfigLayout.TOGGLE_BTN_WIDTH + 2;
 		filterModeBtn = addChild(new CtrlButton(gui(), relativeX + btnX,
 				AeInputConfigLayout.controlY(relativeY),
 				AeInputConfigLayout.TOGGLE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT, "F",
-				(e, mx, my) -> { PacketDistributor.sendToServer(new CycleAeInputFilterModePayload(pos)); return true; }));
+				(e, mx, my) -> { ForgeNetwork.sendToServer(new CycleAeInputFilterModePayload(pos)); return true; }));
 		filterModeBtn.setTooltip(Tooltip.create(
 				Component.translatable("productivebeesgenesis.gui.ae_input_config.filter_mode.tooltip")));
 		btnX += AeInputConfigLayout.TOGGLE_BTN_WIDTH + 2;
 		preciseBtn = addChild(new CtrlButton(gui(), relativeX + btnX,
 				AeInputConfigLayout.controlY(relativeY),
 				AeInputConfigLayout.TOGGLE_BTN_WIDTH, AeInputConfigLayout.CTRL_BTN_HEIGHT, "P",
-				(e, mx, my) -> { PacketDistributor.sendToServer(new ToggleAeInputPreciseModePayload(pos)); return true; }));
+				(e, mx, my) -> { ForgeNetwork.sendToServer(new ToggleAeInputPreciseModePayload(pos)); return true; }));
 		preciseBtn.setTooltip(Tooltip.create(
 				Component.translatable("productivebeesgenesis.gui.ae_input_config.precise_mode.tooltip")));
 		btnX += AeInputConfigLayout.TOGGLE_BTN_WIDTH + 2;
 		// 与下方逐槽齿轮一致：16×16 方形按钮，垂直方向相对 14px 控制行居中
 		globalGearBtn = addChild(new GlobalGearButton(gui(), relativeX + btnX, AeInputConfigLayout.controlY(relativeY) - 1,
 				this::onOpenGlobalAmount,
-				() -> PacketDistributor.sendToServer(new ToggleAllAeInputFilterUnlimitedPayload(pos))));
+				() -> ForgeNetwork.sendToServer(new ToggleAllAeInputFilterUnlimitedPayload(pos))));
 		globalGearBtn.setTooltip(Tooltip.create(Component.translatable(
 				"productivebeesgenesis.gui.ae_input_config.global_gear.tooltip")));
 		btnX += AeInputConfigLayout.GEAR_SIZE + 4;
 		reserveBtn = addChild(new ReserveModeButton(gui(), relativeX + btnX,
 				AeInputConfigLayout.controlY(relativeY),
 				() -> onOpenGlobalReserve(),
-				() -> PacketDistributor.sendToServer(new ToggleAllAeInputFilterNetworkStockPayload(pos))));
+				() -> ForgeNetwork.sendToServer(new ToggleAllAeInputFilterNetworkStockPayload(pos))));
 		reserveBtn.setTooltip(Tooltip.create(Component.translatable(
 				"productivebeesgenesis.gui.ae_input_config.reserve_button.tooltip")));
 		btnX += AeInputConfigLayout.RESERVE_BTN_WIDTH + 2;
@@ -215,7 +216,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 		if (filter != null && filter.hasDirectEntries()) {
 			if (++stockSyncTicks >= 20) {
 				stockSyncTicks = 0;
-				PacketDistributor.sendToServer(new OpenAeInputConfigPayload(pos));
+				ForgeNetwork.sendToServer(new OpenAeInputConfigPayload(pos));
 			}
 		} else {
 			stockSyncTicks = 0;
@@ -247,58 +248,58 @@ public final class GuiAeInputConfig extends GuiWindow {
 							.copy().append(" ").append(Component.translatable(
 									"productivebeesgenesis.gui.ae_input_config.filter_mode.blacklist"));
 				};
-		drawScaledScrollingString(guiGraphics, modeText, startX, startY, TextAlignment.LEFT,
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, modeText, startX, startY, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
 
 		boolean inputEnabled = host.productivebeesgenesis$isAeItemInputEnabled();
 		Component inputText = Component.translatable(inputEnabled
 				? "productivebeesgenesis.gui.ae_input_config.info.input_on"
 				: "productivebeesgenesis.gui.ae_input_config.info.input_off");
-		drawScaledScrollingString(guiGraphics, inputText, startX, startY + 9, TextAlignment.LEFT,
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, inputText, startX, startY + 9, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
 
 		boolean nbtIgnore = host.productivebeesgenesis$isAeInputNbtIgnore();
 		Component nbtText = Component.translatable(nbtIgnore
 				? "productivebeesgenesis.gui.ae_input_config.info.nbt_ignore"
 				: "productivebeesgenesis.gui.ae_input_config.info.nbt_match");
-		drawScaledScrollingString(guiGraphics, nbtText, startX, startY + 18, TextAlignment.LEFT,
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, nbtText, startX, startY + 18, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
 
 		boolean precise = filter != null && filter.isPreciseMode();
 		Component preciseText = Component.translatable(precise
 				? "productivebeesgenesis.gui.ae_input_config.info.precise_on"
 				: "productivebeesgenesis.gui.ae_input_config.info.precise_off");
-		drawScaledScrollingString(guiGraphics, preciseText, startX, startY + 27, TextAlignment.LEFT,
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, preciseText, startX, startY + 27, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
 
 		int slotCount = filter == null ? 0 : filter.getCapacity();
 		int total = AeInputConfigLayout.computeTotalPages(slotCount, minPages);
 		Component pageText = Component.translatable("productivebeesgenesis.gui.ae_input_config.page")
 				.copy().append(" ").append((currentPage + 1) + "/" + total);
-		drawScaledScrollingString(guiGraphics, pageText, startX, startY + 36, TextAlignment.LEFT,
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, pageText, startX, startY + 36, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
 
 		Component countText = Component.translatable("productivebeesgenesis.gui.ae_input_config.entries")
 				.copy().append(" ").append(Integer.toString(entryCount));
-		drawScaledScrollingString(guiGraphics, countText, startX, startY + 45, TextAlignment.LEFT,
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, countText, startX, startY + 45, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
 
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
 		if (holder != null) {
 			Component rateText = Component.translatable("productivebeesgenesis.gui.ae_input_config.info.rate",
 					Integer.toString(holder.getCachedInputRatePerTick()));
-			drawScaledScrollingString(guiGraphics, rateText, startX, startY + 54, TextAlignment.LEFT,
+			com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, rateText, startX, startY + 54, TextAlignment.LEFT,
 					screenTextColor(), panelWidth, 3, false, 0.7F);
 
 			Component intervalText = Component.translatable("productivebeesgenesis.gui.ae_input_config.info.interval",
 					Integer.toString(holder.getCachedInputIntervalTicks()));
-			drawScaledScrollingString(guiGraphics, intervalText, startX, startY + 63, TextAlignment.LEFT,
+			com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, intervalText, startX, startY + 63, TextAlignment.LEFT,
 					screenTextColor(), panelWidth, 3, false, 0.7F);
 
 			Component cooldownText = Component.translatable(
 					"productivebeesgenesis.gui.ae_input_config.info.cooldown",
 					Integer.toString(holder.getInputPullCooldownTicks()));
-			drawScaledScrollingString(guiGraphics, cooldownText, startX, startY + 72, TextAlignment.LEFT,
+			com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, cooldownText, startX, startY + 72, TextAlignment.LEFT,
 					screenTextColor(), panelWidth, 3, false, 0.7F);
 		}
 
@@ -311,14 +312,14 @@ public final class GuiAeInputConfig extends GuiWindow {
 		Component unlimitedText = Component.translatable(
 				"productivebeesgenesis.gui.ae_input_config.info.unlimited_count",
 				Integer.toString(unlimitedCount));
-		drawScaledScrollingString(guiGraphics, unlimitedText, startX, startY + 81, TextAlignment.LEFT,
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, unlimitedText, startX, startY + 81, TextAlignment.LEFT,
 				screenTextColor(), panelWidth, 3, false, 0.7F);
 
 		boolean unlimitedAll = filter != null && filter.isUnlimitedAllFallback();
 		Component unlimitedAllText = Component.translatable(
 				"productivebeesgenesis.gui.ae_input_config.info.unlimited_all",
 				stateLabel(unlimitedAll));
-		drawScaledScrollingString(guiGraphics, unlimitedAllText, startX, startY + 90, TextAlignment.LEFT,
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, unlimitedAllText, startX, startY + 90, TextAlignment.LEFT,
 				unlimitedAll ? 0x55FF55 : screenTextColor(), panelWidth, 3, false, 0.7F);
 
 		boolean globalStock = filter != null && filter.isGlobalNetworkStock();
@@ -326,7 +327,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 				"productivebeesgenesis.gui.ae_input_config.info.reserve_status",
 				stateLabel(globalStock),
 				filter == null ? "0" : AeInputConfigText.formatCompactAmount(filter.getGlobalReserveAmount()));
-		drawScaledScrollingString(guiGraphics, reserveText, startX, startY + 99, TextAlignment.LEFT,
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, reserveText, startX, startY + 99, TextAlignment.LEFT,
 				globalStock ? 0x55FF55 : screenTextColor(),
 				panelWidth, 3, false, 0.7F);
 
@@ -336,7 +337,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 		boolean tagError = tagFilter != null && tagFilter.hasError();
 		Component tagText = Component.translatable(
 				"productivebeesgenesis.gui.ae_input_config.info.tag_filter", stateLabel(tagActive));
-		drawScaledScrollingString(guiGraphics, tagText, startX, startY + 108, TextAlignment.LEFT,
+		com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.drawScaledScrollingString(this, guiGraphics, tagText, startX, startY + 108, TextAlignment.LEFT,
 				tagError ? 0xFF5555 : (tagActive ? 0x55FF55 : screenTextColor()),
 				panelWidth, 3, false, 0.7F);
 	}
@@ -516,7 +517,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 		boolean isBlock = beeType != null && CombFuzzyMatcher.isCombBlock(stack);
 		String fingerprint = encodeFingerprint(stack);
 		if (fingerprint != null) {
-			PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
+			ForgeNetwork.sendToServer(new SetAeInputFilterEntryPayload(
 					pos, Optional.ofNullable(beeType), Optional.of(fingerprint), isBlock,
 					globalSlotIndex, OperationType.ADD));
 			ghostSlots[pageSlotIndex].setDirectEntry(stack, fingerprint);
@@ -524,7 +525,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 		}
 		// 指纹编码失败（世界未就绪 / AE 键构造异常）时蜜脾退回模糊条目；普通物品无从退回。
 		if (beeType == null) return;
-		PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
+		ForgeNetwork.sendToServer(new SetAeInputFilterEntryPayload(
 				pos, Optional.of(beeType), Optional.empty(), isBlock, globalSlotIndex, OperationType.ADD));
 		ghostSlots[pageSlotIndex].setEntry(beeType, isBlock);
 	}
@@ -546,7 +547,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 	/** Sends a REMOVE operation for the given page-local slot. */
 	private void onSlotRemoved(int pageSlotIndex) {
 		int globalSlotIndex = currentPage * AeInputConfigLayout.SLOTS_PER_PAGE + pageSlotIndex;
-		PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
+		ForgeNetwork.sendToServer(new SetAeInputFilterEntryPayload(
 				pos, Optional.empty(), false, globalSlotIndex, OperationType.REMOVE));
 	}
 
@@ -607,13 +608,13 @@ public final class GuiAeInputConfig extends GuiWindow {
 	/** Toggle the unlimited-provide marker for a direct AE2 entry. */
 	private void onSlotToggleUnlimited(int pageSlotIndex) {
 		int globalSlotIndex = currentPage * AeInputConfigLayout.SLOTS_PER_PAGE + pageSlotIndex;
-		PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
+		ForgeNetwork.sendToServer(new SetAeInputFilterEntryPayload(
 				pos, Optional.empty(), false, globalSlotIndex, OperationType.TOGGLE_UNLIMITED));
 	}
 
 	private void onSlotToggleNetworkStock(int pageSlotIndex) {
 		int globalSlotIndex = currentPage * AeInputConfigLayout.SLOTS_PER_PAGE + pageSlotIndex;
-		PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
+		ForgeNetwork.sendToServer(new SetAeInputFilterEntryPayload(
 				pos, Optional.empty(), false, globalSlotIndex, OperationType.TOGGLE_NETWORK_STOCK));
 	}
 
@@ -629,7 +630,7 @@ public final class GuiAeInputConfig extends GuiWindow {
 	}
 
 	private void sendClear() {
-		PacketDistributor.sendToServer(new SetAeInputFilterEntryPayload(
+		ForgeNetwork.sendToServer(new SetAeInputFilterEntryPayload(
 				pos, Optional.empty(), false, 0, OperationType.CLEAR));
 		currentPage = 0;
 	}

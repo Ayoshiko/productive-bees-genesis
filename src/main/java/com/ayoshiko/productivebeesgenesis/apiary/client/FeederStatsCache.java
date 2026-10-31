@@ -90,7 +90,7 @@ final class FeederStatsCache {
 	 */
 	static void addDistinct(List<ItemStack> types, ItemStack stack) {
 		for (int i = 0; i < types.size(); i++) {
-			if (ItemStack.isSameItemSameComponents(types.get(i), stack)) {
+			if (ItemStack.isSameItemSameTags(types.get(i), stack)) {
 				return;
 			}
 		}

@@ -7,9 +7,9 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.slot.SlotType;
-import mekanism.client.recipe_viewer.interfaces.IRecipeViewerGhostTarget.IGhostIngredientConsumer;
-import mekanism.client.recipe_viewer.interfaces.IRecipeViewerGhostTarget.IGhostItemConsumer;
-import mekanism.client.recipe_viewer.interfaces.IRecipeViewerGhostTarget;
+import mekanism.client.jei.interfaces.IJEIGhostTarget.IGhostIngredientConsumer;
+import mekanism.client.jei.interfaces.IJEIGhostTarget.IGhostItemConsumer;
+import mekanism.client.jei.interfaces.IJEIGhostTarget;
 import mekanism.common.recipe.MekanismRecipeType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -39,7 +39,7 @@ import java.util.function.Consumer;
 	 *   <li>新增 isBlock 字段，精确模式下区分蜜脾和蜜脾块</li>
 	 * </ul>
 	 * <p>
-	 * <b>JEI 集成</b>：实现 {@link IRecipeViewerGhostTarget}，Mekanism 已注册的
+	 * <b>JEI 集成</b>：实现 {@link IJEIGhostTarget}，Mekanism 已注册的
 	 * {@code JeiGhostIngredientHandler} 会自动发现本组件并路由 JEI 拖拽物品。
 	 * 仅接受蜜脾类物品（通过 {@link CombFuzzyMatcher#getBeeType} 校验）。
 	 * <p>
@@ -51,7 +51,7 @@ import java.util.function.Consumer;
 	 *   <li>MEK 原版过滤器：GuiSlot.renderWidget（背景）→ GuiSequencedSlotDisplay.drawBackground（物品）</li>
 	 * </ul>
 	 */
-public final class GhostItemWidget extends GuiElement implements IRecipeViewerGhostTarget {
+public final class GhostItemWidget extends GuiElement implements IJEIGhostTarget {
 
 	/** ghost slot 尺寸（宽=高，与 SlotType.NORMAL 一致） */
 	public static final int SIZE = 18;
@@ -167,11 +167,11 @@ public final class GhostItemWidget extends GuiElement implements IRecipeViewerGh
 
 		@Nullable
 		@Override
-		public ItemStack supportedTarget(Object ingredient) {
+		public boolean supportsIngredient(Object ingredient) {
 			if (ingredient instanceof ItemStack stack && !stack.isEmpty()) {
-				return isSupportedInput(stack) ? stack : null;
+				return isSupportedInput(stack);
 			}
-			return null;
+			return false;
 		}
 
 		@Override
@@ -258,24 +258,24 @@ public final class GhostItemWidget extends GuiElement implements IRecipeViewerGh
 	 * </ul>
 	 */
 	@Override
-	public boolean mouseClicked(double mouseX, double mouseY, int button) {
+	public mekanism.client.gui.element.GuiElement mouseClickedNested(double mouseX, double mouseY, int button) {
 		if (!isMouseOver(mouseX, mouseY)) {
-			return false;
+			return null;
 		}
 		ItemStack carried = gui().getCarriedItem();
 		if (button == 0 || button == 1) {
 			// 左键或右键 + 光标携带物品：标记到当前 slot 位置
 			if (!carried.isEmpty()) {
 				acceptGhostIngredient(carried);
-				return true;
+				return this;
 			}
 			// 空光标 + slot 已填充：移除
 			if (!isEmpty() && removeCallback != null) {
 				removeCallback.accept(slotIndex);
-				return true;
+				return this;
 			}
 		}
-		return false;
+		return null;
 	}
 
 	/**

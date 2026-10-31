@@ -1,0 +1,52 @@
+{
+  "conditions": [
+    {
+      "type": "forge:and",
+      "values": [
+        {
+          "type": "forge:mod_loaded",
+          "modid": "emextras"
+        },
+        {
+          "type": "forge:mod_loaded",
+          "modid": "mekanism_extras"
+        },
+        {
+          "type": "forge:mod_loaded",
+          "modid": "evolvedmekanism"
+        }
+      ]
+    }
+  ],
+  "type": "productivebeesgenesis:apiary_shaped",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "mekanism_extras:alloys/shining"
+    },
+    "C": {
+      "tag": "forge:circuits/cosmic_dense"
+    },
+    "P": {
+      "item": "productivebeesgenesis:cosmic_extra_mek_apiary_factory"
+    },
+    "Q": {
+      "item": "productivebeesgenesis:dense_mek_centrifuge_factory"
+    },
+    "T": {
+      "tag": "evolvedmekanism:alloys/singular"
+    },
+    "X": {
+      "item": "mekanism:steel_casing"
+    }
+  },
+  "pattern": [
+    "ACT",
+    "PXQ",
+    "TCA"
+  ],
+  "result": {
+    "count": 1,
+    "item": "productivebeesgenesis:cosmic_dense_emextra_mek_apiary_factory"
+  }
+}

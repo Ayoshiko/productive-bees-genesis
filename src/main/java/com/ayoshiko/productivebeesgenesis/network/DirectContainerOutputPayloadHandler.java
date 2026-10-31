@@ -9,7 +9,7 @@ import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.tile.base.TileEntityMekanism;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import com.ayoshiko.productivebeesgenesis.network.ForgePayloadContext;
 
 /**
  * 产物直通 per-tile 开关的服务端处理器（蜂箱与离心机共用）。
@@ -25,7 +25,7 @@ final class DirectContainerOutputPayloadHandler {
 	private DirectContainerOutputPayloadHandler() {
 	}
 
-	static void handle(ToggleDirectContainerOutputPayload payload, IPayloadContext context) {
+	static void handle(ToggleDirectContainerOutputPayload payload, ForgePayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
 		// 必须是当前打开的机器 GUI，防止伪造坐标远程改别人机器
 		if (!(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)

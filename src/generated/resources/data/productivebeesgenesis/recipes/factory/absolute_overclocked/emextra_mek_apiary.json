@@ -1,0 +1,52 @@
+{
+  "conditions": [
+    {
+      "type": "forge:and",
+      "values": [
+        {
+          "type": "forge:mod_loaded",
+          "modid": "emextras"
+        },
+        {
+          "type": "forge:mod_loaded",
+          "modid": "mekanism_extras"
+        },
+        {
+          "type": "forge:mod_loaded",
+          "modid": "evolvedmekanism"
+        }
+      ]
+    }
+  ],
+  "type": "productivebeesgenesis:apiary_shaped",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "tag": "mekanism_extras:alloys/radiance"
+    },
+    "C": {
+      "tag": "forge:circuits/absolute_overclocked"
+    },
+    "P": {
+      "item": "productivebeesgenesis:absolute_extra_mek_apiary_factory"
+    },
+    "Q": {
+      "item": "productivebeesgenesis:overclocked_mek_centrifuge_factory"
+    },
+    "T": {
+      "tag": "evolvedmekanism:alloys/hypercharged"
+    },
+    "X": {
+      "item": "mekanism:steel_casing"
+    }
+  },
+  "pattern": [
+    "ACT",
+    "PXQ",
+    "TCA"
+  ],
+  "result": {
+    "count": 1,
+    "item": "productivebeesgenesis:absolute_overclocked_emextra_mek_apiary_factory"
+  }
+}

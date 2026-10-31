@@ -10,7 +10,7 @@ import mekanism.common.tier.FactoryTier;
 import mekanism.common.tile.component.ITileComponent;
 import mekanism.common.upgrade.IUpgradeData;
 import mekanism.common.upgrade.MachineUpgradeData;
-import net.minecraft.core.Holder;
+import mekanism.api.providers.IBlockProvider;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.Block;
@@ -57,7 +57,7 @@ public class TileEntityMekApiaryFactory extends TileEntityMekApiary implements I
 	/** 排序需求标志 — 输出槽变化时设为 true，触发排序检查 */
 	private boolean sortingNeeded = true;
 
-	public TileEntityMekApiaryFactory(Holder<Block> blockProvider, net.minecraft.core.BlockPos pos, BlockState state) {
+	public TileEntityMekApiaryFactory(IBlockProvider blockProvider, net.minecraft.core.BlockPos pos, BlockState state) {
 		super(blockProvider, pos, state);
 	}
 
@@ -71,7 +71,7 @@ public class TileEntityMekApiaryFactory extends TileEntityMekApiary implements I
 	@Override
 	protected void presetVariables() {
 		super.presetVariables();
-		tier = Attribute.getTier(getBlockHolder(), FactoryTier.class);
+		tier = Attribute.getTier(getBlockState().getBlock(), FactoryTier.class);
 	}
 
 	/**
@@ -266,17 +266,17 @@ public class TileEntityMekApiaryFactory extends TileEntityMekApiary implements I
 			setControlType(data.controlType);
 			getEnergyContainer().setEnergy(data.energyContainer.getEnergy());
 			sorting = data.sorting;
-			getEnergySlot().deserializeNBT(provider, data.energySlot.serializeNBT(provider));
+			getEnergySlot().deserializeNBT(data.energySlot.serializeNBT());
 			if (data.progress.length > 0) {
 				setOperatingTicks(data.progress[0]);
 			}
 			if (!data.inputSlots.isEmpty()) {
-				getCageInSlot().deserializeNBT(provider, data.inputSlots.get(0).serializeNBT(provider));
+				getCageInSlot().deserializeNBT(data.inputSlots.get(0).serializeNBT());
 			}
 			// 兼容旧版/外部 Mekanism 生成的 MachineUpgradeData：若第二个输入槽存在，
 			// 它对应新增的基因小食槽；旧数据没有该槽时保持目标槽为空。
 			if (data.inputSlots.size() > 1) {
-				getGeneTreatSlot().deserializeNBT(provider, data.inputSlots.get(1).serializeNBT(provider));
+				getGeneTreatSlot().deserializeNBT(data.inputSlots.get(1).serializeNBT());
 			}
 			List<BasicInventorySlot> currentOutputs = getOutputSlots();
 			for (int i = 0; i < data.outputSlots.size() && i < currentOutputs.size(); i++) {
@@ -285,7 +285,7 @@ public class TileEntityMekApiaryFactory extends TileEntityMekApiary implements I
 				currentOutputs.get(i).setStack(data.outputSlots.get(i).getStack().copy());
 			}
 			for (ITileComponent component : getComponents()) {
-				component.read(data.components, provider);
+				component.read(data.components);
 			}
 		} else {
 			super.parseUpgradeData(provider, upgradeData);

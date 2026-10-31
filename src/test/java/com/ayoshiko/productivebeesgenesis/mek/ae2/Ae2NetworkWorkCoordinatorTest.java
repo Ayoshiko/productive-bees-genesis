@@ -15,58 +15,6 @@ class Ae2NetworkWorkCoordinatorTest {
 	}
 
 	@Test
-	void intermittentWorkersRetainTheirOrderAcrossExistingCooldowns() {
-		Object network = new Object();
-		Object handle = Ae2NetworkWorkCoordinator.resolve(network);
-		long[] workers = new long[19];
-		int[] turns = new int[workers.length];
-		Ae2NetworkWorkCoordinator.recordResolvedExtractCost(handle, 0, 10_000_000, 300_000);
-		for (int round = 0; round < workers.length * 3; round++) {
-			long tick = 1L + round * 20L;
-			int accepted = 0;
-			for (int index = 0; index < workers.length; index++) {
-				if (workers[index] == 0) workers[index] = Ae2NetworkWorkCoordinator.createWorkerId();
-				if (!Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, workers[index], tick)) continue;
-				turns[index]++;
-				accepted++;
-				Ae2NetworkWorkCoordinator.recordResolvedExtractCost(handle, tick, 10_000_000, 300_000);
-			}
-			assertEquals(1, accepted);
-		}
-		for (int turnsPerWorker : turns) assertEquals(3, turnsPerWorker);
-	}
-
-	@Test
-	void aWaitingOutputWorkerCannotBeStarvedByRepeatedSlowFirstWorker() {
-		Object network = new Object();
-		Object handle = Ae2NetworkWorkCoordinator.resolve(network);
-		long first = Ae2NetworkWorkCoordinator.createWorkerId();
-		long second = Ae2NetworkWorkCoordinator.createWorkerId();
-		for (int tick = 0; tick < 12; tick++) {
-			if (Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, first, tick)) {
-				Ae2NetworkWorkCoordinator.recordResolvedCost(handle, tick, 10_000_000, 150_000);
-			}
-			boolean secondTurn = Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, second, tick);
-			assertEquals(tick % 2 == 1, secondTurn);
-			if (secondTurn) Ae2NetworkWorkCoordinator.recordResolvedCost(handle, tick, 10_000_000, 150_000);
-		}
-	}
-
-	@Test
-	void staleWaitingReservationIsConsumedAndCannotFreezeRotation() {
-		Object network = new Object();
-		Object handle = Ae2NetworkWorkCoordinator.resolve(network);
-		long active = Ae2NetworkWorkCoordinator.createWorkerId();
-		long vanished = Ae2NetworkWorkCoordinator.createWorkerId();
-		Ae2NetworkWorkCoordinator.recordResolvedCost(handle, 0, 1_000_000, 150_000);
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, active, 1));
-		assertFalse(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, vanished, 1));
-		assertFalse(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, active, 2));
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, active, 3));
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, active, 204));
-	}
-
-	@Test
 	void healthyNetworkDoesNotThrottleWorkers() {
 		Object network = new Object();
 		long first = Ae2NetworkWorkCoordinator.createWorkerId();
@@ -148,82 +96,26 @@ class Ae2NetworkWorkCoordinatorTest {
 	@Test
 	void moderateExtractCostsShareTheNetworkBudgetAndRotateWorkers() {
 		Object network = new Object();
-		Object handle = Ae2NetworkWorkCoordinator.resolve(network);
 		long first = Ae2NetworkWorkCoordinator.createWorkerId();
 		long second = Ae2NetworkWorkCoordinator.createWorkerId();
 
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 24L));
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, second, 24L));
-		Ae2NetworkWorkCoordinator.recordResolvedExtractCost(handle, 24L, 400_000L,
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 24L));
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, second, 24L));
+		Ae2NetworkWorkCoordinator.recordCost(network, 24L, 400_000L,
 				Ae2ExtractBudget.HEALTHY_EXTRACT_NANOS);
 
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 25L));
-		assertFalse(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, second, 25L));
-		Ae2NetworkWorkCoordinator.recordResolvedExtractCost(handle, 25L, 2_100_001L,
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 25L));
+		assertFalse(Ae2NetworkWorkCoordinator.tryAcquire(network, second, 25L));
+		Ae2NetworkWorkCoordinator.recordCost(network, 25L, 2_100_001L,
 				Ae2ExtractBudget.HEALTHY_EXTRACT_NANOS);
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 25L));
-		Ae2NetworkWorkCoordinator.recordResolvedExtractCost(handle, 25L, 500_001L,
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 25L));
+		Ae2NetworkWorkCoordinator.recordCost(network, 25L, 500_001L,
 				Ae2ExtractBudget.HEALTHY_EXTRACT_NANOS);
-		assertFalse(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 25L));
-		assertFalse(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, second, 25L));
+		assertFalse(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 25L));
+		assertFalse(Ae2NetworkWorkCoordinator.tryAcquire(network, second, 25L));
 
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, second, 26L));
-		assertFalse(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 26L));
-	}
-
-	@Test
-	void slowOutputsCannotSpendInputBudgetOrOwnInputTurns() {
-		Object handle = Ae2NetworkWorkCoordinator.resolve(new Object());
-		long outputOnly = Ae2NetworkWorkCoordinator.createWorkerId();
-		long first = Ae2NetworkWorkCoordinator.createWorkerId();
-		long second = Ae2NetworkWorkCoordinator.createWorkerId();
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, outputOnly, 10));
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 10));
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, second, 10));
-		Ae2NetworkWorkCoordinator.recordResolvedCost(handle, 10, 3_000_000, 150_000);
-		assertFalse(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, outputOnly, 10));
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 10));
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, second, 10));
-		Ae2NetworkWorkCoordinator.recordResolvedExtractCost(handle, 10, 1_000_000, 300_000);
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 11));
-		assertFalse(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, second, 11));
-		assertFalse(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 12));
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, second, 12));
-	}
-
-	@Test
-	void exhaustedInputBudgetIsSharedUntilNextTickAndCannotSpendOutputBudget() {
-		Object handle = Ae2NetworkWorkCoordinator.resolve(new Object());
-		long first = Ae2NetworkWorkCoordinator.createWorkerId();
-		long second = Ae2NetworkWorkCoordinator.createWorkerId();
-		Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 20);
-		Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, second, 20);
-		Ae2NetworkWorkCoordinator.recordResolvedExtractCost(handle, 20, 3_000_000, 300_000);
-		for (int sample = 0; sample < 128; sample++) {
-			Ae2NetworkWorkCoordinator.recordResolvedExtractCost(handle, 20, 1_000, 300_000);
-		}
-		for (int repeat = 0; repeat < 1024; repeat++) {
-			assertFalse(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 20));
-			assertFalse(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, second, 20));
-		}
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, first, 20));
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireResolved(handle, second, 20));
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 21));
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, second, 21));
-	}
-
-	@Test
-	void releaseAlsoRemovesInputWorkerFromFutureTurns() {
-		Object network = new Object();
-		Object handle = Ae2NetworkWorkCoordinator.resolve(network);
-		long first = Ae2NetworkWorkCoordinator.createWorkerId();
-		long second = Ae2NetworkWorkCoordinator.createWorkerId();
-		Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 30);
-		Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, second, 30);
-		Ae2NetworkWorkCoordinator.recordResolvedExtractCost(handle, 30, 1_000_000, 300_000);
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 31));
-		Ae2NetworkWorkCoordinator.release(network, second);
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(handle, first, 32));
+		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, second, 26L));
+		assertFalse(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 26L));
 	}
 
 	@Test
@@ -271,45 +163,6 @@ class Ae2NetworkWorkCoordinatorTest {
 		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 62L));
 		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, second, 62L),
 				"网络恢复健康后不应永久保留单宿主限流");
-	}
-
-	@Test
-	void healthyHeadroomClearsAMinorSpikeWithoutWaitingForNanosecondDecay() {
-		Object network = new Object();
-		long first = Ae2NetworkWorkCoordinator.createWorkerId();
-		long second = Ae2NetworkWorkCoordinator.createWorkerId();
-		Ae2NetworkWorkCoordinator.tryAcquire(network, first, 1);
-		Ae2NetworkWorkCoordinator.tryAcquire(network, second, 1);
-		Ae2NetworkWorkCoordinator.recordCost(network, 1, 160_000, 150_000);
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 2));
-		assertFalse(Ae2NetworkWorkCoordinator.tryAcquire(network, second, 2));
-		Ae2NetworkWorkCoordinator.recordCost(network, 2, 50_000, 150_000);
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, second, 2));
-	}
-
-	@Test
-	void healthySamplesCannotReopenAnExhaustedBudgetInTheSameTick() {
-		Object network = new Object();
-		long worker = Ae2NetworkWorkCoordinator.createWorkerId();
-		Ae2NetworkWorkCoordinator.recordCost(network, 1, 3_000_000, 150_000);
-		for (int i = 0; i < 128; i++) {
-			Ae2NetworkWorkCoordinator.recordCost(network, 1, 0, 150_000);
-		}
-		assertFalse(Ae2NetworkWorkCoordinator.tryAcquire(network, worker, 1));
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, worker, 2));
-	}
-
-	@Test
-	void extremeCostSamplesCannotOverflowTheHealthAverage() {
-		Object network = new Object();
-		long first = Ae2NetworkWorkCoordinator.createWorkerId();
-		long second = Ae2NetworkWorkCoordinator.createWorkerId();
-		Ae2NetworkWorkCoordinator.recordCost(network, 0, 0, Long.MAX_VALUE);
-		for (int i = 0; i < 32; i++) {
-			Ae2NetworkWorkCoordinator.recordCost(network, 0, Long.MAX_VALUE, 0);
-		}
-		assertTrue(Ae2NetworkWorkCoordinator.tryAcquire(network, first, 1));
-		assertFalse(Ae2NetworkWorkCoordinator.tryAcquire(network, second, 1));
 	}
 
 	@Test

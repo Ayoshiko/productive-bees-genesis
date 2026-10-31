@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.Mixin;
  * 清理，避免影响同一帧的 JEI 列表图标。使用单一方法包裹和 {@code try/finally}，
  * 即使 JEI 或其它渲染 Mixin 抛出异常也不会把拖拽状态泄漏到后续渲染。
  */
-@Mixin(GhostIngredientDrag.class)
+@Mixin(value = GhostIngredientDrag.class, remap = false)
 public class JeiGhostIngredientDragMixin {
 
 	@WrapMethod(method = "drawItem(Lnet/minecraft/client/gui/GuiGraphics;II)V", require = 0)

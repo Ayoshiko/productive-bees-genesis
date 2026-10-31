@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 /** 离心机流体罐容量倍率配置。 */
 public final class FluidTankMultiplierConfigSection {
@@ -8,7 +8,7 @@ public final class FluidTankMultiplierConfigSection {
 	/** 按工厂等级索引的流体罐倍率。 */
 	public final FactoryTierConfigValues values;
 
-	private FluidTankMultiplierConfigSection(ModConfigSpec.Builder builder) {
+	private FluidTankMultiplierConfigSection(ForgeConfigSpec.Builder builder) {
 		builder.comment(
 				"流体罐倍率（按离心机等级）",
 				"基础容量 256K mB/进程；总容量 = 256K × 倍率 × 进程数",
@@ -21,7 +21,7 @@ public final class FluidTankMultiplierConfigSection {
 		builder.pop();
 	}
 
-	public static FluidTankMultiplierConfigSection create(ModConfigSpec.Builder builder) {
+	public static FluidTankMultiplierConfigSection create(ForgeConfigSpec.Builder builder) {
 		return new FluidTankMultiplierConfigSection(builder);
 	}
 }

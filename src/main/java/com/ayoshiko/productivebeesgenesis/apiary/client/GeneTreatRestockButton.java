@@ -6,10 +6,10 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.network.ToggleApiaryGeneTreatRestockPayload;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 
 /** 基因小食槽下方的补货开关；点击仅请求服务端修改。 */
 final class GeneTreatRestockButton extends MekanismButton {
@@ -22,7 +22,7 @@ final class GeneTreatRestockButton extends MekanismButton {
 				ApiaryGuiLayoutHelper.GENE_TREAT_Y + 19, 18, 14,
 				Component.translatable("gui.productivebeesgenesis.gene_treat_restock.button"),
 				(element, mouseX, mouseY) -> {
-					PacketDistributor.sendToServer(new ToggleApiaryGeneTreatRestockPayload(tile.getBlockPos()));
+					ForgeNetwork.sendToServer(new ToggleApiaryGeneTreatRestockPayload(tile.getBlockPos()));
 					return true;
 				});
 		this.tile = tile;

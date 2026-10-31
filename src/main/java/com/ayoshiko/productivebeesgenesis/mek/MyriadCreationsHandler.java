@@ -12,7 +12,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 
 import java.util.ArrayList;
@@ -55,7 +54,7 @@ public class MyriadCreationsHandler {
 	private final int[] pbProcessingTime;
 
 	/** PB离心配方缓存 — 每进程独立，与协调器共享（万象路径设为 null） */
-	private final RecipeHolder<CentrifugeRecipe>[] cachedPbRecipes;
+	private final CentrifugeRecipe[] cachedPbRecipes;
 
 	/** 流体输出处理器 — 委托处理配方定义的流体输出与流体槽满载缓存 */
 	private final MyriadFluidOutputHandler fluidOutputHandler;
@@ -83,7 +82,7 @@ public class MyriadCreationsHandler {
 	/** 构造万象创世处理器 */
 	public MyriadCreationsHandler(PbRecipeContext context, String logPrefix,
 			int[] pbOperatingTicks, boolean[] pbProcessing,
-			int[] pbProcessingTime, RecipeHolder<CentrifugeRecipe>[] cachedPbRecipes,
+			int[] pbProcessingTime, CentrifugeRecipe[] cachedPbRecipes,
 			PbRecipeFinder recipeFinder) {
 		this.context = context;
 		this.pbOperatingTicks = pbOperatingTicks;
@@ -130,7 +129,7 @@ public class MyriadCreationsHandler {
 			pbOperatingTicks[processIndex] = 0;
 		}
 
-		long availableEnergy = Math.min(context.energyContainer().getEnergy(), Math.max(0L, energyBudget));
+		long availableEnergy = Math.min(com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.toFe(context.energyContainer().getEnergy()), Math.max(0L, energyBudget));
 		Level level = context.level();
 
 		// 计算每周期并行操作数（STACK升级：2^stackUpgrades，受maxOpsPerTick配置限制）
@@ -252,7 +251,7 @@ public class MyriadCreationsHandler {
 					cachedEnergyPerTick, committedOps, plan.executedTicks());
 		}
 		if (energyUsed > 0L) {
-			context.energyContainer().extract(energyUsed, Action.EXECUTE, AutomationType.INTERNAL);
+			com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.extractFe(context.energyContainer(), energyUsed, Action.EXECUTE, AutomationType.INTERNAL);
 		}
 
 		return true;
@@ -407,7 +406,14 @@ public class MyriadCreationsHandler {
 		// 固定本次事务的变体，容量二分、降级重试及最终插入不得重新随机。
 		Map<ResourceLocation, ItemStack> templateByType = MyriadBeeTypeCache.snapshot()
 				.selectTemplates(selectedTypes, isCombBlock, level.getRandom());
-		int currentBatch = effectiveBatchSize;
+		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(
+				snapshot, baseItem, outputPerOperation, selectedTypes, effectiveBatchSize, templateByType);
+		if (maxBatch <= 0) {
+			logger.logOutputBlocked(processIndex, batchSize, false);
+			return 0;
+		}
+
+		int currentBatch = maxBatch;
 		// 修复：产量需要乘以productivityModifier，原实现遗漏导致产量升级在批量模式下无效
 		// productivityMod 已在上方 Task 2 修复中提前计算（用于流体空间约束）
 		int totalCount = SaturatingMath.saturatingToInt(
@@ -420,21 +426,6 @@ public class MyriadCreationsHandler {
 			activeWeights);
 
 		MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(snapshot, baseItem, allocation, templateByType);
-		if (!plan.isSuccess()) {
-			currentBatch = MyriadBatchPlanner.planOrFindMaxBatch(
-					snapshot, baseItem, outputPerOperation, selectedTypes, effectiveBatchSize, templateByType);
-			if (currentBatch <= 0) {
-				logger.logOutputBlocked(processIndex, batchSize, false);
-				return 0;
-			}
-			totalCount = SaturatingMath.saturatingToInt(
-					SaturatingMath.saturatingMultiply(currentBatch, multiplier, productivityMod));
-			typesToUse = Math.min(selectedTypes.size(), Math.max(1, Math.min(totalCount, OUTPUT_SLOT_COUNT)));
-			activeTypes = selectedTypes.subList(0, typesToUse);
-			activeWeights = WeightedTypeSelector.getInstance().getWeightsFor(activeTypes);
-			allocation = WeightedAllocation.allocateByWeight(totalCount, activeTypes, activeWeights);
-			plan = MyriadBatchPlanner.plan(snapshot, baseItem, allocation, templateByType);
-		}
 		// v9-L3 修复：逐步降级重试（MAX_DEGRADATION_ATTEMPTS 次，每次减半），替代原先仅尝试一次的保守降级
 		int degradationAttempts = 0;
 		while (!plan.isSuccess() && currentBatch > 1 && degradationAttempts < MAX_DEGRADATION_ATTEMPTS) {

@@ -146,15 +146,6 @@ public final class Ae2PushBackoff {
 		backoffEndNanos = 0;
 	}
 
-	/** 成功交付的成本调度不累积失败指数。 */
-	void recordSuccessWithDelay(long nanos, long delayNanos) {
-		backoffExponent = 0;
-		long delay = Math.max(0, Math.min(maxBackoffNs, delayNanos));
-		if (delay == 0) backoffEndNanos = 0;
-		else if (nanos > Long.MAX_VALUE - delay) backoffEndNanos = Long.MAX_VALUE;
-		else backoffEndNanos = nanos + delay;
-	}
-
 	/** 完全重置状态（clear 时调用） */
 	public void reset() {
 		backoffExponent = 0;

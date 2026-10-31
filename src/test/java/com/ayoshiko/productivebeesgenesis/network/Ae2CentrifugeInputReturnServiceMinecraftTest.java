@@ -9,15 +9,12 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import appeng.api.config.Actionable;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.storage.MEStorage;
-import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2ItemFingerprint;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
@@ -35,66 +32,6 @@ import org.junit.jupiter.api.Test;
 
 @Tag("minecraft")
 class Ae2CentrifugeInputReturnServiceMinecraftTest {
-
-	@Test
-	void slowSuccessfulReturnDefersLaterLanesWithoutIncreasingFailureExponent() {
-		Fixture fixture = new Fixture();
-		var tile = mock(TileEntityMekCentrifuge.class);
-		Level level = fixture.host.productivebeesgenesis$getAe2Level();
-		when(tile.productivebeesgenesis$getAe2Level()).thenReturn(level);
-		when(tile.productivebeesgenesis$getAe2StateHolder()).thenReturn(fixture.holder);
-		fixture.holder.setUnprocessableInputReturnCheckPending(true);
-		IInventorySlot first = fixture.slot(new ItemStack(Items.RAW_IRON, 4));
-		IInventorySlot second = fixture.slot(new ItemStack(Items.RAW_GOLD, 3));
-		MEStorage storage = mock(MEStorage.class);
-		when(storage.insert(any(), anyLong(), eq(Actionable.SIMULATE), any()))
-				.thenAnswer(call -> call.getArgument(1));
-		when(storage.insert(any(), anyLong(), eq(Actionable.MODULATE), any())).thenAnswer(call -> {
-			fixture.holder.recordNetworkExtractCost(storage, level.getGameTime(), 10_000_000, 150_000);
-			return call.getArgument(1);
-		});
-		try (var grid = mockStatic(Ae2GridNodeManager.class)) {
-			grid.when(() -> Ae2GridNodeManager.getGridNodeState(tile))
-					.thenReturn(Ae2GridNodeManager.STATE_ONLINE);
-			grid.when(() -> Ae2GridNodeManager.getCachedMeStorage(fixture.holder, tile)).thenReturn(storage);
-
-			assertTrue(Ae2CentrifugeInputReturnService.returnUnprocessableInputs(tile, List.of(first, second)));
-			assertTrue(first.isEmpty());
-			assertEquals(3, second.getStack().getCount());
-			assertEquals(0, fixture.holder.getPushState().getReturnBackoff().getBackoffExponent());
-			when(level.getGameTime()).thenReturn(21L);
-			assertFalse(Ae2CentrifugeInputReturnService.returnUnprocessableInputs(tile, List.of(first, second)));
-		}
-		assertTrue(second.isEmpty());
-		assertEquals(0, fixture.holder.getPendingItemBuffer().getTotalAmount());
-		assertEquals(0, fixture.holder.getPushState().getReturnBackoff().getBackoffExponent());
-		assertFalse(fixture.holder.isUnprocessableInputReturnCheckPending());
-		verify(storage).insert(eq(AEItemKey.of(Items.RAW_IRON)), eq(4L), eq(Actionable.MODULATE), any());
-		verify(storage).insert(eq(AEItemKey.of(Items.RAW_GOLD)), eq(3L), eq(Actionable.MODULATE), any());
-	}
-
-	@Test
-	void laterBudgetDeferralDoesNotHideAnEarlierRejection() {
-		Fixture fixture = new Fixture();
-		IInventorySlot first = fixture.slot(new ItemStack(Items.RAW_IRON, 4));
-		IInventorySlot second = fixture.slot(new ItemStack(Items.RAW_GOLD, 3));
-		MEStorage storage = mock(MEStorage.class);
-		when(storage.insert(any(), anyLong(), eq(Actionable.SIMULATE), any())).thenAnswer(call -> {
-			fixture.holder.recordNetworkExtractCost(storage, 20, 10_000_000, 150_000);
-			return 0L;
-		});
-
-		CentrifugeAeReturnResult result = Ae2CentrifugeInputReturnService.returnInputSlots(
-				fixture.host, fixture.holder, storage, List.of(first, second), stack -> true);
-
-		assertTrue(result.retryFailed());
-		assertEquals(0, result.returnedToAe());
-		assertEquals(0, result.pending());
-		assertEquals(4, first.getStack().getCount());
-		assertEquals(3, second.getStack().getCount());
-		verify(storage, never()).insert(eq(AEItemKey.of(Items.RAW_GOLD)), anyLong(), any(), any());
-		verify(storage, never()).insert(any(), anyLong(), eq(Actionable.MODULATE), any());
-	}
 
 	@Test
 	void oneShotCheckMovesUnprocessableOrdinaryPendingWorkToNetworkOnly() {
@@ -163,11 +100,10 @@ class Ae2CentrifugeInputReturnServiceMinecraftTest {
 		assertEquals(2L, result.returnedToAe());
 		assertEquals(3L, result.pending());
 		assertTrue(input.isEmpty());
-		assertFalse(fixture.holder.getPendingItemBuffer().hasRetryableItems(20L));
-		assertTrue(fixture.holder.getPendingItemBuffer().hasRetryableItems(21L));
-		assertEquals(0L, fixture.holder.getPendingItemBuffer().snapshot(21L).getFirst().amount());
+		assertTrue(fixture.holder.getPendingItemBuffer().hasRetryableItems(20L));
+		assertEquals(0L, fixture.holder.getPendingItemBuffer().snapshot(20L).getFirst().amount());
 		assertEquals(3L,
-				fixture.holder.getPendingItemBuffer().snapshot(21L).getFirst().returnToNetworkAmount());
+				fixture.holder.getPendingItemBuffer().snapshot(20L).getFirst().returnToNetworkAmount());
 	}
 
 	@Test

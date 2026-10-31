@@ -1,84 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
-
-import net.minecraft.client.Minecraft;
-import com.ayoshiko.productivebeesgenesis.client.screen.authoring.DesignerFilterScreen;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.StringWidget;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.options.OptionsSubScreen;
+import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraft.network.chat.Component;
-import net.neoforged.fml.config.ModConfig;
-import net.neoforged.neoforge.client.gui.ConfigurationScreen;
-
-/**
-	 * 服务端配置中间页
-	 * <br/>
-	 * 与 NeoForge {@link ConfigurationScreen.ConfigurationSectionScreen}
-	 * 保持一致的 {@link OptionsSubScreen} 风格：左侧标签、右侧操作按钮、底部“完成”按钮。
-	 * <p>
-	 * 该页面同时提供两个入口：
-	 * <ul>
-	 *   <li>“万象创世过滤” — 打开与蜜蜂编辑器共用样式的 {@link DesignerFilterScreen}</li>
-	 *   <li>“其他服务端配置” — 打开基于 NeoForge 的服务端分组列表；平衡性预设使用列表选择器</li>
-	 * </ul>
-	 */
-public final class ServerConfigScreen extends OptionsSubScreen {
-
-	private final ModConfig modConfig;
-
-	public ServerConfigScreen(Screen parent, ModConfig modConfig) {
-		super(parent, Minecraft.getInstance().options,
-				Component.translatable(
-						"productivebeesgenesis.configuration.section.productivebeesgenesis.gameplay.server.toml.title"));
-		this.modConfig = modConfig;
-		// Task 16.3: 移除冗余的 configType 字段 — 该屏幕专用于 SERVER 配置，
-		// 在使用处直接用 ModConfig.Type.SERVER 常量，避免维护一个永不变化的字段
-	}
-
-	// NeoForge 原生配置节屏幕的按钮/标签后缀（如“彩虹特效...”）
-	private static final String SECTION_SUFFIX_KEY = "neoforge.configuration.uitext.section";
-
-	@Override
-	protected void addOptions() {
-		// 1. 万象创世过滤 — 自定义编辑器
-		Component filterLabel = Component.translatable(SECTION_SUFFIX_KEY,
-				Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter"));
-		StringWidget filterLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, filterLabel,
-			font).alignLeft();
-		filterLabelWidget.setTooltip(Tooltip.create(
-				Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.tooltip")));
-
-		Component filterButtonText = Component.translatable(SECTION_SUFFIX_KEY,
-				Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.button"));
-		Button filterButton = Button.builder(filterButtonText, button -> minecraft.setScreen(new DesignerFilterScreen(this)))
-				.tooltip(Tooltip.create(
-						Component.translatable("productivebeesgenesis.configuration.myriad_creations_filter.tooltip")))
-				.width(Button.DEFAULT_WIDTH)
-				.build();
-
-		list.addSmall(filterLabelWidget, filterButton);
-
-		// 2. 其他服务端配置 — 基于 NeoForge，并为平衡性预设提供列表选择器
-		Component otherLabel = Component.translatable(SECTION_SUFFIX_KEY,
-				Component.translatable("productivebeesgenesis.configuration.gameplay.other"));
-		StringWidget otherLabelWidget = new StringWidget(Button.DEFAULT_WIDTH, Button.DEFAULT_HEIGHT, otherLabel,
-			font).alignLeft();
-		otherLabelWidget.setTooltip(Tooltip.create(
-				Component.translatable("productivebeesgenesis.configuration.gameplay.other.tooltip")));
-
-		Component otherButtonText = Component.translatable(SECTION_SUFFIX_KEY,
-				Component.translatable("productivebeesgenesis.configuration.gameplay.other.button"));
-		Button otherButton = Button.builder(otherButtonText, button -> minecraft.setScreen(
-						new BalanceConfigurationScreen(
-								this, ModConfig.Type.SERVER, modConfig,
-								Component.translatable(
-										"productivebeesgenesis.configuration.section.productivebeesgenesis.gameplay.server.toml.title"))))
-				.tooltip(Tooltip.create(Component.translatable(
-						"productivebeesgenesis.configuration.gameplay.other.tooltip")))
-				.width(Button.DEFAULT_WIDTH)
-				.build();
-
-		list.addSmall(otherLabelWidget, otherButton);
-	}
+public final class ServerConfigScreen extends ForgeConfigEditor {
+ public ServerConfigScreen(Screen parent, ModConfig config) { super(parent,(ForgeConfigSpec)config.getSpec(),((ForgeConfigSpec)config.getSpec()).getValues(),Component.translatable("productivebeesgenesis.config.gameplay")); }
 }

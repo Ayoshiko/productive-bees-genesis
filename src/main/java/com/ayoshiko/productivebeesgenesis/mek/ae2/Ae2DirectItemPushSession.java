@@ -33,7 +33,6 @@ import java.util.function.ToIntFunction;
 public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> {
 
 	private MEStorage meStorage;
-	com.ayoshiko.productivebeesgenesis.logistics.OutputCustody custody;
 	private Ae2OutputStateHolder holder;
 	private Ae2KeyBackoffRegistry<AEItemKey> keyBackoff;
 	/** 会话创建时的游戏刻 — 用于全服 insert 预算的 tick 归属 */
@@ -44,8 +43,8 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 	private long spentInsertNanos;
 	/** 连续零接收计数 — 任一成功 insert 即清零 */
 	private int zeroAcceptStreak;
-	/** 复用的外部调用计量器，与本地保管耗时分开。 */
-	private final Ae2MeasuredStorage measuredStorage = new Ae2MeasuredStorage();
+	/** 是否检测到慢 insert */
+	private boolean slowInsertDetected;
 	/** 本机 insert 成本记账器（per-tile，与主推送路径共享 EWMA 与 tick 预算） */
 	private Ae2InsertCostTracker costTracker;
 	/** 本轮允许的 insert 次数上限 — 健康网络等于 MAX_ITEM_KEYS_PER_TICK（无损） */
@@ -67,8 +66,8 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 		this.deferredCount = 0;
 		this.spentInsertNanos = 0L;
 		this.zeroAcceptStreak = 0;
+		this.slowInsertDetected = false;
 		this.costTracker = costTracker;
-		if (costTracker != null) costTracker.useNetwork(meStorage);
 		this.insertQuota = costTracker == null
 				? Ae2PushLimits.MAX_ITEM_KEYS_PER_TICK
 				: costTracker.keyQuota(Ae2PushLimits.MAX_ITEM_KEYS_PER_TICK);
@@ -81,15 +80,30 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 	public int attemptedCount() { return attemptedCount; }
 	public int deferredCount() { return deferredCount; }
 
-	/** 只有连续拒收触发整轮失败退避；成功的网络成本由键调度与预算控制。 */
+	/**
+	 * 是否应触发调用方整体退避 — 慢 insert（网络遍历昂贵）或连续零接收（满存储）。
+	 * <br/>
+	 * 调用方据此调用 {@link Ae2PushBackoff#recordFailure(long)}，
+	 * 即使本轮部分成功也保持退避（修复半满网络下"塞进 1 个物品就复位退避"的抖动漏洞）。
+	 */
 	public boolean shouldTriggerBackoff() {
-		return zeroAcceptStreak >= Ae2PushLimits.CONSECUTIVE_ZERO_ACCEPT_LIMIT;
+		return slowInsertDetected || zeroAcceptStreak >= Ae2PushLimits.CONSECUTIVE_ZERO_ACCEPT_LIMIT;
 	}
 
+	/** 记录单次 insert 耗时到单机预算与全服预算（成功与异常路径共用） */
 	private void recordInsertCost(long insertCost) {
 		if (Ae2GlobalInsertBudget.isSlowOperation(insertCost)) {
+			// 只累计慢 insert 的超出耗时 — 健康网络预算恒 0，满速推送不受限
 			spentInsertNanos += insertCost - Ae2GlobalInsertBudget.SLOW_INSERT_NANOS;
+			slowInsertDetected = true;
 		}
+		Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
+		if (holder != null) {
+			holder.recordNetworkCost(meStorage, gameTick, insertCost,
+					Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
+		}
+		// 自适应记账：全额计入 EWMA 与 tick 预算，覆盖 ae2lt 样板解码这类中等昂贵高频 insert
+		if (costTracker != null) costTracker.record(gameTick, insertCost);
 	}
 
 	@Override
@@ -99,7 +113,7 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 
 	/** AEItemKey 不包含数量；请求量独立传递，绝不修改调用方的模板。 */
 	public int push(ItemStack stack, int amount) {
-		if (stack == null || stack.isEmpty() || amount <= 0 || custody == null || custody.blocked()) return 0;
+		if (stack == null || stack.isEmpty() || amount <= 0) return 0;
 		// 满存储/预算耗尽短路：不再发起 insert（即完整网络遍历），物品由调用方保留
 		if (spentInsertNanos >= Ae2PushLimits.INSERT_TIME_BUDGET_NANOS
 				|| zeroAcceptStreak >= Ae2PushLimits.CONSECUTIVE_ZERO_ACCEPT_LIMIT
@@ -118,19 +132,20 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 		}
 		attemptedCount++;
 		long inserted;
-		measuredStorage.prepare(meStorage, gameTick, costTracker);
+		long insertStart = System.nanoTime();
 		try {
-			inserted = custody.handoffItem(stack, amount, "ae2-item", () ->
-					measuredStorage.insert(key, amount, Actionable.MODULATE, Ae2PushLimits.ActionSourceHolder.INSTANCE));
+			inserted = meStorage.insert(key, amount, Actionable.MODULATE,
+					Ae2PushLimits.ActionSourceHolder.INSTANCE);
 		} catch (Exception e) {
 			// 抛异常的 insert 恰恰最昂贵（病态网络的 fsync/转换接口），同样入账预算防止每 tick 重复全量遍历
-			recordInsertCost(measuredStorage.lastCostNanos());
+			recordInsertCost(System.nanoTime() - insertStart);
 			zeroAcceptStreak++;
 			if (keyBackoff != null) keyBackoff.recordFailure(key, System.nanoTime());
 			Ae2PushExceptionLog.handle(e, 0, 0, stack, amount);
 			return 0;
 		}
-		long insertCost = measuredStorage.lastCostNanos();
+		long insertCost = System.nanoTime() - insertStart;
+		boolean slowInsert = Ae2GlobalInsertBudget.isSlowOperation(insertCost);
 		recordInsertCost(insertCost);
 		if (inserted <= 0) {
 			zeroAcceptStreak++;
@@ -141,7 +156,8 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 		}
 		zeroAcceptStreak = 0;
 		if (keyBackoff != null) {
-			keyBackoff.recordSuccess(key, System.nanoTime(), costTracker == null ? 0 : costTracker.successDelayNanos());
+			if (slowInsert) keyBackoff.recordFailure(key, System.nanoTime());
+			else keyBackoff.recordSuccess(key);
 		}
 		return SaturatingMath.saturatingToInt(
 				SaturatingMath.clampToRequest(inserted, amount));

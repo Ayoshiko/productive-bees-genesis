@@ -30,17 +30,28 @@ final class Ae2OutputBackoffLog {
 				itemKey, requestedAmount, failureCount);
 	}
 
-	/** 成功交付的持续网络成本只影响调度，不计作拒收或资产失败。 */
-	static void logSlowInsertDelay(long delayNanos) {
+	/**
+	 * 慢 insert 退避日志（节流 5 分钟）— 病态网络诊断入口。
+	 * <p>
+	 * insert 成功但耗时超 {@link Ae2GlobalInsertBudget#SLOW_INSERT_NANOS} 说明网络含
+	 * 昂贵外部存储（如 ProjectExpansion 转换接口触发 ProjectE EMC 全量查询），
+	 * 推送仍会完成但频率被指数退避限制。玩家可据此定位 ME 网络侧的性能问题。
+	 * <p>
+	 * 保留 {@code LogThrottle}（而非开发者模式门控）：单次 &gt;0.5ms 的 insert 属于确实需要
+	 * 玩家知晓的异常，且触发前提是已进入退避（推送变慢），不属于常态自适应。
+	 */
+	static void logSlowInsertBackoff(Ae2PushBackoff itemBackoff) {
 		LogThrottle.warnWithCooldown("ae2_slow_insert_backoff", 300_000L,
-				"AE2 插入已成功，按实测网络成本延后最多 {}ms 再次推送",
-				delayNanos / 1_000_000.0);
+				"AE2 网络 insert 耗时异常（>{}ms），推送频率已指数退避（当前指数 {}）— "
+						+ "请检查 ME 网络中的昂贵外部存储（转换接口/EnderDrives 等）",
+				Ae2GlobalInsertBudget.SLOW_INSERT_NANOS / 1_000_000,
+				itemBackoff.getBackoffExponent());
 	}
 
 	/**
 	 * 自适应键配额收缩日志 — 中等昂贵高频网络的诊断入口。
 	 * <p>
-	 * 与 {@link #logSlowInsertDelay} 互补：后者针对单次 &gt;0.5ms 的极慢 insert，
+	 * 与 {@link #logSlowInsertBackoff} 互补：后者针对单次 &gt;0.5ms 的极慢 insert，
 	 * 本日志针对单次 0.15-0.5ms 但高频（ae2lt Matrix Port 样板解码、大量转换接口等）
 	 * 的场景 —— 这类 insert 不触发慢阈值，只能靠均值判定并收缩每 tick 键配额。
 	 * <p>

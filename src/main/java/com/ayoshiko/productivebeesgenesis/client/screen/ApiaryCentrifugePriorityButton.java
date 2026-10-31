@@ -3,9 +3,9 @@ package com.ayoshiko.productivebeesgenesis.client.screen;
 import com.ayoshiko.productivebeesgenesis.network.CycleAeOutputPayload;
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.button.MekanismButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.ForgeGuiCompat.MekanismButton;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.network.PacketDistributor;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 
 /** Toggles centrifuge-first routing for products that a connected centrifuge can process. */
 final class ApiaryCentrifugePriorityButton extends MekanismButton {
@@ -17,7 +17,7 @@ final class ApiaryCentrifugePriorityButton extends MekanismButton {
 			ApiaryDirectEjectOverlay.OverlayTarget target) {
 		super(gui, x, y, SIZE, SIZE, Component.literal("P"), (element, mouseX, mouseY) -> {
 			if (element instanceof ApiaryCentrifugePriorityButton button && button.target != null) {
-				PacketDistributor.sendToServer(new CycleAeOutputPayload(
+				ForgeNetwork.sendToServer(new CycleAeOutputPayload(
 						button.target.apiary().getBlockPos(),
 						CycleAeOutputPayload.OutputType.APIARY_CENTRIFUGE_PRIORITY));
 				return true;

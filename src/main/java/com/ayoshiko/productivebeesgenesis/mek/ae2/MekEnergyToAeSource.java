@@ -53,7 +53,7 @@ public final class MekEnergyToAeSource implements IEnergySource {
 		// Mekanism Action：MODULATE → EXECUTE，SIMULATE → SIMULATE
 		Action mekAction = mode.isSimulate() ? Action.SIMULATE : Action.EXECUTE;
 		long extracted = SaturatingMath.clampToRequest(
-				container.extract(feAmount, mekAction, AutomationType.INTERNAL), feAmount);
+				com.ayoshiko.productivebeesgenesis.util.ForgeEnergyUnits.extractFe(container, feAmount, mekAction, AutomationType.INTERNAL), feAmount);
 		if (extracted <= 0) {
 			return 0;
 		}

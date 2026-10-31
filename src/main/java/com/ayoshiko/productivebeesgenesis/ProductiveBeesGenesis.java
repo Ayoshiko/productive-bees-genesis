@@ -36,32 +36,29 @@ import com.ayoshiko.productivebeesgenesis.util.RecipeReloadRetryManager;
 import com.ayoshiko.productivebeesgenesis.util.ServerTickClock;
 import com.ayoshiko.productivebeesgenesis.util.SharedPbRecipeCache;
 import com.ayoshiko.productivebeesgenesis.util.SingleIngredientCraftingIndex;
-import mekanism.common.attachments.IAttachmentAware;
-import mekanism.common.capabilities.ICapabilityAware;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.storage.LevelResource;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.config.ConfigTracker;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.config.ModConfig.Type;
-import net.neoforged.fml.event.config.ModConfigEvent;
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.neoforged.fml.loading.FMLEnvironment;
-import net.neoforged.fml.loading.FMLPaths;
-import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.AddReloadListenerEvent;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
-import net.neoforged.neoforge.event.TagsUpdatedEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
-import net.neoforged.neoforge.event.server.ServerStoppedEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.registries.RegisterEvent;
-import net.neoforged.neoforge.server.ServerLifecycleHooks;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.ModContainer;
+import net.minecraftforge.fml.config.ConfigTracker;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig.Type;
+import net.minecraftforge.fml.event.config.ModConfigEvent;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.loading.FMLEnvironment;
+import net.minecraftforge.fml.loading.FMLPaths;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.AddReloadListenerEvent;
+import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.event.TagsUpdatedEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.server.ServerAboutToStartEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.event.TickEvent.ServerTickEvent;
+import net.minecraftforge.registries.RegisterEvent;
+import net.minecraftforge.server.ServerLifecycleHooks;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,7 +83,10 @@ public final class ProductiveBeesGenesis {
 	public static final AtomicLong RECIPE_VERSION = new AtomicLong(0L);
 	private boolean serverConfigsInitialized;
 
-	public ProductiveBeesGenesis(IEventBus eventBus, ModContainer modContainer) {
+	public ProductiveBeesGenesis() {
+        IEventBus eventBus = net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus();
+        ModPayloads.register();
+        MinecraftForge.EVENT_BUS.addGenericListener(net.minecraft.world.level.block.entity.BlockEntity.class, this::attachAe2Capabilities);
 		LOGGER.info("资源蜜蜂：创世模组初始化中...");
 
 		// 初始化 Mek 离心机扩展（EM/ME/EME 三层工厂）— 必须在 DeferredRegister.register() 之前
@@ -99,7 +99,7 @@ public final class ProductiveBeesGenesis {
 		registerDeferredRegisters(eventBus);
 
 		// 注册配置文件
-		registerConfigs(modContainer);
+		registerConfigs();
 
 		// 注册配置加载/重载监听器（跨字段校验 + 蜜蜂属性覆盖 + 缓存失效）
 		registerConfigListeners(eventBus);
@@ -131,7 +131,6 @@ public final class ProductiveBeesGenesis {
 	 * 注册 DeferredRegister 到 mod 事件总线
 	 */
 	private void registerDeferredRegisters(IEventBus eventBus) {
-		com.ayoshiko.productivebeesgenesis.resource.ResourceContent.register(eventBus);
 		ModBlocks.BLOCKS.register(eventBus);
 		ModBlockEntities.register(eventBus);
 		ModItems.ITEMS.register(eventBus);
@@ -143,14 +142,14 @@ public final class ProductiveBeesGenesis {
 	/**
 	 * 注册配置文件（CLIENT / COMMON / 三个 SERVER 领域文件）
 	 */
-	private void registerConfigs(ModContainer modContainer) {
-		modContainer.registerConfig(Type.CLIENT, ModConfig.CLIENT_SPEC);
-		modContainer.registerConfig(Type.COMMON, ModConfig.COMMON_SPEC);
-		modContainer.registerConfig(
+	private void registerConfigs() {
+		net.minecraftforge.fml.ModLoadingContext.get().registerConfig(Type.CLIENT, ModConfig.CLIENT_SPEC);
+		net.minecraftforge.fml.ModLoadingContext.get().registerConfig(Type.COMMON, ModConfig.COMMON_SPEC);
+		net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
 				Type.SERVER, ModConfig.GAMEPLAY_SERVER_SPEC, ModConfig.GAMEPLAY_SERVER_FILE_NAME);
-		modContainer.registerConfig(
+		net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
 				Type.SERVER, ModConfig.MACHINES_SERVER_SPEC, ModConfig.MACHINES_SERVER_FILE_NAME);
-		modContainer.registerConfig(
+		net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
 				Type.SERVER, ModConfig.CAPACITIES_SERVER_SPEC, ModConfig.CAPACITIES_SERVER_FILE_NAME);
 	}
 
@@ -198,7 +197,7 @@ public final class ProductiveBeesGenesis {
 		});
 	}
 
-	private static boolean isOwnClientConfig(net.neoforged.fml.config.ModConfig config) {
+	private static boolean isOwnClientConfig(net.minecraftforge.fml.config.ModConfig config) {
 		return config != null
 				&& MOD_ID.equals(config.getModId())
 				&& config.getType() == Type.CLIENT
@@ -221,7 +220,7 @@ public final class ProductiveBeesGenesis {
 	 * 仅处理本模组注册的 SERVER 配置，避免其他模组的配置事件触发本模组逻辑。
 	 * 配置同步到客户端后 spec 身份仍保持不变，mod id 和类型则提供额外边界校验。
 	 */
-	private static boolean isOwnServerConfig(net.neoforged.fml.config.ModConfig config) {
+	private static boolean isOwnServerConfig(net.minecraftforge.fml.config.ModConfig config) {
 		return config != null
 				&& MOD_ID.equals(config.getModId())
 				&& config.getType() == Type.SERVER
@@ -234,10 +233,10 @@ public final class ProductiveBeesGenesis {
 	private void registerModEventBusListeners(IEventBus eventBus) {
 		eventBus.addListener(this::onCommonSetup);
 		// 注册 MEK 离心机的 Capability（安全、能量等）— 使 tooltip 能正确显示拥有者/安全等级/储能
-		eventBus.addListener(this::onRegisterCapabilities);
+
 		// 模块 3 修复：在物品注册完成后调用 IAttachmentAware.attachAttachments，
-		// 补全 MEK 原版的附件注册流程（项目使用标准 DeferredRegister.Items，不会自动调用）
-		eventBus.addListener(EventPriority.LOWEST, (RegisterEvent event) -> onRegisterItemAttachments(event, eventBus));
+		// 补全 MEK 原版的附件注册流程（项目使用标准 DeferredRegister<net.minecraft.world.item.Item>，不会自动调用）
+
 	}
 
 	/**
@@ -245,7 +244,7 @@ public final class ProductiveBeesGenesis {
 	 * <br/>
 	 * 原理：MEK 原版 {@code ItemDeferredRegister.register} 在 {@code RegisterEvent(LOWEST)} 期间
 	 * 调用 {@code ItemRegistryObject.attachDefaultContainers(bus)}，进而调用
-	 * {@code IAttachmentAware.attachAttachments(eventBus)}。项目使用标准 {@code DeferredRegister.Items}
+	 * {@code IAttachmentAware.attachAttachments(eventBus)}。项目使用标准 {@code DeferredRegister<net.minecraft.world.item.Item>}
 	 * 不会自动调用，需手动补全。
 	 * <p>
 	 * {@code attachAttachments} 通过 {@code ContainerType.ENERGY.addDefaultCreators(eventBus, ...)}
@@ -257,17 +256,7 @@ public final class ProductiveBeesGenesis {
 	 * {@link com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeContainerRegistrar} 的 ENERGY 创建器
 	 * 注册(传 null)互不冲突，无论执行顺序如何，ENERGY capability 监听器最终都会注册。
 	 */
-	private void onRegisterItemAttachments(RegisterEvent event, IEventBus eventBus) {
-		if (!event.getRegistryKey().equals(Registries.ITEM)) {
-			return;
-		}
-		for (var entry : ModItems.ITEMS.getEntries()) {
-			Item item = entry.get();
-			if (item instanceof IAttachmentAware aware) {
-				aware.attachAttachments(eventBus);
-			}
-		}
-	}
+
 
 	/**
 	 * 注册 NeoForge 事件总线监听器（游戏运行时事件）
@@ -276,24 +265,24 @@ public final class ProductiveBeesGenesis {
 		// 监听数据重载事件（/reload、数据包变更、服务器启动）— 递增 RECIPE_VERSION，
 		// 通知所有 PB 配方处理器清空 SMELTING/PB 配方缓存。
 		// TagsUpdatedEvent 在所有 reload listener（含配方重载）完成后触发，是重置缓存的可靠信号。
-		NeoForge.EVENT_BUS.addListener(this::onTagsReload);
+		MinecraftForge.EVENT_BUS.addListener(this::onTagsReload);
 		// 注册蜜蜂配方重载器 — 在 RecipeManager 加载完成后动态修改 PB 的 bee_fishing/bee_breeding/bee_spawning/bee_conversion 配方
-		NeoForge.EVENT_BUS.addListener(this::onAddReloadListener);
+		MinecraftForge.EVENT_BUS.addListener(this::onAddReloadListener);
 		// 注册配方重载器的延迟重试 tick 处理器 — 处理首次进入世界时配置未加载的情况
-		NeoForge.EVENT_BUS.addListener(BeeRecipeReloader::onServerTick);
+		MinecraftForge.EVENT_BUS.addListener(BeeRecipeReloader::onServerTick);
 		// 注册服务端 tick 时间监测器 — 通过 Pre/Post 监听器记录每 tick 实际耗时（MSPT），
 		// 维护最近 100 tick 滚动平均，暴露 getTpsFactor() 供所有节流逻辑使用
-		NeoForge.EVENT_BUS.addListener(ServerTickTimeMonitor.getInstance()::onTickPre);
-		NeoForge.EVENT_BUS.addListener(ServerTickTimeMonitor.getInstance()::onTickPost);
+		MinecraftForge.EVENT_BUS.addListener(ServerTickTimeMonitor.getInstance()::onTickPre);
+		MinecraftForge.EVENT_BUS.addListener(ServerTickTimeMonitor.getInstance()::onTickPost);
 		// 推进全局游戏刻时钟 — 槽位对象拿不到 Level，「外部退回窗口」靠它判断凭据是否过期
-		NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post event) -> ServerTickClock.tick());
+		MinecraftForge.EVENT_BUS.addListener((ServerTickEvent event) -> { if (event.phase == net.minecraftforge.event.TickEvent.Phase.END) ServerTickClock.tick(); });
 		// 注册开发者模式命令 — /productivebeesgenesis dev on|off|status|<feature> on|off
 		// 使用内存状态而非配置文件，避免生产环境意外持久化
-		NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
+		MinecraftForge.EVENT_BUS.addListener(this::onRegisterCommands);
 		// 玩家登录时同步开发者模式状态到客户端（控制创造标签页开发物品可见性）
-		NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
+		MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
 		// 玩家下线时清理 PayloadRateLimiter 与 ModPayloads 频次限制缓存（防止离线玩家 UUID 残留）（Task 9）
-		NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
+		MinecraftForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
 			PayloadRateLimiter.onPlayerLogout(event.getEntity().getUUID());
 			ModPayloads.clearFilterSyncRateLimit(event.getEntity().getUUID());
 		});
@@ -301,8 +290,8 @@ public final class ProductiveBeesGenesis {
 		// 通过重写 MekanismShapedRecipe.assemble 在输入消耗前转移 BLOCK_ENTITY_DATA，
 		// 避免 ItemCraftedEvent 在输入被消耗后读到空物品的时序问题。
 		// 服务器停止时清理静态缓存，防止跨存档数据泄漏
-		NeoForge.EVENT_BUS.addListener(this::onServerAboutToStart);
-		NeoForge.EVENT_BUS.addListener(this::onServerStopped);
+		MinecraftForge.EVENT_BUS.addListener(this::onServerAboutToStart);
+		MinecraftForge.EVENT_BUS.addListener(this::onServerStopped);
 	}
 
 	/**
@@ -318,9 +307,9 @@ public final class ProductiveBeesGenesis {
 		Path serverConfigDirectory = event.getServer().getWorldPath(SERVER_CONFIG_DIRECTORY);
 		try {
 			serverConfigsInitialized = false;
-			ConfigTracker.INSTANCE.unloadConfigs(Type.SERVER);
+			ConfigTracker.INSTANCE.unloadConfigs(Type.SERVER, serverConfigDirectory);
 			ConfigTracker.INSTANCE.loadConfigs(
-					Type.SERVER, FMLPaths.CONFIGDIR.get(), serverConfigDirectory);
+					Type.SERVER, serverConfigDirectory);
 			LOGGER.info("存档级配置迁移完成，已按存档覆盖规则重新加载服务端配置：{}",
 					serverConfigDirectory);
 		} catch (RuntimeException exception) {
@@ -403,7 +392,7 @@ public final class ProductiveBeesGenesis {
 				DevModeManager.isEnabled(),
 				DevModeManager.getFeatureStates()
 		);
-		net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(serverPlayer, packet);
+		com.ayoshiko.productivebeesgenesis.network.ForgeNetwork.sendToPlayer(serverPlayer, packet);
 	}
 
 	/**
@@ -480,7 +469,6 @@ public final class ProductiveBeesGenesis {
 		event.enqueueWork(() -> {
 			checkProductiveBeesCompatibility();
 			ModStats.init();
-			com.ayoshiko.productivebeesgenesis.resource.UselessResourceIntegration.install();
 		});
 	}
 
@@ -497,22 +485,11 @@ public final class ProductiveBeesGenesis {
 	 * 使 AE2 线缆（含 ExtendedAE/AdvancedAE/ae2cs/ae2lt/Glodium/AppliedFlux 等附属模组线缆）
 	 * 能自动发现并连接离心机。AE2 未安装时安全跳过，不触发类加载失败。
 	 */
-	private void onRegisterCapabilities(RegisterCapabilitiesEvent event) {
-		for (var entry : ModItems.ITEMS.getEntries()) {
-			Item item = entry.get();
-			if (item instanceof ICapabilityAware aware) {
-				aware.attachCapabilities(event);
-			}
-		}
-		// AE2 capability 注册（仅在 AE2 已安装时执行）
-		if (Ae2IntegrationLoader.isAe2Loaded()) {
-			Ae2CapabilityRegistrar.register(event);
-		}
-	}
+
 
 	private static void checkProductiveBeesCompatibility() {
 		try {
-			if (!net.neoforged.fml.ModList.get().isLoaded(PRODUCTIVE_BEES_MOD_ID)) {
+			if (!net.minecraftforge.fml.ModList.get().isLoaded(PRODUCTIVE_BEES_MOD_ID)) {
 				LOGGER.error("未检测到资源蜜蜂模组 (Productive Bees)，模组无法正常工作！");
 				return;
 			}
@@ -521,4 +498,8 @@ public final class ProductiveBeesGenesis {
 			LOGGER.warn("检查资源蜜蜂模组兼容性时发生错误", e);
 		}
 	}
+
+    private void attachAe2Capabilities(net.minecraftforge.event.AttachCapabilitiesEvent<net.minecraft.world.level.block.entity.BlockEntity> event) {
+        if (Ae2IntegrationLoader.isAe2Loaded()) Ae2CapabilityRegistrar.attach(event);
+    }
 }

@@ -34,7 +34,6 @@ final class Ae2PushBuffers {
 	 * 使「中等昂贵但极高频」的外部存储（ae2lt Matrix Port 等）也能被钳制。
 	 */
 	final Ae2InsertCostTracker insertCostTracker = new Ae2InsertCostTracker();
-	final Ae2MeasuredStorage measuredStorage = new Ae2MeasuredStorage();
 
 	/** 输入尝试的成本预算，与机器及输出成本统计同生命周期。 */
 	final Ae2ExtractBudget extractBudget = new Ae2ExtractBudget();
@@ -106,7 +105,6 @@ final class Ae2PushBuffers {
 	 * 阻止无 PB 离心配方（需其它模组机器处理）的蜜脾每轮反复进入候选空转。
 	 */
 	final Ae2CombProcessableCache combProcessableCache = new Ae2CombProcessableCache();
-	final Ae2ResourceInputGate resourceInputGate = new Ae2ResourceInputGate();
 
 	/**
 	 * Per-host 的 AEItemKey → SNBT 指纹缓存。
@@ -223,7 +221,6 @@ final class Ae2PushBuffers {
 		smeltingInputCache.clear();
 		tagFilterCache.clear();
 		combProcessableCache.clear();
-		resourceInputGate.clear();
 	}
 
 	/** 借用游标扫描选中键缓冲区（调用方使用后应 clear，跨 tick 复用避免每 tick 分配） */

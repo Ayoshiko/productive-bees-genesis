@@ -44,16 +44,6 @@ import java.util.Map;
 	 * @since Task 10
 	 */
 public class CentrifugeUpgradeData extends MachineUpgradeData {
-	/** 当前安装器复用统一配置快照；不包含账户、pending 或外部资产。 */
-	@Nullable
-	public CompoundTag aePerTileState;
-	/** 升级专用的输入暂存及输出交接快照，不进入配置卡。 */
-	@Nullable
-	public CompoundTag aePendingState;
-
-	/** 服务器内存中的一次性交接；资源余额与已付费进度仍只保存在世界账户。 */
-	public com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.Upgrade resourceUpgrade;
-
 
 	/** PB 升级数量映射（键为 PbUpgradeType.name()，值为已安装数量） */
 	public final Map<String, Integer> pbUpgrades;
@@ -302,7 +292,7 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 			@Nullable ItemStack energyItem,
 			@Nullable CompoundTag aeInputFilterNbt,
 			@Nullable CompoundTag aeTagFilterNbt) {
-		super(provider, redstone, controlType, energyContainer, progress, energySlot,
+		super(redstone, controlType, energyContainer, progress, energySlot,
 				inputSlots, outputSlots, sorting, components);
 		this.pbUpgrades = pbUpgrades;
 		this.pbUpgradeInputNbt = pbUpgradeInputNbt;

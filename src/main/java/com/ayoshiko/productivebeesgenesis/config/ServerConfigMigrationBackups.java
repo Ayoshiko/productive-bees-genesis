@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
 import com.electronwill.nightconfig.core.CommentedConfig;
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -123,7 +123,7 @@ final class ServerConfigMigrationBackups {
 		Map<String, CommentedConfig> actual = new HashMap<>();
 		for (ServerConfigMigrationService.MigrationTarget target : targets) {
 			Map<String, Object> perFile = new HashMap<>();
-			for (ModConfigSpec.ConfigValue<?> value : ConfigTraversal.configValues(target.spec())) {
+			for (ForgeConfigSpec.ConfigValue<?> value : ConfigTraversal.configValues(target.spec())) {
 				perFile.put(ConfigTraversal.path(value.getPath()), value.getDefault());
 			}
 			defaults.put(target.fileName(), perFile);

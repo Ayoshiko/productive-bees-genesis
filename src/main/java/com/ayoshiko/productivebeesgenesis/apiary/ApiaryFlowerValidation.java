@@ -16,8 +16,6 @@ final class ApiaryFlowerValidation {
 
 	static boolean check(BeeSlot slot, ResourceLocation beeTypeKey, int cacheVersion,
 			FeederSlotManager feederManager) {
-		// 物品容器不能沿用 BeeSlot 的跨 tick 布尔值；管理器保留同 tick 的有界复用。
-		if (feederManager.hasContainerFlower(beeTypeKey)) return feederManager.hasValidFlower(beeTypeKey);
 		Boolean flowerValid = slot.consumeCachedFlowerValid(cacheVersion);
 		if (flowerValid == null) {
 			flowerValid = feederManager.hasValidFlower(beeTypeKey);

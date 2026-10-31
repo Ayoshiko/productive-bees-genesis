@@ -1,11 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -23,25 +19,9 @@ import net.minecraft.resources.ResourceLocation;
 public record CycleAeOutputPayload(
 		BlockPos pos,
 		OutputType outputType
-) implements CustomPacketPayload {
-
-	public static final CustomPacketPayload.Type<CycleAeOutputPayload> TYPE =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
-					ProductiveBeesGenesis.MOD_ID, "cycle_ae_output"));
+)  {
 
 	/** 枚举编解码器：使用 idMapper 按序数序列化 */
-	public static final StreamCodec<ByteBuf, CycleAeOutputPayload> STREAM_CODEC =
-			StreamCodec.composite(
-					BlockPos.STREAM_CODEC, CycleAeOutputPayload::pos,
-					ByteBufCodecs.idMapper(OutputType::fromOrdinal, OutputType::ordinal),
-					CycleAeOutputPayload::outputType,
-					CycleAeOutputPayload::new
-			);
-
-	@Override
-	public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
 
 	/** 输出类型枚举 */
 	public enum OutputType {
@@ -68,4 +48,12 @@ public record CycleAeOutputPayload(
 			return ordinal >= 0 && ordinal < VALUES.length ? VALUES[ordinal] : ITEM;
 		}
 	}
+
+    public static CycleAeOutputPayload decode(net.minecraft.network.FriendlyByteBuf buf) {
+        return new CycleAeOutputPayload(buf.readBlockPos(), buf.readEnum(OutputType.class));
+    }
+    public void encode(net.minecraft.network.FriendlyByteBuf buf) {
+                buf.writeBlockPos(pos);
+        buf.writeEnum(outputType);
+    }
 }

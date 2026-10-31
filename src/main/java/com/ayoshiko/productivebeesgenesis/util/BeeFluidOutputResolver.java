@@ -4,10 +4,10 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivebees.init.ModFluids;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
+import net.minecraftforge.fluids.FluidStack;
+
 
 import javax.annotation.Nonnull;
 
@@ -88,14 +88,14 @@ public final class BeeFluidOutputResolver {
 	private static FluidStack resolveUncached(@Nonnull ResourceLocation beeTypeKey, @Nonnull Level level) {
 		try {
 			// 1. 通过 CentrifugeRecipeIndex O(1) 查询蜜脾离心配方
-			RecipeHolder<CentrifugeRecipe> recipeHolder = CentrifugeRecipeIndex.get(beeTypeKey);
+			CentrifugeRecipe recipeHolder = CentrifugeRecipeIndex.get(beeTypeKey);
 			if (recipeHolder == null) {
 				// 无离心配方 — 默认蜂蜜（向后兼容）
 				return new FluidStack(ModFluids.HONEY.get(), HONEY_AMOUNT_PER_PRODUCE);
 			}
 
-			CentrifugeRecipe recipe = recipeHolder.value();
-			FluidStack fluidOutput = recipe.getFluidOutputs();
+			CentrifugeRecipe recipe = recipeHolder;
+			FluidStack fluidOutput = PbRecipeOutputs.fluid(recipe);
 			if (fluidOutput.isEmpty()) {
 				// getFluidOutputs() 返回 EMPTY 时（plib 的 getPreferredFluidStackByMod 无匹配 mod），
 				// 直接访问 fluidOutput 字段构造 FluidStack 作为 fallback
@@ -135,18 +135,7 @@ public final class BeeFluidOutputResolver {
 	 */
 	@Nonnull
 	private static FluidStack extractFluidFromIngredient(CentrifugeRecipe recipe) {
-		try {
-			SizedFluidIngredient sized = recipe.fluidOutput;
-			if (sized == null) return FluidStack.EMPTY;
-			// getFluids() 返回的栈可能 amount=0（仅表示流体类型），用 sized.amount() 保证正确数量
-			for (FluidStack stack : sized.getFluids()) {
-				return stack.copyWithAmount(sized.amount());
-			}
-			return FluidStack.EMPTY;
-		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("extractFluidFromIngredient 异常: {}", e.getMessage());
-			return FluidStack.EMPTY;
-		}
+		return PbRecipeOutputs.fluid(recipe.fluidOutput);
 	}
 
 	/**

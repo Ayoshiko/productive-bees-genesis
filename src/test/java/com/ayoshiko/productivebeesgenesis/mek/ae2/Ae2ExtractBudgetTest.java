@@ -109,30 +109,11 @@ class Ae2ExtractBudgetTest {
 		long insertSpent = 10_000_000L;
 		assertTrue(budget.canExtractNow(1000L, 38, insertSpent),
 				"慢输出不能阻止本刻第一次输入尝试");
-		for (int type = 0; type < 25; type++) {
-			assertTrue(budget.canExtractNow(1000L, 38, insertSpent));
-			budget.record(1000L, HEALTHY_COST);
-		}
-		for (int repeat = 0; repeat < 1024; repeat++) {
-			assertFalse(budget.canExtractNow(1000L, 38, insertSpent),
-					"输入保留额度耗尽后，同刻加速不能重新打开预算");
-		}
+		budget.record(1000L, HEALTHY_COST);
+		assertFalse(budget.canExtractNow(1000L, 38, insertSpent),
+				"输入已经获得推进机会后，合计成本耗尽应停止后续提取");
 		// 无 insert 占用时同一冷启动 tick 正常放行（合计上限不误伤纯拉取负载）。
 		assertTrue(budget.canExtractNow(1001L, 38, 0L));
-	}
-
-
-	@Test
-	void combinedCeilingStillCountsOutputAfterInputReserve() {
-		var budget = new Ae2ExtractBudget();
-		for (int type = 0; type < 24; type++) {
-			assertTrue(budget.canExtractNow(1200L, 38, 4_000_000L));
-			budget.record(1200L, 250_000L);
-		}
-		assertFalse(budget.canExtractNow(1200L, 38, 4_000_000L));
-		assertTrue(budget.canExtractNow(1201L, 38, Long.MAX_VALUE));
-		for (int type = 0; type < 8; type++) budget.record(1201L, 250_000L);
-		assertFalse(budget.canExtractNow(1201L, 38, Long.MAX_VALUE));
 	}
 
 	@Test

@@ -4,7 +4,9 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
 import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
 import mekanism.client.gui.IGuiWrapper;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindowCreatorTab;
 import mekanism.client.gui.element.tab.window.GuiWindowCreatorTab;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.client.render.MekanismRenderer;
 import mekanism.common.inventory.container.SelectedWindowData.WindowType;
@@ -37,14 +39,14 @@ import java.util.function.Supplier;
 	 * @since Task 8
 	 */
 public class GuiMultiFluidTanksTab<TILE extends IMultiFluidTankHost>
-		extends GuiWindowCreatorTab<TILE, GuiMultiFluidTanksTab<TILE>> {
+		extends PinnableGuiWindowCreatorTab<TILE, GuiMultiFluidTanksTab<TILE>> {
 
 	/** Tab 颜色 — MEK 灰阶基色 #232323 RGB(35,35,35)(ARGB 格式) */
 	private static final int TAB_COLOR = 0xFF232323;
 
 	/** Tab 图标资源路径(18×18 像素) */
 	private static final ResourceLocation ICON =
-		ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "textures/gui/multi_fluid_tanks_tab.png");
+		new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "textures/gui/multi_fluid_tanks_tab.png");
 
 	/**
 	 * 窗口数据 — UNSPECIFIED 类型(自定义窗口,不与 MEK 内置窗口冲突)

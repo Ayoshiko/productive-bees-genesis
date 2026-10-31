@@ -6,9 +6,11 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.network.ToggleDirectContainerOutputPayload;
-import com.ayoshiko.productivebeesgenesis.client.resource.GuiResourceSideConfig;
 import mekanism.client.gui.GuiMekanism;
+import mekanism.client.gui.element.GuiElement;
+import mekanism.client.gui.element.tab.GuiConfigTypeTab;
 import mekanism.client.gui.element.window.GuiSideConfiguration;
+import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.lib.transmitter.TransmissionType;
@@ -17,12 +19,12 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.ScreenEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.TickEvent.ClientTickEvent;
+import net.minecraftforge.client.event.ScreenEvent;
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 import org.lwjgl.glfw.GLFW;
 
 import java.lang.ref.WeakReference;
@@ -56,7 +58,8 @@ public final class DirectContainerOutputOverlay {
 	}
 
 	@SubscribeEvent
-	public static void onClientTick(ClientTickEvent.Pre event) {
+	public static void onClientTick(ClientTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.START) return;
 		Target target = findTarget(Minecraft.getInstance().screen);
 		if (target == null) return;
 		GuiSideConfiguration<?> sideConfig = target.sideConfig();
@@ -118,7 +121,7 @@ public final class DirectContainerOutputOverlay {
 
 	/** 发送切换包（按钮点击与鼠标命中两条路径共用） */
 	static void sendToggle(BlockEntity tile) {
-		PacketDistributor.sendToServer(new ToggleDirectContainerOutputPayload(tile.getBlockPos()));
+		ForgeNetwork.sendToServer(new ToggleDirectContainerOutputPayload(tile.getBlockPos()));
 	}
 
 	private static DirectContainerOutputButton getButton(GuiSideConfiguration<?> sideConfig) {
@@ -134,10 +137,21 @@ public final class DirectContainerOutputOverlay {
 		if (!(tile instanceof TileEntityMekApiary) && !(tile instanceof IMekCentrifugeTile)) return null;
 		for (GuiWindow window : gui.getWindows()) {
 			if (window instanceof GuiSideConfiguration<?> sideConfig) {
-				return new Target(gui, sideConfig, tile, GuiResourceSideConfig.nativeType(sideConfig));
+				return new Target(gui, sideConfig, tile, currentType(sideConfig));
 			}
 		}
 		return null;
+	}
+
+	/** 侧面配置窗口当前激活的传输类型（激活 Tab 的 visible=false，与其他覆盖层一致） */
+	private static TransmissionType currentType(GuiSideConfiguration<?> sideConfig) {
+		for (GuiElement child : sideConfig.children()) {
+			if (child instanceof GuiConfigTypeTab tab && !tab.visible) return tab.getTransmissionType();
+		}
+		for (GuiElement child : sideConfig.children()) {
+			if (child instanceof GuiConfigTypeTab tab) return tab.getTransmissionType();
+		}
+		return TransmissionType.ITEM;
 	}
 
 	/** 全局总开关（客户端读同步后的服务端配置；未加载时按关闭处理） */

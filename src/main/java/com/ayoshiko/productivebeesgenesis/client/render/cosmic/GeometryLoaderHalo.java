@@ -12,9 +12,9 @@ import net.minecraft.client.resources.model.ModelBaker;
 import net.minecraft.client.resources.model.ModelState;
 import net.minecraft.client.resources.model.UnbakedModel;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
-import net.neoforged.neoforge.client.model.geometry.IGeometryLoader;
-import net.neoforged.neoforge.client.model.geometry.IUnbakedGeometry;
+import net.minecraftforge.client.model.geometry.IGeometryBakingContext;
+import net.minecraftforge.client.model.geometry.IGeometryLoader;
+import net.minecraftforge.client.model.geometry.IUnbakedGeometry;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.function.Function;
@@ -72,9 +72,9 @@ public class GeometryLoaderHalo implements IGeometryLoader<GeometryLoaderHalo.Ha
 			@NotNull Function<Material,
 			TextureAtlasSprite> spriteGetter,
 			@NotNull ModelState modelState,
-			@NotNull ItemOverrides overrides
+			@NotNull ItemOverrides overrides, @NotNull ResourceLocation modelLocation
 		) {
-			BakedModel bakedModel = this.baseModel.bake(baker, this.baseModel, spriteGetter, modelState, true);
+			BakedModel bakedModel = this.baseModel.bake(baker, this.baseModel, spriteGetter, modelState, modelLocation, true);
 			return new BakedModelHalo(bakedModel, this.type, this.alpha, this.pulse);
 		}
 	}

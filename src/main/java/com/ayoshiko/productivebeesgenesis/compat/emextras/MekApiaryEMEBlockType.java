@@ -20,7 +20,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
-import net.neoforged.neoforge.registries.DeferredHolder;
+import net.minecraftforge.registries.RegistryObject;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,7 +38,7 @@ import java.util.function.Supplier;
 	 * 2. 蜜蜂生产逻辑由 ApiaryTickHandler 处理，与原版蜂箱工厂一致
 	 * 3. 仅用 {@link EMExtraAttributeTier} 标记等级，{@link EMExtraAttributeUpgradeable} 支持升级链
 	 * 4. {@code EMExtraMachineBuilder} 无 createMachine 方法（仅有 createEMExtraFactoryMachine，
-	 *    会注入 EMExtraAttributeFactoryType），不适用于蜂箱。改用 {@link Machine.MachineBuilder#createMachine}
+	 *    会注入 EMExtraAttributeFactoryType），不适用于蜂箱。改用 {@link com.ayoshiko.productivebeesgenesis.util.ForgeMachineBuilder#createMachine}
 	 *    构建 BlockTypeTile，手动添加 EME 属性
 	 * 5. GUI 与原版工厂共用 {@link ModMenuTypes#MEK_APIARY_FACTORY}
 	 * <p>
@@ -113,7 +113,7 @@ public final class MekApiaryEMEBlockType {
 	/**
 	 * 创建 EME 等级的工厂蜂箱 BlockType
 	 * <br/>
-	 * 使用 {@link Machine.MachineBuilder#createMachine} 构建 BlockTypeTile（非 EMExtraFactoryMachine），
+	 * 使用 {@link com.ayoshiko.productivebeesgenesis.util.ForgeMachineBuilder#createMachine} 构建 BlockTypeTile（非 EMExtraFactoryMachine），
 	 * 手动添加 EME 属性。原因：蜂箱不走 Mekanism CachedRecipe 管线，不需要 EMExtraAttributeFactoryType；
 	 * {@code EMExtraMachineBuilder} 仅有 createEMExtraFactoryMachine 方法，会注入工厂类型属性，不适用于蜂箱。
 	 * <p>
@@ -130,7 +130,7 @@ public final class MekApiaryEMEBlockType {
 		long storage = SaturatingMath.saturatingMultiply(
 				Math.max(20_000L, usage), Math.max(tier.processes, beeSlots));
 
-		var builder = Machine.MachineBuilder
+		var builder = com.ayoshiko.productivebeesgenesis.util.ForgeMachineBuilder
 				.createMachine(() -> EME_APIARY_FACTORY_TILES.get(tier),
 						descriptionLang(tier.getEMExtraTier().getLowerName() + "_emextra_mek_apiary_factory"))
 				.withEnergyConfig(() -> MekCentrifugeEnergyScaling.balancedBaseEnergyPerTick(usage),
@@ -174,10 +174,9 @@ public final class MekApiaryEMEBlockType {
 	 * @param tierName EME 等级小写名称（如 absolute_overclocked）
 	 * @return 对应方块的 DeferredHolder
 	 */
-	public static DeferredHolder<Block, ?> getEMEApiaryFactoryBlock(String tierName) {
+	public static RegistryObject<?> getEMEApiaryFactoryBlock(String tierName) {
 		String registryName = tierName + "_emextra_mek_apiary_factory";
-		return DeferredHolder.create(Registries.BLOCK,
-				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, registryName));
+		return RegistryObject.create(new ResourceLocation(ProductiveBeesGenesis.MOD_ID, registryName), Registries.BLOCK, ProductiveBeesGenesis.MOD_ID);
 	}
 
 	/**
@@ -190,12 +189,11 @@ public final class MekApiaryEMEBlockType {
 	 * @return BlockRegistryObject 供应商
 	 */
 	@SuppressWarnings("unchecked")
-	public static Supplier<BlockRegistryObject<?, ?>> wrapAsBlockRegistryObject(DeferredHolder<Block, ?> blockHolder) {
+	public static Supplier<BlockRegistryObject<?, ?>> wrapAsBlockRegistryObject(RegistryObject<?> blockHolder) {
 		return () -> {
-			DeferredHolder<Item, ?> itemHolder = DeferredHolder.create(
-					Registries.ITEM, blockHolder.getKey().location());
-			return new BlockRegistryObject<>((DeferredHolder<Block, Block>) blockHolder,
-					(DeferredHolder<Item, Item>) itemHolder);
+			RegistryObject<?> itemHolder = RegistryObject.create(blockHolder.getId(), Registries.ITEM, ProductiveBeesGenesis.MOD_ID);
+			return new BlockRegistryObject<>((RegistryObject<Block>) blockHolder,
+					(RegistryObject<Item>) itemHolder);
 		};
 	}
 

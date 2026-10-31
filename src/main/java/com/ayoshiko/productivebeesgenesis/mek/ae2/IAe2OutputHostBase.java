@@ -8,7 +8,7 @@ import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidStack;
 
 /**
 	 * AE2 输出宿主基础接口（无 AE2 类引用）

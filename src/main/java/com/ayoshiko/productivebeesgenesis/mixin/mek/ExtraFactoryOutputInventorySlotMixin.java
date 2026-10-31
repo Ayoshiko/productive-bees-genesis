@@ -2,7 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
-import com.jerry.mekextras.common.inventory.slot.ExtraFactoryOutputInventorySlot;
+import com.jerry.mekanism_extras.common.inventory.slot.ExtraFactoryOutputInventorySlot;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.Mixin;

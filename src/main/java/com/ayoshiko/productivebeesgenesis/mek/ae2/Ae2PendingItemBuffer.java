@@ -30,18 +30,6 @@ public final class Ae2PendingItemBuffer {
 
 	private final List<PendingItem> entries = new ArrayList<>();
 	private long totalAmount;
-	private final Ae2InputTransfer transfer = new Ae2InputTransfer();
-	private Tag unreadable;
-
-	public Ae2InputTransfer transfer() { return transfer; }
-	public boolean isBlocked() { return unreadable != null || transfer.isPresent(); }
-
-	public boolean canAcceptReturn(String fingerprint, long amount) {
-		PendingItem entry = find(fingerprint);
-		return unreadable == null && fingerprint != null && !fingerprint.isBlank() && amount >= 0L
-				&& amount <= Long.MAX_VALUE - totalAmount
-				&& (entry == null ? hasFreeEntrySlot() : amount <= Long.MAX_VALUE - entry.returnToNetworkAmount);
-	}
 
 	/**
 	 * 将数量登记到缓冲，返回实际登记的数量。
@@ -52,8 +40,6 @@ public final class Ae2PendingItemBuffer {
 	 */
 	public long enqueue(String fingerprint, long amount, long currentTick) {
 		if (fingerprint == null || fingerprint.isBlank() || amount <= 0L) return 0L;
-		amount = Math.min(amount, Long.MAX_VALUE - totalAmount);
-		if (amount == 0L) return 0L;
 		PendingItem existing = find(fingerprint);
 		if (existing == null && entries.size() >= MAX_ENTRIES) return 0L;
 		if (existing == null) {
@@ -76,8 +62,6 @@ public final class Ae2PendingItemBuffer {
 	 */
 	public long enqueueUncertain(String fingerprint, long amount, long currentTick) {
 		if (fingerprint == null || fingerprint.isBlank() || amount <= 0L) return 0L;
-		amount = Math.min(amount, Long.MAX_VALUE - totalAmount);
-		if (amount == 0L) return 0L;
 		PendingItem existing = find(fingerprint);
 		if (existing == null && entries.size() >= MAX_ENTRIES) return 0L;
 		if (existing == null) {
@@ -95,8 +79,6 @@ public final class Ae2PendingItemBuffer {
 	/** Retains known items that must return to ME and must never be placed back in processing slots. */
 	public long enqueueReturnToNetwork(String fingerprint, long amount, long currentTick) {
 		if (fingerprint == null || fingerprint.isBlank() || amount <= 0L) return 0L;
-		amount = Math.min(amount, Long.MAX_VALUE - totalAmount);
-		if (amount == 0L) return 0L;
 		PendingItem existing = find(fingerprint);
 		if (existing == null && entries.size() >= MAX_ENTRIES) return 0L;
 		if (existing == null) {
@@ -165,7 +147,6 @@ public final class Ae2PendingItemBuffer {
 
 	/** 返回当前可重试条目的快照，避免调用方迭代时修改内部列表。 */
 	public List<PendingItem> snapshot(long currentTick) {
-		if (isBlocked()) return List.of();
 		List<PendingItem> result = new ArrayList<>();
 		for (PendingItem entry : entries) {
 			if ((entry.amount > 0L || entry.returnToNetworkAmount > 0L)
@@ -178,7 +159,6 @@ public final class Ae2PendingItemBuffer {
 
 	/** Whether any known amount is ready for delivery; uncertain inserts are never retried. */
 	public boolean hasRetryableItems(long currentTick) {
-		if (isBlocked()) return false;
 		for (PendingItem entry : entries) {
 			if ((entry.amount > 0L || entry.returnToNetworkAmount > 0L)
 					&& entry.nextAttemptTick <= currentTick) return true;
@@ -237,33 +217,16 @@ public final class Ae2PendingItemBuffer {
 
 	/** 记录一次失败并应用有界指数退避。 */
 	public void recordFailure(String fingerprint, long currentTick) {
-		recordFailure(fingerprint, currentTick, 0);
-	}
-
-	void recordFailure(String fingerprint, long currentTick, int previousRetries) {
 		PendingItem entry = find(fingerprint);
 		if (entry == null || (entry.amount <= 0L && entry.returnToNetworkAmount <= 0L)) return;
-		entry.retries = Math.min(MAX_RETRY_COUNT, Math.max(previousRetries, entry.retries) + 1);
+		entry.retries = Math.min(MAX_RETRY_COUNT, entry.retries + 1);
 		long delay = Math.min(MAX_RETRY_DELAY_TICKS,
 				1L << Math.min(10, Math.max(0, entry.retries - 1)));
 		entry.nextAttemptTick = currentTick + delay;
 	}
 
-	/** 未取得网络许可不是拒收；保留失败次数，下个真实刻继续等待。 */
-	void recordDeferred(String fingerprint, long currentTick, int previousRetries) {
-		PendingItem entry = find(fingerprint);
-		if (entry == null) return;
-		entry.retries = Math.min(MAX_RETRY_COUNT, Math.max(previousRetries, entry.retries));
-		entry.nextAttemptTick = currentTick + 1L;
-	}
-
 	/** 将缓冲写入方块实体 NBT。 */
 	public void save(CompoundTag parent) {
-		transfer.save(parent);
-		if (unreadable != null) {
-			parent.put(Ae2NbtKeys.NBT_KEY_AE_PENDING_ITEMS, unreadable.copy());
-			return;
-		}
 		if (entries.isEmpty()) {
 			parent.remove(Ae2NbtKeys.NBT_KEY_AE_PENDING_ITEMS);
 			return;
@@ -283,44 +246,25 @@ public final class Ae2PendingItemBuffer {
 		parent.put(Ae2NbtKeys.NBT_KEY_AE_PENDING_ITEMS, list);
 	}
 
-	/** 坏类型、重复项、溢出及超容量原文保留；不截断资产数据。 */
+	/** 从方块实体 NBT 恢复缓冲，并重新应用条目数边界。 */
 	public void load(CompoundTag parent) {
 		clear();
-		transfer.load(parent);
-		Tag raw = parent.get(Ae2NbtKeys.NBT_KEY_AE_PENDING_ITEMS);
-		if (raw == null) return;
-		if (!(raw instanceof ListTag list) || list.size() > MAX_ENTRIES
-				|| (!list.isEmpty() && list.getElementType() != Tag.TAG_COMPOUND)) {
-			unreadable = raw.copy();
-			return;
-		}
-		try {
-			for (int i = 0; i < list.size(); i++) {
-				CompoundTag tag = list.getCompound(i);
-				if (!tag.contains(KEY_FINGERPRINT, Tag.TAG_STRING) || !tag.contains(KEY_AMOUNT, Tag.TAG_LONG)
-						|| !tag.contains(KEY_RETRIES, Tag.TAG_INT) || !tag.contains(KEY_NEXT_ATTEMPT, Tag.TAG_LONG)
-						|| (tag.contains(KEY_RETURN_TO_NETWORK_AMOUNT) && !tag.contains(KEY_RETURN_TO_NETWORK_AMOUNT, Tag.TAG_LONG))
-						|| (tag.contains(KEY_UNCERTAIN_AMOUNT) && !tag.contains(KEY_UNCERTAIN_AMOUNT, Tag.TAG_LONG))) {
-					throw new IllegalArgumentException("Invalid pending item field type");
-				}
-				String fingerprint = tag.getString(KEY_FINGERPRINT);
-				long amount = tag.getLong(KEY_AMOUNT);
-				long returning = tag.getLong(KEY_RETURN_TO_NETWORK_AMOUNT);
-				long uncertain = tag.getLong(KEY_UNCERTAIN_AMOUNT);
-				int retries = tag.getInt(KEY_RETRIES);
-				if (fingerprint.isBlank() || find(fingerprint) != null || amount < 0 || returning < 0
-						|| uncertain < 0 || retries < 0 || retries > MAX_RETRY_COUNT) {
-					throw new IllegalArgumentException("Invalid pending item values");
-				}
-				long sum = Math.addExact(Math.addExact(amount, returning), uncertain);
-				if (sum == 0) throw new IllegalArgumentException("Empty pending item");
-				totalAmount = Math.addExact(totalAmount, sum);
-				entries.add(new PendingItem(fingerprint, amount, returning, uncertain, retries, tag.getLong(KEY_NEXT_ATTEMPT)));
-			}
-		} catch (IllegalArgumentException | ArithmeticException error) {
-			entries.clear();
-			totalAmount = 0;
-			unreadable = raw.copy();
+		if (!parent.contains(Ae2NbtKeys.NBT_KEY_AE_PENDING_ITEMS, Tag.TAG_LIST)) return;
+		ListTag list = parent.getList(Ae2NbtKeys.NBT_KEY_AE_PENDING_ITEMS, Tag.TAG_COMPOUND);
+		for (int i = 0; i < list.size() && entries.size() < MAX_ENTRIES; i++) {
+			CompoundTag tag = list.getCompound(i);
+			String fingerprint = tag.getString(KEY_FINGERPRINT);
+			long amount = Math.max(0L, tag.getLong(KEY_AMOUNT));
+			long returnToNetworkAmount = Math.max(0L, tag.getLong(KEY_RETURN_TO_NETWORK_AMOUNT));
+			long uncertainAmount = Math.max(0L, tag.getLong(KEY_UNCERTAIN_AMOUNT));
+			if (fingerprint.isBlank()
+					|| (amount <= 0L && returnToNetworkAmount <= 0L && uncertainAmount <= 0L)) continue;
+			entries.add(new PendingItem(fingerprint, amount, returnToNetworkAmount, uncertainAmount,
+					Math.min(MAX_RETRY_COUNT, Math.max(0, tag.getInt(KEY_RETRIES))),
+					tag.getLong(KEY_NEXT_ATTEMPT)));
+			totalAmount = SaturatingMath.saturatingAdd(totalAmount,
+					SaturatingMath.saturatingAdd(SaturatingMath.saturatingAdd(amount, returnToNetworkAmount),
+							uncertainAmount));
 		}
 	}
 
@@ -328,12 +272,10 @@ public final class Ae2PendingItemBuffer {
 	public void clear() {
 		entries.clear();
 		totalAmount = 0L;
-		transfer.clear();
-		unreadable = null;
 	}
 
 	public int size() { return entries.size(); }
-	public long getTotalAmount() { return SaturatingMath.saturatingAdd(totalAmount, transfer.retainedAmount()); }
+	public long getTotalAmount() { return totalAmount; }
 
 	private PendingItem find(String fingerprint) {
 		for (PendingItem entry : entries) {
@@ -370,6 +312,5 @@ public final class Ae2PendingItemBuffer {
 		public long amount() { return amount; }
 		public long returnToNetworkAmount() { return returnToNetworkAmount; }
 		public long uncertainAmount() { return uncertainAmount; }
-		public int retries() { return retries; }
 	}
 }
