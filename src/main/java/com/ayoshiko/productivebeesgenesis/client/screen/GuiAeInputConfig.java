@@ -190,7 +190,7 @@ public final class GuiAeInputConfig extends PinnableGuiWindow {
 
 	@Override
 	protected int getTitlePadStart() {
-		return 14 + GuiPinButton.WIDTH;
+		return 14 + 12;
 	}
 
 	@Override

@@ -52,40 +52,20 @@ import java.util.Map;
 	 */
 public class BeeProduceProcessor {
 
-	/**
-	 * 万象创世随机蜜脾/蜜脾块的 totalCount 上限
-	 * <br/>
-	 * Task 7 起，此常量语义从"ItemStack 数量上限"改为"totalCount 上限"：
-	 * 传入 {@link MyriadAggregatedStacksBuilder#buildAggregatedHoneycombs} /
-	 * {@link MyriadAggregatedStacksBuilder#buildAggregatedCombBlocks} 的 totalCount 参数，
-	 * 由 {@link WeightedAllocation#allocateByWeight} 分配到 3 种 bee_type，
-	 * 实际产出 ItemStack 数量 ≤ 9（每种 bee_type 至多 ceil(576/3/64)=3 个聚合 stack）。
-	 * <p>
-	 * 上限 576 = 9 输出槽 × 64 堆叠上限，保护输出槽总容量不被高倍加速场景击穿。
-	 */
-	private static final int MYRIAD_RANDOM_CAP = 576;
-
 	/** 升级处理器引用 — 用于应用生产力倍率 */
 	private final ApiaryUpgradeHandler upgradeHandler;
 	private final TileEntityMekApiary apiary;
+	final ApiaryProductionState production;
 
-	/** 基因采样器产出处理器 — 委托生成类型与属性基因物品 */
-	private final GeneSampler geneSampler = new GeneSampler();
-	/** 每次 flush 复用的采样来源；保存不可变属性快照和计数，不持有蜜蜂 NBT。 */
-	private final GeneSampler.SampleBatch reusableGeneSampleBatch = new GeneSampler.SampleBatch();
 
-	/** 蜜脾→蜜脾块转换器 — 委托执行蜜脾块升级转换 */
-	private final CombBlockConverter combBlockConverter = new CombBlockConverter();
-
-	/** 万象创世产出预聚合器 — 替代原 576 ItemStack 路径，将产出聚合为 ≤9 个聚合 stack */
-	private final MyriadAggregatedStacksBuilder myriadAggregatedBuilder = new MyriadAggregatedStacksBuilder();
 
 	/** 产物分发器（直写输出槽 + 分段流体注入，复用数组跨 tick 零扩容） */
 	private final BeeProduceOutputDispatcher outputDispatcher;
-	private final ArrayList<ItemStack> reusableProducedItems = new ArrayList<>();
-	/** 每次 flush 复用的四档生产力基因计数，避免按蜜蜂类型分组时反复分配数组。 */
-	private final long[] reusableProductivityCounts = new long[BeeProductivityGene.VERY_HIGH + 1];
 	private final MultiFlowerProductionCache multiFlowerProductionCache = new MultiFlowerProductionCache();
+	private final BeeProductionGenerator generator = new BeeProductionGenerator(this, multiFlowerProductionCache);
+	private final OrderedSlotIndex resourceIndex = new OrderedSlotIndex();
+	private final BeeSlot[] resourceSlots = new BeeSlot[1];
+	private final int[] resourceCounts = new int[1];
 
 
 	/**
@@ -96,6 +76,9 @@ public class BeeProduceProcessor {
 	public BeeProduceProcessor(ApiaryUpgradeHandler upgradeHandler, TileEntityMekApiary apiary) {
 		this.upgradeHandler = upgradeHandler;
 		this.apiary = apiary;
+		this.production = apiary == null ? null : new ApiaryProductionState(apiary.getBeeSlotCount(), apiary::setChanged);
+		resourceIndex.reset(1);
+		resourceIndex.add(0);
 		this.outputDispatcher = new BeeProduceOutputDispatcher(
 				apiary == null ? null : apiary::productivebeesgenesis$outputContentsVersion);
 	}
@@ -140,172 +123,46 @@ public class BeeProduceProcessor {
 									BlockPos origin, Level level,
 									ApiaryOutputBuffer outputBuffer,
 									ApiaryBatchUpgradeSnapshot upgrades, boolean multiFlowerBee) {
-		if (beeSlots == null || pendingCounts == null || groupSlotIndices == null
-				|| produceList == null
-				|| (produceList.isEmpty() && !PBConstants.WANNA_TYPE.equals(beeTypeKey)
-						&& !multiFlowerBee)) {
-			return;
+		var generated = generator.prepare(beeSlots, pendingCounts, groupSlotIndices, beeTypeKey, produceList,
+				feederManager, origin, level, upgrades, multiFlowerBee, true, -1,
+				upgrades.hasEssenceConversionUpgrade() && level != null ? EssenceConversionUpgradeHelper.plan(level) : null, null, 0);
+		if (production != null) {
+            production.freeze(generated);
+            flushFrozen(upgrades);
+        } else {
+            if (pendingCounts != null && groupSlotIndices != null)
+                for (int i = 0; i < groupSlotIndices.size(); i++) pendingCounts[groupSlotIndices.get(i)] = 0;
+            dispatch(generated, slotManager, outputBuffer, upgrades);
+        }
+	}
+
+	/** 已生成的本批结果独占物品与流体模板；准备阶段不扣费用、不推进槽位、不写入接收方。 */
+	record Generated(List<ItemStack> items, FluidStack fluid, long fluidAmount) {
+		static final Generated EMPTY = new Generated(List.of(), FluidStack.EMPTY, 0);
+		Generated { items = List.copyOf(items); fluid = fluid.copy(); }
+	}
+
+	/** 资源接入只提供已预约的周期／轮数，实际产物与普通生产使用同一生成入口。 */
+	Generated prepareResourceBatch(BeeSlot slot, int cycles, ResourceLocation type, Map<ItemStack, ChancedOutput> outputs,
+			ApiaryBatchUpgradeSnapshot upgrades, long rolls, EssenceConversionUpgradeHelper.BatchPlan conversion,
+			GeneSampler.Snapshot sampling, long seed, boolean nativeProduction) {
+		resourceSlots[0] = slot;
+		resourceCounts[0] = cycles;
+		try {
+			return generator.prepare(resourceSlots, resourceCounts, resourceIndex, type, outputs, apiary.getFeederSlotManager(), apiary.getBlockPos(),
+					apiary.getLevel(), upgrades, MultiFlowerBeeAdapter.isMultiFlowerBee(type), nativeProduction, rolls, conversion, sampling, seed);
+		} finally {
+			resourceSlots[0] = null;
+			resourceCounts[0] = 0;
 		}
+	}
 
-		// 累积所有蜜蜂的产出物品，待批量合并插入
-		List<ItemStack> allItems = reusableProducedItems;
-		reusableProducedItems.clear();
-		long totalFluidAmount = 0L;
-		long aggregatedCount = 0L;  // 累积同组产出次数，循环外统一调用 BeeProduceBatchSampler（聚合取整修复）
-		// 基因采样批次复用固定数组，避免高等级工厂每个蜂种组创建 List/record/NBT 引用。
-		GeneSampler.SampleBatch geneSampleBatch = reusableGeneSampleBatch;
-		geneSampleBatch.clear();
-		// 机器级状态一律取自本轮 flush 共享快照（详见 ApiaryBatchUpgradeSnapshot）：
-		// 这些取值与蜂种分组无关，逐组查询会把 ApiaryUpgradeCache 的 AtomicLong
-		// 刷新计数放大 N 倍（N = 本轮分组数，混养时 N 可达槽位数）。
-		int geneSamplerCount = upgrades.geneSamplerCount();
-		long[] productivityCounts = reusableProductivityCounts;
-		Arrays.fill(productivityCounts, 0L);
-		boolean isMyriad = PBConstants.MYRIADCREATIONS_TYPE.equals(beeTypeKey);
-		ServerLevel wannaBeeLevel = level instanceof ServerLevel serverLevel
-				&& PBConstants.WANNA_TYPE.equals(beeTypeKey) ? serverLevel : null;
 
-		float productivityMultiplier = upgrades.productivityMultiplier();
-		boolean discardUselessByproducts = upgrades.discardUselessByproducts();
-
-		// 模块 2+3：循环外查询流体输出类型（同组蜜蜂共享 beeTypeKey，流体类型一致）
-		// BeeFluidOutputResolver 从离心配方推断流体类型：蜂蜜返回 FluidStack(honey, 250)，
-		// 非蜂蜜流体（如时间流体）返回 EMPTY，无配方返回蜂蜜（向后兼容）
-		FluidStack fluidTemplate = (!discardUselessByproducts && beeTypeKey != null && level != null)
-				? BeeFluidOutputResolver.resolveFluidOutput(beeTypeKey, level)
-				: FluidStack.EMPTY;
-
-		// Bug 3: 仅遍历当前组的槽位索引，避免混养时其他组槽位被错误处理
-		for (int position = 0; position < groupSlotIndices.size(); position++) {
-			int idx = groupSlotIndices.get(position);
-			int count = pendingCounts[idx];
-			if (count <= 0) continue;
-			BeeSlot slot = beeSlots[idx];
-			if (slot == null || slot.isEmpty()) continue;
-			CompoundTag beeData = slot.getBeeData();
-
-			aggregatedCount = SaturatingMath.saturatingAdd(aggregatedCount, count);
-			// 模块 2+3：仅当流体模板非空时累积流体量（非蜂蜜流体蜜蜂不注入蜂蜜）
-			if (!fluidTemplate.isEmpty()) {
-				long fluidAmount = SaturatingMath.saturatingMultiply(fluidTemplate.getAmount(), count);
-				totalFluidAmount = SaturatingMath.saturatingAdd(totalFluidAmount, fluidAmount);
-			}
-			if (geneSamplerCount > 0) {
-				// PB 原版只采样成年蜂；Age 缺失时 CompoundTag#getInt 返回 0，按成年蜂兼容。
-				if (beeData == null || beeData.getInt("Age") >= 0) {
-					geneSampleBatch.add(slot.getGeneSampleProfile(), count);
-				}
-			}
-			int productivityLevel = slot.getProductivityLevel();
-			productivityCounts[productivityLevel] = SaturatingMath.saturatingAdd(
-					productivityCounts[productivityLevel], count);
-			// Bug 3: 处理完立即清零，防止其他组重复处理同一槽位导致产出翻倍
-			pendingCounts[idx] = 0;
-		}
-
-		// 按四档生产力等级分别批量采样。PB 原版公式含逐栈取整，混养时不能用平均等级替代。
-		List<ItemStack> allFlowerOutputs = aggregatedCount > 0 && multiFlowerBee && BalanceConfig.apiaryProduceAllFlowers()
-				? multiFlowerProductionCache.get(beeTypeKey, feederManager, level) : null;
-		if (aggregatedCount > 0) {
-			for (int productivityLevel = BeeProductivityGene.NORMAL;
-					productivityLevel <= BeeProductivityGene.VERY_HIGH; productivityLevel++) {
-				int sampledProductionCount = SaturatingMath.saturatingToInt(
-						productivityCounts[productivityLevel]);
-				if (sampledProductionCount <= 0) continue;
-				// 机械蜂箱当前无 stability 升级，stabilityBonus = 0.0
-				if (allFlowerOutputs != null) {
-					for (ItemStack output : allFlowerOutputs) {
-						BeeProduceBatchSampler.sampleGuaranteedInto(allItems, output,
-								sampledProductionCount, productivityMultiplier, productivityLevel);
-					}
-				} else if (multiFlowerBee) {
-					ItemStack feederProduce = MultiFlowerBeeAdapter.sampleProduceStackFromFeeder(
-							beeTypeKey, feederManager, level);
-					BeeProduceBatchSampler.sampleGuaranteedInto(allItems, feederProduce,
-							sampledProductionCount, productivityMultiplier, productivityLevel);
-				} else {
-					BeeProduceBatchSampler.sampleInto(allItems, produceList,
-							sampledProductionCount, productivityMultiplier, 0.0f, productivityLevel);
-				}
-			}
-			if (wannaBeeLevel != null) {
-				allItems.addAll(WannaBeeAmberAdapter.sampleBatches(wannaBeeLevel, origin, feederManager,
-						productivityCounts, productivityMultiplier));
-			}
-		}
-		// 万象创世追加产物也按每只蜜蜂的生产力等级计算，避免与主产物倍率脱节。
-		double scaledMyriadCount = 0.0D;
-		if (isMyriad) {
-			for (int productivityLevel = BeeProductivityGene.NORMAL;
-					productivityLevel <= BeeProductivityGene.VERY_HIGH; productivityLevel++) {
-				scaledMyriadCount += productivityCounts[productivityLevel]
-						* (double) productivityMultiplier
-						* BeeProductivityGene.adjustStackCount(1, productivityLevel);
-			}
-		}
-		int effectiveMyriadCount = scaledMyriadCount >= Integer.MAX_VALUE
-				? Integer.MAX_VALUE : Math.max(0, (int) scaledMyriadCount);
-
-		// Bug 10: 万象创世蜜蜂追加随机蜜脾/蜜脾块
-		// 机械蜂箱绕过 BeeHelperMixin 注入（调用 BeeInfoHelper.getBeeProduce 而非 BeeHelper.getBeeProduce），
-		// 需在此动态追加。随机产物不进入静态缓存 BeeProduceCache，避免所有蜂箱共享同一份随机结果。
-		// Task 7: 改用 MyriadAggregatedStacksBuilder 预聚合，将原 576 ItemStack 降为 ≤9 个聚合 stack，
-		// 后续 distributeToOutput 迭代次数从 576 降为 9。
-		if (effectiveMyriadCount > 0 && level != null) {
-			try {
-				// cappedMyriadCount 作为 totalCount 上限保护输出槽总容量（9 槽 × 64 = 576，实际 ItemStack ≤9）
-				int cappedMyriadCount = Math.min(effectiveMyriadCount, MYRIAD_RANDOM_CAP);
-				List<ItemStack> randomItems;
-				if (upgrades.hasCombBlockUpgrade()) {
-					// 有 Block/Omega 升级：buildAggregatedCombBlocks 内部已 4× 缩放（与 Mixin 单次 4 个比例一致）
-					randomItems = myriadAggregatedBuilder.buildAggregatedCombBlocks(
-							cappedMyriadCount, level, this /* factoryKey */);
-				} else {
-					// 无 Block/Omega 升级
-					randomItems = myriadAggregatedBuilder.buildAggregatedHoneycombs(
-							cappedMyriadCount, level, this /* factoryKey */);
-				}
-				if (randomItems != null && !randomItems.isEmpty()) {
-					allItems.addAll(randomItems);
-				}
-			} catch (Exception e) {
-				// 随机产物追加失败不影响主产出，记录警告便于调试
-				// MyriadAggregatedStacksBuilder 内部已有降级路径，外层 try-catch 为最终兜底
-				ProductiveBeesGenesis.LOGGER.warn("万象创世随机蜜脾追加失败", e);
-			}
-		}
-
-		// 基因采样器按 PB 原版六类 GeneAttribute 随机采样。机械蜂箱从每只蜜蜂保存的
-		// attributes_handler NBT 读取属性值，不能只按 beeTypeKey 聚合，否则同类型异属性蜜蜂会串值。
-		// 概率公式：PB samplerChance × 采样器数量；批次总量按成年蜜蜂产出次数加权。
-		if (!geneSampleBatch.isEmpty() && beeTypeKey != null && level != null && geneSamplerCount > 0) {
-			try {
-				geneSampler.generateGeneSamplesInto(
-						allItems, geneSampleBatch, beeTypeKey, geneSamplerCount, level,
-						upgrades.geneTypeOnly(), upgrades.geneFullPurity());
-			} finally {
-				geneSampleBatch.clear();
-			}
-		}
-		// 防御性清理：beeTypeKey/level 异常时也不跨 tick 保留属性快照。
-		geneSampleBatch.clear();
-
-		if (discardUselessByproducts) {
-			allItems.removeIf(UselessByproductUpgradeHelper::isPollenPuff);
-		}
-
-		if (allItems.isEmpty() && totalFluidAmount == 0) return;
-
-		// Bug 5修复：安装omega升级后，将蜜脾转换为蜜脾块（1:1替换，保持数量）
-		// 转换结果不写入静态缓存 BeeProduceCache（不同蜂箱升级状态不同），每次动态转换
-		if (upgrades.hasCombBlockUpgrade()) {
-			allItems = combBlockConverter.convertCombsToBlocksInPlace(allItems);
-		}
-		// 精华转化升级在所有输出路由前执行，确保转换结果优先进入 AE、离心机或本地槽位。
-		// 转换器只处理唯一同物配方，数量不足整组时保留余数。
-		if (upgrades.hasEssenceConversionUpgrade() && level != null) {
-			allItems = EssenceConversionUpgradeHelper.convert(level, allItems);
-		}
+	private void dispatch(Generated generated, ApiarySlotManager slotManager, ApiaryOutputBuffer outputBuffer,
+			ApiaryBatchUpgradeSnapshot upgrades) {
+		List<ItemStack> allItems = generated.items();
+		var fluidTemplate = generated.fluid();
+		long totalFluidAmount = generated.fluidAmount();
 
 		// 批量插入合并后的物品到输出槽
 		if (upgrades.directAeOutputEnabled() && !allItems.isEmpty()) {
@@ -402,6 +259,51 @@ public class BeeProduceProcessor {
 		}
 		return remaining == null ? stacks : remaining;
 	}
+
+	boolean flushFrozen(ApiaryBatchUpgradeSnapshot upgrades) {
+        var custody = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(apiary);
+        if (production.suspended() || custody.blocked()) return false;
+        for (ItemStack stack : production.items()) {
+            if (stack.isEmpty() || custody.blocked()) continue;
+            if (upgrades.directAeOutputEnabled() && !apiary.shouldHoldForCentrifuge(stack)) {
+                stack.shrink(apiary.pushGeneratedItemToAe(stack));
+                apiary.setChanged();
+            }
+            if (!stack.isEmpty() && upgrades.centrifugeDirectTransferEnabled() && !custody.blocked()) {
+                apiary.directTransferProducedToCentrifuges(List.of(stack));
+                apiary.setChanged();
+            }
+            if (!stack.isEmpty() && upgrades.directContainerOutputEnabled() && !apiary.shouldHoldForCentrifuge(stack)) {
+                stack.shrink(apiary.pushGeneratedItemToNeighbors(stack));
+                apiary.setChanged();
+            }
+            if (!stack.isEmpty() && !custody.blocked()) {
+                stack.shrink(com.ayoshiko.productivebeesgenesis.logistics.LocalOutputTransfer.insert(
+                        apiary.getOutputSlots(), stack, custody));
+                apiary.setChanged();
+            }
+            if (!stack.isEmpty()) {
+                boolean hold = apiary.shouldHoldForCentrifuge(stack);
+                stack.shrink(apiary.getOutputBuffer().accept(stack, hold));
+                if (!stack.isEmpty() && hold && !custody.blocked()) stack.shrink(apiary.pushGeneratedItemToAe(stack));
+                apiary.setChanged();
+            }
+        }
+        production.itemsChanged();
+        if (production.fluidAmount() > 0 && !custody.blocked()) {
+            if (upgrades.directAeOutputEnabled())
+                production.debitFluid(apiary.pushGeneratedFluidToAe(production.fluid(), production.fluidAmount()));
+            if (production.fluidAmount() > 0 && !custody.blocked()) {
+                int amount = (int) Math.min(Integer.MAX_VALUE, production.fluidAmount());
+                FluidStack offered = com.ayoshiko.productivebeesgenesis.util.ForgeFluidStacks.copyWithAmount(production.fluid(),amount);
+                long handed = custody.handoffFluid(offered, amount, "apiary-tank", () ->
+                        amount - apiary.getFluidTank().insert(offered.copy(), mekanism.api.Action.EXECUTE,
+                                mekanism.api.AutomationType.INTERNAL).getAmount());
+                production.debitFluid(handed);
+            }
+        }
+        return !production.hasFrozen() && !custody.blocked();
+    }
 
 	/**
 	 * Retries the fluid suffix before a new production batch is started.

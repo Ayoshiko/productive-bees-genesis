@@ -85,6 +85,7 @@ public final class CentrifugeFactoryCommonLogic {
 			@NotNull IMekanismRecipeTypeProvider<ItemStackToItemStackRecipe,
 					SingleItem<ItemStackToItemStackRecipe>> recipeType, boolean allowSmelting) {
 		if (level == null) return false;
+        if(pbProcessor.acceptsResourceInput(stack))return pbProcessor.allowsNewResourceInput(stack);
 		// Clear cached validation when the smelting-compat switch changes (O(1) flag compare per probe)
 		cache.setSmeltingAllowed(allowSmelting);
 		return cache.getResult(level, stack,
@@ -107,6 +108,7 @@ public final class CentrifugeFactoryCommonLogic {
 			@Nullable IInventorySlot tertiaryOutputSlot,
 			@NotNull InputOutputCompatibilityCache cache, @NotNull PbRecipeProcessor pbProcessor,
 			@NotNull BooleanSupplier superChecker) {
+		if (pbProcessor.acceptsResourceInput(fallbackInput)) return true;
 		return cache.get(level, fallbackInput, outputSlot.getStack(),
 				secondaryOutputSlot == null ? ItemStack.EMPTY : secondaryOutputSlot.getStack(),
 				tertiaryOutputSlot == null ? ItemStack.EMPTY : tertiaryOutputSlot.getStack(),
@@ -126,6 +128,7 @@ public final class CentrifugeFactoryCommonLogic {
 			return null;
 		}
 		ItemStack input = (ItemStack) inputHandlers[cacheIndex].getInput();
+		if (pbProcessor.hasResourceWork(cacheIndex) || pbProcessor.acceptsResourceInput(input)) return null;
 		if (!input.isEmpty() && (MyriadCreationsEventHandler.isMyriadCreationsItem(input)
 				|| pbProcessor.findPbRecipe(input) != null)) {
 			return null;
@@ -515,6 +518,15 @@ public final class CentrifugeFactoryCommonLogic {
 	}
 
 	// ===== PB 上下文计算 =====
+
+	public static int parallelOperations(int operations, int productivityParallel, int maximumOperations) {
+		int base = Math.max(1, operations);
+		if (maximumOperations > 0) {
+			base = Math.min(base, maximumOperations);
+		}
+		return SaturatingMath.saturatingToInt(
+				SaturatingMath.saturatingMultiply(base, Math.max(1, productivityParallel)));
+	}
 
 	/** 计算每刻操作数 — STACK 升级提供 2^stackUpgrades 倍并行 */
 	public static int operationsPerTick(@NotNull TileEntityMekanism tile, int baseTicksRequired) {

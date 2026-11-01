@@ -29,6 +29,7 @@ import mekanism.common.capabilities.holder.slot.IInventorySlotHolder;
 import mekanism.common.config.MekanismConfig;
 import mekanism.common.inventory.container.MekanismContainer;
 import mekanism.common.lib.transmitter.TransmissionType;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceMekEnergyConfig;
 import mekanism.common.recipe.IMekanismRecipeTypeProvider;
 import mekanism.common.recipe.MekanismRecipeType;
 import mekanism.common.recipe.lookup.cache.InputRecipeCache.SingleItem;
@@ -130,7 +131,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 						slotManager.getSecondaryOutputSlot(),
 						slotManager.getTertiaryOutputSlot()),
 				accessor().productivebeesgenesis$getEnergySlot(), false);
-		configComponent.setupInputConfig(TransmissionType.ENERGY, accessor().productivebeesgenesis$getEnergyContainer());
+		ResourceMekEnergyConfig.setup(this, configComponent,
+				accessor().productivebeesgenesis$getEnergyContainer());
 		configComponent.setupOutputConfig(TransmissionType.FLUID, slotManager.getFluidOutputTank(), RelativeSide.RIGHT);
 		ejectorComponent = GenesisTileComponentEjector.replace(this, ejectorComponent,
 				MekanismConfig.general.chemicalAutoEjectRate, () -> Integer.MAX_VALUE);
@@ -224,6 +226,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	 */
 	@Override
 	public boolean containsRecipe(@NotNull ItemStack input) {
+		if (pbProcessor.acceptsResourceInput(input)) return pbProcessor.allowsNewResourceInput(input);
 		if (MyriadCreationsEventHandler.isMyriadCreationsItem(input)) {
 			return true;
 		}
@@ -242,6 +245,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Nullable
 	@Override
 	public ItemStackToItemStackRecipe getRecipe(int cacheIndex) {
+		if (pbProcessor.hasResourceWork(cacheIndex) || pbProcessor.acceptsResourceInput(inputSlot(cacheIndex).getStack())) return null;
 		// 熔炉配方兼容关闭时阻止 SMELTING 管线处理
 		if (!MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)) {
 			return null;
@@ -301,7 +305,9 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Override
 	public CachedRecipe<ItemStackToItemStackRecipe> createNewCachedRecipe(
 			@NotNull ItemStackToItemStackRecipe recipe, int cacheIndex) {
-		return MekCentrifugeUpgradeOps.configureCachedRecipe(this, super.createNewCachedRecipe(recipe, cacheIndex));
+		return MekCentrifugeUpgradeOps.configureCachedRecipe(this, super.createNewCachedRecipe(recipe, cacheIndex))
+				.setCanHolderFunction(() -> canFunction() && !hasUnresolvedInput() && !pbProcessor.hasResourceWork(cacheIndex)
+						&& !pbProcessor.acceptsResourceInput(inputSlot(cacheIndex).getStack()));
 	}
 
 	@Override
@@ -316,6 +322,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 		super.recalculateUpgrades(upgrade);
 		MekCentrifugeUpgradeOps.handleCreativeEnergy(this, upgrade);
 		MekCentrifugeEnergyScaling.normalizeCapacity(this);
+		MekUpgradeSupport.refreshEmpoweredEnergy(this, upgrade);
 		// SPEED/ENERGY 变化影响时间倍率 — 失效 PB 升级倍率缓存（Spark 优化）
 		pbUpgradeHandler.invalidateMultiplierCache();
 		// STACK/CREATIVE/SPEED 变更会改变 operationsPerTick，同刻立即失效，不等下一游戏刻
@@ -550,11 +557,14 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@NotNull
 	@Override public CentrifugeUpgradeData getUpgradeData() { return getUpgradeData(portRegistryAccess()); }
 	public CentrifugeUpgradeData getUpgradeData(HolderLookup.Provider provider) {
+        if(!com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.canUpgrade(this))return null;
+        var resourceUpgrade=com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.prepareUpgrade(this);
 		CentrifugeUpgradeData data = saveHandler.buildUpgradeData(provider, redstone, getControlType(),
 				getOperatingTicks(), getComponents());
 		// 模块 3 Bug 2：深拷贝已保存到升级数据，清空旧方块槽位防 Ejector 重复 popResource
 		saveAllItemsForDrop();
-		return data;
+		data.resourceUpgrade=resourceUpgrade;
+        return data;
 	}
 
 	/**
@@ -569,7 +579,9 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	public void parseUpgradeData(HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) {
 		super.parseUpgradeData(upgradeData);
 		saveHandler.applyUpgradeData(provider, upgradeData);
-	}
+
+        if(upgradeData instanceof CentrifugeUpgradeData data && data.resourceUpgrade!=null)data.resourceUpgrade.apply(this);
+}
 
 	// ===== AE2 网格节点生命周期与 IAe2OutputHostBase/IAe2InputHost 实现（委托 ae2Handler） =====
 

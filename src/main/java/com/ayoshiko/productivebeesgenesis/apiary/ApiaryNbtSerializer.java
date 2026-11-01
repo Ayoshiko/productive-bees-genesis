@@ -153,8 +153,7 @@ class ApiaryNbtSerializer {
 	 * <br/>
 	 * 由 {@link TileEntityMekApiary#loadAdditional} 在调用 super 后调用。
 	 * 修复 v14：追加流体罐反序列化，恢复存档/扳手拆卸时保存的流体内容。
-	 * 使用 {@code insert(..., AutomationType.INTERNAL)} 尊重当前罐容量，
-	 * 与 {@link #applyUpgradeData} 中的流体恢复逻辑一致（DRY）。
+	 * 此处还原同一份库存快照；super 可能已恢复同一个罐，不能再次追加。
 	 * PB 升级槽位与数量均从 NBT 恢复；持久化数量不受当前安装上限裁剪。
 	 */
 	void loadApiaryState(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
@@ -198,7 +197,7 @@ class ApiaryNbtSerializer {
 			if (fluidNbt.contains("Fluid", Tag.TAG_COMPOUND)) {
 				FluidStack fluid = FluidStack.loadFluidStackFromNBT(fluidNbt.getCompound("Fluid"));
 				if (!fluid.isEmpty()) {
-					tile.getFluidTank().insert(fluid, Action.EXECUTE, AutomationType.INTERNAL);
+					tile.getFluidTank().setStack(fluid);
 				}
 			}
 			loadPendingHoneyFluid(fluidNbt, provider);
@@ -206,8 +205,8 @@ class ApiaryNbtSerializer {
 			tile.setPendingHoneyFluid(0L, null);
 		}
 		// F4: 反序列化产物溢出缓冲区（向后兼容：旧存档无此字段时跳过）
-		if (nbt.contains(ApiaryOutputBuffer.nbtKey(), Tag.TAG_COMPOUND)) {
-			tile.getOutputBuffer().load(provider, nbt.getCompound(ApiaryOutputBuffer.nbtKey()));
+		if (nbt.contains(ApiaryOutputBuffer.nbtKey())) {
+			tile.getOutputBuffer().loadRaw(provider, nbt.get(ApiaryOutputBuffer.nbtKey()));
 		}
 		// 模块 3 Bug 1：反序列化镐子破坏/扳手拆卸冗余保存的槽位（向后兼容：旧存档无此键时跳过）
 		// 这些键仅由 saveCustomData 写入，存档加载时通常不存在，由 MEK ITEM_CONTAINER 接管恢复
@@ -288,6 +287,7 @@ class ApiaryNbtSerializer {
 		writeApiaryStateTo(nbt, provider);
 		// 保存 AE2 per-tile 输出开关，避免扳手拆卸后丢失用户设置
 		tile.saveAe2PerTileState(nbt);
+		for (var component : tile.getComponents()) component.write(nbt);
 		// 模块 3 Bug 1：冗余序列化 4 类槽位到自定义 NBT，作为 ITEM_CONTAINER 备份
 		writeDropSlotsToNbt(nbt, provider);
 		// Bug 4修复：在NBT顶层添加方块实体类型注册键id字段，通过CODEC_WITH_ID验证
@@ -390,7 +390,7 @@ class ApiaryNbtSerializer {
 		boolean aeFluidOutputEnabled = Ae2IntegrationLoader.isAe2Loaded()
 				&& tile.productivebeesgenesis$isAeFluidOutputEnabled();
 
-		return new ApiaryUpgradeData(provider, redstone, tile.getControlType(),
+		ApiaryUpgradeData data = new ApiaryUpgradeData(provider, redstone, tile.getControlType(),
 				tile.getEnergyContainer(), new int[]{tile.getOperatingTicks()}, tile.getEnergySlot(),
 				inputSlots, outputSlots, sorting, tile.getComponents(),
 				beeSlotsNbt, feederSlotsNbt, pbUpgradeCountsNbt,
@@ -401,7 +401,13 @@ class ApiaryNbtSerializer {
 				tile.isDirectAeOutputEnabled(), tile.isCentrifugePriorityEnabled(),
 				tile.isFeederConversionEnabled(), tile.isDirectContainerOutputEnabled(),
 				tile.getGeneTreatSlot().serializeNBT(), tile.getGeneTreatRestock().save(provider));
-	}
+
+        data.aePerTileState=new CompoundTag();
+        tile.ae2HostAdapter().savePerTileState(data.aePerTileState);
+        data.aePendingState=new CompoundTag();
+        tile.ae2HostAdapter().savePendingItems(data.aePendingState);
+        return data;
+}
 
 	/**
 	 * 应用升级数据 — 将旧方块状态恢复到新蜂箱
@@ -476,7 +482,7 @@ class ApiaryNbtSerializer {
 			if (data.fluidNbt.contains("Fluid", Tag.TAG_COMPOUND)) {
 				FluidStack fluid = FluidStack.loadFluidStackFromNBT(data.fluidNbt.getCompound("Fluid"));
 				if (!fluid.isEmpty()) {
-					tile.getFluidTank().insert(fluid, Action.EXECUTE, AutomationType.INTERNAL);
+					tile.getFluidTank().setStack(fluid);
 				}
 			}
 			loadPendingHoneyFluid(data.fluidNbt, provider);
@@ -495,12 +501,16 @@ class ApiaryNbtSerializer {
 			} else {
 				tile.setSelectedBeeSlot(-1);
 			}
-			// 恢复 AE2 per-tile 输出开关（AE2 未加载时跳过，新方块使用默认值 true）
-			if (Ae2IntegrationLoader.isAe2Loaded()) {
+			if (data.aePerTileState != null) {
+				tile.ae2HostAdapter().loadPerTileState(data.aePerTileState.copy());
+			} else if (Ae2IntegrationLoader.isAe2Loaded()) {
 				tile.productivebeesgenesis$setAeItemOutputEnabled(data.aeItemOutputEnabled);
 				tile.productivebeesgenesis$setAeFluidOutputEnabled(data.aeFluidOutputEnabled);
 			}
 			tile.setDirectEjectEnabled(data.directEjectEnabled);
+			if (data.aePendingState != null) {
+				tile.ae2HostAdapter().loadPendingItems(data.aePendingState.copy());
+			}
 			tile.setDirectAeOutputEnabled(data.directAeOutputEnabled);
 			tile.setCentrifugePriorityEnabled(data.centrifugePriorityEnabled);
 			tile.setFeederConversionEnabled(data.feederConversionEnabled);

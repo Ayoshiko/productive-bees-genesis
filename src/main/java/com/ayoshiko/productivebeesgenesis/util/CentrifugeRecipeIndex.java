@@ -227,7 +227,7 @@ public final class CentrifugeRecipeIndex {
             if (!isWaxOutput(ingredient)) outputs.put(ingredient, values.copy());
         });
         return new CentrifugeRecipe(originalHolder.getId(), originalHolder.ingredient, outputs,
-                originalHolder.fluidOutput, originalHolder.getProcessingTime());
+                originalHolder.fluidOutput==null?Pair.of("minecraft:empty",0):originalHolder.fluidOutput, originalHolder.getProcessingTime());
 	}
 
 	/**

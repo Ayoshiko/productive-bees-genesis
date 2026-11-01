@@ -6,6 +6,8 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.util.FastColor;
 
 /**
@@ -45,9 +47,43 @@ public final class BeeConfigApplier {
 			data.putInt("secondaryColor", parseHexColor(config.secondaryColor.get()));
 			data.putInt("particleColor", parseHexColor(config.particleColor.get()));
 			data.putInt("glowColor", parseHexColor(config.glowColor.get()));
+			var appearance = config.beeAttributes();
+			data.putInt("tertiaryColor", appearance.tertiaryColor.get().isEmpty()
+					? data.getInt("primaryColor") : parseHexColor(appearance.tertiaryColor.get()));
+			data.putFloat("pollinatedSize", appearance.pollinatedSize.get() == 0
+					? config.size.get().floatValue() : appearance.pollinatedSize.get().floatValue());
+			data.putBoolean("useGlowLayer", appearance.useGlowLayer.get());
+			optional(data, "attackResponse", appearance.attackResponse.get().equals("none") ? "" : appearance.attackResponse.get());
+			data.putString("renderTransform", appearance.renderTransform.get());
+			ListTag immunity = new ListTag();
+			appearance.invulnerability.get().forEach(value -> immunity.add(StringTag.valueOf(value)));
+			data.put("invulnerability", immunity);
+			data.putString("renderer", appearance.renderer.get());
+			optional(data, "model", appearance.model.get());
+			optional(data, "animation", appearance.animation.get());
+			optional(data, "beeTexture", appearance.beeTexture.get());
+			data.putString("particleType", appearance.particleType.get());
+			optional(data, "nestingPreference", appearance.nestingPreference.get());
+			optional(data, "postPollination", appearance.postPollination.get().equals("none") ? "" : appearance.postPollination.get());
+			appearance.traits.forEach((key, value) -> data.putBoolean(key, value.get()));
 
 			// 授粉
-			data.putString("flowerItem", config.flowerItem.get());
+			for (String field : new String[]{"flowerItem", "flowerBlock", "flowerTag", "flowerFluid"}) {
+				data.remove(field);
+			}
+			data.putBoolean("inverseFlower", false);
+			data.putString("flowerType", appearance.flowerType.get());
+			if (!appearance.flowerTag.get().isEmpty()) {
+				String tag = appearance.flowerTag.get();
+				data.putString("flowerTag", tag.startsWith("!") ? tag.substring(1) : tag);
+				data.putBoolean("inverseFlower", tag.startsWith("!"));
+			} else if (!appearance.flowerBlock.get().isEmpty()) {
+				data.putString("flowerBlock", appearance.flowerBlock.get());
+			} else if (!appearance.flowerFluid.get().isEmpty()) {
+				data.putString("flowerFluid", appearance.flowerFluid.get());
+			} else {
+				data.putString("flowerItem", config.flowerItem.get());
+			}
 
 			// PB 属性
 			data.putString("weather_tolerance", config.weatherTolerance.get());
@@ -87,6 +123,14 @@ public final class BeeConfigApplier {
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("解析颜色值 '{}' 失败，使用默认金色", hex, e);
 			return 0xFFFFD700; // 默认金色
+		}
+	}
+
+	private static void optional(CompoundTag data, String key, String value) {
+		if (value.isEmpty()) {
+			data.remove(key);
+		} else {
+			data.putString(key, value);
 		}
 	}
 }

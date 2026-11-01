@@ -4,7 +4,7 @@ license="MIT"
 
 [[mods]]
 modId="productivebeesgenesis"
-version="1.0.10-forge-1.20.1"
+version="1.2.1-forge-1.20.1"
 displayName="资源蜜蜂：创世"
 authors="Ayoshiko"
 logoFile="productivebeesgenesis.png"

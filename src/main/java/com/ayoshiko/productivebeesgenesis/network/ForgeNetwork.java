@@ -12,13 +12,13 @@ import java.util.function.*;
 
 /** Forge transport. Packet directions are enforced before handlers are dispatched. */
 public final class ForgeNetwork {
-    private static final String VERSION = "forge-1";
+    private static final String VERSION = "forge-1.2.1";
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
         new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "main"),
         () -> VERSION, VERSION::equals, VERSION::equals);
     private static int nextId;
     private ForgeNetwork() {}
-    static <T> void register(Class<T> type, BiConsumer<T, FriendlyByteBuf> encoder,
+    public static <T> void register(Class<T> type, BiConsumer<T, FriendlyByteBuf> encoder,
             Function<FriendlyByteBuf, T> decoder, BiConsumer<T, ForgePayloadContext> handler,
             NetworkDirection direction) {
         CHANNEL.messageBuilder(type, nextId++, direction).encoder(encoder).decoder(decoder)

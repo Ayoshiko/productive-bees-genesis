@@ -76,13 +76,12 @@ public final class MekAe2LifecycleHandler {
 	}
 
 	/**
-	 * 销毁 AE2 网格节点并清空状态（方块移除时调用）
-	 * <br/>
-	 * 调用 {@link Ae2GridNodeManager#destroyNode} 销毁节点并释放引用，
-	 * 然后清空 {@link Ae2OutputStateHolder} 的所有状态，防止方块重建后残留旧状态。
+	 * 销毁 AE2 网格节点并释放瞬态引用（方块移除时调用）。
 	 * <p>
-	 * 线程安全：在宿主级锁内执行"销毁节点 + 清空状态"原子操作，
-	 * 避免 destroyNode 与 clear 之间观察到中间状态（node 已 null 但 cache 仍非 null）。
+	 * 挖掘会先移除方块实体，再用该实体生成掉落物；持久化配置、已提取输入和
+	 * 未决交付必须保留到掉落序列化完成，不能在此重置为默认值。
+	 * <p>
+	 * 节点销毁与引用清理在宿主级锁内执行，防止外部节点引用继续使用旧实体。
 	 *
 	 * @param host 输出宿主
 	 */
@@ -91,7 +90,8 @@ public final class MekAe2LifecycleHandler {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		synchronized (host) {
 			Ae2GridNodeManager.destroyNode(host);
-			stateHolder.clear();
+			Ae2ResourceOutput.closeMachine(host);
+			stateHolder.clearForChunkUnload();
 			// 重置连接标志，方块重建后 handler 实例可能复用，确保重新走连接流程
 			ae2NodeConnected = false;
 		}
@@ -110,6 +110,7 @@ public final class MekAe2LifecycleHandler {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		synchronized (host) {
 			Ae2GridNodeManager.destroyNode(host);
+			Ae2ResourceOutput.closeMachine(host);
 			stateHolder.clearForChunkUnload();
 			// 重置连接标志，与 destroyForRemoval 行为一致
 			ae2NodeConnected = false;

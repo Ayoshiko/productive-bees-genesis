@@ -339,22 +339,13 @@ class ApiaryDirectEjectHandler {
 			ItemStack inSlot = slot.getStack();
 			// 预判：类型不匹配的非空槽直接跳过，避免 insertItem 内部组件比较开销
 			if (!inSlot.isEmpty() && !ItemStack.isSameItemSameTags(inSlot, stack)) continue;
-			ItemStack remainder;
-			try {
-				// This is an internal transfer between two machines owned by this mod. EXTERNAL is
-				// reserved for capability/storage-bus callers and activates the factory admission
-				// policy, which intentionally limits one item type to one lane per game tick.
-				remainder = slot.insertItem(stack, Action.EXECUTE, TARGET_INSERT_AUTOMATION);
-			} catch (Exception | LinkageError e) {
-				// 单槽异常隔离：按该槽拒收处理，继续尝试下一槽（与 acceptedTargetMask 防御层级统一）
-				LogThrottle.warn("apiary_produced_direct_insert",
-						"产出直连插入离心机输入槽异常，跳过该槽: {}", stack.getItem(), e);
-				continue;
-			}
-			int accepted = stack.getCount() - (remainder.isEmpty() ? 0 : remainder.getCount());
-			if (accepted > 0) {
-				stack.shrink(accepted);
-			}
+			var custody = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(apiary);
+            if (custody.blocked()) break;
+            ItemStack offered = stack.copy();
+            int accepted = custody.handoffItem(offered, "centrifuge-input", () ->
+                    com.ayoshiko.productivebeesgenesis.logistics.ItemPushHelper.accepted(offered,
+                            slot.insertItem(offered.copy(), Action.EXECUTE, TARGET_INSERT_AUTOMATION)));
+            stack.shrink(accepted);
 		}
 	}
 
@@ -385,7 +376,7 @@ class ApiaryDirectEjectHandler {
 	 */
 	boolean tryDirectEject() {
 		Level level = apiary.getLevel();
-		if (level == null || level.isClientSide) return false;
+		if (level == null || level.isClientSide || com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(apiary).blocked()) return false;
 		if (!apiary.isDirectEjectEnabled()) {
 			needsEjectCheck = false;
 			consecutiveEjectFailures = 0;
@@ -595,7 +586,7 @@ class ApiaryDirectEjectHandler {
 			CentrifugeInputSlotManager inputSlotManager, ItemStack virtualStack,
 			int virtualIdx, int inputIdx, boolean requireEmpty) {
 
-		if (virtualStack.isEmpty()) return virtualStack;
+		if (virtualStack.isEmpty() || com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(apiary).blocked()) return virtualStack;
 
 		// Task 3: 使用预扫描数组值，避免 targetSlot.getStack() API 调用
 		ItemStack targetStack = inputSlotManager.getInputStack(inputIdx);
@@ -647,25 +638,17 @@ class ApiaryDirectEjectHandler {
 
 		// 插入目标输入槽（直接执行，不模拟）
 		ItemStack toInsert = virtualStack.copyWithCount(totalExtracted);
-		ItemStack remaining;
-		try {
-			remaining = targetSlot.insertItem(toInsert, Action.EXECUTE, TARGET_INSERT_AUTOMATION);
-		} catch (RuntimeException e) {
-			remaining = toInsert;
-		}
-		int rejectedByTarget = remaining.isEmpty() ? 0 : remaining.getCount();
-		int bufferedCount = 0;
-
-		// 防御性检查：若有剩余，放回原始输出槽（理论上不会发生，因为已计算 availableSpace）
-		if (!remaining.isEmpty()) {
-			for (int i = 0; i < sources.size() && !remaining.isEmpty(); i++) {
-				remaining = sources.get(i).insertItem(remaining, Action.EXECUTE, AutomationType.EXTERNAL);
-			}
-			if (!remaining.isEmpty()) {
-				bufferedCount = remaining.getCount();
-				apiary.getOutputBuffer().offer(remaining);
-			}
-		}
+		var custody = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(apiary);
+        int handed = custody.handoffItem(toInsert, "centrifuge-input", () ->
+                com.ayoshiko.productivebeesgenesis.logistics.ItemPushHelper.accepted(toInsert,
+                        targetSlot.insertItem(toInsert.copy(), Action.EXECUTE, TARGET_INSERT_AUTOMATION)));
+        int rejectedByTarget = totalExtracted - handed;
+        ItemStack remaining = toInsert.copyWithCount(rejectedByTarget);
+        int returned = remaining.isEmpty() ? 0
+                : com.ayoshiko.productivebeesgenesis.logistics.LocalOutputTransfer.insert(sources, remaining, custody);
+        remaining.shrink(returned);
+        int bufferedCount = remaining.getCount();
+        if (!remaining.isEmpty()) custody.retainItem(remaining, "centrifuge-return-full");
 
 		// 记账：E=提取总数, R=目标拒收, B=未能归还源槽而进入缓冲区的数量
 		// 插入 = E-R, 归还 = R-B, 缓冲 = B；三者之和 = E，无物品凭空消失。

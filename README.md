@@ -9,7 +9,7 @@ apiaries and centrifuges, and optional AE2 integration.
 | Component | Branch baseline |
 | --- | --- |
 | Branch | `forge/1.20.1` |
-| Genesis snapshot | `1.0.10-forge-1.20.1` |
+| Genesis snapshot | `1.2.1-forge-1.20.1` |
 | Minecraft | `1.20.1` |
 | Forge | `47.4.0` |
 | Java | `17` |
@@ -22,6 +22,10 @@ Ayoshiko maintains the upstream project and assists with this branch.
 The independent [bpkiu port](https://github.com/bpkiu/Productive-Bees-Genesis-1.20.1)
 is a separate repository and code lineage; its releases are not this branch's artifacts.
 
+The upstream 1.2.1 editor/resource feature backport and subsequent Forge fixes are included.
+Download the JAR from [releases/1.2.1](releases/1.2.1/). See [build notes](README-FORGE.md)
+for the new pinned optional compile inputs and current verification limits.
+
 ## Build
 
 Use JDK 17 and Python 3.11 or newer:
@@ -33,7 +37,7 @@ python tools/verify_forge_artifact.py
 ```
 
 On Windows, replace `./gradlew` with `.\gradlew.bat`.
-The distributable is `build/libs/productivebeesgenesis-1.0.10-forge-1.20.1-all.jar`.
+The distributable is `build/libs/productivebeesgenesis-1.2.1-forge-1.20.1-all.jar`.
 Distribute it only after reobfuscation and artifact verification finish.
 See [README-FORGE.md](README-FORGE.md) for dependency preparation and packaging details.
 

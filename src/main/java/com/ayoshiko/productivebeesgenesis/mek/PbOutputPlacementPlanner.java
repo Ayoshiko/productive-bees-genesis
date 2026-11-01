@@ -60,6 +60,7 @@ final class PbOutputPlacementPlanner {
 	private ItemStack[] templates = new ItemStack[INITIAL_TEMPLATE_CAPACITY];
 	private int[] requested = new int[INITIAL_TEMPLATE_CAPACITY];
 	private int[] placed = new int[INITIAL_TEMPLATE_CAPACITY];
+	private final int[][] slotContributions = new int[MAX_SLOTS][INITIAL_TEMPLATE_CAPACITY];
 	private int templateCount;
 
 	// ===== 模拟结果 =====
@@ -112,6 +113,7 @@ final class PbOutputPlacementPlanner {
 		int observedCapacity = 0;
 
 		for (int i = 0; i < slotCount; i++) {
+			Arrays.fill(slotContributions[i], 0, templateCount, 0);
 			addAmounts[i] = 0;
 			setTemplates[i] = null;
 			slotTemplate[i] = -1;
@@ -149,6 +151,7 @@ final class PbOutputPlacementPlanner {
 					simCounts[i] = canFit;
 					simLimits[i] = limit;
 					addAmounts[i] += canFit;
+					slotContributions[i][t] += canFit;
 					setTemplates[i] = template;
 					if (slotTemplate[i] < 0) slotTemplate[i] = t;
 					remaining -= canFit;
@@ -161,6 +164,7 @@ final class PbOutputPlacementPlanner {
 					int canFit = Math.min(remaining, space);
 					simCounts[i] += canFit;
 					addAmounts[i] += canFit;
+					slotContributions[i][t] += canFit;
 					if (slotTemplate[i] < 0) slotTemplate[i] = t;
 					remaining -= canFit;
 					written += canFit;
@@ -198,7 +202,10 @@ final class PbOutputPlacementPlanner {
 	boolean execute(List<IInventorySlot> slots, int slotCount, int[] slotIdxMap,
 			PbRecipeContext context, int processIndex) {
 		boolean exact = true;
+		Arrays.fill(placed, 0, templateCount, 0);
+		var custody = PbRecipeFlusher.custody(context);
 		for (int i = 0; i < slotCount; i++) {
+			if (custody != null && custody.blocked()) return false;
 			if (addAmounts[i] <= 0) continue;
 			IInventorySlot slot = slots.get(i);
 			if (slot == null) continue;
@@ -207,24 +214,29 @@ final class PbOutputPlacementPlanner {
 			ItemStack template = setTemplates[i];
 			if (empty && template == null) continue; // 防御：空槽缺模板不写
 			int before = empty ? 0 : current.getCount();
-			context.productivebeesgenesis$expectOutputSlotChange();
-			if (empty) {
-				slot.setStack(template.copyWithCount(addAmounts[i]));
-			} else {
-				slot.growStack(addAmounts[i], Action.EXECUTE);
-			}
-			context.productivebeesgenesis$updateSlotOnly(processIndex, slotIdxMap[i], slot);
-			ItemStack actual = slot.getStack();
-			int written = Math.max(0, (actual.isEmpty() ? 0 : actual.getCount()) - before);
-			if (written >= addAmounts[i]) continue;
-			exact = false;
-			int shortfall = addAmounts[i] - written;
-			int templateIndex = slotTemplate[i];
-			if (templateIndex >= 0 && templateIndex < templateCount) {
-				placed[templateIndex] = Math.max(0, placed[templateIndex] - shortfall);
+			int amount = addAmounts[i], slotIndex = slotIdxMap[i];
+			ItemStack identity = empty ? template : current.copyWithCount(1);
+			java.util.function.LongSupplier write = () -> {
+				context.productivebeesgenesis$expectOutputSlotChange();
+				if (empty) slot.setStack(template.copyWithCount(amount));
+				else slot.growStack(amount, Action.EXECUTE);
+				context.productivebeesgenesis$updateSlotOnly(processIndex, slotIndex, slot);
+				ItemStack actual = slot.getStack();
+				if (!actual.isEmpty() && !ItemStack.isSameItemSameTags(actual, identity))
+					throw new IllegalStateException("Centrifuge output identity changed");
+				return Math.max(0, (actual.isEmpty() ? 0 : actual.getCount()) - before);
+			};
+			int written = (int) (custody == null ? write.getAsLong()
+					: custody.handoffItem(identity, amount, "centrifuge-output-slot", write));
+			if (written != amount) exact = false;
+			// 同一槽可能由多个完整身份相同的配方条目贡献；逐条核销，未执行的槽不扣 pending。
+			for (int t = 0; t < templateCount && written > 0; t++) {
+				int handed = Math.min(written, slotContributions[i][t]);
+				placed[t] += handed;
+				written -= handed;
 			}
 		}
-		return exact;
+		return exact && (custody == null || !custody.blocked());
 	}
 
 	// ===== 结果查询 =====
@@ -291,5 +303,6 @@ final class PbOutputPlacementPlanner {
 		templates = Arrays.copyOf(templates, newSize);
 		requested = Arrays.copyOf(requested, newSize);
 		placed = Arrays.copyOf(placed, newSize);
+		for (int i = 0; i < MAX_SLOTS; i++) slotContributions[i] = Arrays.copyOf(slotContributions[i], newSize);
 	}
 }

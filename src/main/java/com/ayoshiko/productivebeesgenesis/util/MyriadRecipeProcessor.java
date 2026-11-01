@@ -15,7 +15,7 @@ import net.minecraftforge.common.util.Lazy;
 import net.minecraft.core.HolderSet;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
-import net.minecraft.world.item.crafting.Recipe;
+import com.ayoshiko.productivebeesgenesis.port.RecipeHolder;
 import net.minecraft.world.level.biome.Biome;
 
 import java.util.List;
@@ -85,6 +85,13 @@ public final class MyriadRecipeProcessor {
 		}
 
 		return holder;
+	}
+
+	Recipe<?> processRecipe(Recipe<?> holder, java.util.Set<net.minecraft.resources.ResourceLocation> custom) {
+		if (custom.contains(holder.getId())) {
+			return MyriadCreationsEventHandler.isMyriadCreationsEnabled() ? holder : null;
+		}
+		return processRecipe(holder);
 	}
 
 	/** 处理钓鱼配方 */

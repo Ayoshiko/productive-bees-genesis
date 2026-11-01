@@ -13,7 +13,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.nbt.CompoundTag;
+import com.ayoshiko.productivebeesgenesis.port.CustomData;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
@@ -74,9 +74,14 @@ public final class WannaBeeAmberAdapter {
 	 */
 	public static List<ItemStack> sampleBatches(ServerLevel level, BlockPos origin, FeederSlotManager feeder,
 			long[] productionCounts, float multiplier) {
+		return sampleBatches(level, origin, feeder, productionCounts, multiplier, false);
+	}
+
+	public static List<ItemStack> sampleBatches(ServerLevel level, BlockPos origin, FeederSlotManager feeder,
+			long[] productionCounts, float multiplier, boolean strict) {
 		if (level == null || origin == null || feeder == null || productionCounts == null
 				|| !Float.isFinite(multiplier) || multiplier <= 0.0F) return List.of();
-		List<CompoundTag> candidates = feeder.getAmberEntityDataSnapshot();
+		List<CustomData> candidates = feeder.getAmberEntityDataSnapshot();
 		if (candidates.isEmpty()) return List.of();
 
 		int[] eventCounts = new int[productionCounts.length];
@@ -97,6 +102,7 @@ public final class WannaBeeAmberAdapter {
 					LootPool pool = createLootPool(level, origin, candidates, random);
 					sampleRolls(level, aggregated, pool, rollCount, productivityLevel);
 				} catch (Exception e) {
+					if (strict) throw new IllegalStateException("Wanna Bee resource batch generation failed", e);
 					LogThrottle.warn("wanna_bee_amber_loot",
 							"Wanna Bee 无法读取封存生物战利品，跳过本次代表事件: origin={}", origin, e);
 				}
@@ -105,16 +111,20 @@ public final class WannaBeeAmberAdapter {
 
 		List<ItemStack> result = new ArrayList<>(aggregated.size());
 		for (AggregatedDrop drop : aggregated) {
-			int count = drop.count >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) drop.count;
-			if (count > 0) result.add(drop.template.copyWithCount(count));
+			long remaining = drop.count;
+			while (remaining > 0) {
+				int count = (int) Math.min(Integer.MAX_VALUE, remaining);
+				result.add(drop.template.copyWithCount(count));
+				remaining -= count;
+			}
 		}
 		return result;
 	}
 
-	private static LootPool createLootPool(ServerLevel level, BlockPos origin, List<CompoundTag> candidates,
+	private static LootPool createLootPool(ServerLevel level, BlockPos origin, List<CustomData> candidates,
 			ThreadLocalRandom random) {
-		CompoundTag entityData = candidates.get(random.nextInt(candidates.size()));
-		Entity entity = AmberBlockEntity.createEntity(level, entityData.copy());
+		CustomData entityData = candidates.get(random.nextInt(candidates.size()));
+		Entity entity = AmberBlockEntity.createEntity(level, entityData.copyTag());
 		if (!(entity instanceof Mob mob)) return LootPool.EMPTY;
 		Vec3 originCenter = Vec3.atCenterOf(origin);
 		mob.setPos(originCenter);

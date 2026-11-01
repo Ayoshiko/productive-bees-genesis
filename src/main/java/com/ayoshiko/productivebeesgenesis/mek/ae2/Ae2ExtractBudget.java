@@ -43,8 +43,10 @@ final class Ae2ExtractBudget {
 	boolean canExtractNow(long gameTick, int maxExtracts, long insertSpentThisTickNanos) {
 		refreshTile(gameTick);
 		if (maxExtracts <= 0 || tileSpentNanos >= TILE_TICK_BUDGET_NANOS) return false;
-		// 输出先执行，仍给输入一次机会，避免持续慢输出把输入永久饿死。
-		if (tileExtractsThisTick > 0 && SaturatingMath.saturatingAdd(
+		// 输出先执行，仍为输入保留 2ms 累计额度，避免一次输出尖峰只放行一个健康类型。
+		// 超额外部调用无法中断；达到保留额度后继续遵守组合上限。
+		if (tileExtractsThisTick > 0 && tileSpentNanos >= QUOTA_BUDGET_NANOS
+				&& SaturatingMath.saturatingAdd(
 				Math.max(0L, insertSpentThisTickNanos), tileSpentNanos)
 				>= COMBINED_TILE_TICK_BUDGET_NANOS) return false;
 		if (!isExpensiveNetwork()) return true;

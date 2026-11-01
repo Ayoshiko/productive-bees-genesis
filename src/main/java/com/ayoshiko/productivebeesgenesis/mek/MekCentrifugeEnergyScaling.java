@@ -36,12 +36,10 @@ public final class MekCentrifugeEnergyScaling {
 	 * Mekanism's upgraded container value includes the machine-side base price;
 	 * applying the same built-in balance here keeps SMELTING aligned with PB honeycomb work.
 	 */
+	public static mekanism.api.math.FloatingLong balancedSmeltingEnergyPerTick(mekanism.api.math.FloatingLong energy){return energy.divide(BASE_ENERGY_USAGE_DIVISOR);}
 	public static long balancedSmeltingEnergyPerTick(long upgradedEnergyPerTick) {
 		if (upgradedEnergyPerTick <= 0L) return 0L;
 		return dividePositive(upgradedEnergyPerTick, BASE_ENERGY_USAGE_DIVISOR);
-	}
-	public static mekanism.api.math.FloatingLong balancedSmeltingEnergyPerTick(mekanism.api.math.FloatingLong energy) {
-		return energy.divide(BASE_ENERGY_USAGE_DIVISOR);
 	}
 
 	/** Applies the built-in balance reduction to a configured base storage capacity. */
@@ -258,12 +256,13 @@ public final class MekCentrifugeEnergyScaling {
 	}
 
 	/**
-	 * Capacity only depends on ENERGY upgrades. Reading that counter directly keeps
-	 * accelerated sub-ticks allocation-free without walking unrelated upgrade types.
+	 * 普通与强化能量升级共同决定容量；直接读取两个计数，不遍历无关升级。
 	 */
 	private static long upgradeFingerprint(PbRecipeContext context) {
 		if (!(context instanceof ITileUpgradable upgradeTile)) return Long.MIN_VALUE;
-		return upgradeTile.getComponent().getUpgrades(Upgrade.ENERGY);
+		int energy = upgradeTile.getComponent().getUpgrades(Upgrade.ENERGY);
+		int empoweredEnergy = MekUpgradeSupport.getEmpoweredEnergyUpgrades(upgradeTile);
+		return ((long) energy << Integer.SIZE) | Integer.toUnsignedLong(empoweredEnergy);
 	}
 
 	private static long normalCapacityFor(PbRecipeContext context,

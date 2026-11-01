@@ -3,15 +3,19 @@ package com.ayoshiko.productivebeesgenesis.network;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerProtocol;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerServer;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
-
 import com.ayoshiko.productivebeesgenesis.network.ForgePayloadContext;
-
+import com.ayoshiko.productivebeesgenesis.network.ForgeNetwork;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -78,65 +82,132 @@ public final class ModPayloads {
 	 */
 	public static void register() {
 
+
+
 		// 万象创世过滤配置同步包 — 由客户端配置界面发送
+
 		ForgeNetwork.register(FilterConfigSyncPayload.class, FilterConfigSyncPayload::encode, FilterConfigSyncPayload::decode, ModPayloads::handleFilterConfigSync, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// 工厂版蜂箱排序切换包 — 由 GuiApiarySortingTab 发送
+
 		ForgeNetwork.register(ApiaryToggleSortingPayload.class, ApiaryToggleSortingPayload::encode, ApiaryToggleSortingPayload::decode, ApiaryPayloadHandlers::handleApiaryToggleSorting, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// PB升级物品提取包 — 由 GuiPbUpgradeWindow 卸载按钮发送
+
 		ForgeNetwork.register(PbUpgradeExtractPayload.class, PbUpgradeExtractPayload::encode, PbUpgradeExtractPayload::decode, ApiaryPayloadHandlers::handlePbUpgradeExtract, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// Bug 9：蜜蜂槽位选择包 — 由 GuiMekApiary 点击蜜蜂槽发送
+
 		ForgeNetwork.register(ApiarySelectBeePayload.class, ApiarySelectBeePayload::encode, ApiarySelectBeePayload::decode, ApiaryPayloadHandlers::handleApiarySelectBee, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// 桶式蜂笼操作包 — 由 GuiMekApiary 右键点击蜜蜂槽发送
+
 		ForgeNetwork.register(ApiaryCageOperationPayload.class, ApiaryCageOperationPayload::encode, ApiaryCageOperationPayload::decode, ApiaryPayloadHandlers::handleApiaryCageOperation, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// 蜂箱内基因小食喂食包 — 由 GuiMekApiary 右键点击蜜蜂槽发送
+
 		ForgeNetwork.register(ApiaryFeedBeePayload.class, ApiaryFeedBeePayload::encode, ApiaryFeedBeePayload::decode, ApiaryPayloadHandlers::handleApiaryFeedBee, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		ForgeNetwork.register(ToggleApiaryDirectEjectPayload.class, ToggleApiaryDirectEjectPayload::encode, ToggleApiaryDirectEjectPayload::decode, ApiaryPayloadHandlers::handleToggleApiaryDirectEject, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// 喂食槽转化开关包 — 由 GuiFeederWindow 的转化开关按钮发送（与 AE2 无关，无条件注册）
+
 		ForgeNetwork.register(ToggleApiaryFeederConversionPayload.class, ToggleApiaryFeederConversionPayload::encode, ToggleApiaryFeederConversionPayload::decode, ApiaryPayloadHandlers::handleToggleApiaryFeederConversion, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		ForgeNetwork.register(ToggleApiaryGeneTreatRestockPayload.class, ToggleApiaryGeneTreatRestockPayload::encode, ToggleApiaryGeneTreatRestockPayload::decode, ApiaryPayloadHandlers::handleToggleApiaryGeneTreatRestock, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// 喂食槽逐格禁用包 — 由 GuiFeederWindow 在禁用编辑模式（或 Alt+左键）点击格子发送
+
 		ForgeNetwork.register(ToggleFeederSlotDisabledPayload.class, ToggleFeederSlotDisabledPayload::encode, ToggleFeederSlotDisabledPayload::decode, ApiaryPayloadHandlers::handleToggleFeederSlotDisabled, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// 喂食槽批量禁用/恢复包 — 由 Shift + 点击「禁」按钮发送
+
 		ForgeNetwork.register(SetAllFeederSlotsDisabledPayload.class, SetAllFeederSlotsDisabledPayload::encode, SetAllFeederSlotsDisabledPayload::decode, ApiaryPayloadHandlers::handleSetAllFeederSlotsDisabled, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// Smelting compatibility is a core centrifuge feature and remains available without AE2.
+
 		ForgeNetwork.register(ToggleSmeltingCompatPayload.class, ToggleSmeltingCompatPayload::encode, ToggleSmeltingCompatPayload::decode, SmeltingCompatPayloadHandler::handle, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// 产物直通 per-tile 开关（蜂箱/离心机共用）：写相邻容器能力，与 AE2 无关，无条件注册
+
 		ForgeNetwork.register(ToggleDirectContainerOutputPayload.class, ToggleDirectContainerOutputPayload::encode, ToggleDirectContainerOutputPayload::decode, DirectContainerOutputPayloadHandler::handle, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// 核心返还包不依赖 AE2：在线时延迟进入 AE2 服务，离线时走 Mekanism 物品输出面。
+
 		ForgeNetwork.register(ReturnCentrifugeInputPayload.class, ReturnCentrifugeInputPayload::encode, ReturnCentrifugeInputPayload::decode, CentrifugeInputReturnPayloadHandler::handle, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// Do not create method handles for classes with direct AE2 API references unless AE2 is present.
+
 		if (Ae2IntegrationLoader.isAe2Loaded()) {
+
 		// per-tile AE2 输出切换包 — 由 AeOutputButton 点击发送
+
 		ForgeNetwork.register(CycleAeOutputPayload.class, CycleAeOutputPayload::encode, CycleAeOutputPayload::decode, Ae2PayloadHandlers::handleCycleAeOutput, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// per-tile AE2 输入拉取开关包 — 由 AeInputButton 点击发送
+
 		ForgeNetwork.register(ToggleAeInputPayload.class, ToggleAeInputPayload::encode, ToggleAeInputPayload::decode, Ae2PayloadHandlers::handleToggleAeInput, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// per-tile 离心机熔炉配方兼容开关包 — 由 SmeltingCompatButton 点击发送
+
 		// per-tile AE2 输入 NBT 忽略开关包 — 由 AeInputNbtIgnoreButton 点击发送
+
 		ForgeNetwork.register(ToggleAeInputNbtIgnorePayload.class, ToggleAeInputNbtIgnorePayload::encode, ToggleAeInputNbtIgnorePayload::decode, Ae2PayloadHandlers::handleToggleAeInputNbtIgnore, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// per-tile AE2 输入过滤模式循环切换包 — 由 AeInputFilterModeButton 点击发送
+
 		ForgeNetwork.register(CycleAeInputFilterModePayload.class, CycleAeInputFilterModePayload::encode, CycleAeInputFilterModePayload::decode, Ae2PayloadHandlers::handleCycleAeInputFilterMode, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// V13: per-tile AE2 输入精确模式切换包 — 区分蜜脾/蜜脾块
+
 		ForgeNetwork.register(ToggleAeInputPreciseModePayload.class, ToggleAeInputPreciseModePayload::encode, ToggleAeInputPreciseModePayload::decode, Ae2FilterPayloadHandlers::handleToggleAeInputPreciseMode, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// per-tile AE2 输入过滤条目增删包 — 由过滤列表 GUI 发送
+
 		ForgeNetwork.register(SetAeInputFilterEntryPayload.class, SetAeInputFilterEntryPayload::encode, SetAeInputFilterEntryPayload::decode, Ae2FilterPayloadHandlers::handleSetAeInputFilterEntry, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		ForgeNetwork.register(SetAeInputFilterAmountPayload.class, SetAeInputFilterAmountPayload::encode, SetAeInputFilterAmountPayload::decode, Ae2FilterPayloadHandlers::handleSetAeInputFilterAmount, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		ForgeNetwork.register(SetAllAeInputFilterAmountPayload.class, SetAllAeInputFilterAmountPayload::encode, SetAllAeInputFilterAmountPayload::decode, Ae2FilterPayloadHandlers::handleSetAllAeInputFilterAmount, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		ForgeNetwork.register(ToggleAllAeInputFilterUnlimitedPayload.class, ToggleAllAeInputFilterUnlimitedPayload::encode, ToggleAllAeInputFilterUnlimitedPayload::decode, Ae2FilterPayloadHandlers::handleToggleAllAeInputFilterUnlimited, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		ForgeNetwork.register(ToggleAllAeInputFilterNetworkStockPayload.class, ToggleAllAeInputFilterNetworkStockPayload::encode, ToggleAllAeInputFilterNetworkStockPayload::decode, Ae2FilterPayloadHandlers::handleToggleAllAeInputFilterNetworkStock, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// AE2LT-style virtual output slot interaction (take out / put back)
+
 		ForgeNetwork.register(AeInputOutputSlotPayload.class, AeInputOutputSlotPayload::encode, AeInputOutputSlotPayload::decode, Ae2PayloadHandlers::handleAeInputOutputSlot, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// per-tile AE2 输入配置窗口打开请求包 — 由 AeInputOverlay 按钮点击发送
+
 		// 服务端不直接打开 Screen（NeoForge 限制），而是推送最新过滤器状态到客户端，
+
 		// 客户端按钮点击时已立即打开 GuiAeInputConfig，此包仅用于状态同步
+
 		ForgeNetwork.register(OpenAeInputConfigPayload.class, OpenAeInputConfigPayload::encode, OpenAeInputConfigPayload::decode, Ae2FilterPayloadHandlers::handleOpenAeInputConfig, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		// 服务端 → 客户端：同步完整过滤器条目列表（tracker 无法同步集合数据）
+
 		ForgeNetwork.register(SyncAeInputFilterEntriesPayload.class, SyncAeInputFilterEntriesPayload::encode, SyncAeInputFilterEntriesPayload::decode, Ae2FilterPayloadHandlers::handleSyncAeInputFilterEntries, net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT);
+
 		// smelt 输入标签过滤表达式：保存请求（C→S）与归一化结果回传（S→C）
+
 		ForgeNetwork.register(SetAeInputTagFilterPayload.class, SetAeInputTagFilterPayload::encode, SetAeInputTagFilterPayload::decode, Ae2TagFilterPayloadHandlers::handleSetAeInputTagFilter, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
 		ForgeNetwork.register(SyncAeInputTagFilterPayload.class, SyncAeInputTagFilterPayload::encode, SyncAeInputTagFilterPayload::decode, Ae2TagFilterPayloadHandlers::handleSyncAeInputTagFilter, net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT);
+
 		}
+
 		// 服务端 → 客户端：开发者模式状态同步包（玩家登录时推送 + 命令切换时广播）
+
 		ForgeNetwork.register(DevModeStateSyncPacket.class, DevModeStateSyncPacket::encode, DevModeStateSyncPacket::decode, DevModeStateSyncPacket::handleClient, net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT);
+
+        com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerProtocol.register();
+        var resourcePackets = new com.ayoshiko.productivebeesgenesis.port.RegisterPayloadHandlersEvent();
+        com.ayoshiko.productivebeesgenesis.resource.ResourceMenuSync.register(resourcePackets);
+        com.ayoshiko.productivebeesgenesis.resource.ResourceSideConfigSync.register(resourcePackets);
+        com.ayoshiko.productivebeesgenesis.resource.ResourceCatalogSync.register(resourcePackets);
+        ForgeNetwork.register(FilterConfigResultPayload.class, FilterConfigResultPayload::encode, FilterConfigResultPayload::decode, (payload, context) -> FilterConfigResultPayload.receiver.accept(payload), net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT);
 	}
 
 	/**
@@ -161,6 +232,28 @@ public final class ModPayloads {
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}
+		if (!payload.save()) {
+			if (payload.page() >= 0) {
+				if (!PayloadRateLimiter.tryAccept(serverPlayer, "filter_config_catalog", 150)) {
+					filterReply(serverPlayer, payload, false, "designer.filter_rate");
+					return;
+				}
+				try {
+					JsonObject page = com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerFilterCatalog.page(
+							serverPlayer.server, payload.page(), payload.generation());
+					ForgeNetwork.sendToPlayer(serverPlayer, new FilterConfigResultPayload(payload.request(), true, "designer.filter_catalog", page.toString()));
+				} catch (RuntimeException failure) {
+					filterReply(serverPlayer, payload, false, BeeDesignerServer.safeMessage(failure));
+				}
+				return;
+			}
+			if (!PayloadRateLimiter.tryAccept(serverPlayer, "filter_config_read", 500)) {
+				filterReply(serverPlayer, payload, false, "designer.filter_rate");
+				return;
+			}
+			filterReply(serverPlayer, payload, true, "designer.filter_loaded");
+			return;
+		}
 
 		// 0. 频率限制：每玩家 3 秒冷却，防止恶意客户端高频发包
 		// 采用 ConcurrentHashMap + AtomicLong + CAS 模式，采用与其它热路径缓存一致的并发安全思路
@@ -174,6 +267,7 @@ public final class ModPayloads {
 		AtomicLong lastAccept = FILTER_SYNC_LAST_ACCEPT.computeIfAbsent(playerId, k -> new AtomicLong(0));
 		long last = lastAccept.get();
 		if (now - last < FILTER_SYNC_COOLDOWN_MS) {
+			filterReply(serverPlayer, payload, false, "designer.filter_rate");
 			long remainingSeconds = (FILTER_SYNC_COOLDOWN_MS - (now - last) + 999) / 1000;
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.rate_limited", remainingSeconds));
@@ -181,12 +275,15 @@ public final class ModPayloads {
 		}
 		// CAS 推进时间戳，防止并发包穿透冷却窗口
 		if (!lastAccept.compareAndSet(last, now)) {
+			filterReply(serverPlayer, payload, false, "designer.filter_rate");
 			// CAS 失败说明已被其他线程更新，本包拒绝（保守策略，让客户端稍后重试）
 			return;
 		}
 
 		// 1. 权限校验
-		if (!serverPlayer.hasPermissions(REQUIRED_PERMISSION_LEVEL)) {
+		if (!serverPlayer.hasPermissions(REQUIRED_PERMISSION_LEVEL)
+				&& (serverPlayer.server.isDedicatedServer() || !serverPlayer.server.isSingleplayerOwner(serverPlayer.getGameProfile()))) {
+			filterReply(serverPlayer, payload, false, "designer.error.permission");
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.permission_denied"));
 			LogThrottle.warn("filter_sync_permission", "玩家 {} 尝试修改服务端过滤配置但权限不足",
@@ -196,6 +293,7 @@ public final class ModPayloads {
 
 		// 2. 配置加载状态校验（防御性，理论上 join 后已加载）
 		if (!ModConfig.areServerSpecsLoaded()) {
+			filterReply(serverPlayer, payload, false, "designer.filter_unavailable");
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.not_loaded"));
 			// 热路径日志：多玩家场景下可累积刷屏（10 玩家 × 3 次/秒 = 30 条/秒），使用 LogThrottle 全局节流
@@ -204,15 +302,21 @@ public final class ModPayloads {
 		}
 
 		// 2.5 防御性输入长度校验：StreamCodec 已限制字符串与列表上限，此处冗余校验防止协议层变更后绕过
+		if (!filterSnapshot().get("baseline").getAsString().equals(payload.baseline())) {
+			filterReply(serverPlayer, payload, false, "designer.filter_conflict");
+			return;
+		}
 		String filterModeName = payload.filterModeName();
 		if (filterModeName == null
 				|| filterModeName.length() > NetworkSecurityConstants.MAX_FILTER_MODE_NAME_LENGTH) {
+			filterReply(serverPlayer, payload, false, "designer.filter_invalid");
 			LogThrottle.warn("filter_sync_mode_too_long", "收到过长的过滤模式名称：长度 {}",
 					filterModeName == null ? "null" : filterModeName.length());
 			return;
 		}
 		List<String> rawBeeTypes = payload.beeTypes();
 		if (rawBeeTypes != null && rawBeeTypes.size() > NetworkSecurityConstants.MAX_BEE_TYPES_LIST_SIZE) {
+			filterReply(serverPlayer, payload, false, "designer.filter_invalid");
 			LogThrottle.warn("filter_sync_list_too_long", "收到过长的蜜蜂类型列表：大小 {}", rawBeeTypes.size());
 			return;
 		}
@@ -222,6 +326,7 @@ public final class ModPayloads {
 		try {
 			filterMode = ModConfig.FilterMode.valueOf(filterModeName);
 		} catch (IllegalArgumentException e) {
+			filterReply(serverPlayer, payload, false, "designer.filter_invalid");
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.invalid_mode", filterModeName));
 			LogThrottle.warn("filter_sync_invalid_mode", "收到无效的过滤模式: {}", filterModeName);
@@ -231,24 +336,74 @@ public final class ModPayloads {
 		// 4. 蜜蜂类型列表校验（格式 + 去重）
 		List<String> validated = validateAndDeduplicate(payload.beeTypes(), serverPlayer);
 		if (validated == null) {
+			filterReply(serverPlayer, payload, false, "designer.filter_invalid");
 			// 校验失败已通过 sendSystemMessage 通知玩家
 			return;
 		}
 
 		// 5. 写入配置并持久化
 		try {
-			ModConfig.SERVER.myriadCreationsFilteredBeeTypes.set(validated);
-			ModConfig.SERVER.myriadCreationsFilterMode.set(filterMode);
-			ModConfig.saveGameplayServerSpec();
-			// 6. 失效过滤缓存
-			MyriadCreationsEventHandler.invalidateFilterCache();
+			JsonObject expected = filterSnapshot(filterMode.name(), validated);
+			BeeDesignerProtocol.checkSize(expected.toString());
+			BeeDesignerServer.saveFilterConfig(serverPlayer.server, filterMode, validated, message -> {
+				if (serverPlayer.server.getPlayerList().getPlayer(serverPlayer.getUUID()) != serverPlayer) {
+					return;
+				}
+				boolean success = message.equals("designer.filter_saved");
+				if (success && !expected.equals(filterSnapshot())) {
+					filterReply(serverPlayer, payload, false, "designer.filter_conflict");
+				} else {
+					filterReply(serverPlayer, payload, success, message);
+				}
+			});
 		} catch (Exception e) {
+			filterReply(serverPlayer, payload, false, BeeDesignerServer.safeMessage(e));
 			// 异常路径日志使用 LogThrottle.error 节流；
 			// SLF4J 会将最后一个 Throwable 参数识别为堆栈打印对象，保留完整堆栈输出
 			LogThrottle.error("filter_sync_exception", "处理过滤配置同步包时发生异常", e);
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.error"));
 		}
+	}
+
+	private static JsonObject filterSnapshot() {
+		if (!ModConfig.areServerSpecsLoaded()) {
+			return new JsonObject();
+		}
+		return filterSnapshot(ModConfig.SERVER.myriadCreationsFilterMode.get().name(), ModConfig.SERVER.myriadCreationsFilteredBeeTypes.get());
+	}
+
+	private static JsonObject filterSnapshot(String mode, List<? extends String> values) {
+		var data = new JsonObject();
+		data.addProperty("mode", mode);
+		var types = new JsonArray();
+		values.forEach(types::add);
+		data.add("types", types);
+		data.addProperty("baseline", BeeDesignerDocument.fingerprint(data));
+		return data;
+	}
+
+	private static void filterReply(ServerPlayer player, FilterConfigSyncPayload request, boolean success, String message) {
+		String snapshot = "";
+		if (!ModConfig.areServerSpecsLoaded()) {
+			success = false;
+			message = "designer.filter_unavailable";
+		} else if (success || message.equals("designer.filter_conflict")) {
+			try {
+				var current = filterSnapshot();
+				if (current.getAsJsonArray("types").size() > 512) {
+					throw new IllegalArgumentException("designer.filter_limit");
+				}
+				snapshot = current.toString();
+				BeeDesignerProtocol.checkSize(snapshot);
+			} catch (IllegalArgumentException tooLarge) {
+				snapshot = "";
+				success = false;
+				message = "designer.filter_config_large";
+			}
+		}
+		ForgeNetwork.sendToPlayer(player,
+				new FilterConfigResultPayload(request.request(), success, message, snapshot));
 	}
 
 	/**

@@ -8,7 +8,7 @@
 | 组件 | 本分支基线 |
 | --- | --- |
 | 分支 | `forge/1.20.1` |
-| 创世移植快照 | `1.0.10-forge-1.20.1` |
+| 创世移植快照 | `1.2.1-forge-1.20.1` |
 | Minecraft | `1.20.1` |
 | Forge | `47.4.0` |
 | Java | `17` |
@@ -21,6 +21,14 @@ Ayoshiko 维护上游项目并协助本分支维护。
 [bpkiu 的独立移植](https://github.com/bpkiu/Productive-Bees-Genesis-1.20.1)
 属于另一个仓库与代码来源，其发行文件不属于本分支。
 
+当前版本已移植上游 1.2.1 的资源蜜蜂编辑器、资源产出等功能，并包含编辑器平滑与汉化、发布核验和 Mekanism Extras 工厂初始化修复。
+正式 JAR 与 SHA-256 位于 [releases/1.2.1](releases/1.2.1/)。
+
+新增联动的六项编译依赖需要按 `tools/forge_optional_compile_inputs.json` 准备；
+无用联动使用本地无用 1.4.6 / 无用核心 1.0.17 的实际接口。可使用
+`tools/prepare_optional_compile_inputs.py` 从已有模组目录准备依赖，详见 [构建说明](README-FORGE.md)。
+这些第三方 JAR 不随源码或发行 JAR 一同提交。
+
 ## 构建
 
 使用 JDK 17 和 Python 3.11 或更高版本：
@@ -32,13 +40,13 @@ python tools/verify_forge_artifact.py
 ```
 
 Windows 下将 `./gradlew` 替换为 `.\gradlew.bat`。
-产物为 `build/libs/productivebeesgenesis-1.0.10-forge-1.20.1-all.jar`，
+产物为 `build/libs/productivebeesgenesis-1.2.1-forge-1.20.1-all.jar`，
 必须在重混淆和产物检查完成后使用。
 依赖准备与打包细节见 [README-FORGE.md](README-FORGE.md)。
 
 ## 当前状态与兼容边界
 
-本分支是已编译的移植快照，不承诺与新版 NeoForge 1.2.1 编辑器、扩展资源创作系统功能一致。
+本分支移植了上游 1.2.1 的编辑器与扩展资源创作系统；已完成本地编译打包，完整游戏行为和所有可选组合仍需实际运行确认。
 保留的旧 JUnit 测试尚未迁移，`build` 和 `test` 不是目前已验证的打包命令。
 
 游戏启动、客户端渲染、可选模组组合、机器行为及存档恢复仍需运行验证。

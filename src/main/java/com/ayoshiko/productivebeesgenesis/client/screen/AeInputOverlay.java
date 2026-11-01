@@ -5,11 +5,9 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.network.OpenAeInputConfigPayload;
+import com.ayoshiko.productivebeesgenesis.client.resource.GuiResourceSideConfig;
 import mekanism.client.gui.GuiMekanism;
-import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.tab.GuiConfigTypeTab;
 import mekanism.client.gui.element.window.GuiSideConfiguration;
-import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.lib.transmitter.TransmissionType;
@@ -57,7 +55,7 @@ import java.util.WeakHashMap;
 	 * onPress 回调作为后备路径（事件被其他模组取消时仍可响应）。
 	 * <p>
 	 * <b>修复 v14 渲染阶段不修改状态</b>：按钮创建（computeIfAbsent + children().add）
-	 * 迁移到 {@link ClientTickEvent.Pre}（每秒 20 次的非渲染阶段），
+	 * 迁移到 {@link ClientTickEvent}（每秒 20 次的非渲染阶段），
 	 * 渲染阶段仅更新 visible/active/tooltip 状态，避免 ConcurrentModificationException
 	 * 和递归渲染风险。
 	 */
@@ -114,7 +112,7 @@ public final class AeInputOverlay {
 	 * 渲染事件：无操作（保留订阅以便未来扩展，但不修改任何状态）
 	 * <br/>
 	 * P0-1 修复：原在 Render.Post 中调用 updateButton 修改按钮状态字段（visible/active/tooltip/target），
-	 * 违反"渲染阶段不修改状态"原则。已将 updateButton 迁移到 {@link ClientTickEvent.Pre}。
+	 * 违反"渲染阶段不修改状态"原则。已将 updateButton 迁移到 {@link ClientTickEvent}。
 	 * 渲染阶段由 Minecraft 自行根据按钮的 visible/active 字段渲染，本类无需干预。
 	 */
 	@SubscribeEvent
@@ -255,7 +253,7 @@ public final class AeInputOverlay {
 		if (screenTarget == null) return null;
 		for (GuiWindow window : screenTarget.gui().getWindows()) {
 			if (window instanceof GuiSideConfiguration<?> sideConfig) {
-				TransmissionType type = getCurrentType(sideConfig);
+				TransmissionType type = GuiResourceSideConfig.nativeType(sideConfig);
 				return new OverlayTarget(screenTarget.gui(), sideConfig, screenTarget.tile(), type);
 			}
 		}
@@ -273,26 +271,6 @@ public final class AeInputOverlay {
 		if (!(gui.getMenu() instanceof MekanismTileContainer<?> container)) return null;
 		if (!(container.getTileEntity() instanceof IAe2InputHost)) return null;
 		return new ScreenTarget(gui, container.getTileEntity());
-	}
-
-	/**
-	 * 获取侧面配置窗口当前激活的 TransmissionType
-	 * <br/>
-	 * Mekanism 的 GuiConfigTypeTab 中，激活的 Tab 其 visible=false（按钮隐藏表示当前选中）。
-	 * 优先查找不可见的 Tab，其次回退到第一个可见 Tab，最终回退到 ITEM。
-	 */
-	private static TransmissionType getCurrentType(GuiSideConfiguration<?> sideConfig) {
-		for (GuiElement child : sideConfig.children()) {
-			if (child instanceof GuiConfigTypeTab tab && !tab.visible) {
-				return tab.getTransmissionType();
-			}
-		}
-		for (GuiElement child : sideConfig.children()) {
-			if (child instanceof GuiConfigTypeTab tab) {
-				return tab.getTransmissionType();
-			}
-		}
-		return TransmissionType.ITEM;
 	}
 
 	/**

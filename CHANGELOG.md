@@ -1,3 +1,12 @@
+## Forge 1.20.1 — 1.2.1
+
+- Backport the upstream 1.2.1 editor and resource-production feature set onto Forge 1.20.1 / Java 17.
+- Adapt optional integrations to target-version APIs, including the local Useless project.
+- Smooth editor controls and complete additional Chinese labels.
+- Correct recipe directory/source verification and distinguish unresolved publications from active operations.
+- Register the missing Mekanism Extras factory description accessor.
+- Include the reobfuscated release JAR and checksum under `releases/1.2.1`.
+
 # Changelog
 
 所有重要变更将记录在此文件中。

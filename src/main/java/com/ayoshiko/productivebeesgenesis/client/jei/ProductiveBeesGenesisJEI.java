@@ -35,6 +35,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
+import com.ayoshiko.productivebeesgenesis.port.RecipeHolder;
 import net.minecraft.world.level.ItemLike;
 import net.minecraft.world.level.block.Blocks;
 import org.jetbrains.annotations.NotNull;
@@ -50,7 +51,7 @@ import java.util.Set;
 	 * 注册PB离心配方的JEI分类，使MEK离心机的GuiProgress能跳转到PB离心配方界面。
 	 * <p>
 	 * 双配方跳转机制：
-	 * - SMELTING配方：通过Mekanism原生的recipeViewerType()返回MekanismJEIRecipeType.SMELTING
+	 * - SMELTING配方：通过Mekanism原生的recipeViewerType()返回RecipeViewerRecipeType.SMELTING
 	 * - PB离心配方：通过recipeViewerCategories()额外注册PB_CENTRIFUGE_VIEWER_TYPE
 	 * - JEI会同时显示两种配方的"Show Recipes"提示，玩家可选择跳转目标
 	 * <p>
@@ -91,7 +92,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 	/**
 	 * 获取PB离心配方的Mekanism配方查看器类型
 	 * <br/>
-	 * 用于在GuiProgress.jeiCategories()中注册，实现双配方JEI跳转。
+	 * 用于在GuiProgress.recipeViewerCategories()中注册，实现双配方JEI跳转。
 	 * 线程安全：使用volatile + synchronized保证双重检查锁定的正确性。
 	 *
 	 * @return PB离心配方的MekanismJEIRecipeType实例
@@ -109,15 +110,15 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 					workstations.add(ModBlocks.ULTIMATE_MEK_CENTRIFUGE_FACTORY.get());
 					// EM工厂（仅EM加载时）
 					for (var entry : ModBlocks.EM_FACTORIES.entrySet()) {
-						workstations.add((ItemLike) entry.getValue().get());
+						workstations.add(entry.getValue().get());
 					}
 					// ME工厂（仅ME加载时）
 					for (var entry : ModBlocks.ME_FACTORIES.entrySet()) {
-						workstations.add((ItemLike) entry.getValue().get());
+						if(entry.getValue().get() instanceof ItemLike workstation)workstations.add(workstation);
 					}
 					// EME工厂（仅EME加载时）
 					for (var entry : ModBlocks.EME_FACTORIES.entrySet()) {
-						workstations.add((ItemLike) entry.getValue().get());
+						if(entry.getValue().get() instanceof ItemLike workstation)workstations.add(workstation);
 					}
 					pbCentrifugeViewerType = PbCentrifugeRecipeViewerType.create(
 							new ResourceLocation(ProductiveBeesGenesis.MOD_ID, "pb_centrifuge"),
@@ -237,7 +238,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 			ItemStack[] inputItems = recipe.ingredient.getItems();
 			if (inputItems.length == 0) continue;
 			if (inputItems[0].getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()) {
-				ResourceLocation beeType = PbDataComponents.getBeeType(inputItems[0]);
+				ResourceLocation beeType = com.ayoshiko.productivebeesgenesis.util.PbDataComponents.getBeeType(inputItems[0]);
 				if (beeType != null) {
 					nativeCombBlockBeeTypes.add(beeType);
 				}
@@ -254,7 +255,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 			if (inputItems[0].getItem() == ModItems.CONFIGURABLE_COMB_BLOCK.get()) continue;
 
 			// 提取bee_type，跳过没有bee_type的配方
-			ResourceLocation beeType = PbDataComponents.getBeeType(inputItems[0]);
+			ResourceLocation beeType = com.ayoshiko.productivebeesgenesis.util.PbDataComponents.getBeeType(inputItems[0]);
 			if (beeType == null) continue;
 
 			// 模块 6 修复：跳过有原生蜜脾块配方的 bee_type（原生配方已在 centrifugeRecipes 中注册）
@@ -275,8 +276,8 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
                 values[1] = SaturatingMath.saturatingToInt(SaturatingMath.saturatingMultiply(values[1], multiplier));
                 blockOutputs.put(ingredient, new net.minecraft.nbt.IntArrayTag(values));
             });
-            var blockFluid = com.mojang.datafixers.util.Pair.of(recipe.fluidOutput.getFirst(),
-                    SaturatingMath.saturatingToInt(SaturatingMath.saturatingMultiply(recipe.fluidOutput.getSecond(), multiplier)));
+            var blockFluid = com.mojang.datafixers.util.Pair.of(recipe.fluidOutput==null?"minecraft:empty":recipe.fluidOutput.getFirst(),
+                    SaturatingMath.saturatingToInt(SaturatingMath.saturatingMultiply(recipe.fluidOutput==null?0:recipe.fluidOutput.getSecond(), multiplier)));
             ResourceLocation derivedId = new ResourceLocation(ProductiveBeesGenesis.MOD_ID,
                     "jei/comb_block/" + recipe.getId().getNamespace() + "/" + recipe.getId().getPath());
             blockRecipes.add(new CentrifugeRecipe(derivedId, Ingredient.of(combBlock), blockOutputs,
@@ -416,6 +417,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 
 	@Override
 	public void registerGuiHandlers(IGuiHandlerRegistration registration) {
+		DesignerJeiGuiHandler.register(registration);
 		registration.addGenericGuiContainerHandler(GuiMekApiary.class,
 				new ApiaryJeiGuiHandler(registration.getJeiHelpers().getIngredientManager()));
 	}
@@ -431,6 +433,25 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 	 */
 	@Override
 	public void onRuntimeAvailable(IJeiRuntime runtime) {
+		com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient.recipeViewer((id, output) -> {
+			ResourceLocation recipeId = ResourceLocation.tryParse(id);
+			for (var category : runtime.getRecipeManager().createRecipeCategoryLookup().get().toList()) {
+				if (showDesignerRecipe(runtime, category, recipeId)) {
+					return "designer.jei_recipe_opened";
+				}
+			}
+			if (!output.isEmpty()) {
+				var focus = runtime.getJeiHelpers().getFocusFactory().createFocus(
+						mezz.jei.api.recipe.RecipeIngredientRole.OUTPUT, mezz.jei.api.constants.VanillaTypes.ITEM_STACK, output);
+				runtime.getRecipesGui().show(focus);
+				return "designer.jei_draft_help";
+			}
+			return "designer.jei_recipe_missing";
+		});
+		var materials = runtime.getIngredientManager();
+		com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient.externalIngredients(() ->
+				materials.getRegisteredIngredientTypes().stream()
+						.flatMap(type -> materials.getAllIngredients(type).stream()).iterator());
 		// 检查配置是否加载以及万象创世是否被禁用
 		if (!ModConfig.areServerSpecsLoaded()) {
 			return;
@@ -471,6 +492,26 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 					f[0], f[1],
 					PBConstants.MYRIADCREATIONS_TYPE_STRING);
 		}
+	}
+
+	@Override
+	public void onRuntimeUnavailable() {
+		com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient.recipeViewer((id, stack) -> "designer.jei_unavailable");
+		com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient.externalIngredients(java.util.Collections::emptyIterator);
+	}
+
+	private static <T> boolean showDesignerRecipe(IJeiRuntime runtime, mezz.jei.api.recipe.category.IRecipeCategory<T> category,
+			ResourceLocation id) {
+		if (id == null) {
+			return false;
+		}
+		var recipes = runtime.getRecipeManager().createRecipeLookup(category.getRecipeType()).get()
+				.filter(recipe -> id.equals(category.getRegistryName(recipe))).limit(1).toList();
+		if (recipes.isEmpty()) {
+			return false;
+		}
+		runtime.getRecipesGui().showRecipes(category, recipes, java.util.List.of());
+		return true;
 	}
 
 	/**

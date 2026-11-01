@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
+import net.minecraft.nbt.CompoundTag;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.util.EssenceConversionRecipeIndex.Conversion;
@@ -50,35 +51,69 @@ public final class EssenceConversionUpgradeHelper {
 		return convert(EssenceConversionRecipeIndex.snapshotFor(level), drops);
 	}
 
-	private static List<ItemStack> convert(ConversionSnapshot snapshot, List<ItemStack> drops) {
-		List<ItemStack> merged = new ArrayList<>(drops.size());
-		for (ItemStack stack : drops) {
-			if (stack != null && !stack.isEmpty()) addAmount(merged, stack, stack.getCount());
-		}
-		if (merged.isEmpty()) return merged;
+	/** 容量预检与抽样转换共用这一快照；后续重载只影响新计划。 */
+	public static BatchPlan plan(Level level) {
+		return new BatchPlan(EssenceConversionRecipeIndex.snapshotFor(level));
+	}
 
+	public static final class BatchPlan {
+		private final ConversionSnapshot snapshot;
+
+		BatchPlan(ConversionSnapshot snapshot) {
+			this.snapshot = snapshot;
+		}
+
+		public List<ItemStack> convert(List<ItemStack> items) {
+			return transform(snapshot, items, false);
+		}
+
+		/**
+		 * 覆盖每种输入从零到上限的所有抽样，包括整除时看不见的余料。
+		 * 每个身份的数量上界随输入单调不减，可用于宿主的容量搜索。
+		 * 这是保守预约，不是实际产物；执行只能使用 convert 的冻结结果。
+		 */
+		public List<ItemStack> maximum(List<ItemStack> items) {
+			return transform(snapshot, items, true);
+		}
+	}
+
+	private static List<ItemStack> convert(ConversionSnapshot snapshot, List<ItemStack> drops) {
+		return transform(snapshot, drops, false);
+	}
+
+	private static List<ItemStack> transform(ConversionSnapshot snapshot, List<ItemStack> drops, boolean bound) {
+		var merged = new java.util.LinkedHashMap<EssenceConversionRecipeIndex.StackKey, ItemAmount>();
+		for (ItemStack stack : drops) {
+			if (stack == null || stack.isEmpty()) continue;
+			var key = new EssenceConversionRecipeIndex.StackKey(stack.getItem(), stack.hasTag() ? stack.getTag().copy() : new CompoundTag());
+			var previous = merged.get(key);
+			merged.put(key, new ItemAmount(stack, Math.addExact(
+					previous == null ? 0 : previous.amount(), stack.getCount())));
+		}
 		List<ItemStack> converted = new ArrayList<>(merged.size());
-		for (ItemStack stack : merged) {
-			convertStack(snapshot, converted, stack);
+		for (var source : merged.values()) {
+			convertStack(snapshot, converted, source.template(), source.amount(), bound);
 		}
 		return converted;
 	}
 
+	private record ItemAmount(ItemStack template, long amount) {}
+
 	private static void convertStack(ConversionSnapshot snapshot, List<ItemStack> converted,
-			ItemStack source) {
+			ItemStack source, long amount, boolean bound) {
 		Conversion conversion = snapshot.find(source);
 		if (conversion == null) {
-			addAmount(converted, source, source.getCount());
+			addAmount(converted, source, amount);
 			return;
 		}
 
 		AmountConversion first = calculateAmounts(
-				source.getCount(), conversion.inputCount(), conversion.result().getCount());
+				amount, conversion.inputCount(), conversion.result().getCount());
 		if (first.resultAmount() == 0) {
-			addAmount(converted, source, source.getCount());
+			addAmount(converted, source, amount);
 			return;
 		}
-		addAmount(converted, source, first.remainder());
+		addAmount(converted, source, bound ? Math.min(amount, conversion.inputCount() - 1L) : first.remainder());
 
 		if (!conversion.continueChain()) {
 			addAmount(converted, conversion.result(), first.resultAmount());
@@ -91,14 +126,15 @@ public final class EssenceConversionUpgradeHelper {
 		}
 		AmountConversion second = calculateAmounts(
 				first.resultAmount(), next.inputCount(), next.result().getCount());
-		addAmount(converted, conversion.result(), second.remainder());
+		addAmount(converted, conversion.result(), bound
+				? Math.min(first.resultAmount(), next.inputCount() - 1L) : second.remainder());
 		addAmount(converted, next.result(), second.resultAmount());
 	}
 
 	static AmountConversion calculateAmounts(long sourceAmount, int inputCount, int resultCount) {
 		if (sourceAmount <= 0 || inputCount <= 0 || resultCount <= 0) return AmountConversion.EMPTY;
 		long crafts = sourceAmount / inputCount;
-		return new AmountConversion(sourceAmount % inputCount, crafts * resultCount);
+		return new AmountConversion(sourceAmount % inputCount, Math.multiplyExact(crafts, resultCount));
 	}
 
 	/**
@@ -106,6 +142,15 @@ public final class EssenceConversionUpgradeHelper {
 	 * <p>调用方负责在转换后重新计算自己的数量统计。</p>
 	 */
 	public static boolean convertPendingOutputs(Level level, Map<ItemStack, Integer> outputs) {
+		return convertPendingOutputs(level, outputs, false);
+	}
+
+	/** 与执行共用转换快照与公式，保留所有可能余料的容量上界。 */
+	public static boolean maximumPendingOutputs(Level level, Map<ItemStack, Integer> outputs) {
+		return convertPendingOutputs(level, outputs, true);
+	}
+
+	private static boolean convertPendingOutputs(Level level, Map<ItemStack, Integer> outputs, boolean maximum) {
 		if (level == null || outputs == null || outputs.isEmpty()) return false;
 		ConversionSnapshot conversionSnapshot = EssenceConversionRecipeIndex.snapshotFor(level);
 		if (!containsConversionCandidate(outputs, conversionSnapshot)) return false;
@@ -114,7 +159,7 @@ public final class EssenceConversionUpgradeHelper {
 			int count = Math.max(0, entry.getValue());
 			if (count > 0) source.add(entry.getKey().copyWithCount(count));
 		}
-		List<ItemStack> converted = convert(conversionSnapshot, source);
+		List<ItemStack> converted = transform(conversionSnapshot, source, maximum);
 		if (sameStacks(source, converted)) return false;
 		outputs.clear();
 		for (ItemStack stack : converted) {

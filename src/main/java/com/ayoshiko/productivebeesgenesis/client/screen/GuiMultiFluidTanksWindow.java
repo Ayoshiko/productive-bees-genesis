@@ -139,7 +139,7 @@ public class GuiMultiFluidTanksWindow extends PinnableGuiWindow {
 	/** 标题左侧内边距 — 为关闭按钮和固定按钮留出空间 */
 	@Override
 	protected int getTitlePadStart() {
-		return 14 + GuiPinButton.WIDTH;
+		return 14 + 12;
 	}
 
 	/**

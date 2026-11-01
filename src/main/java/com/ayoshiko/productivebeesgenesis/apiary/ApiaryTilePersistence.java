@@ -62,17 +62,24 @@ final class ApiaryTilePersistence {
 	/** 构建升级数据（构建后立即清空旧方块所有槽位，防止 setRemoved 重复掉落） */
 	@NotNull
 	static ApiaryUpgradeData getUpgradeData(TileEntityMekApiary tile, HolderLookup.Provider provider) {
+        if(!com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.canUpgrade(tile))return null;
+        var resourceUpgrade=com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.prepareUpgrade(tile);
 		ApiaryUpgradeData data = tile.nbtSerializer().buildUpgradeData(
 				provider, tile.getRedstonePowered(), tile.getSortingForUpgradeData());
 		// 模块 3 Bug 2：outputItems 字段已是深拷贝（独立于 outputSlots 引用），清空槽位不影响升级数据完整性
 		saveAllItemsForDrop(tile);
-		return data;
+		data.resourceUpgrade=resourceUpgrade;
+        return data;
 	}
 
 	/** 应用升级数据；返回 false 时由调用方回退到父类实现 */
 	static boolean applyUpgradeData(TileEntityMekApiary tile, HolderLookup.Provider provider,
 			@NotNull IUpgradeData upgradeData) {
-		return tile.nbtSerializer().applyUpgradeData(provider, upgradeData);
+		boolean applied = tile.nbtSerializer().applyUpgradeData(provider, upgradeData);
+		if (applied && upgradeData instanceof ApiaryUpgradeData apiary && apiary.resourceUpgrade != null) {
+			apiary.resourceUpgrade.apply(tile);
+		}
+		return applied;
 	}
 
 	/**

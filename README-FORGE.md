@@ -1,9 +1,12 @@
 # Forge 1.20.1 port snapshot
 
-This branch contains the locally compiled Productive Bees Genesis Forge port,
-version `1.0.10-forge-1.20.1`. It replaces the NeoForge source/build setup that
-was previously present on `forge/1.20.1`; it does not claim to include every
-feature from the newer NeoForge 1.2.1 editor.
+This branch contains the Forge 1.20.1 backport of the upstream 1.2.1 feature set,
+including the resource bee editor, resource production and optional integrations.
+The packaged version is `1.2.1-forge-1.20.1`.
+
+The release JAR and SHA-256 are tracked under [releases/1.2.1](releases/1.2.1/).
+This release also includes editor smoothing/Chinese translation improvements,
+Forge recipe publication/recovery fixes and the Mekanism Extras factory accessor fix.
 
 ## Build
 
@@ -17,14 +20,26 @@ python tools/verify_forge_artifact.py
 ```
 
 On Windows use `gradlew.bat`. The output is
-`build/libs/productivebeesgenesis-1.0.10-forge-1.20.1-all.jar`.
+`build/libs/productivebeesgenesis-1.2.1-forge-1.20.1-all.jar`.
 Do not distribute an artifact before `reobfJarJar` finishes.
 
-Gradle resolves the remaining pinned dependencies from their Maven repositories.
-The bootstrap script extracts ProductiveLib 0.0.4 from Productive Bees 12.6.0
-and downloads MixinExtras common/Forge 0.5.5; all three files are checked against pinned
-SHA-256 hashes and remain excluded from Git. JDTE's exact 1.20.1 interface is
-compiled in a separate compile-only source set and is not bundled.
+The new optional integrations additionally require six compile-only inputs, listed
+with SHA-256 hashes in `tools/forge_optional_compile_inputs.json`. Obtain the matching
+AE2 LT, Ars Nouveau, PneumaticCraft, ProjectE and locally built Useless Mod 1.4.6 /
+Useless Core 1.0.17 JARs, then stage them before building:
+
+```sh
+python tools/prepare_optional_compile_inputs.py /path/to/mods /path/to/useless/build/libs /path/to/useless-core/build/libs
+```
+
+These dependencies remain local, excluded from Git and from the Genesis JAR.
+Useless integration targets the local Forge 1.20.1 project's actual API.
+The existing CI bootstrap restores the base inputs only; a clean CI worker also
+needs the six pinned optional inputs. A passing hosted CI run is not claimed for
+this source snapshot. The release JAR was built and reobfuscated locally.
+
+JDTE's exact 1.20.1 interface is compiled in a separate compile-only source set
+and is never bundled. Java 17 and Forge 47.4.0 remain the build targets.
 
 ## Verification and scope
 

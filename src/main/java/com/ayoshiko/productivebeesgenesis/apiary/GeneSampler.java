@@ -104,8 +104,10 @@ public class GeneSampler {
 				|| samplerCount <= 0 || level == null) return;
 
 		float chance = resolveChance(samplerCount, level);
-		if (chance <= 0.0F) return;
-		RandomSource random = level.getRandom();
+        generateGeneSamplesInto(output,sources,beeTypeKey,chance,level.getRandom(),typeOnly,fullPurity);
+    }
+    private void generateGeneSamplesInto(List<ItemStack> output,SampleBatch sources,ResourceLocation beeTypeKey,float chance,RandomSource random,boolean typeOnly,boolean fullPurity){
+        if(chance<=0)return;
 		try {
 			if (sources.totalProduceCount <= MAX_EXACT_EVENTS) {
 				generateExactSamples(sources, chance, random, typeOnly, fullPurity);
@@ -116,6 +118,59 @@ public class GeneSampler {
 			emitSamples(output, beeTypeKey.toString(), fullPurity);
 		} finally {
 			clearAccumulator();
+		}
+	}
+
+	/** 资源事务只捕获输入；抽样仍调用上面同一套已用算法，不另写基因概率与插件规则。 */
+	public static Snapshot snapshot(net.minecraft.nbt.CompoundTag beeData, ResourceLocation type,
+			int samplers, boolean typeOnly, boolean fullPurity) {
+		float chance = samplers <= 0 || (beeData != null && beeData.getInt("Age") < 0) ? 0
+				: (float) Math.max(0, Math.min(1, ProductiveBeesConfig.UPGRADES.samplerChance.get() * samplers));
+		return new Snapshot(GeneSampleProfile.fromBeeData(beeData), type, chance, typeOnly, fullPurity);
+	}
+
+	public static final class Snapshot {
+		private final GeneSampleProfile profile;
+		private final ResourceLocation type;
+		private final float chance;
+		private final boolean typeOnly, fullPurity;
+		private final List<ItemStack> possible;
+		private final GeneSampler sampler = new GeneSampler();
+		private final SampleBatch batch = new SampleBatch();
+
+		private Snapshot(GeneSampleProfile profile, ResourceLocation type, float chance,
+				boolean typeOnly, boolean fullPurity) {
+			this.profile = profile;
+			this.type = java.util.Objects.requireNonNull(type);
+			this.chance = chance;
+			this.typeOnly = typeOnly;
+			this.fullPurity = fullPurity;
+			var candidates = new ArrayList<ItemStack>();
+			if (chance > 0) for (var attribute : ATTRIBUTES) {
+				if (typeOnly && attribute != GeneAttribute.TYPE) continue;
+				int value = attribute == GeneAttribute.TYPE ? 0 : profile.value(attribute);
+				for (int purity = 1; purity <= (fullPurity ? 1 : PURITY_COUNT); purity++) {
+					candidates.add(attribute == GeneAttribute.TYPE ? Gene.getStack(type.toString(),0,1,fullPurity?100:purity) : Gene.getStack(attribute.beeAttribute,value,1,fullPurity?100:purity));
+				}
+			}
+			possible = List.copyOf(candidates);
+		}
+
+		public boolean active() { return !possible.isEmpty(); }
+		public List<ItemStack> possible() { return possible.stream().map(ItemStack::copy).toList(); }
+
+		/** 同一冻结输入与种子产生同一批结果；周期数不再乘生产力轮数。 */
+		public List<ItemStack> sample(long cycles, long seed) {
+			if (cycles < 0 || cycles > Integer.MAX_VALUE) throw new IllegalArgumentException("Invalid sampling batch");
+			if (cycles == 0 || !active()) return List.of();
+			batch.add(profile, cycles);
+			try {
+				var output = new ArrayList<ItemStack>();
+				sampler.generateGeneSamplesInto(output, batch, type, chance, RandomSource.create(seed), typeOnly, fullPurity);
+				return output;
+			} finally {
+				batch.clear();
+			}
 		}
 	}
 

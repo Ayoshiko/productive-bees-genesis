@@ -10,7 +10,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.item.crafting.Recipe;
+import com.ayoshiko.productivebeesgenesis.port.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
 
@@ -41,6 +41,10 @@ final class EssenceConversionRecipeIndex {
 			new ResourceLocation("productivebees", "obsidian_shard");
 	private static final ResourceLocation OBSIDIAN_ID =
 			new ResourceLocation("minecraft", "obsidian");
+	private static final ResourceLocation WITHER_SKULL_CHIP_ID =
+			new ResourceLocation("productivebees", "wither_skull_chip");
+	private static final ResourceLocation WITHER_SKULL_ID =
+			new ResourceLocation("minecraft", "wither_skeleton_skull");
 	private static final ResourceLocation REDSTONE_ESSENCE_ID =
 			new ResourceLocation("mysticalagriculture", "redstone_essence");
 	private static final ResourceLocation REDSTONE_ID =
@@ -322,6 +326,7 @@ final class EssenceConversionRecipeIndex {
 		private boolean isCompression() {
 			return isCompressionShape(inputCount, result.getCount(), inputIsBlock, resultIsBlock, excludedInput)
 					|| isAllowedObsidianShardConversion()
+					|| isAllowedWitherSkullConversion()
 					|| isAllowedRedstoneEssenceConversion()
 					|| isAllowedNetherStarConversion();
 		}
@@ -336,6 +341,12 @@ final class EssenceConversionRecipeIndex {
 			return inputCount == 8 && result.getCount() == 12
 					&& hasItemId(inputKey, REDSTONE_ESSENCE_ID)
 					&& hasItemId(resultKey, REDSTONE_ID);
+		}
+
+		private boolean isAllowedWitherSkullConversion() {
+			return inputCount == 9 && result.getCount() == 1
+					&& hasItemId(inputKey, WITHER_SKULL_CHIP_ID)
+					&& hasItemId(resultKey, WITHER_SKULL_ID);
 		}
 
 		private boolean isAllowedNetherStarConversion() {

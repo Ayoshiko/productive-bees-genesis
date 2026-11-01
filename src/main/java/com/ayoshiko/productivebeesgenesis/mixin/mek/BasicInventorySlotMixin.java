@@ -69,7 +69,7 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	public abstract boolean isItemValidForInsertion(ItemStack stack, AutomationType automationType);
 
 	@Shadow
-	protected abstract void setStackUnchecked(ItemStack stack);
+	public abstract void setStackUnchecked(ItemStack stack);
 
 	@Shadow
 	public abstract void onContentsChanged();
@@ -206,7 +206,7 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 
 	@Inject(method = "extractItem(ILmekanism/api/Action;"
 			+ "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
-			at = @At("HEAD"), cancellable = true)
+			at = @At("HEAD"), cancellable = true, require = 1)
 	private void productivebeesgenesis$bulkExtractOverstackedOutput(int amount, Action action,
 			AutomationType automationType, CallbackInfoReturnable<ItemStack> cir) {
 		if (automationType != AutomationType.EXTERNAL || productivebeesgenesis$inputMultiplier == null
@@ -229,7 +229,7 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	 */
 	@ModifyExpressionValue(method = "extractItem(ILmekanism/api/Action;"
 			+ "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
-			at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/ItemStack;m_41741_()I"))
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/ItemStack;getMaxStackSize()I", remap = true))
 	private int productivebeesgenesis$bulkBinPullLimit(int original, int amount, Action action,
 			AutomationType automationType) {
 		return automationType == AutomationType.EXTERNAL && amount > original
@@ -274,7 +274,7 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	 *   <li>只接受与槽内现有内容<b>完全同类型</b>的物品，因此不会变成隐藏的输入口；</li>
 	 *   <li>槽位为空时不接受，真正的外部插入仍被拒绝。</li>
 	 * </ul>
-	 * order = 900 保证在外部插入配额策略（{@link #productivebeesgenesis$limitExternalInsert}）之前生效。
+	 * require = 1 保证在外部插入配额策略（{@link #productivebeesgenesis$limitExternalInsert}）之前生效。
 	 * <p>
 	 * <b>作用域（关键）</b>：只对本模组机器的槽位生效。本类注入的是 Mekanism 所有机器共用的
 	 * 槽位基类，而本方法放宽的是「外部可否插入」这一基础语义，若不加归属判断就等于替原版
@@ -288,7 +288,9 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 	 * 的等量同种物品（窗口 {@value SlotRollbackWindow#WINDOW_TICKS} 刻）；没有凭据一律拒绝，
 	 * 输出槽对任何外部来源都保持不可插入。
 	 */
-	@Unique
+	@Inject(method = "insertItem(Lnet/minecraft/world/item/ItemStack;Lmekanism/api/Action;"
+			+ "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
+			at = @At("HEAD"), cancellable = true, require = 1)
 	private void productivebeesgenesis$allowOutputRollback(ItemStack stack, Action action,
 			AutomationType automationType, CallbackInfoReturnable<ItemStack> cir) {
 		// 性能优化：输入槽无需输出槽退回保护——发配插入热路径上第一步即短路，省去下方 isItemValidForInsertion
@@ -329,9 +331,6 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 			at = @At("HEAD"), cancellable = true)
 	private void productivebeesgenesis$limitExternalInsert(ItemStack stack, Action action,
 			AutomationType automationType, CallbackInfoReturnable<ItemStack> cir) {
-		// Mixin 0.8.5 has no per-injector order; run rollback explicitly before quota checks.
-		productivebeesgenesis$allowOutputRollback(stack, action, automationType, cir);
-		if (cir.isCancelled()) return;
 		ExternalInsertPolicy policy = productivebeesgenesis$externalInsertPolicy;
 		if (policy == null || automationType != AutomationType.EXTERNAL) return;
 		if (stack.isEmpty()) {

@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.inventory;
 
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
-
+import com.ayoshiko.productivebeesgenesis.port.DataComponents;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -12,7 +12,7 @@ import org.jetbrains.annotations.NotNull;
 	 * <br/>
 	 * 用于 {@link mekanism.common.inventory.slot.BasicInventorySlot#getLimit} 的优化。
 	 * 256× 加速下 getLimit 每秒被调用数千次，旧实现通过 componentHash 比较缓存命中，
-	 * 但 {@code com.ayoshiko.productivebeesgenesis.util.StackTags.hash(stack)} 本身会遍历 DataComponentMap（Spark 中
+	 * 但 {@code java.util.Objects.hashCode(stack.getTag())} 本身会遍历 DataComponentMap（Spark 中
 	 * PatchedDataComponentMap.hashCode 占 14~16% CPU），成为新的瓶颈。
 	 * <p>
 	 * 本缓存改为只按 {@link Item} 引用缓存 baseLimit，不再计算 componentHash。
@@ -122,7 +122,7 @@ public final class SlotLimitCache {
 
 	/** 普通蜜脾的 bee_type 不影响上限；显式修改或移除堆叠上限的组件不能复用 Item 缓存。 */
 	private static boolean hasStackLimitPatch(ItemStack stack) {
-		return !stack.isEmpty() && (stack.hasTag() || stack.getItem().getClass() != Item.class);
+		return !stack.isEmpty() && false;
 	}
 
 	/**

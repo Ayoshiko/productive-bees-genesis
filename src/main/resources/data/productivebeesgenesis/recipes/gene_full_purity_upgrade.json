@@ -17,7 +17,7 @@
       "item": "minecraft:nether_star"
     },
     "U": {
-      "item": "productivelib:upgrade_gene_sampler"
+      "item": "productivebees:upgrade_bee_sampler"
     }
   },
   "result": {

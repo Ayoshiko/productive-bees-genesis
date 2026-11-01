@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mixin.client;
 
+import net.minecraft.nbt.CompoundTag;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.client.MyriadCreationsClientEventHandler;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
@@ -24,43 +25,49 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 	 * 也用于粒子颜色。发光效果由 onRenderLivingPost 事件处理。
 	 */
 @Mixin(value = ConfigurableBee.class, remap = false)
-public abstract class ConfigurableBeeColorMixin {
+public abstract class ConfigurableBeeColorMixin implements com.ayoshiko.productivebeesgenesis.client.screen.authoring.DesignerPreviewData {
+    @org.spongepowered.asm.mixin.Unique private CompoundTag genesis$preview;
+    public void productivebeesgenesis$setPreviewData(CompoundTag data){genesis$preview=data.copy();}
+    public boolean productivebeesgenesis$isPreview(){return genesis$preview!=null;}
+    @Inject(method="getNBTData",at=@At("HEAD"),cancellable=true,remap=false)
+    private void genesis$previewDefinition(CallbackInfoReturnable<CompoundTag> ci){if(genesis$preview!=null)ci.setReturnValue(genesis$preview);}
+
 
 	/**
 	 * 拦截 getColor 方法，为万象创世蜜蜂返回自定义彩虹颜色
 	 */
 	@Inject(method = "getColor", at = @At("HEAD"), cancellable = true)
-	private void productivebeesgenesis$onGetColor(int tintIndex, float partialTicks, CallbackInfoReturnable<Integer> cir) {
+	private void productivebeesgenesis$onGetColor(int tintIndex, float partialTicks, CallbackInfoReturnable<float[]> cir) {
 		// 服务端配置禁用万象创世时，使用原始逻辑
 		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
 
 		ConfigurableBee self = productivebeesgenesis$getSelf();
-		if (!PBConstants.MYRIADCREATIONS_TYPE.equals(self.getBeeType())) {
+		if (!PBConstants.MYRIADCREATIONS_TYPE_STRING.equals(self.getBeeType())) {
 			return; // 非万象创世蜜蜂，使用原始逻辑
 		}
 
 		// 使用我们自定义的慢速彩虹颜色
 		float[] rainbow = MyriadCreationsClientEventHandler.getRainbowColor(System.currentTimeMillis());
 		int color = productivebeesgenesis$floatToArgb(rainbow);
-		cir.setReturnValue(color);
+		cir.setReturnValue(rainbow);
 	}
 
 	/**
 	 * 拦截 getTertiaryColor 方法，为万象创世蜜蜂返回自定义彩虹颜色（水晶渲染器用）
 	 */
 	@Inject(method = "getTertiaryColor", at = @At("HEAD"), cancellable = true)
-	private void productivebeesgenesis$onGetTertiaryColor(float partialTicks, CallbackInfoReturnable<Integer> cir) {
+	private void productivebeesgenesis$onGetTertiaryColor(float partialTicks, CallbackInfoReturnable<float[]> cir) {
 		// 服务端配置禁用万象创世时，使用原始逻辑
 		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
 
 		ConfigurableBee self = productivebeesgenesis$getSelf();
-		if (!PBConstants.MYRIADCREATIONS_TYPE.equals(self.getBeeType())) {
+		if (!PBConstants.MYRIADCREATIONS_TYPE_STRING.equals(self.getBeeType())) {
 			return;
 		}
 
 		float[] rainbow = MyriadCreationsClientEventHandler.getRainbowColor(System.currentTimeMillis());
 		int color = productivebeesgenesis$floatToArgb(rainbow);
-		cir.setReturnValue(color);
+		cir.setReturnValue(rainbow);
 	}
 
 	/**
@@ -70,18 +77,18 @@ public abstract class ConfigurableBeeColorMixin {
 	 * 使用此方法颜色渲染身体上的花粉层。拦截后花粉层颜色会随彩虹循环变化。
 	 */
 	@Inject(method = "getParticleColor", at = @At("HEAD"), cancellable = true)
-	private void productivebeesgenesis$onGetParticleColor(CallbackInfoReturnable<Integer> cir) {
+	private void productivebeesgenesis$onGetParticleColor(CallbackInfoReturnable<float[]> cir) {
 		// 服务端配置禁用万象创世时，使用原始逻辑
 		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
 
 		ConfigurableBee self = productivebeesgenesis$getSelf();
-		if (!PBConstants.MYRIADCREATIONS_TYPE.equals(self.getBeeType())) {
+		if (!PBConstants.MYRIADCREATIONS_TYPE_STRING.equals(self.getBeeType())) {
 			return;
 		}
 
 		float[] rainbow = MyriadCreationsClientEventHandler.getRainbowColor(System.currentTimeMillis());
 		int color = productivebeesgenesis$floatToArgb(rainbow);
-		cir.setReturnValue(color);
+		cir.setReturnValue(rainbow);
 	}
 
 	/** 获取当前 Mixin 目标实例 */

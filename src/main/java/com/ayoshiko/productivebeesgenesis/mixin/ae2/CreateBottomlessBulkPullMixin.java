@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.At;
 public abstract class CreateBottomlessBulkPullMixin {
 
 	@WrapOperation(method = "extractItem", at = @At(value = "INVOKE",
-			target = "Lnet/minecraft/world/item/ItemStack;m_41741_()I"), require = 0)
+			target = "Lnet/minecraft/world/item/ItemStack;getMaxStackSize()I", remap = true), require = 0)
 	private int productivebeesgenesis$bulkPullLimit(ItemStack stack, Operation<Integer> original,
 			int slot, int amount, boolean simulate) {
 		if (slot == 0 && amount > 0

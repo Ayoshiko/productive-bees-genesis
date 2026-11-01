@@ -67,6 +67,8 @@ final class ApiaryCraftingDataTransfer {
 	 */
 	static void transferAllBlockEntityData(List<ItemStack> inputs, ItemStack dest, Block outputBlock, boolean isApiary) {
 		String targetTileId = resolveBlockEntityTypeId(outputBlock);
+        // Forge keeps side/ejector settings in the first input BlockEntityTag,
+        // which is preserved by both transfer paths below.
 		if (inputs.size() == 1) {
 			// 单输入场景：直接深拷贝 BLOCK_ENTITY_DATA 到输出
 			transferBlockEntityDataDirect(inputs.get(0), dest, targetTileId);
@@ -248,6 +250,13 @@ final class ApiaryCraftingDataTransfer {
 		String pbUpgradeKey = isApiary ? ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS
 				: MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS;
 		mergePbUpgradeCounts(merged, nbts, pbUpgradeKey);
+        for (var nbt : nbts) {
+            if (nbt.contains(com.ayoshiko.productivebeesgenesis.resource.ResourceSidePersistence.KEY)) {
+                merged.put(com.ayoshiko.productivebeesgenesis.resource.ResourceSidePersistence.KEY,
+                        nbt.get(com.ayoshiko.productivebeesgenesis.resource.ResourceSidePersistence.KEY).copy());
+                break;
+            }
+        }
 
 		// 替换为目标方块的 BlockEntityType 注册键（不能 remove：CODEC_WITH_ID 校验顶层 id）
 		if (targetTileId != null) {

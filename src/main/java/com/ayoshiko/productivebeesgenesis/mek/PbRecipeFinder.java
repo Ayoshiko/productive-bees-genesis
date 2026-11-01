@@ -9,11 +9,15 @@ import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Optional;
+import java.util.LinkedHashMap;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
 	 * PB离心配方查找器 — 封装双层缓存的配方查找逻辑
@@ -48,6 +52,10 @@ public class PbRecipeFinder {
 	 * 配方重载时由 {@link #clearCaches()} 清空。
 	 */
 	private final InputValidationCache inputRecipeCache = new InputValidationCache();
+	// 实例拥有，最多保留 64 份当前配方；旧已付工作由账户独立拥有。
+	private final Map<CentrifugeRecipe, CompoundTag> frozenRecipes = new LinkedHashMap<>();
+	private final Map<Integer, FrozenLane> frozenLanes = new HashMap<>();
+	private record FrozenLane(CompoundTag raw, ItemStack input, CentrifugeRecipe recipe) {}
 
 	public PbRecipeFinder(PbRecipeContext context) {
 		this.context = context;
@@ -101,7 +109,7 @@ public class PbRecipeFinder {
 			ResourceLocation beeType = PbDataComponents.getBeeType(input);
 			if (beeType != null) {
 				CentrifugeRecipe blockRecipe = CentrifugeRecipeIndex.getCombBlock(beeType);
-				if (blockRecipe != null) {
+				if (blockRecipe != null && blockRecipe.ingredient.test(input)) {
 					SharedPbRecipeCache.put(input, blockRecipe);
 					return blockRecipe;
 				}
@@ -166,5 +174,32 @@ public class PbRecipeFinder {
 	/** 配方重载时清空本实例的短期缓存（静态共享缓存由 ProductiveBeesGenesis.onTagsReload 统一失效） */
 	public void clearCaches() {
 		inputRecipeCache.clear();
+		frozenRecipes.clear();
+		frozenLanes.clear();
+	}
+
+	CompoundTag frozenRecipe(ItemStack input) {
+		var selected = findPbRecipe(input);
+		if (selected == null) return null;
+		var raw = frozenRecipes.get(selected);
+		if (raw == null) {
+			raw = PbCentrifugeRecipeSnapshot.capture(selected, context.level().registryAccess());
+			if (frozenRecipes.size() >= 64) frozenRecipes.remove(frozenRecipes.keySet().iterator().next());
+			frozenRecipes.put(selected, raw);
+		}
+		// 仅供同包构造封闭工作，接收方在取得所有权时复制。
+		return raw;
+	}
+
+	CentrifugeRecipe frozenRecipe(int lane, CompoundTag raw, ItemStack input) {
+		if (lane < 0 || lane >= 256) throw new IllegalArgumentException("Invalid centrifuge lane");
+		var cached = frozenLanes.get(lane);
+		if (cached == null || !ItemStack.isSameItemSameTags(cached.input(), input)
+				|| !cached.raw().equals(raw)) {
+			var recipe = PbCentrifugeRecipeSnapshot.restore(raw, input, context.level().registryAccess());
+			cached = new FrozenLane(raw.copy(), input.copyWithCount(1), recipe);
+			frozenLanes.put(lane, cached);
+		}
+		return cached.recipe();
 	}
 }

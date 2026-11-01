@@ -209,7 +209,7 @@ public class GuiFeederWindow extends PinnableGuiWindow {
 	 */
 	@Override
 	protected int getTitlePadStart() {
-		return 14 + GuiPinButton.WIDTH;
+		return 14 + 12;
 	}
 
 	/**

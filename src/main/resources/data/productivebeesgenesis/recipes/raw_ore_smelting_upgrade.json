@@ -17,7 +17,7 @@
       "item": "minecraft:redstone"
     },
     "U": {
-      "item": "productivelib:upgrade_base"
+      "item": "productivebees:upgrade_base"
     }
   },
   "result": {

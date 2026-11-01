@@ -6,12 +6,18 @@ import com.ayoshiko.productivebeesgenesis.apiary.ItemStackMergeHelper;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
+import cy.jdkdigital.productivebees.common.recipe.BlockConversionRecipe;
+import cy.jdkdigital.productivebees.common.recipe.ItemConversionRecipe;
 import cy.jdkdigital.productivebees.util.BeeHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.animal.Bee;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import com.ayoshiko.productivebeesgenesis.port.RecipeHolder;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -19,6 +25,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -41,8 +48,36 @@ import java.util.concurrent.atomic.AtomicLong;
 	 *   <li>合并结果：调用 {@link #mergeItemStacks(List)} 合并同类物品</li>
 	 * </ul>
 	 */
-@Mixin(value = BeeHelper.class, remap = false)
+@Mixin(value=BeeHelper.class,remap=false)
 public abstract class BeeHelperMixin {
+	@Shadow @Final private static Map<String, List<BlockConversionRecipe>> blockConversionRecipeMap;
+	@Shadow @Final private static Map<String, List<ItemConversionRecipe>> itemConversionRecipeMap;
+	@Unique private static long productivebeesgenesis$conversionVersion = Long.MIN_VALUE;
+
+	@Inject(method = "getBlockConversionRecipe", at = @At("HEAD"), remap = false)
+	private static void productivebeesgenesis$refreshBlockConversions(Bee bee, BlockState state,
+			CallbackInfoReturnable<BlockConversionRecipe> cir) {
+		productivebeesgenesis$refreshConversions(bee);
+	}
+
+	@Inject(method = "getItemConversionRecipe", at = @At("HEAD"), remap = false)
+	private static void productivebeesgenesis$refreshItemConversions(Bee bee, ItemStack stack,
+			CallbackInfoReturnable<ItemConversionRecipe> cir) {
+		productivebeesgenesis$refreshConversions(bee);
+	}
+
+	@Unique
+	private static void productivebeesgenesis$refreshConversions(Bee bee) {
+		if (bee.level().isClientSide()) {
+			return;
+		}
+		long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
+		if (productivebeesgenesis$conversionVersion != version) {
+			blockConversionRecipeMap.clear();
+			itemConversionRecipeMap.clear();
+			productivebeesgenesis$conversionVersion = version;
+		}
+	}
 
 	/** 完整 32 位掩码，用于节流计数器重置 */
 	@Unique
@@ -119,7 +154,7 @@ public abstract class BeeHelperMixin {
 		return ItemStackMergeHelper.mergeStacks(source);
 	}
 
-	@Inject(method = "getBeeProduce", at = @At("RETURN"), cancellable = true)
+	@Inject(method = "getBeeProduce", remap=false, at = @At("RETURN"), cancellable = true)
 	private static void productivebeesgenesis$appendRandomHoneycomb(
 			Level level,
 			Bee beeEntity,
@@ -132,7 +167,7 @@ public abstract class BeeHelperMixin {
 			// 万象创世功能被禁用时，不追加额外产出
 			if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
 			if (!(beeEntity instanceof ConfigurableBee configurableBee)) return;
-			ResourceLocation beeType = ResourceLocation.tryParse(configurableBee.getBeeType());
+			ResourceLocation beeType = new ResourceLocation(configurableBee.getBeeType());
 			if (!MyriadCreationsEventHandler.isMyriadCreationsBeeType(beeType)) return;
 
 			List<ItemStack> original = cir.getReturnValue();

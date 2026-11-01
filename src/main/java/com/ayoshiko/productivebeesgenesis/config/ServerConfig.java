@@ -109,6 +109,7 @@ public final class ServerConfig {
 
 	// ========== 高倍加速批处理配置 ==========
 	public final ForgeConfigSpec.IntValue maxBatchTicksPerTick;
+	public final ForgeConfigSpec.IntValue virtualTickBankCapacity;
 
 	// ========== MEK离心机配置 —— 向后兼容委托字段(基础参数,堆叠/流体倍率已迁移至子段)==========
 	public final ForgeConfigSpec.LongValue mekCentrifugeEnergyPerTick;
@@ -376,9 +377,13 @@ public final class ServerConfig {
 
 		maxBatchTicksPerTick = builder
 				.comment("批量加速每个真实游戏刻的虚拟 tick 上限",
-						"默认 1024；实际预算会根据当前 MSPT 自动降级，超出部分进入短期挂账")
+						"默认 2048，范围 1–4096；为 1024 倍加速保留积压消化余量，实际预算按 MSPT 降级")
 				.translation("productivebeesgenesis.configuration.advanced_beehive.maxBatchTicksPerTick")
-				.defineInRange("maxBatchTicksPerTick", 1024, 1, 1024);
+				.defineInRange("maxBatchTicksPerTick", 2048, 1, 4096);
+		virtualTickBankCapacity = builder
+				.comment("每台机器可暂存的虚拟 tick 数量", "默认 8192，范围 1024–32768；只缓冲积压，不提高每刻兑现预算")
+				.translation("productivebeesgenesis.configuration.advanced_beehive.virtualTickBankCapacity")
+				.defineInRange("virtualTickBankCapacity", 8192, 1024, 32768);
 
 		builder.pop(); // advanced_beehive
 

@@ -97,10 +97,8 @@ public final class PbRecipeFlusher {
 	 */
 	Outcome flush(PbRecipeCompleter completer, int processIndex, int maxDeferredPerType) {
 		PbRecipeContext context = completer.getContext();
-		completer.discardSuppressedWaxOutputs();
-		// 在 AE 和本地槽位规划前转换 pending 产物，保证两条输出路径行为一致。
-		completer.convertPendingEssenceOutputs();
-		completer.convertPendingRawOreOutputs();
+		if (completer.invalidPending() || outputBlocked(context)) return Outcome.BLOCKED;
+		completer.prepareOutputUpgrades(false);
 		// 诊断信息只描述本次尝试：否则「流体满」导致的失败会读到上一次种类溢出的陈旧标记，
 		// 让调用方误判为需要延迟提交（流体满应保持原语义：暂停并保留输入）。
 		lastPlanUnplaceableType = false;
@@ -119,7 +117,7 @@ public final class PbRecipeFlusher {
 		}
 
 		FluidStack bufferedFluid = completer.getPendingFluidTemplate();
-		if (context.suppressesUselessByproducts()
+		if (!completer.isPreparedOutput() && context.suppressesUselessByproducts()
 				&& bufferedFluid != null
 				&& UselessByproductUpgradeHelper.isHoney(bufferedFluid)) {
 			completer.consumePendingFluid(completer.getPendingFluidAmount());
@@ -141,6 +139,10 @@ public final class PbRecipeFlusher {
 			if (pushPendingDirectToNeighbors(completer, context)) {
 				consumePendingInput(completer, context, processIndex);
 				deferralBudget = Integer.MAX_VALUE;
+			}
+			if (outputBlocked(context)) {
+				consumePendingInput(completer, context, processIndex);
+				return Outcome.DEFERRED;
 			}
 
 			// AE 接收全部产物时不读取或写入本地输出槽。
@@ -198,6 +200,36 @@ public final class PbRecipeFlusher {
 		} finally {
 			context.productivebeesgenesis$endOutputBatch(processIndex);
 		}
+	}
+
+	/** 复用本地放置模拟；三槽种类溢出沿用一槽余量预算，单输入仍可形成有界已付批次。 */
+	boolean fitsPrepared(PbRecipeCompleter batch, int lane, int inputs) {
+		var context = batch.getContext();
+		if (outputBlocked(context)) return false;
+		int slots = buildOutputSlots(context, lane);
+		planner.snapshot(batch.getPendingOutputs().keySet(), batch.getPendingOutputs());
+		planner.simulate(reusableOutputSlots, slots);
+		boolean direct = context.productivebeesgenesis$isDirectAeOutputEnabled()
+				|| context instanceof IMekCentrifugeTile machine && machine.productivebeesgenesis$isDirectContainerOutputEnabled();
+		var fluid = batch.getPendingFluidTemplate();
+		long amount = batch.getPendingFluidAmount();
+		if (fluid != null && amount > 0) {
+			var tank = context.fluidOutputTankForInsert(fluid);
+			if (!canStorePendingFluidLocally(fluid, amount, tank)
+					&& !(direct && (inputs == 1 || tank != null && amount <= tank.getCapacity()))) return false;
+		}
+		return planner.placedAll() || (planner.placedAny() || direct)
+				&& (inputs == 1 || planner.maxDeferredPerType() <= planner.slotCapacity());
+	}
+
+	static com.ayoshiko.productivebeesgenesis.logistics.OutputCustody custody(PbRecipeContext context) {
+		return context instanceof mekanism.common.tile.base.TileEntityMekanism
+				? com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(context) : null;
+	}
+
+	static boolean outputBlocked(PbRecipeContext context) {
+		var custody = custody(context);
+		return custody != null && custody.blocked();
 	}
 
 	/** 存在无处安放的产物种类（减半批量无效，只能延迟提交） */
@@ -336,8 +368,13 @@ public final class PbRecipeFlusher {
 		}
 		int scaledAmount = (int) Math.min(pending, Integer.MAX_VALUE);
 		FluidStack scaledFluid = com.ayoshiko.productivebeesgenesis.util.ForgeFluidStacks.copyWithAmount(template, scaledAmount);
-		FluidStack remainder = tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
-		long inserted = scaledAmount - (remainder.isEmpty() ? 0 : remainder.getAmount());
+		var custody = custody(context);
+		java.util.function.LongSupplier insert = () -> {
+			FluidStack remainder = tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
+			return scaledAmount - (remainder.isEmpty() ? 0 : remainder.getAmount());
+		};
+		long inserted = custody == null ? insert.getAsLong()
+				: custody.handoffFluid(template, scaledAmount, "centrifuge-tank", insert);
 		completer.consumePendingFluid(inserted);
 		if (inserted > 0L && LocalFluidDrainPolicy.shouldDrainAfterCommit(
 				tank.getNeeded(), scaledAmount)) {
@@ -364,15 +401,14 @@ public final class PbRecipeFlusher {
 	private static boolean pushPendingDirectToAe(PbRecipeCompleter completer, PbRecipeContext context) {
 		boolean acceptedAny = false;
 		Iterator<Map.Entry<ItemStack, Integer>> iterator = completer.getPendingOutputs().entrySet().iterator();
-		while (iterator.hasNext()) {
+		while (iterator.hasNext() && !outputBlocked(context)) {
 			Map.Entry<ItemStack, Integer> entry = iterator.next();
 			int requested = Math.max(0, entry.getValue());
 			if (requested <= 0) {
 				iterator.remove();
 				continue;
 			}
-			int accepted = Math.max(0, Math.min(requested,
-					context.productivebeesgenesis$pushGeneratedItemToAe(entry.getKey(), requested)));
+			int accepted = directItem(context, entry.getKey(), requested, true);
 			if (accepted <= 0) continue;
 			acceptedAny = true;
 			completer.consumePendingItemCount(accepted);
@@ -385,9 +421,8 @@ public final class PbRecipeFlusher {
 
 		FluidStack template = completer.getPendingFluidTemplate();
 		long requestedFluid = completer.getPendingFluidAmount();
-		if (template != null && !template.isEmpty() && requestedFluid > 0) {
-			long accepted = Math.max(0L, Math.min(requestedFluid,
-					context.productivebeesgenesis$pushGeneratedFluidToAe(template, requestedFluid)));
+		if (template != null && !template.isEmpty() && requestedFluid > 0 && !outputBlocked(context)) {
+			long accepted = directFluid(context, template, requestedFluid);
 			acceptedAny |= accepted > 0;
 			completer.consumePendingFluid(accepted);
 		}
@@ -409,15 +444,14 @@ public final class PbRecipeFlusher {
 		if (pendingOutputs.isEmpty()) return false;
 		boolean acceptedAny = false;
 		Iterator<Map.Entry<ItemStack, Integer>> iterator = pendingOutputs.entrySet().iterator();
-		while (iterator.hasNext()) {
+		while (iterator.hasNext() && !outputBlocked(context)) {
 			Map.Entry<ItemStack, Integer> entry = iterator.next();
 			int requested = Math.max(0, entry.getValue());
 			if (requested <= 0) {
 				iterator.remove();
 				continue;
 			}
-			int accepted = Math.max(0, Math.min(requested,
-					context.productivebeesgenesis$pushGeneratedItemToNeighbors(entry.getKey(), requested)));
+			int accepted = directItem(context, entry.getKey(), requested, false);
 			if (accepted <= 0) continue;
 			acceptedAny = true;
 			completer.consumePendingItemCount(accepted);
@@ -428,6 +462,33 @@ public final class PbRecipeFlusher {
 			}
 		}
 		return acceptedAny;
+	}
+
+	private static int directItem(PbRecipeContext context, ItemStack template, int amount, boolean ae) {
+		try {
+			int handed = ae ? context.productivebeesgenesis$pushGeneratedItemToAe(template, amount)
+					: context.productivebeesgenesis$pushGeneratedItemToNeighbors(template, amount);
+			if (handed < 0 || handed > amount) throw new IllegalStateException("Invalid direct output receipt");
+			return handed;
+		} catch (RuntimeException | LinkageError failure) {
+			var custody = custody(context);
+			if (custody == null || custody.blocked()) throw failure;
+			return (int) custody.handoffItem(template, amount, ae ? "centrifuge-direct-ae" : "centrifuge-direct-neighbor",
+					() -> { throw new IllegalStateException("Direct output outcome uncertain", failure); });
+		}
+	}
+
+	private static long directFluid(PbRecipeContext context, FluidStack template, long amount) {
+		try {
+			long handed = context.productivebeesgenesis$pushGeneratedFluidToAe(template, amount);
+			if (handed < 0 || handed > amount) throw new IllegalStateException("Invalid direct fluid receipt");
+			return handed;
+		} catch (RuntimeException | LinkageError failure) {
+			var custody = custody(context);
+			if (custody == null || custody.blocked()) throw failure;
+			return custody.handoffFluid(template, amount, "centrifuge-direct-ae-fluid",
+					() -> { throw new IllegalStateException("Direct fluid outcome uncertain", failure); });
+		}
 	}
 
 	private static boolean canStorePendingFluidLocally(

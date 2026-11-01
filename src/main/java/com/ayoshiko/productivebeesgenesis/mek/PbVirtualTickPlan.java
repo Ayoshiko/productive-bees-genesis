@@ -7,10 +7,10 @@ import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 	 * progress, input and energy limits equivalent to repeated Mekanism recipe ticks
 	 * without rerunning the complete block-entity tick for every virtual tick.
 	 */
-record PbVirtualTickPlan(int completedOperations, int remainingProgress,
+public record PbVirtualTickPlan(int completedOperations, int remainingProgress,
 		int executedTicks, long energyUsed) {
 
-	static PbVirtualTickPlan create(int currentProgress, int virtualTicks, int processingTime,
+	public static PbVirtualTickPlan create(int currentProgress, int virtualTicks, int processingTime,
 			int operationsPerCycle, int availableInputs, long energyPerOperation, long availableEnergy) {
 		int required = Math.max(1, processingTime);
 		int progress = Math.max(0, Math.min(currentProgress, required - 1));

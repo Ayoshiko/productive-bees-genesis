@@ -5,11 +5,9 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.network.ToggleSmeltingCompatPayload;
+import com.ayoshiko.productivebeesgenesis.client.resource.GuiResourceSideConfig;
 import mekanism.client.gui.GuiMekanism;
-import mekanism.client.gui.element.GuiElement;
-import mekanism.client.gui.element.tab.GuiConfigTypeTab;
 import mekanism.client.gui.element.window.GuiSideConfiguration;
-import com.ayoshiko.productivebeesgenesis.client.screen.PinnableGuiWindow;
 import mekanism.client.gui.element.window.GuiWindow;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.lib.transmitter.TransmissionType;
@@ -135,7 +133,7 @@ public final class SmeltingCompatOverlay {
 		for (GuiWindow window : screenTarget.gui().getWindows()) {
 			if (window instanceof GuiSideConfiguration<?> sideConfig) {
 				return new AeInputOverlay.OverlayTarget(screenTarget.gui(), sideConfig, screenTarget.tile(),
-					getCurrentType(sideConfig));
+					GuiResourceSideConfig.nativeType(sideConfig));
 			}
 		}
 		return null;
@@ -148,19 +146,6 @@ public final class SmeltingCompatOverlay {
 		return new ScreenTarget(gui, container.getTileEntity());
 	}
 
-	private static TransmissionType getCurrentType(GuiSideConfiguration<?> sideConfig) {
-		for (GuiElement child : sideConfig.children()) {
-			if (child instanceof GuiConfigTypeTab tab && !tab.visible) {
-				return tab.getTransmissionType();
-			}
-		}
-		for (GuiElement child : sideConfig.children()) {
-			if (child instanceof GuiConfigTypeTab tab) {
-				return tab.getTransmissionType();
-			}
-		}
-		return TransmissionType.ITEM;
-	}
 
 	/** 仅 ITEM 页显示（熔炉配方为物品输入） */
 	private static boolean shouldRender(TransmissionType type) {

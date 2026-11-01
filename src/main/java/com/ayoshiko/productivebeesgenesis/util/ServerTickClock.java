@@ -4,7 +4,7 @@ package com.ayoshiko.productivebeesgenesis.util;
  * 服务端游戏刻时钟
  * <br/>
  * 为拿不到 {@code Level} 的组件（例如 Mekanism 的槽位对象）提供「当前服务端刻」，
- * 用于判定时间窗口。由 {@code ServerTickEvent.Post} 每刻推进一次。
+ * 用于判定时间窗口。由 {@code ServerTickEvent} 每刻推进一次。
  * <p>
  * 采用自增计数而非 {@code Level#getGameTime()}：槽位无法访问世界，且自增 long
  * 既不会像 {@code MinecraftServer#getTickCount()}（int）那样溢出，也保证单调递增。
@@ -22,7 +22,7 @@ public final class ServerTickClock {
 	private ServerTickClock() {
 	}
 
-	/** 推进一刻（由 ServerTickEvent.Post 调用）。 */
+	/** 推进一刻（由 ServerTickEvent 调用）。 */
 	public static void tick() {
 		long current = currentTick;
 		currentTick = current == UNSET ? 1L : current + 1L;

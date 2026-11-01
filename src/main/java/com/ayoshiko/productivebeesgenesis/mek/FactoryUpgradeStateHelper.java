@@ -54,6 +54,7 @@ public final class FactoryUpgradeStateHelper {
 		}
 		// The 10.4 cache receives the dynamic Genesis operations supplier directly.
 		MekCentrifugeEnergyScaling.normalizeCapacity(factory);
+        MekUpgradeSupport.refreshEmpoweredEnergy(factory,upgrade);
 	}
 
 	/**

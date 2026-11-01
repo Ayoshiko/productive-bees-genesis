@@ -131,6 +131,7 @@ public final class ProductiveBeesGenesis {
 	 * 注册 DeferredRegister 到 mod 事件总线
 	 */
 	private void registerDeferredRegisters(IEventBus eventBus) {
+		com.ayoshiko.productivebeesgenesis.resource.ResourceContent.register(eventBus);
 		ModBlocks.BLOCKS.register(eventBus);
 		ModBlockEntities.register(eventBus);
 		ModItems.ITEMS.register(eventBus);
@@ -304,7 +305,7 @@ public final class ProductiveBeesGenesis {
 	 */
 	private void onServerAboutToStart(ServerAboutToStartEvent event) {
 		if (!ServerConfigMigrationService.consumeReloadRequired()) return;
-		Path serverConfigDirectory = event.getServer().getWorldPath(SERVER_CONFIG_DIRECTORY);
+		Path serverConfigDirectory = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer().getWorldPath(SERVER_CONFIG_DIRECTORY);
 		try {
 			serverConfigsInitialized = false;
 			ConfigTracker.INSTANCE.unloadConfigs(Type.SERVER, serverConfigDirectory);
@@ -342,6 +343,7 @@ public final class ProductiveBeesGenesis {
 		EssenceConversionUpgradeHelper.invalidateCache();
 		// 失效粗矿熔炼配方缓存，确保 /reload 后读取最新 Mekanism 配方
 		RawOreSmeltingUpgradeHelper.invalidateCache();
+        com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper.invalidateCache();
 		com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper.invalidateCache();
 		// 失效万象批量规划器模板缓存（标签重载后 bee_type 可能变化）（Task 19）
 		MyriadBatchPlanner.clearTemplateCache();
@@ -427,6 +429,7 @@ public final class ProductiveBeesGenesis {
 		safeClear(BeeProduceProcessor::invalidateCache, "BeeProduceProcessor");
 		safeClear(EssenceConversionUpgradeHelper::invalidateCache, "EssenceConversionUpgradeHelper");
 		safeClear(RawOreSmeltingUpgradeHelper::invalidateCache, "RawOreSmeltingUpgradeHelper");
+        safeClear(com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper::invalidateCache,"UselessByproductUpgradeHelper");
 		safeClear(com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper::invalidateCache,
 				"UselessByproductUpgradeHelper");
 		// 清理物品/方块转化配方索引 — 防止跨存档残留旧 RecipeHolder 引用（与 onTagsReload 生命周期一致）
@@ -469,6 +472,7 @@ public final class ProductiveBeesGenesis {
 		event.enqueueWork(() -> {
 			checkProductiveBeesCompatibility();
 			ModStats.init();
+			com.ayoshiko.productivebeesgenesis.resource.UselessResourceIntegration.install();
 		});
 	}
 

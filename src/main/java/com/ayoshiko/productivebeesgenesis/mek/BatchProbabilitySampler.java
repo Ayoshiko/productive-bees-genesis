@@ -64,7 +64,7 @@ public final class BatchProbabilitySampler {
 	 * @param p      成功概率（[0,1]）
 	 * @return 成功次数 [0, n]
 	 */
-	public static int sampleBinomial(ThreadLocalRandom random, int n, double p) {
+	public static int sampleBinomial(java.util.random.RandomGenerator random, int n, double p) {
 		if (n <= 0) return 0;
 		// Task 13：NaN/Infinity 守卫
 		if (Double.isNaN(p) || Double.isInfinite(p)) return 0;
@@ -121,7 +121,7 @@ public final class BatchProbabilitySampler {
 	 * @param p      单次成功概率（[0,1]）
 	 * @return 总成功次数（保底 + 随机），范围 [0, n]
 	 */
-	public static long sampleBinomialWithGuarantee(ThreadLocalRandom random, int n, double p) {
+	public static long sampleBinomialWithGuarantee(java.util.random.RandomGenerator random, int n, double p) {
 		if (n <= 0) return 0L;
 		// Task 13：NaN/Infinity 守卫
 		if (Double.isNaN(p) || Double.isInfinite(p)) return 0L;
@@ -159,7 +159,7 @@ public final class BatchProbabilitySampler {
 	 * @param p      成功概率（(0,1)）
 	 * @return 成功次数 [0, n]
 	 */
-	private static int sampleBinomialExact(ThreadLocalRandom random, int n, double p) {
+	private static int sampleBinomialExact(java.util.random.RandomGenerator random, int n, double p) {
 		double q = 1.0 - p;
 		double u = random.nextDouble();
 		// P(X=0) = q^N
@@ -192,7 +192,7 @@ public final class BatchProbabilitySampler {
 	 * @param n      原 Binomial 的 N，用于上限截断（避免 Poisson 长尾超过 N）
 	 * @return 成功次数 [0, n]
 	 */
-	private static int samplePoissonKnuth(ThreadLocalRandom random, double lambda, int n) {
+	private static int samplePoissonKnuth(java.util.random.RandomGenerator random, double lambda, int n) {
 		double L = Math.exp(-lambda);
 		int k = 0;
 		double p = 1.0;
@@ -218,7 +218,7 @@ public final class BatchProbabilitySampler {
 	 * @param p      成功概率（(0,1)）
 	 * @return 成功次数 [0, n]
 	 */
-	private static int sampleBinomialCLT(ThreadLocalRandom random, int n, double p) {
+	private static int sampleBinomialCLT(java.util.random.RandomGenerator random, int n, double p) {
 		double mean = (double) n * p;
 		double variance = (double) n * p * (1.0 - p);
 		double stdDev = Math.sqrt(variance);

@@ -107,12 +107,13 @@ public class ServerTickTimeMonitor {
 	 * @param event 服务端 tick Pre 事件
 	 */
 	public void onTickPre(net.minecraftforge.event.TickEvent.ServerTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
         if (event.phase != net.minecraftforge.event.TickEvent.Phase.START) return;
 		tickStartNanos = System.nanoTime();
 	}
 
 	/**
-	 * ServerTickEvent.Post 监听器 — 计算并记录本 tick 耗时到滚动数组
+	 * ServerTickEvent 监听器 — 计算并记录本 tick 耗时到滚动数组
 	 * <br/>
 	 * 性能约束：仅算术运算 + 数组写入，禁止 I/O 或字符串操作。
 	 * <p>
@@ -123,6 +124,7 @@ public class ServerTickTimeMonitor {
 	 * @param event 服务端 tick Post 事件
 	 */
 	public void onTickPost(net.minecraftforge.event.TickEvent.ServerTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
         if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
 		long start = tickStartNanos;
 		tickStartNanos = UNSET_TICK_START;

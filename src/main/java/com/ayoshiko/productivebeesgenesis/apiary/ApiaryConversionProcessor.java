@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import net.minecraft.nbt.CompoundTag;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.BeeConversionQueries;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
@@ -8,6 +9,7 @@ import cy.jdkdigital.productivebees.common.recipe.ItemConversionRecipe;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import com.ayoshiko.productivebeesgenesis.port.RecipeHolder;
 import net.minecraft.world.level.Level;
 
 import java.util.List;
@@ -65,13 +67,17 @@ final class ApiaryConversionProcessor {
 	private int cachedMatchFeederVersion = -1;
 	private boolean cachedMatchItemEnabled;
 	private boolean cachedMatchBlockEnabled;
+	private long cachedMatchRecipeVersion = Long.MIN_VALUE;
 	private ConversionMatch cachedMatch;
+	private final long[] resourceAttemptBatch;
 
 	ApiaryConversionProcessor(TileEntityMekApiary tile, ApiarySlotManager slotManager,
 			FeederSlotManager feederManager) {
 		this.tile = tile;
 		this.slotManager = slotManager;
 		this.feederManager = feederManager;
+		resourceAttemptBatch = new long[slotManager.getBeeSlotCount()];
+		java.util.Arrays.fill(resourceAttemptBatch, Long.MIN_VALUE);
 	}
 
 	/**
@@ -158,23 +164,91 @@ final class ApiaryConversionProcessor {
 	 */
 	private ConversionOutcome attemptConversion(ResourceLocation beeTypeKey, Level level,
 			boolean itemEnabled, boolean blockEnabled) {
+		var match = cachedMatch(beeTypeKey, itemEnabled, blockEnabled);
+		return match == null ? ConversionOutcome.NONE : applyMatch(match, level);
+	}
+
+	private ConversionMatch cachedMatch(ResourceLocation beeTypeKey, boolean itemEnabled, boolean blockEnabled) {
 		// 匹配缓存命中（饲养板内容与配置开关均未变化）：直接应用缓存结果，不再重扫饲养板
 		// 负结果（无匹配）同样缓存：42 蜜蜂 × 60 槽无配方原料场景避免每次 flush 重复 O(N×M) 扫描
 		int feederVersion = feederManager.getFlowerCacheVersion();
+		long recipeVersion = com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis.RECIPE_VERSION.get();
 		if (beeTypeKey.equals(cachedMatchBeeType) && cachedMatchFeederVersion == feederVersion
-				&& cachedMatchItemEnabled == itemEnabled && cachedMatchBlockEnabled == blockEnabled) {
-			return cachedMatch == null ? ConversionOutcome.NONE : applyMatch(cachedMatch, level);
+				&& cachedMatchItemEnabled == itemEnabled && cachedMatchBlockEnabled == blockEnabled
+				&& cachedMatchRecipeVersion == recipeVersion) {
+			return cachedMatch;
 		}
 		// 缓存未命中：扫描饲养板找第一个匹配项（每蜜蜂类型每饲养板状态每配置组合最多一次）
 		cachedMatchBeeType = beeTypeKey;
 		cachedMatchFeederVersion = feederVersion;
 		cachedMatchItemEnabled = itemEnabled;
 		cachedMatchBlockEnabled = blockEnabled;
+		cachedMatchRecipeVersion = recipeVersion;
 		cachedMatch = findFirstMatch(beeTypeKey, itemEnabled, blockEnabled);
-		if (cachedMatch == null) {
-			return ConversionOutcome.NONE;
+		return cachedMatch;
+	}
+
+	/** 资源周期沿用同一匹配、开关和每刷新批次至多一次的预算；准备阶段不抽样、不消费。 */
+	ConversionPlan prepareResource(ResourceLocation type, Level level, int beeSlot, long batch) {
+		if (!tile.isFeederConversionEnabled() || resourceAttemptBatch[beeSlot] == batch) return null;
+		boolean item = ModConfig.SERVER.apiaryItemConversionEnabled.get();
+		boolean block = ModConfig.SERVER.apiaryBlockConversionEnabled.get();
+		if (!item && !block) return null;
+		BeeConversionQueries.ensureLoaded(level);
+		if (!BeeConversionQueries.hasAnyConversionRecipe(type) || !feederManager.hasAnyFlower()) return null;
+		var match = cachedMatch(type, item, block);
+		return match == null ? null : new ConversionPlan(match, beeSlot, batch);
+	}
+
+	final class ConversionPlan {
+		private final ConversionMatch match;
+		private final ItemStack before;
+		private final int beeSlot;
+		private final long batch;
+		private boolean sampled, success, committed;
+
+		ConversionPlan(ConversionMatch match, int beeSlot, long batch) {
+			this.match = match;
+			this.beeSlot = beeSlot;
+			this.batch = batch;
+			before = feederManager.getFeederInventorySlots().get(match.slotIndex).getStack().copy();
 		}
-		return applyMatch(cachedMatch, level);
+		boolean occupiesCycle() { return !match.pollinates; }
+		List<ItemStack> maximumOutput() {
+			return match.output == null || match.output.isEmpty() ? List.of() : List.of(match.output.copy());
+		}
+		void sample(Level level) {
+			if (sampled) throw new IllegalStateException("Flower attempt already sampled");
+			sampled = true;
+			success = level.random.nextFloat() <= match.chance;
+		}
+		List<ItemStack> output() { return success ? maximumOutput() : List.of(); }
+		void verify() {
+			var slot = feederManager.getFeederInventorySlots().get(match.slotIndex);
+			if (committed || !slot.isActive() || !ItemStack.matches(before, slot.getStack()))
+				throw new IllegalStateException("Flower input changed before commit");
+		}
+		void commit() {
+			verify();
+			if (!sampled) throw new IllegalStateException("Flower attempt not sampled");
+			committed = true;
+			resourceAttemptBatch[beeSlot] = batch;
+			if (success) {
+				var slot = feederManager.getFeederInventorySlots().get(match.slotIndex);
+				consumeFromFeeder(slot, before);
+				if (!ItemStack.matches(before.copyWithCount(before.getCount() - 1), slot.getStack()))
+					throw new IllegalStateException("Flower debit outcome uncertain");
+			}
+		}
+		net.minecraft.nbt.CompoundTag context(net.minecraft.core.HolderLookup.Provider provider) {
+			var tag = new net.minecraft.nbt.CompoundTag();
+			tag.putInt("slot", match.slotIndex);
+			tag.put("input", before.copyWithCount(1).save(new CompoundTag()));
+			tag.putInt("count_before", before.getCount());
+			tag.putBoolean("consumed", success);
+			tag.putBoolean("pollinates", match.pollinates);
+			return tag;
+		}
 	}
 
 	/**
@@ -267,10 +341,7 @@ final class ApiaryConversionProcessor {
 			}
 			return match.pollinates ? ConversionOutcome.POLLINATES : ConversionOutcome.NO_POLLINATES;
 		} catch (Exception e) {
-			// 单次转化应用异常隔离：不中断整箱产出 flush
-			LogThrottle.warn("apiary_conversion_apply",
-					"蜂箱转化应用异常（槽位 {}），本次转化跳过", match.slotIndex, e);
-			return ConversionOutcome.NONE;
+            throw new IllegalStateException("Flower conversion result unknown at slot " + match.slotIndex, e);
 		}
 	}
 
@@ -302,10 +373,8 @@ final class ApiaryConversionProcessor {
 		if (stack.isEmpty()) {
 			return;
 		}
-		List<ItemStack> leftovers = outputDispatcher.distribute(slotManager.getOutputSlots(), List.of(stack));
-		if (!leftovers.isEmpty()) {
-			tile.getOutputBuffer().offer(leftovers);
-		}
+        int accepted = tile.getOutputBuffer().accept(stack);
+        if (accepted != stack.getCount()) throw new IllegalStateException("Reserved conversion capacity changed");
 		tile.markDirectEjectDirty();
 	}
 

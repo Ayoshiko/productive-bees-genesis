@@ -113,6 +113,11 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 	 */
 	@Override
 	public void setRecipe(IRecipeLayoutBuilder builder, CentrifugeRecipe recipe, IFocusGroup focuses) {
+		setRecipeLayout(builder, recipe, false);
+	}
+
+	/** 普通、热能和 Genesis 分类共用布局；热能分类仍按 PB 规则过滤蜂蜡。 */
+	public static void setRecipeLayout(IRecipeLayoutBuilder builder, CentrifugeRecipe recipe, boolean stripWax) {
 		// 输入槽
 		builder.addSlot(RecipeIngredientRole.INPUT, 5, 27)
 				.addItemStacks(Arrays.stream(recipe.ingredient.getItems()).toList())
@@ -124,7 +129,9 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 
 		// 物品输出：使用索引for循环，循环变量i在每次迭代中为effectively final，无需final快照
 		List<Map.Entry<ItemStack, ChancedOutput>> outputEntries =
-				new ArrayList<>(ChancedOutput.convert(recipe.getRecipeOutputs()).entrySet());
+				ChancedOutput.convert(recipe.getRecipeOutputs()).entrySet().stream()
+						.filter(entry -> !stripWax || !entry.getKey().is(com.ayoshiko.productivebeesgenesis.util.ForgeBeeTags.WAXES))
+						.toList();
 		for (int i = 0; i < outputEntries.size(); i++) {
 			Map.Entry<ItemStack, ChancedOutput> entry = outputEntries.get(i);
 			ItemStack stack = entry.getKey();
@@ -143,6 +150,7 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 			int row = i / 3;
 			builder.addSlot(RecipeIngredientRole.OUTPUT, startX + (col * 18) + 1, startY + (row * 18) + 1)
 					.addItemStacks(innerList)
+					.setStandardSlotBackground()
 					.addRichTooltipCallback((recipeSlotView, tooltip) -> {
 						float chance = value.chance() * 100f;
 						if (chance < 100) {
@@ -165,6 +173,8 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 			int row = slotIndex / 3;
 			builder.addSlot(RecipeIngredientRole.OUTPUT, startX + (col * 18) + 1, startY + (row * 18) + 1)
 					.addIngredient(ForgeTypes.FLUID_STACK, fluid)
+					.setFluidRenderer(Math.max(1000, fluid.getAmount()), false, 16, 16)
+					.setStandardSlotBackground()
 					.addRichTooltipCallback((recipeSlotView, tooltip) ->
 							tooltip.add(Component.translatable("productivebees.centrifuge.tooltip.amount",
 									fluid.getAmount() + "mB")))

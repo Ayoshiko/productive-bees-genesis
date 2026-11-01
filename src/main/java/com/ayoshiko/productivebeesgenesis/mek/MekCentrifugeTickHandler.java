@@ -9,6 +9,7 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import net.minecraft.world.item.ItemStack;
+import com.ayoshiko.productivebeesgenesis.port.RecipeHolder;
 import net.minecraft.world.level.Level;
 
 /**
@@ -61,11 +62,15 @@ class MekCentrifugeTickHandler {
 	/** AE2 tick 阶段异常日志冷却器（ms 模式，与 PB 异常分开节流避免相互覆盖） */
 	private final LogThrottle ae2ErrorThrottle = new LogThrottle();
 
+	/** 工作声音处理器 — 服务端按概率播放降噪后的离心机声（替代 Mekanism withSound 客户端循环，避免破坏后残留满音量循环） */
+	private final MekCentrifugeSoundHandler soundHandler;
+
 	MekCentrifugeTickHandler(TileEntityMekCentrifuge tile, PbRecipeProcessor pbProcessor,
 			TickAccelTracker tickAccelTracker) {
 		this.tile = tile;
 		this.pbProcessor = pbProcessor;
 		this.tickAccelTracker = tickAccelTracker;
+		this.soundHandler = new MekCentrifugeSoundHandler(tile);
 	}
 
 	/**
@@ -239,6 +244,9 @@ class MekCentrifugeTickHandler {
 		// 配方扣能后补回当前批次容量但不缩容，让普通 FE 电缆可在下个机器 tick 前填充，
 		// AE2 则只补回本批实际消耗的差额。
 		tile.productivebeesgenesis$refillAe2EnergyAfterBatch();
+
+		// 机器激活时按概率播放降噪后的离心机工作声（替代 Mekanism withSound 客户端循环）
+		soundHandler.maybePlayWorkSound(tile.getActive());
 
 		return sendUpdatePacket;
 	}

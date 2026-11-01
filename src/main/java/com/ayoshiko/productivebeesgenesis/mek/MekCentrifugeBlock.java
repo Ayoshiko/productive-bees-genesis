@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
 import com.ayoshiko.productivebeesgenesis.util.WrenchCapabilityHelper;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeState;
@@ -223,6 +224,7 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 					ForgeNetwork.sendToPlayer(serverPlayer, new PacketSecurityUpdate(placer.getUUID()));
 				}
 			}
+            if(!level.isClientSide && ResourceHiveHost.existing(updateable)!=null)ResourceHiveHost.ensureMechanical(updateable);
 		}
 	}
 

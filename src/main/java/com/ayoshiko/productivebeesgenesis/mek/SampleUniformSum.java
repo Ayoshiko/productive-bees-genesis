@@ -37,7 +37,7 @@ public final class SampleUniformSum {
 	 * @param modifier 生产力倍率
 	 * @return N 次采样的总和乘以 modifier
 	 */
-	public static long sample(ThreadLocalRandom random, int min, int max, long n, int modifier) {
+	public static long sample(java.util.random.RandomGenerator random, int min, int max, long n, int modifier) {
 		if (n <= 0 || modifier <= 0 || max < min || min < 0) return 0;
 		if (n == 1) {
 			// 单次走原版精确路径
@@ -63,7 +63,7 @@ public final class SampleUniformSum {
 	}
 
 	/** Samples an inclusive int range without overflowing {@code max - min + 1}. */
-	public static int sampleSingle(ThreadLocalRandom random, int min, int max) {
+	public static int sampleSingle(java.util.random.RandomGenerator random, int min, int max) {
 		if (random == null || min < 0 || max < min) return 0;
 		if (max == min) return min;
 		long range = (long) max - min + 1L;

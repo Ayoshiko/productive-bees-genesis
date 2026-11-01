@@ -15,6 +15,7 @@ import com.ayoshiko.productivebeesgenesis.client.screen.CustomConfigScreenFactor
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifugeFactory;
+import com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEMenuTypeRegistration;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.client.gui.GuiEMExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEMenuTypeRegistration;
@@ -57,12 +58,14 @@ public final class ProductiveBeesGenesisClient {
 
 	@SubscribeEvent
 	public static void onClientSetup(FMLClientSetupEvent event) {
+        event.enqueueWork(BeeDesignerClient::initialize);
 		ModLoadingContext.get().registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class,
 				() -> new ConfigScreenHandler.ConfigScreenFactory((minecraft, parent) ->
 						new CustomConfigScreenFactory().createScreen(null, parent)));
 		event.enqueueWork(ScreenRegistry::registerScreens);
 	}
 
+    @SubscribeEvent public static void onReloadListeners(net.minecraftforge.client.event.RegisterClientReloadListenersEvent event) { event.registerReloadListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener) manager -> BeeEntityCache.clearCache()); }
 	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 	public static final class WorldCacheLifecycle {
 		@SubscribeEvent

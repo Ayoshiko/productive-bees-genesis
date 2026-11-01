@@ -17,7 +17,7 @@
       "tag": "forge:dusts/redstone"
     },
     "U": {
-      "item": "productivelib:upgrade_gene_sampler"
+      "item": "productivebees:upgrade_bee_sampler"
     },
     "W": {
       "item": "minecraft:writable_book"

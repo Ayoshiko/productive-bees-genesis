@@ -5,7 +5,9 @@
       "conditions": {
         "items": [
           {
-            "items": "productivelib:upgrade_gene_sampler"
+            "items": [
+              "productivebees:upgrade_bee_sampler"
+            ]
           }
         ]
       },

@@ -1,0 +1,68 @@
+[
+  {
+    "artifact": "ae2lt-port",
+    "version": "1.20.1",
+    "sha256": "f09a4ff2a9b7ac03cac3c4e3f234545ab672c4f03f38844ed2cfa2d0571b0154",
+    "mods": [
+      {
+        "id": "ae2lt",
+        "version": "2.1.3"
+      }
+    ]
+  },
+  {
+    "artifact": "ars-port",
+    "version": "1.20.1",
+    "sha256": "1f1debc282a0c379c1141f2840ea294eede6f6b544c589663f40bbe17b59a1af",
+    "mods": [
+      {
+        "id": "ars_nouveau",
+        "version": "${file.jarVersion}"
+      }
+    ]
+  },
+  {
+    "artifact": "pneumatic-port",
+    "version": "1.20.1",
+    "sha256": "8d5117f18a3f80eb6670cfb04f0a42a103195972bfdf429d2181587958ec4c38",
+    "mods": [
+      {
+        "id": "pneumaticcraft",
+        "version": "6.0.23+mc1.20.1"
+      }
+    ]
+  },
+  {
+    "artifact": "projecte-port",
+    "version": "1.20.1",
+    "sha256": "f51f387e56307e7cda26915ca0c789760d85e97a8b40b8bfa0988be66371d018",
+    "mods": [
+      {
+        "id": "projecte",
+        "version": "1.0.1"
+      }
+    ]
+  },
+  {
+    "artifact": "useless-core-port",
+    "version": "1.20.1",
+    "sha256": "c02be6ce7df2bbe459e28d02e9126c03c64f05b8dcb1089c687d4a4f10e465e2",
+    "mods": [
+      {
+        "id": "useless_core",
+        "version": "1.0.17"
+      }
+    ]
+  },
+  {
+    "artifact": "useless-port",
+    "version": "1.20.1",
+    "sha256": "5519a174ce52459c68b703e04bc768c9c4dde92e4668ff55efe151f12cf0a56d",
+    "mods": [
+      {
+        "id": "useless_mod",
+        "version": "1.4.6"
+      }
+    ]
+  }
+]

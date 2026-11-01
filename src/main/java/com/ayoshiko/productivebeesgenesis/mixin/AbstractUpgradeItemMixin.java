@@ -66,7 +66,7 @@ public abstract class AbstractUpgradeItemMixin {
 	 * @param context 右键上下文（含玩家、世界、手持物品、点击坐标）
 	 * @param cir     回调信息（可设置返回值取消原方法）
 	 */
-	@Inject(method = "m_6225_", at = @At("HEAD"), cancellable = true, remap = false)
+	@Inject(method = "useOn", at = @At("HEAD"), cancellable = true, remap = true)
 	private void productivebeesgenesis$installPbUpgradeBulk(
 			UseOnContext context, CallbackInfoReturnable<InteractionResult> cir) {
 		// 1. 玩家与潜行检查 — PB 原版 useOn 也会检查，但提前返回避免无谓查方块实体

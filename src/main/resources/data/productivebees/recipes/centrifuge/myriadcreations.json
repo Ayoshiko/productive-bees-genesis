@@ -20,11 +20,13 @@
       "item": {
         "item": "productivebees:wax"
       }
+    },
+    {
+      "fluid": {
+        "fluid": "productivebees:honey"
+      },
+      "amount": 100
     }
   ],
-  "fluid": {
-    "amount": 100,
-    "fluid": "productivebees:honey"
-  },
   "processingTime": 200
 }

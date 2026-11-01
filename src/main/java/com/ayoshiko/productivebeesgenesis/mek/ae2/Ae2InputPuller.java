@@ -98,14 +98,40 @@ public final class Ae2InputPuller {
 	 * A positive value is already constrained by the adaptive batch budget, so it must not be scaled by
 	 * the MSPT factor a second time. A non-positive value keeps the legacy tracker-based fallback.
 	 */
+	/** 正式加工与新取料共用出口缓存，满槽和取料冷却不跳过这项检查。 */
+	public static com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.OutputAvailability resourceOutputAvailability(
+			BlockEntity entity, com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeRecipe recipe) {
+		if (!(entity instanceof IAe2InputHost host) || entity.getLevel() == null) {
+			return com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.OutputAvailability.AVAILABLE;
+		}
+		var holder = host.productivebeesgenesis$getAe2StateHolder();
+		if (holder == null) return com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.OutputAvailability.DEFERRED;
+		var buffers = Ae2OutputPusher.getReusableBuffers(holder, host);
+		var storage = holder.getPushState().getCachedNodeState(host) == Ae2GridNodeManager.STATE_ONLINE
+				? Ae2GridNodeManager.getCachedMeStorage(holder, host) : null;
+		buffers.resourceInputGate.prepare(host, holder, buffers, storage, entity.getLevel().getGameTime());
+		return switch (buffers.resourceInputGate.decision(recipe)) {
+			case ACCEPTED -> com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.OutputAvailability.AVAILABLE;
+			case REJECTED -> com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.OutputAvailability.UNAVAILABLE;
+			case DEFERRED -> com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.OutputAvailability.DEFERRED;
+		};
+	}
+
 	public static void pullInputs(IAe2InputHost host, int executedBatchMultiplier) {
 		// Spark 优化：缓存 holder 到局部变量，消除后续 10+ 次冗余 getAe2StateHolder() 接口分发
 		// （每次2层接口分发：getLifecycleHandler→getStateHolder，热力图显示为热点）
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
-		if (holder == null) return;
+		if (holder == null || holder.getPendingItemBuffer().isBlocked()) return;
 		Level level = host.productivebeesgenesis$getAe2Level();
 		if (level == null) return;
 		long currentTick = level.getGameTime();
+		if (holder.getReusableBuffers() instanceof Ae2PushBuffers existingBuffers
+				&& existingBuffers.resourceInputGate.hasWaitingRecipes()) {
+			var storage = holder.getPushState().getCachedNodeState(host) == Ae2GridNodeManager.STATE_ONLINE
+					? Ae2GridNodeManager.getCachedMeStorage(holder, host) : null;
+			existingBuffers.resourceInputGate.prepare(host, holder, existingBuffers, storage, currentTick);
+			existingBuffers.resourceInputGate.refreshWaitingRecipes();
+		}
 		if (holder.isConfigCacheStale(currentTick)) {
 			holder.refreshConfigCache(currentTick);
 		}
@@ -121,32 +147,24 @@ public final class Ae2InputPuller {
 		boolean pendingRetryable = holder.getPendingItemBuffer().hasRetryableItems(currentTick);
 		if (!inputPullEnabled && !pendingRetryable) return;
 
-		// 2. 回送退避检查（Task 10：3 次重试失败后进入退避窗口，跳过整个拉取流程减少循环频率）
-		//    入口级别跳过实现深度退避（Task 4）：避免进入 getAvailableStacks 遍历前的无效开销
-		//    holder 已非 null，getPushState() 永不返回 null（final 字段构造时初始化）
 		Ae2PushBackoff returnBackoff = holder.getPushState().getReturnBackoff();
-		if (returnBackoff.shouldSkip(System.nanoTime())) {
-			return;
-		}
-
-		// 模块2.5：强检测 grid node 状态，仅当 ONLINE(3) 时继续拉取
-		// 状态 0/1/2: OFFLINE/NETWORK_BOOTING/MISSING_CHANNEL — 不进入拉取路径，避免无效的 getAvailableStacks 遍历
-		// 使用 pushState 缓存（20 tick 刷新一次）避免每 tick 高频调用 getGridNodeState
-		int nodeState = holder.getPushState().getCachedNodeState(host);
-		if (nodeState != Ae2GridNodeManager.STATE_ONLINE) {
-			return;
-		}
+		boolean returnCooling = returnBackoff.shouldSkip(System.nanoTime());
+		if (returnCooling && !pendingRetryable) return;
 		boolean pendingRetriedEarly = false;
 		if (pendingRetryable) {
-			MEStorage pendingStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
-			if (pendingStorage != null) {
-				retryPendingItems(level, holder, pendingStorage, inputSlots, currentTick);
-				host.productivebeesgenesis$markAe2StateChanged();
-				pendingRetriedEarly = true;
-			}
+			MEStorage pendingStorage = !returnCooling
+					&& holder.getPushState().getCachedNodeState(host) == Ae2GridNodeManager.STATE_ONLINE
+					? Ae2GridNodeManager.getCachedMeStorage(holder, host) : null;
+			// 已知资产可先落本地槽；网络断线和回送冷却只限制网络交互。
+			retryPendingItems(level, holder, pendingStorage, inputSlots, currentTick,
+					host instanceof BlockEntity entity ? entity : null);
+			host.productivebeesgenesis$markAe2StateChanged();
+			pendingRetriedEarly = true;
 		}
 		// Pending recovery above is independent from the switch for accepting new inputs.
-		if (!inputPullEnabled) return;
+		if (!inputPullEnabled || holder.getPendingItemBuffer().isBlocked()) return;
+		if (returnBackoff.shouldSkip(System.nanoTime())) return;
+		if (holder.getPushState().getCachedNodeState(host) != Ae2GridNodeManager.STATE_ONLINE) return;
 
 		// 3. Level 与当前游戏刻已在入口获取并复用，避免重复调用。
 
@@ -220,9 +238,14 @@ public final class Ae2InputPuller {
 		// 先处理上次抽取后未能落槽或回送 ME 的物品，避免新抽取继续扩大待处理所有权。
 		boolean hasRetryablePending = holder.getPendingItemBuffer().hasRetryableItems(currentTick);
 		if (hasRetryablePending && !pendingRetriedEarly) {
-			retryPendingItems(level, holder, meStorage, inputSlots, currentTick);
+			retryPendingItems(level, holder, meStorage, inputSlots, currentTick,
+					host instanceof BlockEntity entity ? entity : null);
 			host.productivebeesgenesis$markAe2StateChanged();
 		}
+		if (holder.getPendingItemBuffer().isBlocked()) return;
+
+		// 先取得许可再扫描候选与规划车道；等待不是一次拉取尝试，不推进原有冷却。
+		if (!holder.tryAcquireNetworkExtract(meStorage, currentTick)) return;
 
 		// 9. 获取复用缓冲与调度状态；同样延后到真正需要扫描网络库存时。
 		Ae2PushBuffers buffers = Ae2OutputPusher.getReusableBuffers(holder, host);
@@ -241,8 +264,10 @@ public final class Ae2InputPuller {
 		// 判定按 (Item, bee_type) 记忆化，只在 10 tick 候选刷新与条目极少的直探路径调用；
 		// 每轮限速首次判定次数，防止配方重载后的首轮刷新把全量遍历堆在同一 tick。
 		buffers.combProcessableCache.beginProbeWindow();
+		buffers.resourceInputGate.prepare(host, holder, buffers, meStorage, currentTick);
 		Ae2InputCandidatePolicy.CombProcessGate combGate =
-				key -> buffers.combProcessableCache.canProcess(host, key, smeltingEnabled);
+				key -> buffers.resourceInputGate.resourcesAvailable(key)
+						&& buffers.combProcessableCache.canProcess(host, key, smeltingEnabled);
 		Ae2KeyBackoffRegistry<AEItemKey> keyBackoff = getOrCreateKeyBackoff(holder);
 		Ae2InputFairnessScheduler fairness = getOrCreateFairnessScheduler(holder);
 		fairness.roll(currentTick);
@@ -260,10 +285,12 @@ public final class Ae2InputPuller {
 		// AE2 已在 StorageService 中维护网格库存缓存。直接调用 MEStorage.getAvailableStacks()
 		// 会再次遍历每个存储单元；在大型 Omni Cell 网络中这正是 Spark 的主要热点。
 		// 单次拉取固定使用同一快照，游标回绕也不会触发第二次网络聚合。
-		var availableStacks = storageService.getCachedInventory();
+		KeyCounter availableStacks = null;
 		List<Ae2InputFilter.DirectEntry> directEntries = filter != null && filter.hasDirectEntries()
 				? filter.getDirectEntries() : List.of();
 		if (!directEntries.isEmpty()) {
+			boolean unresolved = directEntries.stream().anyMatch(entry -> entry.key() == null);
+			if (unresolved) availableStacks = storageService.getCachedInventory();
 			var resolvedKeys = Ae2ItemFingerprint.resolve(
 					directEntries, availableStacks, level.registryAccess());
 			for (Ae2InputFilter.DirectEntry direct : directEntries) {
@@ -292,6 +319,7 @@ public final class Ae2InputPuller {
 				}
 			}
 		}
+		if (!directOnly || stockPolicyActive) availableStacks = storageService.getCachedInventory();
 		if (directOnly) {
 			// 精确白名单的候选集合就是已解析配置键，无需扫描整个网络类型列表。
 			int directStart = Ae2CursorScan.cursorStartIndex(
@@ -308,7 +336,7 @@ public final class Ae2InputPuller {
 				long available = liveStockEntry
 						? Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 								availableStacks, meStorage, key, Long.MAX_VALUE, ActionSourceHolder.INSTANCE)
-						: Math.max(0L, availableStacks.get(key));
+						: inputCapacity;
 				long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive, decision);
 				if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 					pullKeys.remove(key);
@@ -318,10 +346,16 @@ public final class Ae2InputPuller {
 					available = Math.min(available, configuredLimit);
 				}
 				if (available > 0) {
+					var resourceDecision = buffers.resourceInputGate.decision(key);
+					if (resourceDecision == Ae2ResourceInputGate.Decision.REJECTED) {
+						pullKeys.remove(key);
+						continue;
+					}
 					PullEntry entry = buffers.borrowPullEntry(key,
 							SaturatingMath.saturatingToInt(available),
 							unlimitedMode && decision.unlimited);
 					entry.marked = decision.marked;
+					entry.resourceDeferred = resourceDecision == Ae2ResourceInputGate.Decision.DEFERRED;
 					entry.smelting = kind.isSmelting();
 					entry.combBlock = CombFuzzyMatcher.isCombBlock(key);
 					entry.reserveFloor = decision.reserveFloor;
@@ -331,6 +365,7 @@ public final class Ae2InputPuller {
 				}
 			}
 		} else {
+			KeyCounter scanInventory = availableStacks;
 			// 白名单精确条目优先直探：过滤配置刚变更时无需等待候选缓存刷新，且单条
 			// SMELTING 指纹也不会依赖游标扫描。库存模式继续用实时可见量探测外部存储；
 			// 普通条目沿用 AE2 已聚合的 KeyCounter，避免额外网络模拟。黑名单仍只走扫描。
@@ -361,10 +396,16 @@ public final class Ae2InputPuller {
 						available = Math.min(available, configuredLimit);
 					}
 					if (available > 0) {
+						var resourceDecision = buffers.resourceInputGate.decision(key);
+						if (resourceDecision == Ae2ResourceInputGate.Decision.REJECTED) {
+							pullKeys.remove(key);
+							continue;
+						}
 						PullEntry entry = buffers.borrowPullEntry(key,
 								SaturatingMath.saturatingToInt(available),
 								unlimitedMode && decision.unlimited);
 						entry.marked = decision.marked;
+						entry.resourceDeferred = resourceDecision == Ae2ResourceInputGate.Decision.DEFERRED;
 						entry.smelting = kind.isSmelting();
 						entry.combBlock = CombFuzzyMatcher.isCombBlock(key);
 						entry.reserveFloor = decision.reserveFloor;
@@ -415,7 +456,7 @@ public final class Ae2InputPuller {
 			Predicate<AEItemKey> acceptableCandidate = key -> {
 				if (pullKeys.contains(key)) return false;
 				if (keyBackoff.shouldSkip(key, nanoNow)) return false;
-				long cachedAvailable = availableStacks.get(key);
+				long cachedAvailable = scanInventory.get(key);
 				if (cachedAvailable <= 0L && !stockPolicyActive) return false;
 				long limit;
 				if (filter == null) {
@@ -430,6 +471,7 @@ public final class Ae2InputPuller {
 				// 此处不再为每次拉取重复查询候选类型。
 				int amount = SaturatingMath.saturatingToInt(limit < 0L ? available : Math.min(available, limit));
 				if (amount <= 0) return false;
+				if (buffers.resourceInputGate.decision(key) == Ae2ResourceInputGate.Decision.REJECTED) return false;
 				candidateAmounts.put(key, amount, decision);
 				return true;
 			};
@@ -446,6 +488,7 @@ public final class Ae2InputPuller {
 				if (amount > 0 && pullKeys.add(key)) {
 					PullEntry entry = buffers.borrowPullEntry(key, amount);
 					candidateAmounts.apply(key, entry, unlimitedMode);
+					entry.resourceDeferred = buffers.resourceInputGate.decision(key) == Ae2ResourceInputGate.Decision.DEFERRED;
 					entry.smelting = index < smeltingSelected;
 					entry.combBlock = CombFuzzyMatcher.isCombBlock(key);
 					pullList.add(entry);
@@ -495,12 +538,12 @@ public final class Ae2InputPuller {
 		// 因此执行阶段每插入一个车道就刷新该条即可保持精确。
 		// 必须在这里（回送剩余物之后）采集，否则会拿到回送前的旧内容。
 		Ae2InputLaneSnapshot laneSnapshot = buffers.inputLaneSnapshot();
-		laneSnapshot.capture(inputSlots, processCount);
+		laneSnapshot.capture(inputSlots, processCount, host instanceof BlockEntity entity ? entity : null);
 		// 多类型公平分配（修复 smelt 候选被同一种物品饿死）：排序器只决定顺序，
 		// 排在第一的类型原先会同时吃掉整个 normalQuota 与全部空槽（高堆叠槽上限千万级，
 		// 一旦占满其他类型的 getSlotRemainingCapacity 恒为 0），顺序公平落不到实际。
-		// 第 0 轮给每个类型限「槽数/类型数」条新车道 + 配额等分份额；第 1 轮解除上限
-		// 把没人要的余量填满，故总吞吐与旧实现一致。单类型时两个上限都退化为无限。
+		// 公平轮按「槽数/类型数」分配份额，并计入已有车道；补齐轮在所有需求均有车道后
+		// 才借用空槽，避免暂缓的类型失去全部槽位。单类型时不限制车道份额。
 		int laneBudget = Ae2InputLaneFairness.emptyLaneBudget(processCount, typeCount);
 		long fairShare = Ae2InputLaneFairness.typeQuotaShare(normalQuota, typeCount);
 		int passes = typeCount > 1 ? 2 : 1;
@@ -510,14 +553,20 @@ public final class Ae2InputPuller {
 		for (PullEntry entry : pullList) {
 			entry.beginComponentMatchCache(processCount);
 		}
-		for (int pass = 0; pass < passes && totalPulled < inputCapacity; pass++) {
+		for (int pass = 0; pass < passes && totalPulled < inputCapacity && !holder.getPendingItemBuffer().isBlocked(); pass++) {
 			boolean fairPass = pass == 0 && typeCount > 1;
+			boolean protectLanes = typeCount > 1 && (fairPass
+					|| hasUnassignedDemand(pullList, laneSnapshot, processCount));
 			// 补齐轮只在公平轮确实被上限截断时才跑：否则会为每个类型重复一遍
 			// 逐槽 SIMULATE 探测（processCount × typeCount 次），纯属浪费。
 			if (!Ae2InputLaneFairness.shouldRunPass(pass, fairPassTruncated)) break;
-			for (int typeOffset = 0; typeOffset < typeCount && totalPulled < inputCapacity; typeOffset++) {
+			for (int typeOffset = 0; typeOffset < typeCount && totalPulled < inputCapacity && !holder.getPendingItemBuffer().isBlocked(); typeOffset++) {
 				PullEntry entry = pullList.get(typeOffset);
 				if (entry.remaining <= 0 || keyBackoff.shouldSkip(entry.key, nanoNow)) continue;
+				if (entry.resourceDeferred) {
+					networkWorkDeferred = true;
+					continue;
+				}
 
 				// 在逐槽规划前检查累计耗时，同时考虑本机本刻已发生的输出成本。
 				if (!buffers.extractBudget.canExtractNow(currentTick, typeCount,
@@ -526,31 +575,35 @@ public final class Ae2InputPuller {
 					break;
 				}
 
-				// 先汇总该类型在所有可用槽位中的容量，然后一次 ME extract，再本地分发。
-				// 同一类型的模拟探针在所有输入槽中复用；SIMULATE 不会修改传入栈，
-				// 这样可避免高倍加速下为每个「类型 × 槽位」重复创建 ItemStack。
+				// 每个候选只构造一个探针，并复用当前规划轮的完整组件匹配缓存。
 				ItemStack slotProbe = entry.key.toStack(1);
+				Item keyItem = entry.key.getItem();
+				int typeSlotStart = laneSnapshot.preferredStart(entry.key, slotStart);
 				long typeAvailable = 0L;
+				int occupiedLanes = 0;
+				if (protectLanes) {
+					for (int index = 0; index < processCount; index++) {
+						if (laneSnapshot.item(index) == keyItem
+								&& entry.matchesComponents(index, laneSnapshot.stack(index), slotProbe,
+										laneSnapshot.patchSize(index), laneSnapshot.beeType(index))) occupiedLanes++;
+					}
+				}
+				int newLaneBudget = Ae2InputLaneFairness.remainingLaneBudget(laneBudget, occupiedLanes);
 				int newLanes = 0;
 				boolean lanesSuppressed = false;
-				// 每轮容量规划重新归因，避免公平轮的结论被补齐轮沿用
-				entry.validatorRejected = false;
-				// 提到循环外：types × lanes 的内层循环里 getItem() 会被调用上千次
-				Item keyItem = entry.key.getItem();
 				for (int slotOffset = 0; slotOffset < processCount; slotOffset++) {
-					int slotIdx = (slotStart + slotOffset) % processCount;
+					int slotIdx = (typeSlotStart + slotOffset) % processCount;
+					boolean emptyLane = laneSnapshot.item(slotIdx) == null;
+					if (protectLanes && emptyLane && newLanes >= newLaneBudget) {
+						// 已用完份额的空槽不会被采用，无需再调用配方和槽位校验。
+						inputSlotCapacities[slotIdx] = 0L;
+						lanesSuppressed = true;
+						continue;
+					}
 					long slotQuota = entry.unlimited ? Long.MAX_VALUE : perSlotQuota;
 					long slotCapacity = Math.min(slotQuota,
 							laneCapacity(laneSnapshot, slotIdx, keyItem, entry, slotProbe));
-					if (slotCapacity > 0L && fairPass && laneSnapshot.item(slotIdx) == null) {
-						// 空槽 = 一条新车道；超出份额的空槽本轮留给其他类型
-						if (newLanes >= laneBudget) {
-							slotCapacity = 0L;
-							lanesSuppressed = true;
-						} else {
-							newLanes++;
-						}
-					}
+					if (slotCapacity > 0L && protectLanes && emptyLane) newLanes++;
 					inputSlotCapacities[slotIdx] = slotCapacity;
 					if (slotCapacity > 0L) {
 						typeAvailable = SaturatingMath.saturatingAdd(typeAvailable, slotCapacity);
@@ -559,12 +612,7 @@ public final class Ae2InputPuller {
 				if (typeAvailable <= 0L) {
 					// 车道被压制导致本类型这轮完全拿不到槽：补齐轮必须再给它一次机会
 					if (lanesSuppressed) fairPassTruncated = true;
-					// 槽位 validator 明确拒绝（不是暂时没位置）时记一次 per-key 退避：
-					// 这类键永远走不到 pullBatchForType，若不在此归因就会被全速重复探测。
-					// 兜底防线，正常情况下候选分类阶段的可处理性门已把它们挡在外面。
-					else if (entry.validatorRejected) {
-						keyBackoff.recordFailure(entry.key, System.nanoTime());
-					}
+					// 槽校验可能依赖配对输出状态，只表示本轮无容量，不能对整个 key 退避。
 					continue;
 				}
 				long entryQuota = entry.unlimited
@@ -581,7 +629,7 @@ public final class Ae2InputPuller {
 					if (lanesSuppressed || quotaClipped) fairPassTruncated = true;
 					continue;
 				}
-				if (!holder.tryAcquireNetworkWork(meStorage, currentTick)) {
+				if (!holder.tryAcquireNetworkExtract(meStorage, currentTick)) {
 					networkWorkDeferred = true;
 					break;
 				}
@@ -590,7 +638,7 @@ public final class Ae2InputPuller {
 					PullBatchResult batchResult = pullBatchForType(level, holder, entry.key, toPull,
 							entry.reserveFloor, availableStacks, meStorage,
 							ActionSourceHolder.INSTANCE,
-						inputSlots, inputSlotCapacities, laneSnapshot, slotStart, pos, keyBackoff,
+						inputSlots, inputSlotCapacities, laneSnapshot, slotProbe, typeSlotStart, pos, keyBackoff,
 						buffers.fingerprintCache, buffers.extractBudget);
 					int pulled = batchResult.insertedCount();
 					entry.remaining -= pulled;
@@ -609,6 +657,13 @@ public final class Ae2InputPuller {
 					maxSlowExtractCost = Math.max(maxSlowExtractCost, batchResult.extractCostNanos());
 				} catch (LinkageError | RuntimeException e) {
 					handlePullException(e, entry.key);
+					if (holder.getPendingItemBuffer().isBlocked()) {
+						var unresolved = holder.getPendingItemBuffer().transfer();
+						unresolved.fingerprint();
+						LogThrottle.error("ae2_input_transfer_unknown", "AE2 输入待核验 pos={} request={} target={} known={} offered={}: {}",
+								pos, unresolved.request(), unresolved.destination(), unresolved.knownAmount(), unresolved.offeredAmount(), e.toString());
+						host.productivebeesgenesis$markAe2StateChanged();
+					}
 					degradedExtractDetected = true;
 				}
 			}
@@ -622,7 +677,10 @@ public final class Ae2InputPuller {
 		// a later healthy key in the same pass; otherwise a healthy pass clears the window
 		// immediately, while leftover fallback remains a degraded result.
 		if (returnBackoff != null) {
-			if (slowExtractDetected) {
+			if (slowExtractDetected && !degradedExtractDetected) {
+				returnBackoff.recordSuccessWithDelay(System.nanoTime(),
+						Ae2StorageHealth.successfulExtractDelay(maxSlowExtractCost));
+			} else if (slowExtractDetected) {
 				returnBackoff.recordSlowOperation(System.nanoTime(), maxSlowExtractCost);
 			} else if (degradedExtractDetected) {
 				returnBackoff.recordFailure(System.nanoTime());
@@ -640,8 +698,10 @@ public final class Ae2InputPuller {
 		} else if (!networkWorkDeferred) {
 			holder.onInputPullFail(unlimitedAttempted);
 		}
-		holder.updateLastPullTick(currentTick);
-		holder.updateLastPullCounter(pullCounter);
+		if (totalPulled > 0 || !networkWorkDeferred) {
+			holder.updateLastPullTick(currentTick);
+			holder.updateLastPullCounter(pullCounter);
+		}
 
 		// 拉取列表已使用完毕，clear 而非新建（复用 ReusableBuffers）
 		pullList.clear();
@@ -671,6 +731,30 @@ public final class Ae2InputPuller {
 	 * @param slots 输入槽列表
 	 * @return 所有输入槽剩余容量之和
 	 */
+	/** 暂缓的类型仍保留空槽份额，补齐轮不能把短暂退避变成永久挤占。 */
+	static boolean hasUnassignedDemand(List<PullEntry> entries, Ae2InputLaneSnapshot lanes, int laneCount) {
+		boolean hasEmptyLane = false;
+		for (int index = 0; index < laneCount; index++) {
+			if (lanes.item(index) == null) {
+				hasEmptyLane = true;
+				break;
+			}
+		}
+		if (!hasEmptyLane) return false;
+		for (PullEntry entry : entries) {
+			if (entry.remaining <= 0) continue;
+			boolean assigned = false;
+			for (int index = 0; index < laneCount; index++) {
+				if (entry.key.matches(lanes.stack(index))) {
+					assigned = true;
+					break;
+				}
+			}
+			if (!assigned) return true;
+		}
+		return false;
+	}
+
 	private static long calculateInputCapacity(List<IInventorySlot> slots) {
 		long total = 0;
 		for (IInventorySlot slot : slots) {
@@ -709,6 +793,7 @@ public final class Ae2InputPuller {
 		if (entry == null || entry.key == null) return 0;
 		IInventorySlot slot = lanes.slot(slotIdx);
 		if (slot == null) return 0;
+		if (!lanes.acceptsRequiredInput(slotIdx, probe)) return 0;
 		// 廉价身份剪枝（与 getSlotRemainingCapacity 首判等价，但这里是纯数组读取）
 		Item laneItem = lanes.item(slotIdx);
 		if (laneItem != null && laneItem != keyItem) return 0;
@@ -718,7 +803,6 @@ public final class Ae2InputPuller {
 		if (laneItem == null) {
 			// 空槽也必须按真实候选求上限：珍珠、工具和 MAX_STACK_SIZE 组件可能低于空栈上限。
 			if (!entry.acceptsProbe(slotIdx, basicSlot, probe)) {
-				entry.validatorRejected = true;
 				return 0;
 			}
 			return Ae2InputLaneSnapshot.safeLimit(slot, probe);
@@ -734,7 +818,6 @@ public final class Ae2InputPuller {
 		if (!entry.matchesComponents(slotIdx, lanes.stack(slotIdx), probe,
 				lanes.patchSize(slotIdx), lanes.beeType(slotIdx))) return 0;
 		if (!entry.acceptsProbe(slotIdx, basicSlot, probe)) {
-			entry.validatorRejected = true;
 			return 0;
 		}
 		return limit - count;
@@ -767,7 +850,6 @@ public final class Ae2InputPuller {
 				// 创建模拟返回栈，并复用同一次 getLimit 结果。
 				if (stack.isEmpty()) {
 					if (!entry.acceptsProbe(slotIndex, basicSlot, probe)) {
-						entry.validatorRejected = true;
 						return 0;
 					}
 					return Math.max(0, slot.getLimit(probe));
@@ -779,19 +861,16 @@ public final class Ae2InputPuller {
 						Ae2InputLaneSnapshot.singleBeeType(stack, stack.getItem(), lanePatchSize))) return 0;
 				int limit = slot.getLimit(probe);
 				// 先做「槽已满」的廉价判断（原顺序，避免多付一次 validator 调用）；
-				// validator 拒绝与槽满必须分开归因：前者说明本机永远不接受该物品，
-				// 是可据此进入 per-key 退避的持久信号，后者只是暂时没位置。
+				// 槽校验也可能随配对输出变化，不跨拉取轮缓存其拒收结论。
 				if (limit <= stack.getCount()) return 0;
 				if (!entry.acceptsProbe(slotIndex, basicSlot, probe)) {
-					entry.validatorRejected = true;
 					return 0;
 				}
 				return (long) limit - stack.getCount();
 			}
 			// 保留非 BasicInventorySlot 实现的完整回退路径，兼容自定义 IInventorySlot。
 			if (!slot.insertItem(probe, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()) {
-				// 空槽都插不进 = 该实现永久拒绝此物品（非「暂时没位置」）
-				if (stack.isEmpty()) entry.validatorRejected = true;
+				// 自定义空槽也可能暂时拒收，本轮保留在 ME 中。
 				return 0;
 			}
 			if (stack.isEmpty()) return Math.max(0, slot.getLimit(probe));
@@ -806,34 +885,16 @@ public final class Ae2InputPuller {
 	}
 
 	/**
-	 * 异常处理：限流日志 + 按异常类型分级记录 + InterruptedException 恢复中断。
-	 * <p>
-	 * Task 7.3 日志治理：
-	 * <ul>
-	 *   <li>NPE 异常 → ERROR 级别无节流（数据完整性问题必须立即报告，代码缺陷）</li>
-	 *   <li>LinkageError → ERROR 级别无节流（AE2 版本不兼容属于严重环境问题）</li>
-	 *   <li>其他异常 → LogThrottle 5 秒节流 WARN（多 tile 全局节流）</li>
-	 *   <li>所有异常不阻塞拉取流程</li>
-	 * </ul>
-	 */
-	static long extractFromNetwork(MEStorage storage, AEItemKey key, int amount, IActionSource source) {
-		// 保留 AE2 的路由、优先级和外部过滤，只在同步调用内放宽匹配 Bin 的逐组返回限制。
-		return BulkItemPullScope.extract(key.toStack(1),
-				() -> storage.extract(key, amount, Actionable.MODULATE, source));
-	}
-
-	/**
 	 * Per-type batch pull: one ME extract, then local distribution across slots.
 	 * This mirrors the AE2LT batching approach and reduces high-tier factory AE2 API calls.
 	 */
-	private static PullBatchResult pullBatchForType(Level level, Ae2OutputStateHolder holder, AEItemKey key, int amount,
+	static PullBatchResult pullBatchForType(Level level, Ae2OutputStateHolder holder, AEItemKey key, int amount,
 			long reserveFloor, KeyCounter cachedInventory, MEStorage meStorage, IActionSource actionSource,
 			List<IInventorySlot> inputSlots, long[] inputSlotCapacities, Ae2InputLaneSnapshot laneSnapshot,
-			int slotStart, BlockPos pos,
+			ItemStack slotProbe, int slotStart, BlockPos pos,
 			Ae2KeyBackoffRegistry<AEItemKey> keyBackoff, Ae2FingerprintCache fingerprintCache,
 			Ae2ExtractBudget extractBudget) {
-		// 拉取不使用共享输出令牌；这里只记录实际成本，由本机提取预算限制慢网络，
-		// 避免输出先占令牌时输入无机会执行。
+		// 调用方已取得网络工作许可；本机提取预算另行限制慢调用。
 		long gameTick = level.getGameTime();
 		// 抽取前的兜底闸门：只要求 pending 缓冲还有「类型条目位」可登记，不限制抽取数量。
 		// extract 一旦执行就无法撤回，若之后既无法落槽、又无法回送 ME、也无处登记，
@@ -890,7 +951,7 @@ public final class Ae2InputPuller {
 				extractBudget.recordProbe(gameTick, reserveQueryCost);
 				Ae2GlobalInsertBudget.recordCost(gameTick, reserveQueryCost,
 						Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
-				holder.recordNetworkCost(meStorage, gameTick, reserveQueryCost,
+				holder.recordNetworkExtractCost(meStorage, gameTick, reserveQueryCost,
 						Ae2ExtractBudget.HEALTHY_EXTRACT_NANOS);
 				if (keyBackoff != null) keyBackoff.recordFailure(key, System.nanoTime());
 				LogThrottle.warn("ae2_reserve_query",
@@ -902,7 +963,7 @@ public final class Ae2InputPuller {
 			extractBudget.recordProbe(gameTick, reserveQueryCost);
 			Ae2GlobalInsertBudget.recordCost(gameTick, reserveQueryCost,
 					Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
-			holder.recordNetworkCost(meStorage, gameTick, reserveQueryCost,
+			holder.recordNetworkExtractCost(meStorage, gameTick, reserveQueryCost,
 					Ae2ExtractBudget.HEALTHY_EXTRACT_NANOS);
 			slowReserveQuery = Ae2StorageHealth.isPathological(reserveQueryCost);
 			amount = Ae2FilterPullPolicy.reserveSafeRequest(amount, liveExtractable, reserveFloor);
@@ -917,17 +978,20 @@ public final class Ae2InputPuller {
 						slowReserveQuery, !slowReserveQuery);
 			}
 		}
+		Ae2InputTransfer transfer = pending.transfer();
+		transfer.beginExtract(() -> fingerprintCache.get(key, level.registryAccess()), amount);
 		long extractStart = System.nanoTime();
 		long extracted;
 		try {
-			extracted = SaturatingMath.clampToRequest(
-					extractFromNetwork(meStorage, key, amount, actionSource), amount);
+			extracted = BulkItemPullScope.extract(slotProbe,
+					() -> meStorage.extract(key, transfer.offeredAmount(), Actionable.MODULATE, actionSource));
+			transfer.extracted(extracted);
 		} catch (LinkageError | RuntimeException error) {
 			long extractCost = System.nanoTime() - extractStart;
 			extractBudget.record(gameTick, extractCost);
 			Ae2GlobalInsertBudget.recordCost(gameTick, extractCost,
 					Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
-			holder.recordNetworkCost(meStorage, gameTick, extractCost,
+			holder.recordNetworkExtractCost(meStorage, gameTick, extractCost,
 					Ae2ExtractBudget.HEALTHY_EXTRACT_NANOS);
 			throw error;
 		}
@@ -935,11 +999,12 @@ public final class Ae2InputPuller {
 		extractBudget.record(gameTick, extractCost);
 		Ae2GlobalInsertBudget.recordCost(gameTick, extractCost,
 				Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
-		holder.recordNetworkCost(meStorage, gameTick, extractCost,
+		holder.recordNetworkExtractCost(meStorage, gameTick, extractCost,
 			Ae2ExtractBudget.HEALTHY_EXTRACT_NANOS);
 		long maxNetworkCost = Math.max(reserveQueryCost, extractCost);
 		boolean slowNetworkOperation = slowReserveQuery || Ae2StorageHealth.isPathological(extractCost);
 		if (extracted <= 0) {
+			transfer.finish(pending, gameTick, false);
 			if (keyBackoff != null) {
 				keyBackoff.recordFailure(key, System.nanoTime());
 			}
@@ -947,190 +1012,99 @@ public final class Ae2InputPuller {
 					slowNetworkOperation, !slowNetworkOperation);
 		}
 		Ae2NetworkInventoryView.recordExtract(holder, gameTick, meStorage, key, extracted);
-		// 只登记「分发+回送之后真正剩下的」数量，不再预登记整批抽取量。
-		// 抽取前已确认该指纹有条目位可用，因此剩余量一定能被完整登记，
-		// 不存在「登记不下 → 掉落世界」的分支。
-		ItemStack stack = key.toStack(SaturatingMath.saturatingToInt(extracted));
-		int originalCount = stack.getCount();
+		int insertedCount = 0;
 		int slotCount = inputSlots.size();
-		for (int slotOffset = 0; slotOffset < slotCount && !stack.isEmpty(); slotOffset++) {
-			int slotIdx = (slotStart + slotOffset) % slotCount;
+		for (int offset = 0; offset < slotCount && transfer.knownAmount() > 0; offset++) {
+			int slotIdx = (slotStart + offset) % slotCount;
 			IInventorySlot slot = inputSlots.get(slotIdx);
-			if (slot == null) continue;
 			int quota = SaturatingMath.saturatingToInt(inputSlotCapacities[slotIdx]);
-			if (quota <= 0) continue;
-			int toInsert = Math.min(stack.getCount(), quota);
-			boolean laneChanged = false;
-			if (toInsert == stack.getCount()) {
-				ItemStack remainder = slot.insertItem(stack, Action.EXECUTE, AutomationType.INTERNAL);
-				int remainderCount = remainder.isEmpty() ? 0 : Math.min(toInsert, remainder.getCount());
-				if (remainderCount < toInsert) {
-					laneChanged = true;
-					stack = remainderCount == 0 ? ItemStack.EMPTY : remainder;
-				}
-			} else {
-				ItemStack remainder = slot.insertItem(stack.copyWithCount(toInsert),
-						Action.EXECUTE, AutomationType.INTERNAL);
-				int insertedNow = toInsert - (remainder.isEmpty() ? 0 : remainder.getCount());
-				if (insertedNow > 0) {
-					laneChanged = true;
-					stack.shrink(insertedNow);
-				}
+			if (slot == null || quota <= 0) continue;
+			int amountForSlot = (int) Math.min(transfer.knownAmount(), quota);
+			int inserted = Ae2LeftoverReturner.insertIntoSlot(transfer, key, slot, amountForSlot, slotIdx);
+			insertedCount += inserted;
+			if (inserted > 0 && laneSnapshot != null) {
+				laneSnapshot.remember(key, slotIdx);
+				laneSnapshot.refresh(slotIdx);
 			}
-			// 本轮内唯一会改变车道内容的就是这里：就地刷新快照，后续类型的容量规划才不会读到过期值。
-			if (laneChanged && laneSnapshot != null) laneSnapshot.refresh(slotIdx);
 		}
-		int insertedCount = originalCount - (stack.isEmpty() ? 0 : stack.getCount());
-		boolean slowExtract = slowNetworkOperation;
 		if (insertedCount > 0 && keyBackoff != null) {
-			if (slowExtract) {
-				keyBackoff.recordFailure(key, System.nanoTime());
-			} else {
-				keyBackoff.recordSuccess(key);
-			}
+			keyBackoff.recordSuccess(key, System.nanoTime(),
+					Ae2StorageHealth.successfulExtractDelay(maxNetworkCost));
 		}
-		boolean hadLeftover = !stack.isEmpty();
-		boolean leftoverStranded = false;
-		if (hadLeftover) {
-			int leftoverRemaining = Ae2LeftoverReturner.returnLeftoverToMe(holder, meStorage, key, stack, actionSource,
-					holder.getPushState().getReturnBackoff(), level, pos, inputSlots);
-			if (leftoverRemaining > 0) {
-				// 既没落槽也没回送成功的部分才登记 pending，由下一轮 retryPendingItems 处理。
-				// 指纹推迟到此刻才算：正常稳态下这条分支永不进入（剩余物都能回送 ME），
-				// 于是每次抽取都省掉一次 Codec + StringTagVisitor 编码。
-				// fingerprintCache.get 内部走 encodeOrLegacy，绝不抛异常 —— 抽取已不可撤回，
-				// 此刻抛出就等于丢物品；最坏情况只是拿到 legacy 键并在重试时告警保留。
-				String pendingFingerprint = fingerprintCache.get(key, level.registryAccess());
-				leftoverStranded = true;
-				pending.enqueue(pendingFingerprint, leftoverRemaining, gameTick);
-				pending.recordFailure(pendingFingerprint, gameTick);
-				if (level.getBlockEntity(pos) != null) level.getBlockEntity(pos).setChanged();
-				LogThrottle.warn("ae2_pull_leftover_pending",
-						"AE2 批量拉取剩余物品已登记 pending，等待下一轮回送 key={} count={}",
-						key, leftoverRemaining);
-			}
+		boolean returnAttempted = false;
+		if (transfer.knownAmount() > 0) {
+			returnAttempted = Ae2LeftoverReturner.returnLeftoverToMe(holder, meStorage, key, actionSource, gameTick);
 		}
-		// 只有「剩余物既落不进槽、又回送不进 ME」才算故障。全部回送成功属正常稳态
-		// （无限拉取本就按槽位上限请求，多出来的退回网络），原实现把它也算 degraded，
-		// 会让整机 returnBackoff 长期停在退避窗口里，表现为拉取时断时续。
-		return new PullBatchResult(insertedCount, maxNetworkCost, slowExtract, leftoverStranded,
-				!slowExtract && !leftoverStranded);
+		boolean stranded = transfer.knownAmount() > 0;
+		boolean returnFailed = stranded && returnAttempted;
+		transfer.finish(pending, gameTick, false, 0, returnFailed);
+		if (stranded && level.getBlockEntity(pos) != null) level.getBlockEntity(pos).setChanged();
+		return new PullBatchResult(insertedCount, maxNetworkCost, slowNetworkOperation, returnFailed,
+				!slowNetworkOperation && !returnFailed);
 	}
 
-	/** 重试宿主级 pending 物品；每次最多处理四种 key，避免断网时占满 tick。 */
+	/** 重试已知余量；每轮最多四个身份，发生未知结果立即停止本机重试。 */
 	static void retryPendingItems(Level level, Ae2OutputStateHolder holder, MEStorage meStorage,
 			List<IInventorySlot> inputSlots, long currentTick) {
+		retryPendingItems(level, holder, meStorage, inputSlots, currentTick, null);
+	}
+
+	private static boolean acceptsLaneInput(BlockEntity host, int lane, ItemStack input) {
+		var required = com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.requiredLaneInput(host, lane);
+		return required == null || !required.isEmpty() && ItemStack.isSameItemSameTags(required, input);
+	}
+
+	private static void retryPendingItems(Level level, Ae2OutputStateHolder holder, MEStorage meStorage,
+			List<IInventorySlot> inputSlots, long currentTick, BlockEntity host) {
 		Ae2PendingItemBuffer pending = holder.getPendingItemBuffer();
+		if (pending.isBlocked()) return;
 		int attempts = 0;
 		for (Ae2PendingItemBuffer.PendingItem entry : pending.snapshot(currentTick)) {
-			if (attempts++ >= 4) break;
+			if (pending.isBlocked() || attempts >= 4) break;
+			if (meStorage == null && entry.amount() <= 0) continue;
+			attempts++;
 			AEItemKey key = Ae2ItemFingerprint.decode(entry.fingerprint(), level.registryAccess());
 			if (key == null) {
 				pending.recordFailure(entry.fingerprint(), currentTick);
-				LogThrottle.warn("ae2_pending_item_decode",
-						"AE2 pending 物品指纹无法解析，保留等待迁移 fingerprint={}", entry.fingerprint());
+				LogThrottle.warn("ae2_pending_item_decode", "AE2 pending 指纹无法解析，保留等待迁移: {}", entry.fingerprint());
 				continue;
 			}
-			if (entry.returnToNetworkAmount() > 0L) {
-				retryPendingNetworkAmount(holder, meStorage, key, entry, currentTick,
-						entry.returnToNetworkAmount(), true);
+			if (entry.returnToNetworkAmount() > 0 && meStorage != null) {
+				retryKnownAmount(holder, meStorage, inputSlots, entry, key, entry.returnToNetworkAmount(), true, currentTick, host);
 			}
-			if (entry.amount() <= 0L) continue;
+			if (entry.amount() > 0 && !pending.isBlocked()) {
+				retryKnownAmount(holder, meStorage, inputSlots, entry, key, entry.amount(), false, currentTick, host);
+			}
+		}
+	}
 
-			// Ordinary pull leftovers may return to processing slots; explicit AE return work above may not.
-			long attempt = Math.min(entry.amount(), Integer.MAX_VALUE);
-			ItemStack stack = key.toStack((int) attempt);
-			for (IInventorySlot slot : inputSlots) {
-				if (slot == null || stack.isEmpty()) continue;
-				try {
-					stack = slot.insertItem(stack, Action.EXECUTE, AutomationType.INTERNAL);
-				} catch (RuntimeException e) {
-					LogThrottle.warn("ae2_pending_item_slot",
-							"AE2 pending 物品回插槽异常，跳过该槽: {}", e.toString());
+	private static void retryKnownAmount(Ae2OutputStateHolder holder, MEStorage storage,
+			List<IInventorySlot> slots, Ae2PendingItemBuffer.PendingItem entry, AEItemKey key,
+			long amount, boolean networkOnly, long tick, BlockEntity host) {
+		var pending = holder.getPendingItemBuffer();
+		var transfer = pending.transfer();
+		long request = Math.min(amount, Integer.MAX_VALUE);
+		transfer.beginKnown(entry::fingerprint, request);
+		if (networkOnly) pending.consumeReturnToNetwork(entry.fingerprint(), request, tick);
+		else pending.consume(entry.fingerprint(), request, tick);
+		try {
+			if (!networkOnly) {
+				for (int index = 0; index < slots.size() && transfer.knownAmount() > 0; index++) {
+					IInventorySlot slot = slots.get(index);
+					if (slot != null && (host == null || acceptsLaneInput(host, index, key.getReadOnlyStack()))) {
+						Ae2LeftoverReturner.insertIntoSlot(transfer, key, slot, (int) transfer.knownAmount(), index);
+					}
 				}
 			}
-			int remaining = stack.isEmpty() ? 0 : stack.getCount();
-			int deliveredToSlots = (int) attempt - remaining;
-			if (deliveredToSlots > 0) pending.consume(entry.fingerprint(), deliveredToSlots, currentTick);
-			if (remaining > 0) {
-				retryPendingNetworkAmount(holder, meStorage, key, entry, currentTick, remaining, false);
-			}
-		}
-	}
-
-	private static void retryPendingNetworkAmount(Ae2OutputStateHolder holder,
-			MEStorage meStorage, AEItemKey key, Ae2PendingItemBuffer.PendingItem entry,
-			long currentTick, long requestedKnownAmount, boolean returnToNetworkOnly) {
-		Ae2PendingItemBuffer pending = holder.getPendingItemBuffer();
-		long knownAmount = Math.min(requestedKnownAmount,
-				returnToNetworkOnly ? entry.returnToNetworkAmount() : entry.amount());
-		int requested = SaturatingMath.saturatingToInt(Math.min(knownAmount, Integer.MAX_VALUE));
-		if (requested <= 0 || !holder.tryAcquireNetworkWork(meStorage, currentTick)) return;
-
-		long simulated;
-		long start = System.nanoTime();
-		try {
-			simulated = SaturatingMath.clampToRequest(
-					meStorage.insert(key, requested, Actionable.SIMULATE, ActionSourceHolder.INSTANCE), requested);
+			boolean returnAttempted = Ae2LeftoverReturner.returnLeftoverToMe(
+					holder, storage, key, ActionSourceHolder.INSTANCE, tick);
+			transfer.finish(pending, tick, networkOnly, entry.retries(), returnAttempted);
 		} catch (LinkageError | RuntimeException error) {
-			long cost = System.nanoTime() - start;
-			recordPendingInsertCost(holder, meStorage, currentTick, cost);
-			Ae2GlobalInsertBudget.recordCost(currentTick, cost,
-					Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
-			pendingFailure(holder, entry.fingerprint(), currentTick,
-					"AE2 pending ME 模拟插入失败，保留等待重试: {}", error);
-			return;
+			transfer.fingerprint();
+			LogThrottle.error("ae2_input_transfer_unknown",
+					"AE2 输入交接待核验；停止自动重试 request={} target={} known={} offered={}: {}",
+					transfer.request(), transfer.destination(), transfer.knownAmount(), transfer.offeredAmount(), error.toString());
 		}
-		long simulationCost = System.nanoTime() - start;
-		recordPendingInsertCost(holder, meStorage, currentTick, simulationCost);
-		Ae2GlobalInsertBudget.recordCost(currentTick, simulationCost,
-				Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
-		if (simulated <= 0L) {
-			pending.recordFailure(entry.fingerprint(), currentTick);
-			return;
-		}
-
-		long accepted;
-		start = System.nanoTime();
-		try {
-			accepted = SaturatingMath.clampToRequest(meStorage.insert(
-					key, simulated, Actionable.MODULATE, ActionSourceHolder.INSTANCE), simulated);
-		} catch (LinkageError | RuntimeException error) {
-			long cost = System.nanoTime() - start;
-			recordPendingInsertCost(holder, meStorage, currentTick, cost);
-			Ae2GlobalInsertBudget.recordCost(currentTick, cost,
-					Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
-			pending.quarantine(entry.fingerprint(), simulated, returnToNetworkOnly);
-			pending.recordFailure(entry.fingerprint(), currentTick);
-			LogThrottle.error("ae2_pending_insert_unknown",
-					"AE2 pending ME 写入结果未知；已隔离本次数量并保留其它已知余量 fingerprint={} count={}: {}",
-					entry.fingerprint(), simulated, error.toString());
-			return;
-		}
-		long modulationCost = System.nanoTime() - start;
-		recordPendingInsertCost(holder, meStorage, currentTick, modulationCost);
-		Ae2GlobalInsertBudget.recordCost(currentTick, modulationCost,
-				Ae2StorageHealth.PATHOLOGICAL_OPERATION_NANOS);
-		if (returnToNetworkOnly) {
-			pending.consumeReturnToNetwork(entry.fingerprint(), accepted, currentTick);
-		} else {
-			pending.consume(entry.fingerprint(), accepted, currentTick);
-		}
-		if (accepted < knownAmount) pending.recordFailure(entry.fingerprint(), currentTick);
-	}
-
-	private static void recordPendingInsertCost(Ae2OutputStateHolder holder, MEStorage storage,
-			long gameTick, long costNanos) {
-		holder.recordNetworkCost(storage, gameTick, costNanos,
-				Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
-		Object reusable = holder.getReusableBuffers();
-		if (reusable instanceof Ae2PushBuffers buffers) buffers.insertCostTracker.record(gameTick, costNanos);
-	}
-
-	private static void pendingFailure(Ae2OutputStateHolder holder, String fingerprint, long currentTick,
-			String message, Throwable error) {
-		holder.getPendingItemBuffer().recordFailure(fingerprint, currentTick);
-		LogThrottle.warn("ae2_pending_insert", message, error.toString());
 	}
 
 	private static void handlePullException(Throwable e, AEItemKey key) {
@@ -1187,6 +1161,8 @@ public final class Ae2InputPuller {
 		/** Whether this entry is an ordinary Mekanism SMELTING input. */
 		boolean smelting;
 		boolean combBlock;
+		/** 等待资源出口探测时只保留公平份额，不提取原料。 */
+		boolean resourceDeferred;
 		/** Effective AE2 stock floor, or -1 when no reserve policy applies. */
 		long reserveFloor;
 		long servedInWindow;
@@ -1196,7 +1172,6 @@ public final class Ae2InputPuller {
 		 * 用于给这类键记一次 per-key 退避：它们从不进入 {@code pullBatchForType}，
 		 * 因此原先永远不会触发 {@code keyBackoff.recordFailure}，只能全速重复空转探测。
 		 */
-		boolean validatorRejected;
 		/** 当前拉取轮次按槽位记忆的组件匹配结果，容量数值不在此缓存。 */
 		private ItemStack[] componentMatchStacks = new ItemStack[0];
 		private boolean[] componentMatchResults = new boolean[0];
@@ -1221,9 +1196,9 @@ public final class Ae2InputPuller {
 			this.marked = false;
 			this.smelting = false;
 			this.combBlock = false;
+			this.resourceDeferred = false;
 			this.reserveFloor = -1L;
 			this.servedInWindow = 0L;
-			this.validatorRejected = false;
 			Arrays.fill(validatorSlots, null);
 		}
 

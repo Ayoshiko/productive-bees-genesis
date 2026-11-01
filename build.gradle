@@ -38,12 +38,19 @@ repositories {
     maven { url = 'https://cursemaven.com'; content { includeGroup 'curse.maven' } }
 }
 dependencies {
+    compileOnly fg.deobf('local:useless-port:1.20.1')
+    compileOnly fg.deobf('local:useless-core-port:1.20.1')
+    compileOnly fg.deobf('local:ars-port:1.20.1')
+    compileOnly fg.deobf('local:ae2lt-port:1.20.1')
+    compileOnly fg.deobf('local:pneumatic-port:1.20.1')
+    compileOnly fg.deobf('local:projecte-port:1.20.1')
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     implementation fg.deobf('mekanism:Mekanism:1.20.1-10.4.16.80')
     implementation fg.deobf('maven.modrinth:productivebees:mywVOObd')
     implementation fg.deobf('local:productivelib:1.20.1-0.0.4')
     jarJar('io.github.llamalad7:mixinextras-forge:0.5.5') { jarJar.ranged(it, '[0.5.5,)') }
     compileOnly files('libs/mixinextras-common-0.5.5.jar')
+    runtimeOnly 'io.github.llamalad7:mixinextras-forge:0.5.5'
     compileOnly fg.deobf('curse.maven:applied-energistics-2-223794:7148487')
     compileOnly fg.deobf('curse.maven:applied-flux-965012:7072853')
     compileOnly fg.deobf('curse.maven:mekanism-extras-1026040:8247562')
@@ -68,15 +75,49 @@ mixin {
     config 'productivebeesgenesis.mixins.json'
 }
 tasks.withType(Jar).configureEach {
-    from('LICENSE') {
-        rename { "LICENSE_${mod_id}" }
-    }
-    from('THIRD_PARTY_LICENSES.md') {
-        rename { "THIRD_PARTY_LICENSES_${mod_id}.md" }
-    }
+    from('LICENSE') { rename { "LICENSE_${mod_id}" } }
+    from('THIRD_PARTY_LICENSES.md') { rename { "THIRD_PARTY_LICENSES_${mod_id}.md" } }
 }
 tasks.named('jar', Jar).configure {
     manifest.attributes('MixinConfigs': 'productivebeesgenesis.mixins.json')
     finalizedBy 'reobfJar'
 }
-tasks.matching { it.name in ['reobfJar', 'reobfJarJar'] }.configureEach { useArgsFile() }
+tasks.matching { it.name in ['reobfJar','reobfJarJar'] }.configureEach { useArgsFile() }
+
+
+// Local integration smoke run; these dependencies are never bundled.
+if(project.hasProperty('portCompatSmoke')) {
+    dependencies {
+        runtimeOnly fg.deobf('curse.maven:applied-energistics-2-223794:7148487')
+        runtimeOnly fg.deobf('local:useless-port:1.20.1')
+        runtimeOnly fg.deobf('local:useless-core-port:1.20.1')
+        runtimeOnly fg.deobf('maven.modrinth:guideme:i7Tp1AHw')
+    }
+}
+
+if(project.hasProperty('portSmoke')) {
+    sourceSets {
+        portSmoke {
+            java.setSrcDirs(['src/portSmoke/java'])
+            resources.setSrcDirs(['src/portSmoke/resources'])
+            compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        }
+    }
+    minecraft.runs.server {
+        mods { genesis_port_smoke { source sourceSets.portSmoke } }
+        args '--world', 'pbg-port-smoke'
+    }
+    tasks.named('processPortSmokeResources') { duplicatesStrategy = DuplicatesStrategy.EXCLUDE }
+    tasks.register('preparePortSmoke', Copy) {
+        from 'src/portSmoke/datapack'
+        into 'run/pbg-port-smoke/datapacks/pbg_smoke'
+    }
+    tasks.matching { it.name == 'runServer' }.configureEach { dependsOn 'portSmokeClasses', 'preparePortSmoke' }
+}
+
+if(project.hasProperty('portClientSmoke')) {
+    minecraft.runs.client {
+        workingDirectory project.file('run-client-check')
+        args '--width','1280','--height','800'
+    }
+}

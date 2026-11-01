@@ -82,10 +82,11 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	@SubscribeEvent
 	public static void onServerTick(ServerTickEvent event) {
         if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
 		// 万象创世功能被禁用时，跳过缓存更新
 		if (!isMyriadCreationsEnabled()) return;
 		if (MyriadBeeTypeCache.onServerTick()) {
-			MyriadBeeTypeCache.updateBeeTypeCache(event.getServer().overworld());
+			MyriadBeeTypeCache.updateBeeTypeCache(net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer().overworld());
 		}
 	}
 

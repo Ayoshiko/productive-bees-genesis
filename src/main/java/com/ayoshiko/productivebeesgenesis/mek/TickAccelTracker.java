@@ -34,19 +34,11 @@ public class TickAccelTracker {
 	/** 加速倍率上限 — 防止极端值导致 int 溢出 */
 	private static final int MAX_MULTIPLIER = 1024;
 
-	/**
-	 * 虚拟 tick 银行挂账上限 — 修复 JDTE 加速停止后残留过久的根因。
-	 * <br/>
-	 * JDTE 每 gameTick 最多入账 timeAcceleratorMaxExecutionsPerTick（默认 4096）个虚拟 tick，
-	 * 而每 gameTick 只消化 getBatchBudget（默认上限 1024，并受 MSPT 降级）个；若上限对齐
-	 * JDTE 的 1M 挂账，加速停止后仍会长时间消化已经入账的虚拟 tick。将上限收紧为
-	 * 4096（JDTE 单刻最大入账量），既保留单刻突发量的平滑能力，也把残留限制为至多
-	 * 四个健康服务器满额批次；降级期间则按实时预算逐步消化。
-	 */
-	private static final long MAX_PENDING_TICKS = 4_096L;
+	/** 默认缓冲四个满额批次；可配置至 32768，兑现仍受独立预算限制。 */
+	private static final long MAX_PENDING_TICKS = 8_192L;
 
 	/** 每真实 gameTick 最多批量执行的虚拟 tick 数（预算）— 防止无批次限制的加速器（如 1024x 时间杖）造成 MSPT 尖峰 */
-	private static final int MAX_BATCH_TICKS = 1024;
+	private static final int MAX_BATCH_TICKS = 2048;
 	/** 银行饱和告警间隔（tick） */
 	private static final int SATURATION_WARN_INTERVAL = 600;
 
@@ -62,6 +54,7 @@ public class TickAccelTracker {
 
 	/** 虚拟 tick 银行字段 — 已发生的加速调用挂账，按每 tick 预算分批消化（饱和累加，上限 MAX_PENDING_TICKS） */
 	private long pendingVirtualTicks = 0L;
+	private int pendingTickLimit = (int) MAX_PENDING_TICKS;
 
 	/** 配置上限缓存的刷新 tick；MSPT 因子仍每个真实游戏刻读取一次。 */
 	private static final int BUDGET_REFRESH_INTERVAL = 10;
@@ -101,6 +94,7 @@ public class TickAccelTracker {
 			return false;
 		}
 		lastMaintenanceTick = gameTick;
+		refreshConfiguredLimits(gameTick);
 		return true;
 	}
 
@@ -117,7 +111,7 @@ public class TickAccelTracker {
 			callsInCurrentTick = 1;
 		}
 		// 虚拟 tick 银行入账（<10ns：一次比较 + 一次自增）
-		if (pendingVirtualTicks < MAX_PENDING_TICKS) {
+		if (pendingVirtualTicks < pendingTickLimit) {
 			pendingVirtualTicks++;
 		}
 	}
@@ -135,7 +129,7 @@ public class TickAccelTracker {
 	 */
 	public void onAe2Tick(Level level) {
 		// 仅入账银行（<10ns），不修改倍率计数
-		if (pendingVirtualTicks < MAX_PENDING_TICKS) {
+		if (pendingVirtualTicks < pendingTickLimit) {
 			pendingVirtualTicks++;
 		}
 	}
@@ -183,8 +177,8 @@ public class TickAccelTracker {
 	 *   <li>无批次限制加速器（如 1024x 时间杖）：每 tick 最多处理 {@link #getMaxBatchTicks()}，
 	 *       余量挂账后续 tick 消化——<b>短期</b>总产出不丢失，MSPT 平滑；
 	 *       持续超预算加速时产能被预算封顶（见 {@link #getBatchBudget} 的饱和告警）</li>
-	 *   <li>加速停止：残留挂账被 {@link #MAX_PENDING_TICKS} 收紧（4096），随后按实时预算消化，
-	 *       不再残留数十分钟的加速效果</li>
+	 *   <li>加速停止：残留挂账被 {@link #MAX_PENDING_TICKS} 限制（默认 8192），随后按实时预算消化，
+	 *       残留持续时间由挂账量与实际预算共同决定</li>
 	 * </ul>
 	 * 单次调用开销 &lt; 5ns（一次 Math.min + 一次减法）。
 	 *
@@ -214,7 +208,7 @@ public class TickAccelTracker {
 		return takeBatchTicks(getBatchBudget(currentTick));
 	}
 
-	/** 每真实 gameTick 批量执行预算上限（见 {@link #takeBatchTicks}） */
+	/** 内置默认批量预算；运行时配置与 MSPT 调整见 {@link #getBatchBudget}。 */
 	public static int getMaxBatchTicks() {
 		return MAX_BATCH_TICKS;
 	}
@@ -228,8 +222,27 @@ public class TickAccelTracker {
 	 * @param ticks 虚拟 tick 数（≤0 忽略）
 	 */
 	public void addVirtualTicks(int ticks) {
-		if (ticks > 0 && pendingVirtualTicks < MAX_PENDING_TICKS) {
-			pendingVirtualTicks = Math.min(MAX_PENDING_TICKS, pendingVirtualTicks + ticks);
+		if (ticks > 0 && pendingVirtualTicks < pendingTickLimit) {
+			pendingVirtualTicks = Math.min(pendingTickLimit, pendingVirtualTicks + ticks);
+		}
+	}
+
+	private void refreshConfiguredLimits(long currentTick) {
+		if (isIntervalElapsed(currentTick, lastBudgetRefreshTick, BUDGET_REFRESH_INTERVAL)) {
+			lastBudgetRefreshTick = currentTick;
+			int max = MAX_BATCH_TICKS;
+			int bank = (int) MAX_PENDING_TICKS;
+			try {
+				if (ModConfig.areServerSpecsLoaded()) {
+					max = Math.max(1, Math.min(4096, ModConfig.SERVER.maxBatchTicksPerTick.get()));
+					bank = Math.max(1024, Math.min(32768, ModConfig.SERVER.virtualTickBankCapacity.get()));
+				}
+			} catch (RuntimeException ignored) {
+				// 配置未就绪时使用内置默认
+			}
+			cachedConfiguredMaxBatchTicks = max;
+			// 调低容量只暂停新增入账，已有挂账继续保留。
+			pendingTickLimit = bank;
 		}
 	}
 
@@ -237,9 +250,9 @@ public class TickAccelTracker {
 	 * 计算本 gameTick 的批量执行预算（配置上限 × TPS 自适应因子）。
 	 * <br/>
 	 * 每 {@link #BUDGET_REFRESH_INTERVAL}（10 tick）刷新一次配置上限；MSPT 因子每个
-	 * 真实游戏刻刷新，使 1024 默认预算能在出现负载尖峰后立即降级：
+	 * 真实游戏刻刷新，使默认预算能在出现负载尖峰后立即降级：
 	 * <ul>
-	 *   <li>健康服务器（avgMSPT ≤ 50ms）：满额 = 配置上限（默认 1024）</li>
+	 *   <li>健康服务器（avgMSPT ≤ 50ms）：满额 = 配置上限（默认 2048）</li>
 	 *   <li>轻微卡顿（50-100ms）：线性降级到 10%</li>
 	 *   <li>严重卡顿（>100ms）：保底 10%（最低 1）</li>
 	 * </ul>
@@ -252,28 +265,17 @@ public class TickAccelTracker {
 	 * @return 批量预算（范围 [1, 配置上限]）
 	 */
 	public int getBatchBudget(long currentTick) {
-		if (isIntervalElapsed(currentTick, lastBudgetRefreshTick, BUDGET_REFRESH_INTERVAL)) {
-			lastBudgetRefreshTick = currentTick;
-			int max = MAX_BATCH_TICKS;
-			try {
-				if (ModConfig.areServerSpecsLoaded()) {
-					max = Math.max(1, Math.min(1024, ModConfig.SERVER.maxBatchTicksPerTick.get()));
-				}
-			} catch (RuntimeException ignored) {
-				// 配置未就绪时使用内置默认
-			}
-			cachedConfiguredMaxBatchTicks = max;
-		}
+		refreshConfiguredLimits(currentTick);
 		double factor = ServerTickTimeMonitor.getInstance().getTpsFactor(currentTick);
 		cachedBatchBudget = Math.max(1, Math.min(cachedConfiguredMaxBatchTicks,
 				SaturatingMath.saturatingCeilToInt(cachedConfiguredMaxBatchTicks * factor)));
-		if (pendingVirtualTicks >= MAX_PENDING_TICKS
+		if (pendingVirtualTicks >= pendingTickLimit
 				&& isIntervalElapsed(currentTick, lastSaturationWarnTick, SATURATION_WARN_INTERVAL)) {
 			lastSaturationWarnTick = currentTick;
 			LogThrottle.warn("tick_bank_saturated",
-					"虚拟 tick 银行已饱和（{}），加速倍率超过每刻预算 {}，产能被限制为预算值；"
-							+ "可在配置 maxBatchTicksPerTick 中调高上限",
-					MAX_PENDING_TICKS, cachedBatchBudget);
+					"虚拟 tick 银行已饱和（{}），当前每刻预算 {} 无法及时消化积压；"
+							+ "请结合 MSPT、加速需求及 maxBatchTicksPerTick 检查负载",
+					pendingTickLimit, cachedBatchBudget);
 		}
 		return cachedBatchBudget;
 	}
@@ -313,6 +315,7 @@ public class TickAccelTracker {
 		callsInPreviousTick = 1;
 		pendingVirtualTicks = 0L;
 		lastBudgetRefreshTick = Long.MIN_VALUE;
+		pendingTickLimit = (int) MAX_PENDING_TICKS;
 		cachedBatchBudget = MAX_BATCH_TICKS;
 		cachedConfiguredMaxBatchTicks = MAX_BATCH_TICKS;
 		lastSaturationWarnTick = Long.MIN_VALUE;

@@ -58,6 +58,8 @@ public final class ModItems {
 
 	public static final DeferredRegister<net.minecraft.world.item.Item> ITEMS =
 			DeferredRegister.create(net.minecraftforge.registries.ForgeRegistries.ITEMS, ProductiveBeesGenesis.MOD_ID);
+    public static final net.minecraftforge.registries.RegistryObject<com.ayoshiko.productivebeesgenesis.item.BeeDesignerItem> BEE_DESIGNER = ITEMS.register("bee_designer", () -> new com.ayoshiko.productivebeesgenesis.item.BeeDesignerItem(new Item.Properties()));
+
 
 	/** PB 13 upgrades backported for Genesis machines; PB 12 has no corresponding items. */
 	public static final RegistryObject<cy.jdkdigital.productivebees.common.item.UpgradeItem> TIME_2_UPGRADE =
