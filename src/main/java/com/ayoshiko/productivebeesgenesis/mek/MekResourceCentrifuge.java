@@ -15,7 +15,7 @@ final class MekResourceCentrifuge {
 
 	static boolean accepts(PbRecipeContext context, ItemStack input) {
 		return context instanceof BlockEntity entity && context.level() instanceof ServerLevel level
-				&& (ResourceRuntime.recipes(level.getServer()).centrifuge(input) != null
+				&& (ResourceRuntime.centrifugeAdmission(level.getServer(), input) != ResourceRuntime.CentrifugeAdmission.UNMANAGED
 				|| ResourceCentrifugeProcessor.hasPendingInput(entity, input));
 	}
 
@@ -33,7 +33,7 @@ final class MekResourceCentrifuge {
 		var input = context.inputSlot(lane).getStack();
 		if (context.level() instanceof ServerLevel level && !hasWork(context, lane)
 				&& input.getItem() instanceof net.minecraft.world.item.HoneycombItem
-				&& ResourceRuntime.recipes(level.getServer()).centrifuge(input) == null
+				&& ResourceRuntime.centrifugeAdmission(level.getServer(), input) == ResourceRuntime.CentrifugeAdmission.UNMANAGED
 				&& finder.findPbRecipe(input) == null
 				&& !com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler.isMyriadCreationsItem(input)) {
 			new Access(context, lane, 0, progress, completer, finder).returnInput();

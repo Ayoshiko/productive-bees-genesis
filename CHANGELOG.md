@@ -29,6 +29,42 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
+## [Unreleased]
+
+### 变更
+
+- 减少机械蜂箱与离心机重复准备产出上界、解析旧工作和编码产物审计文本的开销，并减少空批次结算、高倍率熔炼及物流交接的临时分配。缓存按完整物品组件区分身份，随配方、升级、原文或注册表变化失效；实际容量、费用和接收结果仍实时校验。
+- 改进 AE2 拉取与回送：普通取料复用短时库存目录，库存保留策略仍核对当前库存；拉取与回送分别等待，满载回送不再额外推迟正常取料。断网时已有余量优先安全保管，恢复或换网后继续交付。
+- 优化蜜蜂编辑器首次教程：检查步骤直接定位校验按钮，最后一步明确圈出“应用到世界”和“导出到本机”。没有应用权限时说明原因并指向本机导出；完成教程后停留在出口附近，保留编辑内容，实际应用仍需原确认流程。窄窗口和低高度窗口按可用空间安排提示，可跳过或从设置重新查看。
+
+### 修复
+
+- 修复关闭万象创世蜜蜂总开关后仍可用木棍转化获取、在蜂箱中生产或继续专属蜜脾转化的问题。禁用只影响万象创世，其它蜜蜂与通用机器照常工作；已有蜜蜂、物品和已付周期保留，蜜蜂槽的 Shift 详情明确显示停工原因及恢复方式。
+- 修复机械蜂箱输出槽、溢出缓冲和已付产物同时积压时，仍每刻反复尝试满载的本地输出、ME 存储、相邻容器或直连离心机而增加 tick 开销的问题。连续零接收时短暂降低重试频率，保留原产物和生产进度；本地腾位、路由变化或成功交付后及时恢复，不降低其它正常蜂箱的生产频率。
+- 修复扩展资源注册、重载或账户准备失败时牵连普通蜜蜂、Wanna 抽蜂和普通蜜脾加工／AE2 取料的问题。故障仅暂停声明相应扩展产出的蜂种与资源车道，成功重载后自动恢复；Shift 详情区分正在重载、资源配方／依赖不可用和账户／容量等待。
+- 强化旧蜂箱的产物与已付周期恢复：读档及成功重载后有界重试暂时无法解码的原始产物，保留完整组件和数量；换蜂后的动态旧周期继续独立保管，新蜂可正常生产。失效账户引用仍锁住原已付车道，未知交付和损坏原文继续保管等待核验，避免自动重放或补发。
+- 修复原生 FE 出口只模拟接收 1 FE，被 Mekanism 等整数能量换算桥误判为满载，导致资源蜜脾被返还或停工的问题。预检采用有界模拟金额，实际交付继续按原余额和真实接收量结算。
+- 修复高倍率下组合蜜脾转换产物的预检顺序与实际入槽顺序不一致，容量足够却误判为等待输出的问题。统一产物顺序，保留原产量、转换余料和真实容量限制。
+- 修复高倍率熔炼使用完整 tick 更新前的旧配方缓存，以及中途失败后部分车道的批次未正确结束的问题。已开始的批次仍逐一清理，合并费用只结算一次，并保留最初失败及后续清理错误。
+
+### English
+
+#### Changed
+
+- Reduced repeated maximum-output preparation, retained-work decoding and audit-text encoding in mechanical apiaries and centrifuges, with fewer temporary allocations in empty batch settlement, accelerated smelting and logistics handoffs. Caches distinguish full item components and invalidate when recipes, upgrades, original data or registries change; current capacity, costs and actual acceptance are still checked.
+- Improved AE2 pulling and returns. Ordinary pulls reuse a short-lived inventory directory while stock-retention policies still check current stock. Pulling and returns use separate delays, so full return destinations no longer add a delay to ordinary pulls. Existing leftovers stay safely retained across disconnections and resume delivery when the network recovers or changes.
+- Improved the bee editor's first tutorial. Validation now points directly to the check button, and the final step highlights “Apply to world” and “Export locally”. Players without application permission receive an explanation and a local-export path. Finishing leaves the editor near these actions and preserves edits; applying still uses the original confirmation. Narrow and low-height windows place guidance within the available space, and the tutorial can be skipped or reopened from settings.
+
+#### Fixed
+
+- Fixed the Myriad Creations master switch allowing stick conversion, hive production or special comb conversion after disabling the bee. Only Myriad Creations is affected; other bees and machines keep working. Existing bees, items and paid cycles are retained, and the bee-slot Shift tooltip explains the stop reason and how to resume.
+- Fixed mechanical apiaries repeatedly retrying full local outputs, ME storage, adjacent containers or directly connected centrifuges every tick when their output slots, overflow buffer and paid products are backed up. Repeated zero acceptance now uses a short retry delay while retaining products and progress. Local space changes, routing changes or successful delivery restore prompt retries without reducing production frequency in other healthy apiaries.
+- Fixed extended resource registration, reload or account preparation failures blocking ordinary bees, Wanna Bees, ordinary comb processing or AE2 input pulling. Only bees and lanes with the affected extended outputs pause, and a successful reload restores work automatically. Shift details distinguish an active reload, unavailable resource recipes/dependencies and account/capacity waits.
+- Strengthened recovery of old apiary products and paid cycles. Loading and successful reloads retry temporarily undecodable original products within a shared budget, preserving full components and amounts. Replaced bees' dynamic paid cycles stay separately retained while current bees work. Stale account references still isolate their original paid lanes; unknown transfers and damaged data remain retained for review without automatic replay or replacement products.
+- Fixed native FE output probing only 1 FE, which integer energy conversion bridges such as Mekanism could incorrectly report as full, returning resource combs or stopping work. Probes now use a bounded simulated amount; actual transfers still debit only the original balance and confirmed receipt.
+- Fixed combined comb conversion using different output orders for capacity checks and actual placement at high acceleration, incorrectly waiting for output despite sufficient space. Both paths now keep the same order while preserving yields, conversion remainders and real capacity limits.
+- Fixed accelerated smelting using a stale recipe cache from before the full tick, and leaving some lane batches open after a mid-batch failure. Started batches are cleaned up individually, combined energy usage is settled once, and both the original failure and subsequent cleanup errors are preserved.
+
 ## [1.2.1] - 2026-10-31
 
 **编辑器易用性与跨整合包迁移更新。** 本版改进蜜蜂编辑器的布局、文字、搜索、批量选择与导入导出，并修复多项升级兼容、保存和 ME 取料问题。客户端和服务端请一起更新到 1.2.1。

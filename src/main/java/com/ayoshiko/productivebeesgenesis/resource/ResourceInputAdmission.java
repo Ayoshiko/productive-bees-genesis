@@ -11,6 +11,9 @@ public final class ResourceInputAdmission {
 	private ResourceInputAdmission() {}
 
 	public static boolean allows(MinecraftServer server, ItemStack input) {
+		var admission = ResourceRuntime.centrifugeAdmission(server, input);
+		if (admission == ResourceRuntime.CentrifugeAdmission.UNMANAGED) return true;
+		if (admission == ResourceRuntime.CentrifugeAdmission.UNAVAILABLE) return false;
 		var recipe = ResourceRuntime.recipes(server).centrifuge(input);
 		return recipe == null || outputsAvailable(server, recipe.value());
 	}
@@ -20,6 +23,9 @@ public final class ResourceInputAdmission {
 		if (!(host.getLevel() instanceof ServerLevel level)
 				|| host.isRemoved() || level.getBlockEntity(host.getBlockPos()) != host) return false;
 		var server = level.getServer();
+		var admission = ResourceRuntime.centrifugeAdmission(server, input);
+		if (admission == ResourceRuntime.CentrifugeAdmission.UNMANAGED) return true;
+		if (admission == ResourceRuntime.CentrifugeAdmission.UNAVAILABLE) return false;
 		var recipe = ResourceRuntime.recipes(server).centrifuge(input);
 		if (recipe == null) return true;
 		if (!outputsAvailable(server, recipe.value())) return false;
@@ -39,6 +45,7 @@ public final class ResourceInputAdmission {
 	}
 
 	public static boolean allowsBee(MinecraftServer server, ResourceLocation bee) {
+		if (ResourceRuntime.recipesUnavailable(server)) return !ResourceRuntime.failedBeeDefinition(server, bee);
 		var index = ResourceRuntime.recipes(server);
 		var centrifuge = index.centrifugeForBee(bee);
 		if (centrifuge != null && !outputsAvailable(server, centrifuge.value())) return false;

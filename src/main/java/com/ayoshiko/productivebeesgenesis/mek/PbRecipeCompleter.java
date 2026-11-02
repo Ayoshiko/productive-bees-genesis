@@ -16,7 +16,7 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.IdentityHashMap;
+import it.unimi.dsi.fastutil.objects.Reference2ObjectLinkedOpenHashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -70,10 +70,10 @@ public class PbRecipeCompleter {
 	/**
 	 * 本 tick 尚未插入的 PB 配方输出(按 ItemStack key 累加数量)
 	 * <br/>
-	 * 使用 {@link IdentityHashMap}:key 实例稳定,引用相等即可,
-	 * 避免 merge/get 调用 {@link ItemStack#hashCode()}(遍历数据组件,开销高)。
+	 * 按引用识别模板并保留插入顺序；转换上界与实际产物必须以同一顺序认领空槽，
+	 * 否则较小产物抢槽会使已通过上界检查的批次被误拒收。
 	 */
-	private final Map<ItemStack, Integer> pendingOutputs = new IdentityHashMap<>(4);
+	private final Map<ItemStack, Integer> pendingOutputs = new Reference2ObjectLinkedOpenHashMap<>(4);
 
 	/** 当前聚合输出对应的 PB 配方(用于 flush 时按原顺序插入) */
 	@Nullable
@@ -102,8 +102,8 @@ public class PbRecipeCompleter {
 	private long outputUpgradeRevision;
 	private boolean preparationOverflow;
 	private CompoundTag invalidPending;
-	/** 每进程一个只读容量探针，复用其放置数组；绝不承接已付产物。 */
-	private PbRecipeCompleter capacityProbe;
+	/** 只缓存准备结果；每次准入仍复核当前槽位和外部路由状态。 */
+	private PbOutputCapacityCache capacityCache;
 
 	public PbRecipeCompleter(PbRecipeContext context) {
 		this.context = context;
@@ -263,9 +263,8 @@ public class PbRecipeCompleter {
 	}
 
 	boolean fitsMaximum(CentrifugeRecipe recipe, int lane, int inputs) {
-		if (capacityProbe == null) capacityProbe = new PbRecipeCompleter(context);
-		prepareInto(capacityProbe, recipe, inputs, 0, true);
-		return capacityProbe.fitsPrepared(lane, inputs);
+		if (capacityCache == null) capacityCache = new PbOutputCapacityCache(this, context);
+		return capacityCache.fits(recipe, lane, inputs);
 	}
 
 	private void prepareInto(PbRecipeCompleter batch, CentrifugeRecipe recipe, int inputs, long seed, boolean maximum) {
@@ -440,7 +439,7 @@ public class PbRecipeCompleter {
 	 * 不清空 {@link #pendingFluidTemplate},同配方流体模板可复用,避免重新调用 getFluidOutputs()。
 	 */
 	void clearPendingOutputs() {
-		// IdentityHashMap.clear 即使为空也遍历底层数组；空闲进程每刻都会重置。
+		// 空闲进程无需重复清理模板索引。
 		if (!pendingOutputs.isEmpty()) pendingOutputs.clear();
 		pendingFluidAmount = 0;
 		pendingInputShrink = 0;
@@ -455,6 +454,7 @@ public class PbRecipeCompleter {
 		pendingRecipeOutputs = null;
 		pendingFluidTemplate = null;
 		clearPendingOutputs();
+		capacityCache = null;
 	}
 
 	/** 本 tick 已聚合的物品总数量(供协调器判断是否达到 flush 阈值) */
@@ -528,7 +528,7 @@ public class PbRecipeCompleter {
 		return pendingRecipeOutputs;
 	}
 
-	/** @return 本 tick 尚未插入的物品输出(IdentityHashMap,引用相等 key) */
+	/** @return 本 tick 尚未插入的物品输出（按引用相等，保持准备顺序） */
 	Map<ItemStack, Integer> getPendingOutputs() {
 		return pendingOutputs;
 	}

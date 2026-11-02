@@ -7,6 +7,7 @@ import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRollPlan;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceProductionRecipe;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceProductionSnapshot;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.init.ModEntities;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
@@ -42,11 +43,11 @@ final class ApiaryResourceProduction {
         // 正式入箱保留蜂笼的 entity 字段，旧居住数据使用 id；共用已有解析规则。
         if (!reuse && !spec.dynamic()
                 && BeeNbtHelper.resolveEntityType(slot.getBeeData()) != ModEntities.CONFIGURABLE_BEE.get()) return null;
-        var host = ResourceHiveHost.ensureMechanical(tile);
-        if (host == null) return null;
-        host.productionMonitor().observe(index, spec.outputs(), ResourceProductionSnapshot.State.WAITING_OUTPUT,
-                tile.getLevel().getGameTime());
         try {
+            var host = ResourceHiveHost.ensureMechanical(tile);
+            if (host == null) return null;
+            host.productionMonitor().observe(index, spec.outputs(), ResourceProductionSnapshot.State.WAITING_OUTPUT,
+                    tile.getLevel().getGameTime());
             var account = host.account(tile);
             if (!account.canExtract(host.reference()) || account.laneSuspended(index)) return null;
             Prepared prepared = previous;
@@ -64,7 +65,13 @@ final class ApiaryResourceProduction {
             host.productionMonitor().observe(index, spec.outputs(), ResourceProductionSnapshot.State.WAITING_WORK,
                     tile.getLevel().getGameTime());
             return prepared;
-        } catch (IllegalArgumentException | IllegalStateException | ArithmeticException blocked) { return null; }
+        } catch (IllegalArgumentException | IllegalStateException | ArithmeticException blocked) {
+            return null;
+        } catch (RuntimeException | LinkageError failure) {
+            // 尚未提交生产；原账户保留，故障只暂停当前资源蜂槽。
+            LogThrottle.warn("apiary_resource_prepare", "扩展资源准备失败，位置 {}，蜂种 {}", tile.getBlockPos(), type, failure);
+            return null;
+        }
     }
 
     static boolean eligible(TileEntityMekApiary tile, PbResourceCatalog.Spec spec,

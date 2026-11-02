@@ -243,6 +243,43 @@ class ResourceCentrifugeMinecraftTest {
 		assertTrue(account.available().isEmpty());
 	}
 
+	@Test void retainedWorkLookupInvalidatesRawAccountAndRegistryAndProtectsInputCopies() {
+		var store = new ResourceAccounts(() -> {});
+		var account = ResourceAccountsMinecraftTest.account(store);
+		var host = org.mockito.Mockito.mock(ResourceHiveHost.class);
+		var entity = org.mockito.Mockito.mock(net.minecraft.world.level.block.entity.BlockEntity.class);
+		var level = org.mockito.Mockito.mock(net.minecraft.world.level.Level.class);
+		org.mockito.Mockito.when(entity.getLevel()).thenReturn(level);
+		org.mockito.Mockito.when(level.registryAccess()).thenReturn(REGISTRIES);
+		org.mockito.Mockito.when(host.reference()).thenReturn(account.reference());
+		org.mockito.Mockito.when(host.account(entity)).thenReturn(account);
+		var work = new ResourceCentrifugeWork(ID, recipe(100), recipe(100).input(true), 7, 91, 5);
+		account.centrifugeWork.put(0, work.save(REGISTRIES));
+		try (var hosts = org.mockito.Mockito.mockStatic(ResourceHiveHost.class)) {
+			hosts.when(() -> ResourceHiveHost.existing(entity)).thenReturn(host);
+			assertTrue(ResourceCentrifugeProcessor.hasPendingInput(entity, work.input));
+			var borrowed = ResourceCentrifugeProcessor.requiredLaneInput(entity, 0);
+			borrowed.remove(PbDataComponents.beeType());
+			assertTrue(ItemStack.isSameItemSameComponents(work.input, ResourceCentrifugeProcessor.requiredLaneInput(entity, 0)));
+			var changed = work.input.copy();
+			changed.set(DataComponents.CUSTOM_NAME, Component.literal("replaced retained input"));
+			account.centrifugeWork.put(0, new ResourceCentrifugeWork(ID, recipe(100), changed, 7, 91, 5).save(REGISTRIES));
+			assertFalse(ResourceCentrifugeProcessor.hasPendingInput(entity, work.input));
+			assertTrue(ResourceCentrifugeProcessor.hasPendingInput(entity, changed));
+			var malformed = account.centrifugeWork.get(0).copy();
+			malformed.getCompound("input").remove("id");
+			account.centrifugeWork.put(0, malformed);
+			assertTrue(ResourceCentrifugeProcessor.requiredLaneInput(entity, 0).isEmpty());
+			assertEquals(malformed, account.centrifugeWork.get(0));
+			account.centrifugeWork.put(0, work.save(REGISTRIES));
+			assertTrue(ResourceCentrifugeProcessor.hasPendingInput(entity, work.input));
+			var replacement = ResourceAccountsMinecraftTest.account(new ResourceAccounts(() -> {}));
+			org.mockito.Mockito.when(host.account(entity)).thenReturn(replacement);
+			assertNull(ResourceCentrifugeProcessor.requiredLaneInput(entity, 0));
+			assertFalse(ResourceCentrifugeProcessor.hasPendingInput(entity, work.input));
+		}
+	}
+
 	@Test void nativeCentrifugesKeepLegacyRecoveryButDoNotInterceptResourceRecipes() {
 		for (String name : List.of("centrifuge", "powered_centrifuge", "heated_centrifuge")) {
 			var block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse("productivebees:" + name));

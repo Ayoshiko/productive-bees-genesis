@@ -59,6 +59,37 @@ class PbCombinedOutputMinecraftTest {
                 e -> e.getKey().getItem().toString() + e.getKey().getComponentsPatch(), Map.Entry::getValue));
     }
 
+    @Test void directAeKeepsReceiptBasedCommitWithEmptyOrFullLocalOutputs() {
+        for (boolean full : List.of(false, true)) {
+            var context = mock(com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase.class);
+            when(context.productivityModifier()).thenReturn(2);
+            when(context.productivebeesgenesis$isDirectAeOutputEnabled()).thenReturn(true);
+            when(context.primaryOutputSlot(0)).thenReturn(BasicInventorySlot.at(null, 0, 0));
+            when(context.secondaryOutputSlot(0)).thenReturn(BasicInventorySlot.at(null, 0, 0));
+            when(context.tertiaryOutputSlot(0)).thenReturn(BasicInventorySlot.at(null, 0, 0));
+            when(context.inputSlot(0)).thenReturn(BasicInventorySlot.at(null, 0, 0));
+            context.inputSlot(0).setStack(new ItemStack(Items.HONEYCOMB, 8));
+            if (full) {
+                for (var slot : List.of(context.primaryOutputSlot(0), context.secondaryOutputSlot(0), context.tertiaryOutputSlot(0))) {
+                    slot.setStack(new ItemStack(Items.DIAMOND, 64));
+                }
+            }
+            when(context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyInt())).thenAnswer(call -> call.getArgument(1));
+            var output = new ChancedOutput(Ingredient.of(Items.IRON_INGOT), 1, 1, 1);
+            var recipe = new CentrifugeRecipe(Ingredient.of(Items.HONEYCOMB), List.of(output), null, 20) {
+                @Override public FluidStack getFluidOutputs() { return FluidStack.EMPTY; }
+            };
+            var owner = new PbRecipeCompleter(context);
+            owner.accumulatePbRecipeOutputsBatch(recipe, 0, 2, 6);
+            assertTrue(owner.flushPendingPbOutputs(0));
+            assertEquals(2, context.inputSlot(0).getCount());
+            assertFalse(owner.hasPendingOutputs());
+            verify(context).productivebeesgenesis$pushGeneratedItemToAe(any(), eq(12));
+            verify(context, never()).productivebeesgenesis$pushGeneratedItemToNeighbors(any(), anyInt());
+            assertEquals(full ? 64 : 0, context.primaryOutputSlot(0).getCount());
+        }
+    }
+
     @Test void prepareSharesOrdinaryGenerationWithoutTouchingInputOrOutput() {
         var context = context();
         context.inputSlot(0).setStack(new ItemStack(Items.HONEYCOMB, 8));
@@ -331,5 +362,83 @@ class PbCombinedOutputMinecraftTest {
         assertEquals(64, returned);
         assertTrue(context.inputSlot(0).isEmpty());
         assertFalse(restored.hasCommittedPendingOutputs());
+    }
+
+    @Test void cachedMaximumRechecksLiveSlotsAndAllUpgradeRevisions() {
+        var context = context();
+        var owner = new PbRecipeCompleter(context);
+        var recipe = recipe(1);
+        assertTrue(owner.fitsMaximum(recipe, 0, 16));
+        for (var slot : List.of(context.primaryOutputSlot(0), context.secondaryOutputSlot(0), context.tertiaryOutputSlot(0))) {
+            slot.setStack(new ItemStack(Items.STONE, 64));
+        }
+        assertFalse(owner.fitsMaximum(recipe, 0, 16));
+        for (var slot : List.of(context.primaryOutputSlot(0), context.secondaryOutputSlot(0), context.tertiaryOutputSlot(0))) {
+            slot.setStack(ItemStack.EMPTY);
+        }
+        assertTrue(owner.fitsMaximum(recipe, 0, 16));
+        var level = mock(net.minecraft.world.level.Level.class);
+        when(context.level()).thenReturn(level);
+        when(level.registryAccess()).thenReturn(REGISTRIES);
+        when(context.productivebeesgenesis$hasRawOreSmeltingUpgrade()).thenReturn(true);
+        try (var conversions = mockStatic(com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.class)) {
+            assertTrue(owner.fitsMaximum(recipe, 0, 16));
+            assertTrue(owner.fitsMaximum(recipe, 0, 16));
+            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingOutputs(
+                    eq(level), any()), times(1));
+            when(context.stabilityBonus()).thenReturn(.5f);
+            assertTrue(owner.fitsMaximum(recipe, 0, 16));
+            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingOutputs(
+                    eq(level), any()), times(2));
+            com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis.RECIPE_VERSION.incrementAndGet();
+            assertTrue(owner.fitsMaximum(recipe, 0, 16));
+            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingOutputs(
+                    eq(level), any()), times(3));
+            var replacement = mock(net.minecraft.world.level.Level.class);
+            when(replacement.registryAccess()).thenReturn(REGISTRIES);
+            when(context.level()).thenReturn(replacement);
+            assertTrue(owner.fitsMaximum(recipe, 0, 16));
+            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingOutputs(
+                    eq(replacement), any()), times(1));
+        }
+    }
+
+    @Test void capacityPreparationRetainsRecipeIdentityOrderAcrossIndependentBatches() {
+        var context = context();
+        var owner = new PbRecipeCompleter(context);
+        var recipe = recipe(1);
+        var expected = recipe.getRecipeOutputs().keySet().stream().map(ItemStack::getItem).toList();
+        assertEquals(expected, owner.prepare(recipe, 8, 0, true).getPendingOutputs().keySet().stream().map(ItemStack::getItem).toList());
+        assertEquals(expected, owner.prepare(recipe, 8, 0, false).getPendingOutputs().keySet().stream().map(ItemStack::getItem).toList());
+        var overflow = owner.prepare(recipe, 8, 0, false);
+        overflow.getPendingOutputs().clear();
+        var first = new ItemStack(Items.DIAMOND);
+        var sameIdentity = first.copy();
+        overflow.getPendingOutputs().put(first, 4);
+        overflow.getPendingOutputs().put(sameIdentity, 5);
+        assertEquals(2, overflow.getPendingOutputs().size());
+        assertEquals(List.of(first, sameIdentity), List.copyOf(overflow.getPendingOutputs().keySet()));
+    }
+
+    @Test void emptyFlushKeepsFluidOnlyAndInputOnlyCommitSemantics() {
+        var context = context();
+        var owner = new PbRecipeCompleter(context);
+        assertTrue(owner.flushPendingPbOutputs(0));
+        var fluidRecipe = new CentrifugeRecipe(Ingredient.of(Items.HONEYCOMB), List.of(), null, 20) {
+            @Override public FluidStack getFluidOutputs() { return new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 10); }
+        };
+        context.inputSlot(0).setStack(new ItemStack(Items.HONEYCOMB, 2));
+        owner.accumulatePbRecipeOutputs(fluidRecipe, 0, 1);
+        assertFalse(owner.flushPendingPbOutputs(0));
+        assertEquals(10, owner.getPendingFluidAmount());
+        assertEquals(2, context.inputSlot(0).getCount());
+        owner.resetPendingRecipe();
+        var noOutputs = new CentrifugeRecipe(Ingredient.of(Items.HONEYCOMB), List.of(), null, 20) {
+            @Override public FluidStack getFluidOutputs() { return FluidStack.EMPTY; }
+        };
+        owner.accumulatePbRecipeOutputs(noOutputs, 0, 1);
+        assertTrue(owner.flushPendingPbOutputs(0));
+        assertEquals(1, context.inputSlot(0).getCount());
+        assertEquals(0, owner.pendingInputShrink());
     }
 }

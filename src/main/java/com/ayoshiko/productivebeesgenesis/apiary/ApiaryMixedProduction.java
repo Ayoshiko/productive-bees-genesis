@@ -113,6 +113,7 @@ final class ApiaryMixedProduction {
 	ApiaryRoutedOutput sample(long cycles, long rolls, long seed, List<ItemStack> extra) {
 		var generated = tile.getProduceProcessor().prepareResourceBatch(slot, Math.toIntExact(cycles), type,
 				outputs, upgrades, rolls, conversion, sampling, seed, nativeProduction);
+		if (extra.isEmpty()) return new ApiaryRoutedOutput(tile, generated, upgrades);
 		var items = new ArrayList<>(generated.items());
 		items.addAll(extra);
 		return new ApiaryRoutedOutput(tile, new BeeProduceProcessor.Generated(items, generated.fluid(), generated.fluidAmount()), upgrades);

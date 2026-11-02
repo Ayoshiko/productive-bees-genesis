@@ -103,6 +103,10 @@ public final class CentrifugeMixinHelper {
 			CentrifugeBlockEntity entity,
 			boolean heated) {
 		ItemStack input = invHandler.getStackInSlot(InventoryHandlerHelper.INPUT_SLOT);
+		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()
+				&& MyriadCreationsEventHandler.isMyriadCreationsItem(input)) {
+			return false;
+		}
 		if (!MyriadCreationsEventHandler.isMyriadCreationsItem(input)) return true;
 		if (recipe == null) return false;
 		int modifier = Math.min(input.getCount(), Math.min(64,

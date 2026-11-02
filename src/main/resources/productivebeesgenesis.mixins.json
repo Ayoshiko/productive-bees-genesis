@@ -6,6 +6,7 @@
   "mixins": [
     "beehive.BeeContainerFlowerDataMixin",
     "beehive.DesignerRetiredSimulationMixin",
+    "beehive.MyriadDisabledHiveMixin",
     "beehive.ResourceServerLifecycleMixin",
     "accessor.BasicInventorySlotAccessor",
     "accessor.BeeDataAccessor",
@@ -58,6 +59,9 @@
     "mekenergistics.MekEnergisticsPatternGuardMixin",
     "mekenergistics.MekEnergisticsTargetResolverGuardMixin",
     "recipe.DesignerRecipeUnificationMixin",
+    "recipe.MyriadDisabledRecipeMixin",
+    "recipe.MyriadDisabledFishingMixin",
+    "recipe.MyriadDisabledNestMixin",
     "recipe.AdvancedBeehiveRecipeSerializerMixin",
     "recipe.BeeBreedingRecipeSerializerMixin",
     "recipe.BeeConversionRecipeSerializerMixin",
@@ -65,6 +69,7 @@
     "recipe.BeeSpawningRecipeSerializerMixin",
     "BeeConfigReloadMixin",
     "DesignerRetiredBeeMixin",
+    "MyriadDisabledBeeMixin",
     "BeeHelperMixin",
     "AbstractUpgradeItemMixin"
   ],

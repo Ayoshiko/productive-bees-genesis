@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** 每服务器每配方代际只建一次的 R1 准入索引；热路径不扫描 PB 配方。 */
 public final class PbResourceCatalog {
@@ -52,6 +53,12 @@ public final class PbResourceCatalog {
 	private PbResourceCatalog(long revision, Map<ResourceLocation, Spec> entries) {
 		this.revision = revision;
 		this.entries = Map.copyOf(entries);
+	}
+
+	static PbResourceCatalog unavailable(long revision, Set<ResourceLocation> bees) {
+		var entries = new HashMap<ResourceLocation, Spec>();
+		for (var bee : bees) entries.put(bee, new Spec(List.of(), "resource_registration_failed"));
+		return new PbResourceCatalog(revision, entries);
 	}
 
 	static PbResourceCatalog build(ServerLevel level, ResourceRecipeIndex index) {
@@ -97,7 +104,7 @@ public final class PbResourceCatalog {
 				}
 				entries.put(bee, new Spec(outputs, problem, items, nativeItems, containerFlower));
 			}
-		} catch (RuntimeException failure) {
+        } catch (RuntimeException | LinkageError failure) {
 			ProductiveBeesGenesis.LOGGER.error("资源蜂准入索引构建失败，暂停本代际 PB 扩展生产", failure);
 			for (var bee : index.beeTypes()) entries.put(bee, new Spec(List.of(), "invalid_recipe_index"));
 		}

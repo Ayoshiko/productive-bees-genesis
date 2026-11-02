@@ -419,6 +419,7 @@ public final class Ae2OutputStateHolder {
 
 	/** 失效 AE2 网格/存储缓存（gridChanged 回调触发） */
 	public void onResourceOutputRecovered() {
+		pushState.getInputBackoff().reset();
 		inputPullCooldown.reset();
 		inputPullInitialized = false;
 		Object registry = pushState.getInputKeyBackoffRegistry();
@@ -436,6 +437,9 @@ public final class Ae2OutputStateHolder {
 	/** 失效 AE2 网格/存储缓存（gridChanged 回调触发） */
 	public void onGridChanged() {
 		releaseNetworkCoordination();
+		if (cachedMeStorage != null && Ae2IntegrationLoader.isAe2Loaded()) {
+			Ae2NetworkCandidateDirectory.invalidate(cachedMeStorage);
+		}
 		cachedGrid = null;
 		cachedStorage = null;
 		cachedMeStorage = null;
@@ -457,6 +461,7 @@ public final class Ae2OutputStateHolder {
 		pushState.getFluidBackoff().reset();
 		pushState.getReturnBackoff().reset();
 		inputPullCooldown.reset();
+		pushState.getInputBackoff().reset();
 		lastPullCounter = 0L;
 		inputPullInitialized = false;
 		Object inputRegistry = pushState.getInputKeyBackoffRegistry();

@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerLifecycle;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
@@ -232,7 +233,10 @@ class BeeSlotTickProcessor {
 		// 必须在首次调用 upgradeHandler.getXxx() 之前执行，确保缓存守卫正确递增
 		upgradeHandler.tickRefresh();
 		Level level = slotManager.getLevel();
-		if (level instanceof ServerLevel serverLevel && ResourceRuntime.reloadBlocked(serverLevel.getServer())) {
+		if (level instanceof ServerLevel serverLevel && ResourceRuntime.reloadInProgress(serverLevel.getServer())) {
+			for (BeeSlot slot : slotManager.getBeeSlots()) {
+				if (!slot.isEmpty()) slot.setState(BeeState.WAITING_RELOAD);
+			}
 			activationCounter.deactivateAll();
 			return;
 		}
@@ -315,6 +319,8 @@ class BeeSlotTickProcessor {
 		Arrays.fill(runnableBeeSlots, false);
 		Arrays.fill(resourceSpecs, null);
 		var resourceCatalog = level instanceof ServerLevel serverLevel ? ResourceRuntime.pbCatalog(serverLevel) : null;
+		boolean resourceReloadBlocked = level instanceof ServerLevel serverLevel
+				&& ResourceRuntime.reloadBlocked(serverLevel.getServer());
 		int runnableBeeCount = 0;
 		int slotStart = beeSlots.length == 0 ? 0 : Math.floorMod(beeSlotRotationIndex, beeSlots.length);
 		for (int slotOffset = 0; slotOffset < beeSlots.length; slotOffset++) {
@@ -338,6 +344,11 @@ class BeeSlotTickProcessor {
 				activationCounter.onBeeDeactivated(i);
 				continue;
 			}
+			if (MyriadCreationsEventHandler.isMyriadCreationsDisabled(beeTypeKey)) {
+				slot.setState(BeeState.MYRIAD_DISABLED);
+				activationCounter.onBeeDeactivated(i);
+				continue;
+			}
 			if (checkBeeGenes) {
 				BeeState blockingState = BeeWorkConditionEvaluator.blockingState(
 						resolveBeeWorkTraitsForSlot(slot, i),
@@ -355,14 +366,21 @@ class BeeSlotTickProcessor {
 			}
 			var resourceSpec = resourceCatalog == null ? null : resourceCatalog.get(beeTypeKey);
 			resourceSpecs[i] = resourceSpec;
-			resourcePrepared[i] = resourceSpec == null ? null : ApiaryResourceProduction.prepare(tile, resourceSpec, upgradeHandler, slot, i, beeTypeKey, resourcePrepared[i], batchUpgrades, flowerCacheVersion);
+			resourcePrepared[i] = resourceSpec == null || resourceReloadBlocked ? null
+					: ApiaryResourceProduction.prepare(tile, resourceSpec, upgradeHandler, slot, i, beeTypeKey, resourcePrepared[i], batchUpgrades, flowerCacheVersion);
 			boolean resourceBlocked = resourceSpec != null && resourcePrepared[i] == null;
 			BeeState blockingState = sharedBlockingState;
 			if (blockingState == null && !production.canAdvance(i, slot)) {
 				blockingState = BeeState.WAITING_PREVIOUS_BEE;
 			}
 			if (blockingState == null && resourceBlocked) {
-				blockingState = BeeState.WAITING_RESOURCE;
+				if (resourceReloadBlocked) {
+					blockingState = BeeState.WAITING_RESOURCE_RELOAD;
+				} else if (!resourceSpec.validForMechanical()) {
+					blockingState = BeeState.WAITING_RESOURCE_RECIPE;
+				} else {
+					blockingState = BeeState.WAITING_RESOURCE;
+				}
 			}
 			if (blockingState == null && resourceSpec == null) {
 				if (pendingFluidBlocked) {
@@ -549,6 +567,10 @@ class BeeSlotTickProcessor {
 
     private void settleProductionGroup(ResourceLocation type, OrderedSlotIndex indices, BeeSlot[] paidBees,
             int[] paidCounts, boolean retained, Level level, ApiaryBatchUpgradeSnapshot upgrades) {
+        // 尚未生成的已付周期仍属于原蜜蜂；禁用期间保留，重新启用后结清。
+        if (MyriadCreationsEventHandler.isMyriadCreationsDisabled(type)) {
+            return;
+        }
         boolean feederDependentProduce = MultiFlowerBeeAdapter.isMultiFlowerBee(type);
         // 固定配方的周期已经付费完成，不再检查当前花源；动态产物仍需真实花源才能结清。
         if ((feederDependentProduce || PBConstants.WANNA_TYPE.equals(type)) && !feederManager.hasValidFlower(type)) {

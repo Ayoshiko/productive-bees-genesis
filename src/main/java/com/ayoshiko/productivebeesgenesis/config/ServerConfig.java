@@ -181,7 +181,9 @@ public final class ServerConfig {
 
 		// 万象创世蜜蜂总开关
 		myriadCreationsEnabled = builder
-				.comment("启用万象创世蜜蜂", "false时禁用蜜蜂相关功能，仅保留通用机械资源蜜蜂机器")
+				.comment("启用万象创世蜜蜂",
+						"false 时只停止万象创世蜜蜂的获取、繁殖、采蜜、蜂箱生产及专属蜜脾转化；其它蜜蜂和通用机器照常工作。",
+						"已有蜜蜂、物品和已付周期保留；重新启用后重载配方或重启服务器可恢复。")
 				.define("myriadCreationsEnabled", true);
 
 		balancePreset = builder

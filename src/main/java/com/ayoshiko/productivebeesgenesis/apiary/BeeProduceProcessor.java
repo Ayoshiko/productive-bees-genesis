@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2PushBackoff;
 import com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver;
 import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
@@ -56,9 +57,13 @@ public class BeeProduceProcessor {
 	private final ApiaryUpgradeHandler upgradeHandler;
 	private final TileEntityMekApiary apiary;
 	final ApiaryProductionState production;
-
-
-
+	final ApiaryOutputEvidenceCache outputEvidence = new ApiaryOutputEvidenceCache();
+	private final Ae2PushBackoff frozenOutputBackoff = new Ae2PushBackoff(50_000_000L, 200_000_000L);
+	private long frozenOutputVersion = Long.MIN_VALUE;
+	private long frozenProductionVersion = Long.MIN_VALUE;
+	private long frozenAeRetryNanos;
+	private int frozenTankAmount = -1;
+	private int frozenRoutingFlags = -1;
 	/** 产物分发器（直写输出槽 + 分段流体注入，复用数组跨 tick 零扩容） */
 	private final BeeProduceOutputDispatcher outputDispatcher;
 	private final MultiFlowerProductionCache multiFlowerProductionCache = new MultiFlowerProductionCache();
@@ -263,33 +268,60 @@ public class BeeProduceProcessor {
 	boolean flushFrozen(ApiaryBatchUpgradeSnapshot upgrades) {
         var custody = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(apiary);
         if (production.suspended() || custody.blocked()) return false;
-        for (ItemStack stack : production.items()) {
-            if (stack.isEmpty() || custody.blocked()) continue;
-            if (upgrades.directAeOutputEnabled() && !apiary.shouldHoldForCentrifuge(stack)) {
-                stack.shrink(apiary.pushGeneratedItemToAe(stack));
-                apiary.setChanged();
-            }
-            if (!stack.isEmpty() && upgrades.centrifugeDirectTransferEnabled() && !custody.blocked()) {
-                apiary.directTransferProducedToCentrifuges(List.of(stack));
-                apiary.setChanged();
-            }
-            if (!stack.isEmpty() && upgrades.directContainerOutputEnabled() && !apiary.shouldHoldForCentrifuge(stack)) {
-                stack.shrink(apiary.pushGeneratedItemToNeighbors(stack));
-                apiary.setChanged();
-            }
-            if (!stack.isEmpty() && !custody.blocked()) {
-                stack.shrink(com.ayoshiko.productivebeesgenesis.logistics.LocalOutputTransfer.insert(
-                        apiary.getOutputSlots(), stack, custody));
-                apiary.setChanged();
-            }
-            if (!stack.isEmpty()) {
-                boolean hold = apiary.shouldHoldForCentrifuge(stack);
-                stack.shrink(apiary.getOutputBuffer().accept(stack, hold));
-                if (!stack.isEmpty() && hold && !custody.blocked()) stack.shrink(apiary.pushGeneratedItemToAe(stack));
-                apiary.setChanged();
-            }
+        if (!production.hasFrozen()) {
+            frozenOutputBackoff.reset();
+            return true;
         }
-        production.itemsChanged();
+        long outputVersion = apiary.getOutputBuffer().getOutputVersion();
+        long productionVersion = production.frozenVersion();
+        int tankAmount = apiary.getFluidTank().getFluidAmount();
+        int routingFlags = (upgrades.directAeOutputEnabled() ? 1 : 0)
+                | (upgrades.centrifugeDirectTransferEnabled() ? 2 : 0)
+                | (upgrades.directContainerOutputEnabled() ? 4 : 0);
+        // 只节流整批零接收的冻结结果。新批次、本地腾位或路由变化立即重试；
+        // 外部容器无空间通知时，含相位抖动的单调时钟等待至多 250ms，不随加速倍率增长。
+        if (outputVersion != frozenOutputVersion || productionVersion != frozenProductionVersion
+                || tankAmount != frozenTankAmount || routingFlags != frozenRoutingFlags) {
+            frozenOutputBackoff.reset();
+        }
+        long now = System.nanoTime();
+        // 已记录的 AE 等待到期只唤醒一次，避免冻结等待再次推迟存储的合法重试。
+        boolean aeRetryDue = frozenAeRetryNanos > 0 && now >= frozenAeRetryNanos;
+        if (frozenOutputBackoff.shouldSkip(now) && !aeRetryDue) return false;
+        frozenAeRetryNanos = 0;
+        boolean itemsChanged = false;
+        long originalFluidAmount = production.fluidAmount();
+        try {
+            for (ItemStack stack : production.items()) {
+                if (stack.isEmpty() || custody.blocked()) continue;
+                int originalCount = stack.getCount();
+                try {
+                    if (upgrades.directAeOutputEnabled() && !apiary.shouldHoldForCentrifuge(stack)) {
+                        stack.shrink(apiary.pushGeneratedItemToAe(stack));
+                    }
+                    if (!stack.isEmpty() && upgrades.centrifugeDirectTransferEnabled() && !custody.blocked()) {
+                        apiary.directTransferProducedToCentrifuges(List.of(stack));
+                    }
+                    if (!stack.isEmpty() && upgrades.directContainerOutputEnabled() && !apiary.shouldHoldForCentrifuge(stack)) {
+                        stack.shrink(apiary.pushGeneratedItemToNeighbors(stack));
+                    }
+                    if (!stack.isEmpty() && !custody.blocked()) {
+                        stack.shrink(com.ayoshiko.productivebeesgenesis.logistics.LocalOutputTransfer.insert(
+                                apiary.getOutputSlots(), stack, custody));
+                    }
+                    if (!stack.isEmpty()) {
+                        boolean hold = apiary.shouldHoldForCentrifuge(stack);
+                        stack.shrink(apiary.getOutputBuffer().accept(stack, hold));
+                        if (!stack.isEmpty() && hold && !custody.blocked()) stack.shrink(apiary.pushGeneratedItemToAe(stack));
+                    }
+                } finally {
+                    itemsChanged |= originalCount != stack.getCount();
+                }
+            }
+        } finally {
+            // 后续路线异常也必须提交已接收前缀，原异常仍交给调用方处理。
+            if (itemsChanged) production.itemsChanged();
+        }
         if (production.fluidAmount() > 0 && !custody.blocked()) {
             if (upgrades.directAeOutputEnabled())
                 production.debitFluid(apiary.pushGeneratedFluidToAe(production.fluid(), production.fluidAmount()));
@@ -302,8 +334,27 @@ public class BeeProduceProcessor {
                 production.debitFluid(handed);
             }
         }
-        return !production.hasFrozen() && !custody.blocked();
+        boolean completed = !production.hasFrozen() && !custody.blocked();
+        if (completed || itemsChanged || originalFluidAmount != production.fluidAmount()) {
+            frozenOutputBackoff.recordSuccess();
+        } else if (!custody.blocked()) {
+            frozenOutputBackoff.recordFailure(System.nanoTime());
+        }
+        frozenOutputVersion = apiary.getOutputBuffer().getOutputVersion();
+        frozenProductionVersion = production.frozenVersion();
+        frozenTankAmount = apiary.getFluidTank().getFluidAmount();
+        frozenRoutingFlags = routingFlags;
+        if (upgrades.directAeOutputEnabled() && !completed && !custody.blocked()) {
+            long retry = apiary.productivebeesgenesis$getAe2StateHolder().getPushState()
+                    .getItemBackoff().getBackoffEndNanos();
+            if (retry > System.nanoTime()) frozenAeRetryNanos = retry;
+        }
+        return completed;
     }
+
+	void onOutputRoutingChanged() {
+		frozenOutputBackoff.reset();
+	}
 
 	/**
 	 * Retries the fluid suffix before a new production batch is started.

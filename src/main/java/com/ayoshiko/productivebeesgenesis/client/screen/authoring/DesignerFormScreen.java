@@ -1649,8 +1649,33 @@ public abstract class DesignerFormScreen extends Screen {
 		while (index + 1 < bands.size() && bands.get(index + 1).source() <= row) {
 			index++;
 		}
-		scroll.jump(Math.max(0, bandOffsets[index] - 12));
+		int available = Math.max(0, editorBottom() - contentTop - bands.get(index).height());
+		int margin = Math.min(12, available);
+		scroll.jump(Math.max(0, bandOffsets[index] - margin));
 		realizeRows();
+		if (bands.get(index).height() > editorBottom() - contentTop) {
+			var cell = bands.get(index).cell(row);
+			int cellLeft = left + (cell == null ? 0 : cell.x());
+			int cellRight = cellLeft + (cell == null ? contentWidth : cell.width());
+			for (PositionedWidget positioned : rowViews.get(index).widgets) {
+				AbstractWidget widget = positioned.widget;
+				if (!widget.visible || widget.getX() < cellLeft || widget.getRight() > cellRight
+						|| widget.getHeight() > editorBottom() - contentTop) {
+					continue;
+				}
+				int adjustment = 0;
+				if (widget.getBottom() > editorBottom()) {
+					adjustment = widget.getBottom() - editorBottom();
+				} else if (widget.getY() < contentTop) {
+					adjustment = widget.getY() - contentTop;
+				}
+				if (adjustment != 0) {
+					scroll.jump(scroll.position() + adjustment);
+					realizeRows();
+				}
+				break;
+			}
+		}
 		highlightedSource = row;
 		highlightedError = error;
 		highlightUntil = !error && DesignerTutorialScreen.current(this) != null ? 0 : net.minecraft.Util.getMillis() + 8000;

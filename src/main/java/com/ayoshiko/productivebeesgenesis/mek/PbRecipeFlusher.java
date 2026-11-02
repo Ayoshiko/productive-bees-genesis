@@ -96,9 +96,15 @@ public final class PbRecipeFlusher {
 	 * @return 见 {@link Outcome}
 	 */
 	Outcome flush(PbRecipeCompleter completer, int processIndex, int maxDeferredPerType) {
+		if (completer.invalidPending()) return Outcome.BLOCKED;
+		if (!completer.hasPendingOutputs() && completer.getPendingInputShrink() <= 0) {
+			lastPlanUnplaceableType = false;
+			lastPlanMaxDeferredPerType = 0;
+			completer.clearPendingOutputs();
+			return Outcome.COMMITTED;
+		}
 		PbRecipeContext context = completer.getContext();
-		if (completer.invalidPending() || outputBlocked(context)) return Outcome.BLOCKED;
-		completer.prepareOutputUpgrades(false);
+		if (outputBlocked(context)) return Outcome.BLOCKED;
 		// 诊断信息只描述本次尝试：否则「流体满」导致的失败会读到上一次种类溢出的陈旧标记，
 		// 让调用方误判为需要延迟提交（流体满应保持原语义：暂停并保留输入）。
 		lastPlanUnplaceableType = false;
@@ -115,6 +121,7 @@ public final class PbRecipeFlusher {
 			completer.clearPendingOutputs();
 			return Outcome.COMMITTED;
 		}
+		completer.prepareOutputUpgrades(false);
 
 		FluidStack bufferedFluid = completer.getPendingFluidTemplate();
 		if (!completer.isPreparedOutput() && context.suppressesUselessByproducts()
@@ -440,6 +447,8 @@ public final class PbRecipeFlusher {
 	 */
 	private static boolean pushPendingDirectToNeighbors(
 			PbRecipeCompleter completer, PbRecipeContext context) {
+		if (context instanceof IMekCentrifugeTile machine
+				&& !machine.productivebeesgenesis$isDirectContainerOutputEnabled()) return false;
 		Map<ItemStack, Integer> pendingOutputs = completer.getPendingOutputs();
 		if (pendingOutputs.isEmpty()) return false;
 		boolean acceptedAny = false;

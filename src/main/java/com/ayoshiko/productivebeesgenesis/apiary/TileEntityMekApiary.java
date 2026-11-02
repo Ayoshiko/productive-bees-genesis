@@ -383,6 +383,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	/** Called when item-side routing changes, so same-tick direct-eject caches cannot stay stale. */
 	void onDirectEjectRoutingChanged() {
 		directEjectHandler.onRoutingConfigChanged();
+		if (produceProcessor != null) produceProcessor.onOutputRoutingChanged();
 	}
 
 	/** Called by every physical output slot, including changes made by external automation. */
@@ -782,6 +783,8 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	@Override public void clearRemoved() { super.clearRemoved(); ae2HostAdapter.prepareForLoad(); }
 	@Override public void setRemoved() {
+		outputBuffer.stopRecovery();
+		produceProcessor.outputEvidence.clear();
 		super.setRemoved();
 		// 模块 2 修复（v2.4 最终版）：移除 outputBuffer.dumpToWorld 调用
 		// v2.3 的 dumpToWorld 是项目中唯一的 Block.popResource 源，导致创造模式/镐子破坏时
@@ -791,7 +794,12 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		// onRemove 中的 saveAllItemsForDrop 仍保留，作为防御性措施清空槽位，防止未来引入新的 popResource 路径。
 		ae2HostAdapter.destroyForRemoval();
 	}
-	@Override public void onChunkUnloaded() { super.onChunkUnloaded(); ae2HostAdapter.destroyForChunkUnload(); }
+	@Override public void onChunkUnloaded() {
+		outputBuffer.stopRecovery();
+		produceProcessor.outputEvidence.clear();
+		super.onChunkUnloaded();
+		ae2HostAdapter.destroyForChunkUnload();
+	}
 	@Override public MekAe2LifecycleHandler productivebeesgenesis$getAe2LifecycleHandler(
 	) {
 		return ae2HostAdapter.getAe2LifecycleHandler();

@@ -260,9 +260,8 @@ public class BeeTooltipRenderer {
 	 */
 	private void addStateLine(List<FormattedCharSequence> lines, BeeSlot beeSlot) {
 		Component stateComponent = getStateComponent(beeSlot.getState());
-		lines.add(Component.translatable(KEY_STATE, stateComponent)
-				.withStyle(s -> s.withColor(COLOR_WHITE))
-				.getVisualOrderText());
+		lines.addAll(Minecraft.getInstance().font.split(Component.translatable(KEY_STATE, stateComponent)
+				.withStyle(s -> s.withColor(COLOR_WHITE)), 300));
 	}
 
 	/**

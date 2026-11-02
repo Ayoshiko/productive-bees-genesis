@@ -1,7 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.api.resource.ResourceProductionApi;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -9,8 +13,10 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.util.IdentityHashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** 按服务器隔离的资源运行期状态；无生产调用时不创建账户文件。 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
@@ -23,6 +29,10 @@ public final class ResourceRuntime {
 		long recipeVersion = Long.MIN_VALUE;
 		long failedRecipeVersion = Long.MIN_VALUE;
 		Throwable recipeFailure;
+		Set<ResourceLocation> failedBeeTypes = Set.of();
+		Set<ResourceLocation> failedCentrifugeBeeTypes = Set.of();
+		long failedCatalogVersion = Long.MIN_VALUE;
+		PbResourceCatalog failedCatalog;
 		boolean buildingRecipes;
 		ResourceAccountsSavedData data;
 		// 生命周期观察信号；区块保存失败可能从 IO 线程报告，不访问世界或改账户。
@@ -39,6 +49,9 @@ public final class ResourceRuntime {
 		boolean validatingKey;
 		long nativeOutputTick = Long.MIN_VALUE;
 		int nativeOutputChecks;
+		long recoveryTick = Long.MIN_VALUE;
+		int recoveryChecks;
+		final java.util.LinkedHashSet<BlockEntity> recoveryHosts = new java.util.LinkedHashSet<>();
 		// 只保留尚未取得预算的已加载接口；接口撤销及停服时清理。
 		final java.util.LinkedHashSet<Object> nativeOutputs = new java.util.LinkedHashSet<>();
 		final java.util.LinkedHashSet<ResourceOutputAccess> outputHosts = new java.util.LinkedHashSet<>();
@@ -70,6 +83,36 @@ public final class ResourceRuntime {
 		return current != null && (current.reloads > 0 || current.reloadFailed);
 	}
 
+	/** 普通生产只等待正在发布的新代际，扩展重载失败仍由资源路线单独拒收。 */
+	public static synchronized boolean reloadInProgress(MinecraftServer server) {
+		State current = STATES.get(server);
+		return current != null && current.reloads > 0;
+	}
+
+	/** 全服务器每刻最多四台旧产物校验，已完成者退出，排队顺序避免首机长期独占。 */
+	public static boolean claimRecovery(MinecraftServer server, BlockEntity host) {
+		var current = state(server);
+		current.recoveryHosts.add(host);
+		long tick = server.getTickCount();
+		if (current.recoveryTick != tick) {
+			current.recoveryTick = tick;
+			current.recoveryChecks = 0;
+		}
+		if (current.recoveryChecks >= 4 || current.recoveryHosts.getFirst() != host) return false;
+		current.recoveryHosts.removeFirst();
+		current.recoveryChecks++;
+		return true;
+	}
+
+	public static void releaseRecovery(MinecraftServer server, BlockEntity host) {
+		if (!server.isSameThread()) throw new IllegalStateException("Recovery requires the server thread");
+		State current;
+		synchronized (ResourceRuntime.class) {
+			current = STATES.get(server);
+		}
+		if (current != null) current.recoveryHosts.remove(host);
+	}
+
 	static void trackOutput(MinecraftServer server, ResourceOutputAccess output) {
 		var state = state(server);
 		if (state.outputHosts.add(output)) state.outputSnapshot = null;
@@ -91,6 +134,7 @@ public final class ResourceRuntime {
 		if (event.getLevel() instanceof net.minecraft.server.level.ServerLevel level
 				&& event.getChunk() instanceof net.minecraft.world.level.chunk.LevelChunk chunk) {
 			for (var host : chunk.getBlockEntities().values()) {
+				releaseRecovery(level.getServer(), host);
 				var state = ResourceHiveHost.existing(host);
 				if (state != null && state.outputAccess != null) untrackOutput(level.getServer(), state.outputAccess);
 			}
@@ -192,9 +236,28 @@ public final class ResourceRuntime {
 				state.recipes = next;
 				state.recipeVersion = version;
 				state.recipeFailure = null;
+				state.failedBeeTypes = Set.of();
+				state.failedCentrifugeBeeTypes = Set.of();
+				state.failedCatalog = null;
 			} catch (RuntimeException | LinkageError failure) {
 				state.failedRecipeVersion = version;
 				state.recipeFailure = failure;
+				var bees = new HashSet<>(state.recipes.beeTypes());
+				var centrifugeBees = new HashSet<ResourceLocation>();
+				for (var recipe : state.recipes.centrifugeRecipes()) centrifugeBees.add(recipe.value().bee());
+				for (var recipe : server.getRecipeManager().getAllRecipesFor(ResourceProductionRecipe.TYPE)) {
+					bees.add(recipe.value().bee());
+				}
+				if (failure instanceof ResourceProductionApi.RegistrationFailure registration) {
+					bees.addAll(registration.beeTypes());
+					centrifugeBees.addAll(registration.centrifugeBeeTypes());
+				}
+				for (var recipe : server.getRecipeManager().getAllRecipesFor(ResourceCentrifugeRecipe.TYPE)) {
+					centrifugeBees.add(recipe.value().bee());
+				}
+				state.failedBeeTypes = Set.copyOf(bees);
+				state.failedCentrifugeBeeTypes = Set.copyOf(centrifugeBees);
+				ProductiveBeesGenesis.LOGGER.error("扩展资源注册失败；已声明资源蜂暂停，普通蜂继续生产，成功重载后重建", failure);
 				throw new IllegalStateException("Resource recipe registration failed", failure);
 			} finally {
 				state.buildingRecipes = false;
@@ -205,12 +268,63 @@ public final class ResourceRuntime {
 
 	public static PbResourceCatalog pbCatalog(net.minecraft.server.level.ServerLevel level) {
 		var state = state(level.getServer());
-		var index = recipes(level.getServer());
+		long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
+		if (state.failedRecipeVersion == version && state.failedCatalog != null
+				&& state.failedCatalogVersion == version) return state.failedCatalog;
+		if (!recipesReady(level.getServer(), state)) {
+			if (state.failedCatalog == null || state.failedCatalogVersion != version) {
+				state.failedCatalog = PbResourceCatalog.unavailable(version, state.failedBeeTypes);
+				state.failedCatalogVersion = version;
+			}
+			return state.failedCatalog;
+		}
+		var index = state.recipes;
 		if (state.catalogIndex != index) {
 			state.catalog = PbResourceCatalog.build(level, index);
 			state.catalogIndex = index;
 		}
 		return state.catalog;
+	}
+
+	private static boolean recipesReady(MinecraftServer server, State state) {
+		long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
+		if (state.failedRecipeVersion == version) return false;
+		if (state.recipeVersion == version) return true;
+		try {
+			recipes(server);
+			return true;
+		} catch (IllegalStateException failure) {
+			if (state.failedRecipeVersion != version) throw failure;
+			return false;
+		}
+	}
+
+	public enum CentrifugeAdmission { UNMANAGED, READY, UNAVAILABLE }
+
+	/** 故障时只保管已声明资源蜜脾；普通蜜脾不触发逐刻异常或资源账户创建。 */
+	public static CentrifugeAdmission centrifugeAdmission(MinecraftServer server, ItemStack input) {
+		if (ResourceCentrifugeRecipe.unitsForItem(input) == 0) return CentrifugeAdmission.UNMANAGED;
+		var state = state(server);
+		if (recipesReady(server, state)) {
+			if (state.recipes.centrifuge(input) == null) return CentrifugeAdmission.UNMANAGED;
+			return reloadBlocked(server) ? CentrifugeAdmission.UNAVAILABLE : CentrifugeAdmission.READY;
+		}
+		var bee = input.get(com.ayoshiko.productivebeesgenesis.util.PbDataComponents.beeType());
+		return bee != null && state.failedCentrifugeBeeTypes.contains(bee)
+				? CentrifugeAdmission.UNAVAILABLE : CentrifugeAdmission.UNMANAGED;
+	}
+
+	static boolean recipesUnavailable(MinecraftServer server) {
+		return !recipesReady(server, state(server));
+	}
+
+	public static boolean recipeRegistrationFailed(MinecraftServer server) {
+		return state(server).failedRecipeVersion == ProductiveBeesGenesis.RECIPE_VERSION.get();
+	}
+
+	static boolean failedBeeDefinition(MinecraftServer server, ResourceLocation bee) {
+		var state = state(server);
+		return !recipesReady(server, state) && (state.failedBeeTypes.contains(bee) || state.failedCentrifugeBeeTypes.contains(bee));
 	}
 
 	/** 首次账户访问时加载主世界 SavedData，读取失败状态不会转为空库。 */
@@ -272,6 +386,7 @@ public final class ResourceRuntime {
 			removed = STATES.remove(event.getServer());
 		}
 		if (removed != null) {
+			removed.recoveryHosts.clear();
 			try {
 				for (var output : removed.outputHosts) {
 					try {

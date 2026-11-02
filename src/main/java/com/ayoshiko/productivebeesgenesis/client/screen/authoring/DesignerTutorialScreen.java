@@ -13,15 +13,17 @@ import java.util.List;
 
 /** 引导附着在真实页面；圈选具体控件，子页仍通过自身确认流程保管编辑。 */
 final class DesignerTutorialScreen {
-	private static final String[] STEPS = {"workspace", "migration", "select", "appearance", "attributes", "jei", "acquisition", "outputs", "review", "portable", "files"};
-	private static final int[] PAGES = {0, 0, 0, 1, 2, 2, 3, 4, 5, 5, 5};
-	private static final String[] LOCATIONS = {"", "", "", "names/zh_cn", "definition/flower_section", "definition/flower_value", "machine_recipes", "production_nodes", "review_check_step", "review_portable", "generated_files"};
-	private static final String[] BUTTONS = {"new", "browse_instances", "search", "", "", "", "machine_add", "add_production", "check_generate", "collection_export", ""};
+	private static final String[] STEPS = {"workspace", "migration", "select", "appearance", "attributes", "jei", "acquisition", "outputs", "review", "portable", "files", "deliver"};
+	private static final int[] PAGES = {0, 0, 0, 1, 2, 2, 3, 4, 5, 5, 5, 5};
+	private static final String[] LOCATIONS = {"", "", "", "names/zh_cn", "definition/flower_section", "definition/flower_value", "machine_recipes", "production_nodes", "review_check_action", "review_portable", "generated_files", "review_apply"};
+	private static final String[] BUTTONS = {"new", "browse_instances", "search", "", "", "", "machine_add", "add_production", "check_generate", "collection_export", "", "apply"};
 	private final BeeDesignerScreen root;
 	private final DesignerGuideOverlay overlay = new DesignerGuideOverlay();
+	private final DesignerGuideOverlay exportOverlay = new DesignerGuideOverlay();
 	private int step;
 	private Rect2i card;
 	private Rect2i target;
+	private Rect2i exportTarget;
 	private int buttonY;
 	private boolean awaitingBee;
 	private long shownAt;
@@ -62,7 +64,7 @@ final class DesignerTutorialScreen {
 
 	private void move(int next) {
 		if (next >= STEPS.length) {
-			finish();
+			complete();
 			return;
 		}
 		step = Math.max(0, next);
@@ -71,7 +73,8 @@ final class DesignerTutorialScreen {
 		Minecraft.getInstance().setScreen(root);
 		root.tutorialPage(awaitingBee ? 0 : PAGES[step]);
 		if (!awaitingBee && !LOCATIONS[step].isEmpty()) {
-			root.focusLocation(LOCATIONS[step], false);
+			String location = STEPS[step].equals("deliver") ? completionLocation() : LOCATIONS[step];
+			root.focusLocation(location, false);
 		}
 		if (!awaitingBee && STEPS[step].equals("files")) {
 			root.expandGroup("generated_files");
@@ -90,6 +93,9 @@ final class DesignerTutorialScreen {
 		String key = awaitingBee ? "select" : STEPS[step];
 		target = locate(screen, subpage);
 		String textKey = subpage ? "tutorial.live_subpage" : "tutorial.live." + key + ".body";
+		if (!subpage && key.equals("deliver") && !root.canPublish) {
+			textKey = "tutorial.live.deliver.no_permission";
+		}
 		if (!subpage && screen.frameHeight < 192) {
 			renderCompact(screen, graphics, mouseX, mouseY, key, textKey, subpage);
 			return;
@@ -107,7 +113,7 @@ final class DesignerTutorialScreen {
 			return;
 		}
 		card = place(screen, width, height);
-		if (target != null && overlaps(card, target)) {
+		if (target != null && overlaps(card, target) || exportTarget != null && overlaps(card, exportTarget)) {
 			renderCompact(screen, graphics, mouseX, mouseY, key, textKey, subpage);
 			return;
 		}
@@ -124,6 +130,9 @@ final class DesignerTutorialScreen {
 						? 0.94F + (float) Math.sin((net.minecraft.Util.getMillis() - shownAt) / 950.0) * 0.06F : 1;
 				overlay.focus(graphics, target, colors.accent(), opacity * breath);
 				overlay.connect(graphics, card, target, colors.accent(), opacity);
+				if (exportTarget != null) {
+					exportOverlay.focus(graphics, exportTarget, colors.accent(), opacity * breath);
+				}
 				int badgeX = Math.max(screen.frameLeft + 8, target.getX() - 6);
 				int badgeY = Math.max(screen.frameTop + 30, target.getY() - 12);
 				DesignerGuideOverlay.box(graphics, badgeX - 1, badgeY - 1, 16, 16, 8, colors.panel());
@@ -153,7 +162,7 @@ final class DesignerTutorialScreen {
 			if (subpage) {
 				advanceLabel = "done";
 			} else if (step + 1 == STEPS.length) {
-				advanceLabel = "tutorial_finish";
+				advanceLabel = "tutorial_ready";
 			}
 			control(graphics, left + 2 * cell + 22, cell, advanceLabel, !awaitingBee, true, mouseX, mouseY);
 			int dotsX = left + (width - (STEPS.length - 1) * 7 - 6) / 2;
@@ -180,6 +189,9 @@ final class DesignerTutorialScreen {
 			if (target != null) {
 				overlay.focus(graphics, target, colors.accent(), 1);
 			}
+			if (exportTarget != null) {
+				exportOverlay.focus(graphics, exportTarget, colors.accent(), 1);
+			}
 			DesignerGuideOverlay.box(graphics, x, y, width, 46, 7, colors.border());
 			DesignerGuideOverlay.box(graphics, x + 1, y + 1, width - 2, 44, 6, colors.panel());
 			var font = DesignerFonts.body();
@@ -196,7 +208,7 @@ final class DesignerTutorialScreen {
 			if (subpage) {
 				advanceLabel = "done";
 			} else if (step + 1 == STEPS.length) {
-				advanceLabel = "tutorial_finish";
+				advanceLabel = "tutorial_ready";
 			}
 			control(graphics, x + 2 * cell + 22, cell, advanceLabel, !awaitingBee, true, mouseX, mouseY);
 			if (mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + 21) {
@@ -229,7 +241,7 @@ final class DesignerTutorialScreen {
 		candidates.add(new Rect2i(minX, minY, width, height));
 		for (Rect2i candidate : candidates) {
 			if (candidate.getX() >= minX && candidate.getX() <= maxX && candidate.getY() >= minY && candidate.getY() <= maxY
-					&& !overlaps(candidate, target)) {
+					&& !overlaps(candidate, target) && (exportTarget == null || !overlaps(candidate, exportTarget))) {
 				return candidate;
 			}
 		}
@@ -253,6 +265,19 @@ final class DesignerTutorialScreen {
 	}
 
 	private Rect2i locate(DesignerFormScreen screen, boolean subpage) {
+		exportTarget = null;
+		if (!subpage && !awaitingBee && STEPS[step].equals("deliver")) {
+			Rect2i apply = actionBounds(screen, "apply");
+			Rect2i localExport = actionBounds(screen, "local_export");
+			if (!root.canPublish && localExport != null) {
+				exportTarget = apply;
+				return localExport;
+			}
+			exportTarget = localExport;
+			if (apply != null) return apply;
+			exportTarget = null;
+			return localExport;
+		}
 		String key = awaitingBee ? "search" : BUTTONS[step];
 		if (!subpage && (awaitingBee || PAGES[step] == 0)) {
 			return root.tutorialCatalogTarget(key);
@@ -302,6 +327,29 @@ final class DesignerTutorialScreen {
 			}
 		}
 		return nearest == null ? row : bounds(nearest);
+	}
+
+	/** 最后一步也展示因权限暂不可用的按钮，出口不能因 active=false 消失。 */
+	private static Rect2i actionBounds(DesignerFormScreen screen, String action) {
+		for (var child : screen.children()) {
+			if (child instanceof AbstractWidget widget && widget.visible
+					&& widget.getY() >= screen.contentTop && widget.getBottom() <= screen.editorBottom()
+					&& widget.getMessage().getString().equals(DesignerFormScreen.tr(action).getString())) {
+				return bounds(widget);
+			}
+		}
+		return null;
+	}
+
+	private String completionLocation() {
+		return root.canPublish ? "review_apply" : "review_local_export";
+	}
+
+	private void complete() {
+		root.tutorialPage(5);
+		root.focusLocation(completionLocation(), false);
+		finish();
+		root.focusLocation(completionLocation(), false);
 	}
 
 	private static Rect2i bounds(AbstractWidget widget) {

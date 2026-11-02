@@ -33,6 +33,7 @@ final class DesignerReviewPage {
 			}
 		}
 		screen.note("check_result", DesignerFormScreen.tr(result));
+		screen.anchor("review_check_action");
 		screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> screen.primaryButton(x, y, Math.min(230, w),
 				DesignerFormScreen.tr("check_generate"), () -> action.accept("check")).active = !publishing));
 		if (diagnostics != null) {
@@ -57,11 +58,13 @@ final class DesignerReviewPage {
 			screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> screen.primaryButton(x, y, w,
 					DesignerFormScreen.tr("reconcile"), () -> action.accept("reconcile")).active = canPublish && !publishing));
 		}
+		screen.anchor("review_apply");
 		screen.rows.add(new DesignerFormScreen.Row("review_world", (x, y, w) -> {
 			screen.primaryButton(x, y, w, DesignerFormScreen.tr("apply"), () -> action.accept("confirm_apply"))
 					.active = !publishing && canPublish && !uncertain;
 		}, 20, false, 140));
 		if (screen instanceof BeeDesignerScreen editor) {
+			screen.anchor("review_local_export");
 			screen.rows.add(new DesignerFormScreen.Row("review_local", (x, y, w) -> screen.button(x, y, w,
 					DesignerFormScreen.tr("local_export"), editor::exportLocal).active = !publishing, 20, false, 140));
 			screen.anchor("review_portable");

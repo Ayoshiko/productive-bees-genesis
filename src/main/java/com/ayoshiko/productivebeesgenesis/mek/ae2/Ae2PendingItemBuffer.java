@@ -165,12 +165,19 @@ public final class Ae2PendingItemBuffer {
 
 	/** 返回当前可重试条目的快照，避免调用方迭代时修改内部列表。 */
 	public List<PendingItem> snapshot(long currentTick) {
+		return snapshot(currentTick, MAX_ENTRIES, true);
+	}
+
+	/** 先筛离线不可交付项，再截取实际尝试窗口；保留迭代期间的独立资产快照。 */
+	List<PendingItem> snapshot(long currentTick, int limit, boolean networkAvailable) {
 		if (isBlocked()) return List.of();
-		List<PendingItem> result = new ArrayList<>();
+		if (limit <= 0) return List.of();
+		List<PendingItem> result = new ArrayList<>(Math.min(entries.size(), limit));
 		for (PendingItem entry : entries) {
-			if ((entry.amount > 0L || entry.returnToNetworkAmount > 0L)
+			if ((entry.amount > 0L || networkAvailable && entry.returnToNetworkAmount > 0L)
 					&& entry.nextAttemptTick <= currentTick) {
 				result.add(entry.copy());
+				if (result.size() >= limit) break;
 			}
 		}
 		return result;

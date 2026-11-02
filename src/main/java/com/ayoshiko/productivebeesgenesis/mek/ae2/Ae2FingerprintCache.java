@@ -18,19 +18,16 @@ final class Ae2FingerprintCache {
 	static final int MAX_CACHED_CHARACTERS = 2 * 1024 * 1024;
 
 	private static final Map<AEItemKey, String> cache = new LinkedHashMap<>(128, 0.75f, true);
+	private static final Map<String, AEItemKey> decoded = new LinkedHashMap<>(128, 0.75f, true);
 	private static WeakReference<HolderLookup.Provider> registries = new WeakReference<>(null);
 	private static long recipeVersion = Long.MIN_VALUE;
 	private static int cachedCharacters;
+	private static int decodedCharacters;
 
 	/** 调用方在服务器线程内使用；GUI 编码继续走 Ae2ItemFingerprint 原路径。 */
 	String get(AEItemKey key, HolderLookup.Provider provider) {
 		if (key == null || provider == null) return "";
-		long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
-		if (registries.get() != provider || recipeVersion != version) {
-			clearShared();
-			registries = new WeakReference<>(provider);
-			recipeVersion = version;
-		}
+		prepare(provider);
 		String cached = cache.get(key);
 		if (cached != null) return cached;
 		String encoded = Ae2ItemFingerprint.encodeOrLegacy(key, provider);
@@ -47,9 +44,39 @@ final class Ae2FingerprintCache {
 		return encoded;
 	}
 
+	/** 仅缓存成功解析，缺失组件保留原指纹并在后续重载时重新尝试。 */
+	static AEItemKey decode(String fingerprint, HolderLookup.Provider provider) {
+		if (fingerprint == null || provider == null) return null;
+		prepare(provider);
+		AEItemKey key = decoded.get(fingerprint);
+		if (key != null) return key;
+		key = Ae2ItemFingerprint.decode(fingerprint, provider);
+		if (key == null || fingerprint.length() > MAX_CACHED_CHARACTERS) return key;
+		decoded.put(fingerprint, key);
+		decodedCharacters += fingerprint.length();
+		while (decoded.size() > MAX_ENTRIES || decodedCharacters > MAX_CACHED_CHARACTERS) {
+			var iterator = decoded.entrySet().iterator();
+			var eldest = iterator.next();
+			decodedCharacters -= eldest.getKey().length();
+			iterator.remove();
+		}
+		return key;
+	}
+
+	private static void prepare(HolderLookup.Provider provider) {
+		long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
+		if (registries.get() != provider || recipeVersion != version) {
+			clearShared();
+			registries = new WeakReference<>(provider);
+			recipeVersion = version;
+		}
+	}
+
 	static void clearShared() {
 		cache.clear();
+		decoded.clear();
 		cachedCharacters = 0;
+		decodedCharacters = 0;
 		registries.clear();
 		recipeVersion = Long.MIN_VALUE;
 	}

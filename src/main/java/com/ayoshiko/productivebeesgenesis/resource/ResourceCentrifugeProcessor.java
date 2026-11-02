@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.resource;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.PbVirtualTickPlan;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import java.math.BigInteger;
 import net.minecraft.server.level.ServerLevel;
@@ -47,7 +48,8 @@ public final class ResourceCentrifugeProcessor {
 		void commit();
 	}
 	public enum Result { UNMANAGED, BLOCKED, WORKING }
-	private record Cached(CompoundTag raw, ResourceCentrifugeWork work) {}
+	private record Cached(ResourceAccount account, CompoundTag raw, HolderLookup.Provider provider,
+			ResourceCentrifugeWork work) {}
 	private final Map<Integer, Cached> decoded = new HashMap<>();
 	private final Map<Integer, ResourceCentrifugeWork> templates = new HashMap<>();
 	private record Rolls(ResourceCentrifugeRecipe recipe, int productivity, double stability, int units,
@@ -58,7 +60,16 @@ public final class ResourceCentrifugeProcessor {
 	/** 无配方的旧机器不创建账户，也不接管旧物品／流体链。 */
 	public static Result tick(Access access, int virtualTicks) {
 		if (!(access.entity().getLevel() instanceof ServerLevel level)) return Result.UNMANAGED;
-		var current = ResourceRuntime.recipes(level.getServer()).centrifuge(access.input());
+		var admission = ResourceRuntime.centrifugeAdmission(level.getServer(), access.input());
+		if (admission == ResourceRuntime.CentrifugeAdmission.UNAVAILABLE) return Result.BLOCKED;
+		if (admission == ResourceRuntime.CentrifugeAdmission.UNMANAGED) {
+			if (!hasWork(access.entity(), access.lane())) return Result.UNMANAGED;
+			if (ResourceRuntime.reloadBlocked(level.getServer()) || ResourceRuntime.recipesUnavailable(level.getServer())) {
+				return Result.BLOCKED;
+			}
+		}
+		var current = admission == ResourceRuntime.CentrifugeAdmission.READY
+				? ResourceRuntime.recipes(level.getServer()).centrifuge(access.input()) : null;
 		if (current != null && !ResourceInputAdmission.outputsAvailable(level.getServer(), current.value())) {
 			var existing = ResourceHiveHost.existing(access.entity());
 			if (existing != null && existing.reference() != null) {
@@ -106,8 +117,13 @@ public final class ResourceCentrifugeProcessor {
 		var host = ResourceHiveHost.existing(entity);
 		if (host == null || host.reference() == null || entity.getLevel() == null) return false;
 		try {
-			for (var raw : host.account(entity).centrifugeWork.values()) {
-				var work = ResourceCentrifugeWork.load(raw, entity.getLevel().registryAccess());
+			var account = retainedAccount(entity, host);
+			if (account == null) return false;
+			if (account.centrifugeWork.isEmpty()) return false;
+			if (host.centrifugeProcessor == null) host.centrifugeProcessor = new ResourceCentrifugeProcessor();
+			for (var entry : account.centrifugeWork.entrySet()) {
+				var work = host.centrifugeProcessor.decodedWork(account, entry.getKey(),
+						entry.getValue(), entity.getLevel().registryAccess());
 				if (ItemStack.isSameItemSameComponents(input, work.input)) return true;
 			}
 		} catch (RuntimeException invalid) { return false; }
@@ -119,10 +135,23 @@ public final class ResourceCentrifugeProcessor {
 		var host = ResourceHiveHost.existing(entity);
 		if (host == null || host.reference() == null) return false;
 		try {
-			var account = host.account(entity);
-			return account.laneSuspended(lane) || account.centrifugeWork(lane) != null;
+			var account = retainedAccount(entity, host);
+			return account != null && (unresolvedLane(account, lane) || account.centrifugeWork(lane) != null);
 		}
 		catch (IllegalStateException invalid) { return false; }
+	}
+
+	/** 失效引用只读取原账户的保管记录，不因绑定失效把旧工作交回普通配方。 */
+	private static ResourceAccount retainedAccount(BlockEntity entity, ResourceHiveHost host) {
+		try {
+			return host.account(entity);
+		} catch (IllegalStateException stale) {
+			if (!(entity.getLevel() instanceof ServerLevel level)
+					|| !(entity instanceof mekanism.common.lib.security.ISecurityTile security)
+					|| security.getOwnerUUID() == null) return null;
+			var original = ResourceRuntime.accounts(level.getServer()).accounts().find(host.reference().sourceId());
+			return original != null && original.owner().equals(security.getOwnerUUID()) ? original : null;
+		}
 	}
 
 	/** 返料不删除已付工作；该车道只允许原完整输入身份续接，未知工作继续锁定。 */
@@ -130,13 +159,30 @@ public final class ResourceCentrifugeProcessor {
 		var host = ResourceHiveHost.existing(entity);
 		if (host == null || host.reference() == null) return null;
 		try {
-			var account = host.account(entity);
+			var account = retainedAccount(entity, host);
+			if (account == null) return ItemStack.EMPTY;
 			if (unresolvedLane(account, lane)) return ItemStack.EMPTY;
 			var raw = account.centrifugeWork(lane);
-			return raw == null ? null : ResourceCentrifugeWork.load(raw, entity.getLevel().registryAccess()).input.copy();
+			if (raw == null) {
+				if (host.centrifugeProcessor != null) host.centrifugeProcessor.decoded.remove(lane);
+				return null;
+			}
+			if (host.centrifugeProcessor == null) host.centrifugeProcessor = new ResourceCentrifugeProcessor();
+			return host.centrifugeProcessor.decodedWork(account, lane, raw, entity.getLevel().registryAccess()).input.copy();
 		} catch (RuntimeException invalid) {
 			return ItemStack.EMPTY;
 		}
+	}
+
+	/** 成功解析只借用账户的封闭原文；损坏数据不缓存为成功，替换原文或注册表即重新核验。 */
+	private ResourceCentrifugeWork decodedWork(ResourceAccount account, int lane, CompoundTag raw,
+			HolderLookup.Provider provider) {
+		var cached = decoded.get(lane);
+		if (cached == null || cached.account() != account || cached.raw() != raw || cached.provider() != provider) {
+			cached = new Cached(account, raw, provider, ResourceCentrifugeWork.load(raw, provider));
+			decoded.put(lane, cached);
+		}
+		return cached.work();
 	}
 
 	private static boolean unresolvedLane(ResourceAccount account, int lane) {
@@ -181,12 +227,7 @@ public final class ResourceCentrifugeProcessor {
 				}
 				work = template.advance(0, level.random.nextLong());
 			} else {
-				var cached = decoded.get(access.lane());
-				if (cached == null || cached.raw() != raw) {
-					cached = new Cached(raw, ResourceCentrifugeWork.load(raw, level.registryAccess()));
-					decoded.put(access.lane(), cached);
-				}
-				work = cached.work();
+				work = decodedWork(account, access.lane(), raw, level.registryAccess());
 				if (!ItemStack.isSameItemSameComponents(input, work.input)) {
 					host.status("work_input_changed");
 					return Result.BLOCKED;
@@ -297,7 +338,7 @@ public final class ResourceCentrifugeProcessor {
 			host.productionMonitor().record(produced);
 			host.productionMonitor().observe(access.lane(), work.recipe.outputs(), ResourceProductionSnapshot.State.PRODUCING, level.getGameTime());
 			if (next == null) decoded.remove(access.lane());
-			else decoded.put(access.lane(), new Cached(account.centrifugeWork(access.lane()), next));
+			else decoded.put(access.lane(), new Cached(account, account.centrifugeWork(access.lane()), level.registryAccess(), next));
 			host.status("ready");
 			return Result.WORKING;
 		} catch (RuntimeException failure) {

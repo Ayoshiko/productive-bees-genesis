@@ -90,7 +90,7 @@ public class MyriadAggregatedStacksBuilder {
 	 * @return 聚合后的 ItemStack 列表（≤9 个），异常时退化为原版随机路径
 	 */
 	public List<ItemStack> buildAggregatedHoneycombs(int totalCount, Level level, Object factoryKey) {
-		if (totalCount <= 0) {
+		if (totalCount <= 0 || !MyriadCreationsEventHandler.isMyriadCreationsEnabled()) {
 			return List.of();
 		}
 		MyriadBeeTypeCache.BeeTypeCacheSnapshot snapshot = MyriadBeeTypeCache.snapshot();
@@ -130,7 +130,7 @@ public class MyriadAggregatedStacksBuilder {
 	 * @return 聚合后的 ItemStack 列表（蜜脾块路径因 4× 缩放最坏可达 ≤36 个：3 类型 × ceil(576×4/3/64)=12），异常时退化为原版随机路径
 	 */
 	public List<ItemStack> buildAggregatedCombBlocks(int totalCount, Level level, Object factoryKey) {
-		if (totalCount <= 0) {
+		if (totalCount <= 0 || !MyriadCreationsEventHandler.isMyriadCreationsEnabled()) {
 			return List.of();
 		}
 		MyriadBeeTypeCache.BeeTypeCacheSnapshot snapshot = MyriadBeeTypeCache.snapshot();

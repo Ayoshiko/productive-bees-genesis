@@ -119,7 +119,10 @@ public final class ResourceNativeOutput {
         if (type == ResourceNativeType.SOUL
                 && com.ayoshiko.productivebeesgenesis.resource.souls.ResourceSoulIntegration.canPull(level, neighbor)) return true;
         var receiver = receiver(level, host, key, side);
-        return receiver != null && checked(receiver.simulate(1), 1) > 0;
+        // FE 接收桥可能按整数换算；单个 FE 的往返舍入为零不代表接收方满载。
+        long probeAmount = type == ResourceNativeType.ENERGY
+                ? Math.min(Integer.MAX_VALUE, ResourceTypes.transferLimit(key)) : 1;
+        return receiver != null && checked(receiver.simulate(probeAmount), probeAmount) > 0;
     }
     private static boolean stateOutput(BlockEntity host, ResourceNativeType type, Direction side) {
         return ResourceHiveHost.existing(host).nativeOutput(host, type, side);

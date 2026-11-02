@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.logistics;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import mekanism.common.tile.base.TileEntityMekanism;
+import mekanism.common.tile.interfaces.ISideConfiguration;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
@@ -32,6 +33,10 @@ public final class OutputCustody {
     public OutputCustody(Runnable changed) { this.changed = changed; }
 
     public static OutputCustody of(Object host) {
+        if (host instanceof ISideConfiguration configured
+                && configured.getEjector() instanceof GenesisTileComponentEjector ejector) {
+            return ejector.outputCustody();
+        }
         if (host instanceof TileEntityMekanism tile) {
             for (var component : tile.getComponents()) {
                 if (component instanceof GenesisTileComponentEjector ejector) return ejector.outputCustody();

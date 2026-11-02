@@ -21,6 +21,45 @@ import static org.mockito.ArgumentMatchers.*;
 class OutputCustodyMinecraftTest {
     private static OutputCustody custody() { return new OutputCustody(() -> {}); }
 
+    @Test void successfulTemplateReuseKeepsLaterComponentChangesAndUnknownRequestIndependent() {
+        var custody = custody();
+        ItemStack source = new ItemStack(Items.DIAMOND, 6);
+        source.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal("first"));
+        assertEquals(6, custody.handoffItem(source, "target", () -> 6));
+        source.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal("second"));
+        assertEquals(6, custody.handoffItem(source, "target", () -> {
+            source.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal("receiver mutation"));
+            throw new IllegalStateException("unknown acceptance");
+        }));
+        custody.resolve(custody.sequence(), 2);
+        ItemStack recovered = custody.recoveredItem();
+        assertEquals(4, recovered.getCount());
+        assertEquals("second", recovered.getHoverName().getString());
+        recovered.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal("changed recovery copy"));
+        assertEquals("second", custody.recoveredItem().getHoverName().getString());
+    }
+
+    @Test void cachedItemTemplateStillSavesTheFullRequestBeforeReceiverChangesSource() {
+        var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        var holder = new OutputCustody[1];
+        var snapshots = new java.util.ArrayList<net.minecraft.nbt.CompoundTag>();
+        holder[0] = new OutputCustody(() -> snapshots.add(holder[0].save(registries)));
+        ItemStack source = new ItemStack(Items.IRON_INGOT, 7);
+        source.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal("original identity"));
+        assertEquals(7, holder[0].handoffItem(source, "target", () -> 7));
+        snapshots.clear();
+        assertEquals(7, holder[0].handoffItem(source, "target", () -> {
+            source.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal("changed source"));
+            throw new IllegalStateException("saved unknown request");
+        }));
+        var restored = custody();
+        restored.load(registries, snapshots.getFirst());
+        restored.resolve(restored.sequence(), 3);
+        assertEquals(4, restored.recoveredItem().getCount());
+        assertEquals("original identity", restored.recoveredItem().getHoverName().getString());
+        assertEquals(snapshots.getFirst().getUUID("sequence"), holder[0].sequence());
+    }
+
     @Test void knownPrefixAndUnknownSuffixHaveSeparateOwnersAndSurviveRestart() {
         var custody = custody();
         var handler = new ItemStackHandler(2) {
@@ -47,6 +86,51 @@ class OutputCustodyMinecraftTest {
         recovered.consumeRecovered(5);
         assertFalse(recovered.blocked());
         assertThrows(IllegalStateException.class, () -> recovered.resolve(id, 0));
+    }
+
+    @Test void localReceiverMayMutateItsCopyWithoutChangingTheOwnedTemplate() {
+        var source = new ItemStack(Items.IRON_INGOT, 10);
+        source.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
+                net.minecraft.network.chat.Component.literal("完整回执"));
+        var slot = mock(mekanism.api.inventory.IInventorySlot.class);
+        when(slot.getStack()).thenReturn(ItemStack.EMPTY);
+        when(slot.insertItem(any(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL))).thenAnswer(call -> {
+            ItemStack offered = call.getArgument(0);
+            assertNotSame(source, offered);
+            offered.setCount(7);
+            return offered;
+        });
+        var retained = custody();
+        assertEquals(3, LocalOutputTransfer.insert(java.util.List.of(slot), source, retained));
+        assertEquals(10, source.getCount());
+        assertFalse(retained.blocked());
+        assertThrows(IllegalStateException.class,
+                () -> ItemPushHelper.accepted(source, 7, source.copyWithCount(8)));
+    }
+
+    @Test void localKnownPrefixAndWrongComponentSuffixRemainSeparatelyOwned() {
+        var source = new ItemStack(Items.IRON_INGOT, 10);
+        source.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
+                net.minecraft.network.chat.Component.literal("原始物品"));
+        var first = mock(mekanism.api.inventory.IInventorySlot.class);
+        var second = mock(mekanism.api.inventory.IInventorySlot.class);
+        when(first.getStack()).thenReturn(ItemStack.EMPTY);
+        when(second.getStack()).thenReturn(ItemStack.EMPTY);
+        when(first.insertItem(any(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL)))
+                .thenAnswer(call -> ((ItemStack) call.getArgument(0)).copyWithCount(7));
+        when(second.insertItem(any(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL)))
+                .thenReturn(new ItemStack(Items.GOLD_INGOT, 4));
+        var retained = custody();
+        assertEquals(10, LocalOutputTransfer.insert(java.util.List.of(first, second), source, retained));
+        assertEquals(7, retained.amount());
+        assertEquals(10, source.getCount());
+        assertTrue(retained.blocked());
+        source.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
+                net.minecraft.network.chat.Component.literal("外部后续修改"));
+        retained.resolve(retained.sequence(), 0);
+        assertEquals("原始物品", retained.recoveredItem()
+                .get(net.minecraft.core.component.DataComponents.CUSTOM_NAME).getString());
+        assertEquals(7, retained.recoveredItem().getCount());
     }
 
     @Test void executionThrowBeforeObservableAcceptanceStillRequiresResolution() {

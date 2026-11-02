@@ -23,7 +23,7 @@ Production, power use, capacities, and bee rules are controlled by the server in
 
 This section controls the Myriad Creations Bee, balance profile, acquisition methods, resource filter, attributes, and accelerated-work budget.
 
-- **Myriad master switch** disables only that bee; machines and upgrades remain available.
+- **Myriad master switch** stops only Myriad Creations acquisition, breeding, pollination, hive production and special comb conversion. Other bees, machines and upgrades keep working. Existing bees and inventory remain intact; paid cycles whose outputs have not been generated are held until re-enabled. Reload recipes or restart the server after re-enabling. The apiary bee-slot tooltip, including Shift details, explains that the gameplay master switch stopped the bee.
 - **Balance profile**: use Basic for a normal pack, Paradox Infinity for unrestricted high-scale play, and Custom only when every limit is understood.
 - **Produce from Every Apiary Flower**: lumber, quarry and dye bees produce from every distinct valid feeder source each cycle. Off in Basic and on in Paradox Infinity. Switch to Custom and save to edit independently; the previous preset value is inherited. Duplicate slots and stack counts add no rolls.
 - **Myriad filter** excludes resources with a blacklist or keeps only selected resources with a whitelist.

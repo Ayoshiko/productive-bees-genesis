@@ -87,6 +87,10 @@ public final class MyriadRecipeProcessor {
 
 	RecipeHolder<?> processRecipe(RecipeHolder<?> holder, java.util.Set<net.minecraft.resources.ResourceLocation> custom) {
 		if (custom.contains(holder.id())) {
+			if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()
+					&& holder.value() instanceof BeeSpawningRecipe spawning) {
+				return MyriadRecipeGate.withoutMyriad(new RecipeHolder<>(holder.id(), spawning));
+			}
 			return MyriadCreationsEventHandler.isMyriadCreationsEnabled() ? holder : null;
 		}
 		return processRecipe(holder);
@@ -141,12 +145,9 @@ public final class MyriadRecipeProcessor {
 		if (!containsMyriadcreations(spawning.output)) {
 			return holder;
 		}
-		// 总开关禁用时移除所有万象创世配方
-		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) {
-			return null;
-		}
-		if (!ModConfig.SERVER.spawningEnabled.get()) {
-			return null;
+		// 共享蜂巢只去除万象结果，其它结果沿用原材料与群系条件。
+		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled() || !ModConfig.SERVER.spawningEnabled.get()) {
+			return MyriadRecipeGate.withoutMyriad(new RecipeHolder<>(holder.id(), spawning));
 		}
 		Ingredient ingredient = RecipeIngredientFactory.createIngredient(ModConfig.SERVER.spawningNest.get());
 		HolderSet<Biome> biomes = ingredientFactory.createBiomeHolderSetFromString(ModConfig.SERVER.spawningBiomes.get());
@@ -156,6 +157,9 @@ public final class MyriadRecipeProcessor {
 
 	/** 处理蜜蜂转化配方 */
 	private RecipeHolder<?> processConversionRecipe(RecipeHolder<?> holder, BeeConversionRecipe conversion) {
+		if (MyriadRecipeGate.blocked(conversion)) {
+			return null;
+		}
 		if (!isMyriadcreations(conversion.result)) {
 			return holder;
 		}

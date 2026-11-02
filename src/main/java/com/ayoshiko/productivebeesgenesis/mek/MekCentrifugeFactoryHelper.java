@@ -112,91 +112,66 @@ public final class MekCentrifugeFactoryHelper {
 	 */
 	public static boolean runLightSmeltingTicks(@NotNull RecipeCacheLookupMonitor<?>[] monitors,
 			int batchMultiplier, @NotNull MachineEnergyContainer<?> energyContainer) {
-		if (batchMultiplier <= 1 || monitors.length == 0) {
-			return false;
-		}
+		if (batchMultiplier <= 1 || monitors.length == 0) return false;
+		CachedRecipe<?>[] cachedRecipes = currentSmeltingRecipes(monitors);
 		BatchEnergyLedger ledger = new BatchEnergyLedger();
-		List<ICachedRecipeBatchAccel> acceleratedRecipes = new ArrayList<>();
-		List<CachedRecipe<?>> cachedRecipes = currentSmeltingRecipes(monitors);
-		if (cachedRecipes.isEmpty()) {
-			return false;
-		}
-		int extraTicks = batchMultiplier - 1;
-		for (CachedRecipe<?> cached : cachedRecipes) {
-			if (cached instanceof ICachedRecipeBatchAccel accel) {
-				accel.productivebeesgenesis$bindBatchEnergyLedger(ledger);
-				accel.productivebeesgenesis$startBatch(extraTicks);
-				acceleratedRecipes.add(accel);
-			}
-		}
-
+		int boundCount = 0;
 		boolean updated = false;
+		Throwable processingFailure = null;
 		try (BatchEnergyLedger.Scope ignored = BatchEnergyLedger.activate(ledger)) {
-			for (int index = 0; index < cachedRecipes.size(); index++) {
-				CachedRecipe<?> cached = cachedRecipes.get(index);
-				if (cached instanceof ICachedRecipeBatchAccel accel) {
-					// 一次完整计算 + 预算内字段级推进；跨周期时自动回到完整计算。
-					for (int j = 0; j < extraTicks; j++) {
-						cached.process();
-						updated = true;
-						if (accel.productivebeesgenesis$isBatchExhausted()) {
-							break;
-						}
-					}
-				} else {
-					// Mixin 未应用时保留原版逐 tick 回退；正常路径不会进入这里。
-					for (int j = 0; j < extraTicks; j++) {
-						cached.process();
-						updated = true;
-					}
+			int extraTicks = batchMultiplier - 1;
+			for (int index = 0; index < cachedRecipes.length; index++) {
+				boundCount = index + 1;
+				if (cachedRecipes[index] instanceof ICachedRecipeBatchAccel accel) {
+					accel.productivebeesgenesis$bindBatchEnergyLedger(ledger);
+					accel.productivebeesgenesis$startBatch(extraTicks);
 				}
 			}
-		} finally {
-			for (ICachedRecipeBatchAccel accel : acceleratedRecipes) {
-				accel.productivebeesgenesis$finishBatch();
+			for (CachedRecipe<?> cached : cachedRecipes) {
+				if (cached == null) continue;
+				for (int j = 0; j < extraTicks; j++) {
+					cached.process();
+					updated = true;
+					if (cached instanceof ICachedRecipeBatchAccel accel
+							&& accel.productivebeesgenesis$isBatchExhausted()) break;
+				}
 			}
-			ledger.flush(energyContainer);
+		} catch (RuntimeException | Error failure) {
+			processingFailure = failure;
+			throw failure;
+		} finally {
+			finishSmeltingBatch(cachedRecipes, boundCount, ledger, energyContainer, processingFailure);
 		}
 		return updated;
 	}
 
 	/**
-	 * Runs one complete SMELTING tick and its accelerated remainder under one energy ledger.
-	 * <p>
-	 * This mirrors the PB batch boundary: the first real tick and all virtual ticks only
-	 * accumulate energy, then the caller's container is charged once. Recipes are read after
-	 * the full tick so newly created or replaced monitor caches receive the accelerated remainder.
+	 * 完整 tick 后捕获当前缓存；整批共享费用，并在异常路径撤销所有已绑定会话。
 	 */
 	public static boolean runSmeltingBatch(@NotNull RecipeCacheLookupMonitor<?>[] monitors,
 			int batchMultiplier, @NotNull MachineEnergyContainer<?> energyContainer,
 			@NotNull BooleanSupplier fullTick) {
-		if (batchMultiplier <= 1 || monitors.length == 0) {
-			return fullTick.getAsBoolean();
-		}
-
+		if (batchMultiplier <= 1 || monitors.length == 0) return fullTick.getAsBoolean();
 		BatchEnergyLedger ledger = new BatchEnergyLedger();
-		List<ICachedRecipeBatchAccel> acceleratedRecipes = new ArrayList<>();
+		CachedRecipe<?>[] cachedRecipes = null;
+		int boundCount = 0;
 		boolean updated = false;
+		Throwable processingFailure = null;
 		try (BatchEnergyLedger.Scope ignored = BatchEnergyLedger.activate(ledger)) {
-			// AE2 注能是否触发容器 listener 取决于兼容工厂的父类接线；显式解除旧暂停，
-			// 保证本次完整计算能在预算充足时立即清除 NOT_ENOUGH_ENERGY。
-			for (RecipeCacheLookupMonitor<?> monitor : monitors) {
-				monitor.unpause();
-			}
-			// 先完整执行一次，让监视器创建、替换并正常清除各 lane 的错误状态。
-			// 作用域会让本次完整 tick（包括新建缓存）只向账本记账，不立即写能量容器。
+			// 兼容父类可能不传递 AE2 补能 listener；完整计算前恢复旧断电暂停。
+			for (RecipeCacheLookupMonitor<?> monitor : monitors) monitor.unpause();
 			updated = fullTick.getAsBoolean();
 			int extraTicks = batchMultiplier - 1;
-			List<CachedRecipe<?>> cachedRecipes = currentSmeltingRecipes(monitors);
-			for (CachedRecipe<?> cached : cachedRecipes) {
-				if (cached instanceof ICachedRecipeBatchAccel accel) {
+			cachedRecipes = currentSmeltingRecipes(monitors);
+			for (int index = 0; index < cachedRecipes.length; index++) {
+				boundCount = index + 1;
+				if (cachedRecipes[index] instanceof ICachedRecipeBatchAccel accel) {
 					accel.productivebeesgenesis$bindBatchEnergyLedger(ledger);
 					accel.productivebeesgenesis$startBatch(extraTicks);
-					acceleratedRecipes.add(accel);
 				}
 			}
-			for (int index = 0; index < cachedRecipes.size(); index++) {
-				CachedRecipe<?> cached = cachedRecipes.get(index);
+			for (CachedRecipe<?> cached : cachedRecipes) {
+				if (cached == null) continue;
 				if (cached instanceof ICachedRecipeBatchAccel accel) {
 					for (int j = 0; j < extraTicks && !accel.productivebeesgenesis$isBatchExhausted(); j++) {
 						cached.process();
@@ -209,24 +184,44 @@ public final class MekCentrifugeFactoryHelper {
 					}
 				}
 			}
+		} catch (RuntimeException | Error failure) {
+			processingFailure = failure;
+			throw failure;
 		} finally {
-			for (ICachedRecipeBatchAccel accel : acceleratedRecipes) {
-				accel.productivebeesgenesis$finishBatch();
-			}
-			ledger.flush(energyContainer);
+			finishSmeltingBatch(cachedRecipes, boundCount, ledger, energyContainer, processingFailure);
 		}
 		return updated;
 	}
 
-	/** 在完整 tick 后读取监视器当前持有的缓存，避免继续处理已被替换的旧引用。 */
-	private static List<CachedRecipe<?>> currentSmeltingRecipes(
-			@NotNull RecipeCacheLookupMonitor<?>[] monitors) {
-		List<CachedRecipe<?>> cachedRecipes = new ArrayList<>(monitors.length);
-		for (int i = 0; i < monitors.length; i++) {
-			CachedRecipe<?> cached = monitors[i].getCachedRecipe(i);
-			if (cached != null) cachedRecipes.add(cached);
-		}
+	/** 数组是单批次快照；保留空 lane 位置，避免为缓存和加速接口各分配一份列表。 */
+	private static CachedRecipe<?>[] currentSmeltingRecipes(@NotNull RecipeCacheLookupMonitor<?>[] monitors) {
+		CachedRecipe<?>[] cachedRecipes = new CachedRecipe<?>[monitors.length];
+		for (int i = 0; i < monitors.length; i++) cachedRecipes[i] = monitors[i].getCachedRecipe(i);
 		return cachedRecipes;
+	}
+
+	private static void finishSmeltingBatch(CachedRecipe<?>[] cachedRecipes, int boundCount,
+			BatchEnergyLedger ledger, MachineEnergyContainer<?> energyContainer, Throwable processingFailure) {
+		RuntimeException failure = null;
+		for (int index = 0; index < boundCount; index++) {
+			if (!(cachedRecipes[index] instanceof ICachedRecipeBatchAccel accel)) continue;
+			try {
+				accel.productivebeesgenesis$finishBatch();
+			} catch (RuntimeException cleanupFailure) {
+				if (failure == null) failure = cleanupFailure;
+				else failure.addSuppressed(cleanupFailure);
+			}
+		}
+		try {
+			ledger.flush(energyContainer);
+		} catch (RuntimeException debitFailure) {
+			if (failure == null) failure = debitFailure;
+			else failure.addSuppressed(debitFailure);
+		}
+		if (failure != null) {
+			if (processingFailure != null) processingFailure.addSuppressed(failure);
+			else throw failure;
+		}
 	}
 
 	/** 工厂跟踪的配方错误类型（原版工厂构造函数使用） */
@@ -248,7 +243,6 @@ public final class MekCentrifugeFactoryHelper {
 			SingleItem<ItemStackToItemStackRecipe>> getSmeltingRecipeType() {
 		return MekanismRecipeType.SMELTING;
 	}
-
 	/** 返回SMELTING JEI配方查看器类型 */
 	@NotNull
 	public static IRecipeViewerRecipeType<ItemStackToItemStackRecipe> getSmeltingRecipeViewerType() {

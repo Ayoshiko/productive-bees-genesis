@@ -18,6 +18,43 @@ import static org.mockito.ArgumentMatchers.*;
 
 @Tag("minecraft")
 class Ae2OutputCustodyMinecraftTest {
+    @Test void generatedKeysKeepFullComponentsWhenTemplateAndQuantityChange() {
+        var holder = new Ae2OutputStateHolder();
+        var network = mock(MEStorage.class);
+        var received = new java.util.ArrayList<AEItemKey>();
+        when(network.insert(any(), anyLong(), eq(Actionable.MODULATE), any())).thenAnswer(call -> {
+            received.add(call.getArgument(0));
+            return call.getArgument(1);
+        });
+        var session = new Ae2DirectItemPushSession(holder, network, null, 10, null);
+        session.custody = new OutputCustody(() -> {});
+        ItemStack source = new ItemStack(Items.DIAMOND, 5);
+        source.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal("first"));
+        assertEquals(5, session.push(source, 5));
+        assertEquals(50, session.push(source.copyWithCount(50), 50));
+        source.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal("second"));
+        assertEquals(3, session.push(source, 3));
+        assertEquals(received.get(0), received.get(1));
+        assertNotEquals(received.get(0), received.get(2));
+        session.reset(holder, network, null, 11, null);
+        assertEquals(7, session.push(source, 7));
+        assertEquals(received.get(2), received.get(3));
+        verify(network, times(4)).insert(any(), anyLong(), any(), any());
+    }
+
+    @Test void unknownDirectReceiptRemainsInCustodyAndNeverRetries() {
+        var network = mock(MEStorage.class);
+        when(network.insert(any(), anyLong(), any(), any())).thenThrow(new IllegalStateException("unknown outcome"));
+        var session = new Ae2DirectItemPushSession(new Ae2OutputStateHolder(), network, null, 10, null);
+        session.custody = new OutputCustody(() -> {});
+        ItemStack source = new ItemStack(Items.DIAMOND, 5);
+        assertEquals(5, session.push(source, 5));
+        assertTrue(session.custody.blocked());
+        assertEquals(5, session.custody.amount());
+        assertEquals(0, session.push(source, 5));
+        verify(network, times(1)).insert(any(), anyLong(), any(), any());
+    }
+
     @Test void sourceListenerThrowAfterDebitDoesNotDebitTwice() {
         ItemStack[] content = {new ItemStack(Items.IRON_INGOT, 20)};
         IInventorySlot slot = mock(IInventorySlot.class);

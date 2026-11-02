@@ -30,6 +30,7 @@ public final class ApiaryProductionState {
     private CompoundTag invalid;
     private ApiaryRetainedCycles retained;
     private boolean activeRetained;
+    private long frozenVersion;
 
     ApiaryProductionState(int slots, Runnable changed) {
         this.changed = changed;
@@ -103,6 +104,17 @@ public final class ApiaryProductionState {
     }
 
     public boolean suspended() { return request != null || invalid != null; }
+    boolean hasInvalidData() { return invalid != null; }
+
+    /** 只重新解析原快照；合法未知请求仍保持暂停，不重新生成或补发产物。 */
+    boolean retryInvalid(HolderLookup.Provider provider) {
+        if (invalid == null) return false;
+        CompoundTag original = invalid;
+        load(provider, original);
+        if (invalid != null) return false;
+        changed.run();
+        return true;
+    }
     public UUID request() { return request; }
     public String phase() { return phase; }
     public String failure() { return failure; }
@@ -110,6 +122,7 @@ public final class ApiaryProductionState {
     List<ItemStack> items() { return items; }
     FluidStack fluid() { return fluid; }
     long fluidAmount() { return fluidAmount; }
+    long frozenVersion() { return frozenVersion; }
 
     void begin(OrderedSlotIndex indices) {
         begin(indices, false);
@@ -148,6 +161,7 @@ public final class ApiaryProductionState {
         activeSlots = new int[0];
         activeRetained = false;
         phase = "";
+        frozenVersion++;
         changed.run();
     }
 
@@ -160,6 +174,7 @@ public final class ApiaryProductionState {
     void itemsChanged() { items.removeIf(ItemStack::isEmpty); changed.run(); }
     void debitFluid(long amount) {
         if (amount < 0 || amount > fluidAmount) throw new IllegalArgumentException("Invalid fluid debit");
+        if (amount == 0) return;
         fluidAmount -= amount;
         if (fluidAmount == 0) fluid = FluidStack.EMPTY;
         changed.run();
@@ -221,6 +236,7 @@ public final class ApiaryProductionState {
     }
 
     void load(HolderLookup.Provider provider, CompoundTag tag) {
+        frozenVersion++;
         java.util.Arrays.fill(counts, 0);
         java.util.Arrays.fill(beeSnapshots, null);
         for (BeeSlot bee : bees) bee.setBeeData(null);
@@ -334,7 +350,10 @@ public final class ApiaryProductionState {
                     }
                 }
             }
-        } catch (RuntimeException error) { invalid = tag.copy(); failure = "Invalid paid production; original preserved"; }
+        } catch (RuntimeException | LinkageError error) {
+            invalid = tag.copy();
+            failure = "Invalid paid production; original preserved";
+        }
     }
 
     private static ListTag compoundList(CompoundTag tag, String key) {

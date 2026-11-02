@@ -117,6 +117,10 @@ public class MyriadCreationsHandler {
 			pbProcessing[processIndex] = false;
 			return false;
 		}
+		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) {
+			pbProcessing[processIndex] = false;
+			return false;
+		}
 		// Task 3 性能优化：每 tick 缓存流体槽满载状态
 		fluidOutputHandler.initFluidTankFullCache();
 

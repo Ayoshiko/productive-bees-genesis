@@ -154,6 +154,15 @@ public abstract class BeeHelperMixin {
 		return ItemStackMergeHelper.mergeStacks(source);
 	}
 
+	@Inject(method = "getBeeProduce", at = @At("HEAD"), cancellable = true, remap = false)
+	private static void productivebeesgenesis$disabledMyriadProduce(Level level, Bee bee,
+			boolean hasCombBlockUpgrade, double modifier, CallbackInfoReturnable<List<ItemStack>> result) {
+		if (bee instanceof ConfigurableBee configurable
+				&& MyriadCreationsEventHandler.isMyriadCreationsDisabled(configurable.getBeeType())) {
+			result.setReturnValue(new ArrayList<>());
+		}
+	}
+
 	@Inject(method = "getBeeProduce", at = @At("RETURN"), cancellable = true)
 	private static void productivebeesgenesis$appendRandomHoneycomb(
 			Level level,

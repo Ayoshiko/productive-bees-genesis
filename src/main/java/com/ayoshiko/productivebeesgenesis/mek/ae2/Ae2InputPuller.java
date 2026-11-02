@@ -150,21 +150,22 @@ public final class Ae2InputPuller {
 
 		Ae2PushBackoff returnBackoff = holder.getPushState().getReturnBackoff();
 		boolean returnCooling = returnBackoff.shouldSkip(System.nanoTime());
-		if (returnCooling && !pendingRetryable) return;
 		boolean pendingRetriedEarly = false;
 		if (pendingRetryable) {
 			MEStorage pendingStorage = !returnCooling
 					&& holder.getPushState().getCachedNodeState(host) == Ae2GridNodeManager.STATE_ONLINE
 					? Ae2GridNodeManager.getCachedMeStorage(holder, host) : null;
 			// 已知资产可先落本地槽；网络断线和回送冷却只限制网络交互。
-			retryPendingItems(level, holder, pendingStorage, inputSlots, currentTick,
-					host instanceof BlockEntity entity ? entity : null);
-			host.productivebeesgenesis$markAe2StateChanged();
+			if (retryPendingItems(level, holder, pendingStorage, inputSlots, currentTick,
+					host instanceof BlockEntity entity ? entity : null)) {
+				host.productivebeesgenesis$markAe2StateChanged();
+			}
 			pendingRetriedEarly = true;
 		}
 		// Pending recovery above is independent from the switch for accepting new inputs.
 		if (!inputPullEnabled || holder.getPendingItemBuffer().isBlocked()) return;
-		if (returnBackoff.shouldSkip(System.nanoTime())) return;
+		Ae2PushBackoff inputBackoff = holder.getPushState().getInputBackoff();
+		if (inputBackoff.shouldSkip(System.nanoTime())) return;
 		if (holder.getPushState().getCachedNodeState(host) != Ae2GridNodeManager.STATE_ONLINE) return;
 
 		// 3. Level 与当前游戏刻已在入口获取并复用，避免重复调用。
@@ -239,9 +240,10 @@ public final class Ae2InputPuller {
 		// 先处理上次抽取后未能落槽或回送 ME 的物品，避免新抽取继续扩大待处理所有权。
 		boolean hasRetryablePending = holder.getPendingItemBuffer().hasRetryableItems(currentTick);
 		if (hasRetryablePending && !pendingRetriedEarly) {
-			retryPendingItems(level, holder, meStorage, inputSlots, currentTick,
-					host instanceof BlockEntity entity ? entity : null);
-			host.productivebeesgenesis$markAe2StateChanged();
+			if (retryPendingItems(level, holder, meStorage, inputSlots, currentTick,
+					host instanceof BlockEntity entity ? entity : null)) {
+				host.productivebeesgenesis$markAe2StateChanged();
+			}
 		}
 		if (holder.getPendingItemBuffer().isBlocked()) return;
 
@@ -320,7 +322,10 @@ public final class Ae2InputPuller {
 				}
 			}
 		}
-		if (!directOnly || stockPolicyActive) availableStacks = storageService.getCachedInventory();
+		if (!directOnly || stockPolicyActive) {
+			availableStacks = Ae2NetworkCandidateDirectory.readInventory(
+					meStorage, storageService, currentTick, stockPolicyActive);
+		}
 		if (directOnly) {
 			// 精确白名单的候选集合就是已解析配置键，无需扫描整个网络类型列表。
 			int directStart = Ae2CursorScan.cursorStartIndex(
@@ -677,16 +682,16 @@ public final class Ae2InputPuller {
 		// Update the whole-tile storage backoff once per pull pass. A slow key wins over
 		// a later healthy key in the same pass; otherwise a healthy pass clears the window
 		// immediately, while leftover fallback remains a degraded result.
-		if (returnBackoff != null) {
+		if (inputBackoff != null) {
 			if (slowExtractDetected && !degradedExtractDetected) {
-				returnBackoff.recordSuccessWithDelay(System.nanoTime(),
+				inputBackoff.recordSuccessWithDelay(System.nanoTime(),
 						Ae2StorageHealth.successfulExtractDelay(maxSlowExtractCost));
 			} else if (slowExtractDetected) {
-				returnBackoff.recordSlowOperation(System.nanoTime(), maxSlowExtractCost);
+				inputBackoff.recordSlowOperation(System.nanoTime(), maxSlowExtractCost);
 			} else if (degradedExtractDetected) {
-				returnBackoff.recordFailure(System.nanoTime());
+				inputBackoff.recordFailure(System.nanoTime());
 			} else if (healthyExtractDetected) {
-				returnBackoff.recordSuccess();
+				inputBackoff.recordSuccess();
 			}
 		}
 
@@ -1033,7 +1038,8 @@ public final class Ae2InputPuller {
 					Ae2StorageHealth.successfulExtractDelay(maxNetworkCost));
 		}
 		boolean returnAttempted = false;
-		if (transfer.knownAmount() > 0) {
+		if (transfer.knownAmount() > 0
+				&& !holder.getPushState().getReturnBackoff().shouldSkip(System.nanoTime())) {
 			returnAttempted = Ae2LeftoverReturner.returnLeftoverToMe(holder, meStorage, key, actionSource, gameTick);
 		}
 		boolean stranded = transfer.knownAmount() > 0;
@@ -1055,16 +1061,16 @@ public final class Ae2InputPuller {
 		return required == null || !required.isEmpty() && ItemStack.isSameItemSameComponents(required, input);
 	}
 
-	private static void retryPendingItems(Level level, Ae2OutputStateHolder holder, MEStorage meStorage,
+	private static boolean retryPendingItems(Level level, Ae2OutputStateHolder holder, MEStorage meStorage,
 			List<IInventorySlot> inputSlots, long currentTick, BlockEntity host) {
 		Ae2PendingItemBuffer pending = holder.getPendingItemBuffer();
-		if (pending.isBlocked()) return;
+		if (pending.isBlocked()) return false;
 		int attempts = 0;
-		for (Ae2PendingItemBuffer.PendingItem entry : pending.snapshot(currentTick)) {
+		for (Ae2PendingItemBuffer.PendingItem entry : pending.snapshot(currentTick, 4, meStorage != null)) {
 			if (pending.isBlocked() || attempts >= 4) break;
 			if (meStorage == null && entry.amount() <= 0) continue;
 			attempts++;
-			AEItemKey key = Ae2ItemFingerprint.decode(entry.fingerprint(), level.registryAccess());
+			AEItemKey key = Ae2FingerprintCache.decode(entry.fingerprint(), level.registryAccess());
 			if (key == null) {
 				pending.recordFailure(entry.fingerprint(), currentTick);
 				LogThrottle.warn("ae2_pending_item_decode", "AE2 pending 指纹无法解析，保留等待迁移: {}", entry.fingerprint());
@@ -1077,6 +1083,7 @@ public final class Ae2InputPuller {
 				retryKnownAmount(holder, meStorage, inputSlots, entry, key, entry.amount(), false, currentTick, host);
 			}
 		}
+		return attempts > 0;
 	}
 
 	private static void retryKnownAmount(Ae2OutputStateHolder holder, MEStorage storage,

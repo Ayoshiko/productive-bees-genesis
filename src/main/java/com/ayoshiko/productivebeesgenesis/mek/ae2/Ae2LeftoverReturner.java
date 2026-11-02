@@ -32,8 +32,8 @@ public final class Ae2LeftoverReturner {
             IActionSource source, long tick) {
         var transfer = holder.getPendingItemBuffer().transfer();
         long remaining = transfer.knownAmount();
-        if (remaining <= 0 || !canReturnNow(holder, storage, tick)) return false;
         var backoff = holder.getPushState().getReturnBackoff();
+        if (remaining <= 0 || !canReturnNow(holder, storage, tick)) return false;
         long simulated;
         try {
             simulated = timedInsert(holder, storage, key, remaining, Actionable.SIMULATE, source, tick);

@@ -172,11 +172,13 @@ public final class ProductiveBeesGenesis {
 			}
 			if (isOwnServerConfig(event.getConfig())) {
 				ServerConfigMigrationService.onConfigLoading(event.getConfig());
+				MyriadCreationsEventHandler.invalidateEnabledCache();
 				initializeServerConfigs();
 			}
 		});
 		eventBus.addListener((ModConfigEvent.Reloading event) -> {
 			if (isOwnServerConfig(event.getConfig()) && ModConfig.areServerSpecsLoaded()) {
+				MyriadCreationsEventHandler.invalidateEnabledCache();
 				boolean changed = ModConfig.validateAndFixCrossFields();
 				changed |= BalanceConfig.refresh(true);
 				if (changed) {
@@ -187,8 +189,6 @@ public final class ProductiveBeesGenesis {
 				// The master recipe-mode switch can invalidate already cached Mekanism recipes.
 				mekanism.common.CommonWorldTickHandler.flushTagAndRecipeCaches = true;
 				MyriadCreationsEventHandler.invalidateFilterCache();
-				// 同步万象创世启用状态缓存（避免每 tick 32 次 volatile read 配置查询）
-				MyriadCreationsEventHandler.invalidateEnabledCache();
 				// 外部物流开关走 100 刻缓存，重载后立即失效以免等待 5 秒
 				com.ayoshiko.productivebeesgenesis.logistics.ExternalLogisticsSettings.invalidate();
 				// 工厂倍率快照只在 Loading 构建，Reloading 不替换；修改后仍需重启游戏生效。

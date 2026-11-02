@@ -11,7 +11,9 @@ import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Set;
 
 /**
  * 扩展资源产物的注册、查询与份数计算入口。常驻 API 不引用 AE2 或第三方资源类。
@@ -24,6 +26,27 @@ public final class ResourceProductionApi {
 	public static final int API_VERSION = 1;
 
 	private ResourceProductionApi() {}
+
+	/** 原因和已声明蜂种一起保管；失败代际不能发布部分产物定义。 */
+	@ApiStatus.Internal
+	public static final class RegistrationFailure extends IllegalStateException {
+		private final Set<ResourceLocation> beeTypes;
+		private final Set<ResourceLocation> centrifugeBeeTypes;
+
+		private RegistrationFailure(Throwable cause, Set<ResourceLocation> beeTypes, Set<ResourceLocation> centrifugeBeeTypes) {
+			super("Resource recipe registration failed", cause);
+			this.beeTypes = Set.copyOf(beeTypes);
+			this.centrifugeBeeTypes = Set.copyOf(centrifugeBeeTypes);
+		}
+
+		public Set<ResourceLocation> beeTypes() {
+			return beeTypes;
+		}
+
+		public Set<ResourceLocation> centrifugeBeeTypes() {
+			return centrifugeBeeTypes;
+		}
+	}
 
 	/**
 	 * 返回服务器线程上的不可变快照。按 revision 失效缓存；
@@ -76,27 +99,42 @@ public final class ResourceProductionApi {
 			Collection<RecipeHolder<ResourceProductionRecipe>> datapackRecipes,
 			Collection<RecipeHolder<com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeRecipe>> centrifugeRecipes) {
 		var event = new RegisterResourceRecipesEvent(revision);
+		var declaredBees = new HashSet<ResourceLocation>();
+		var declaredCentrifugeBees = new HashSet<ResourceLocation>();
+		for (var recipe : datapackRecipes) declaredBees.add(recipe.value().bee());
+		for (var recipe : centrifugeRecipes) declaredCentrifugeBees.add(recipe.value().bee());
+		boolean finished = false;
 		try {
 			NeoForge.EVENT_BUS.post(event);
+			var defaults = event.finish();
+			finished = true;
+			var merged = new LinkedHashMap<ResourceLocation, RecipeHolder<ResourceProductionRecipe>>();
+			for (var recipe : defaults) merged.put(recipe.id(), recipe);
+			var centrifuging = new LinkedHashMap<ResourceLocation, RecipeHolder<com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeRecipe>>();
+			for (var recipe : event.finishedCentrifuging()) centrifuging.put(recipe.id(), recipe);
+			var seenDatapackIds = new HashSet<ResourceLocation>();
+			for (var recipe : datapackRecipes) {
+				if (!seenDatapackIds.add(recipe.id())) throw new IllegalArgumentException("Duplicate datapack recipe id");
+				merged.put(recipe.id(), recipe);
+				centrifuging.remove(recipe.id());
+			}
+			for (var recipe : centrifugeRecipes) {
+				if (!seenDatapackIds.add(recipe.id())) throw new IllegalArgumentException("Duplicate datapack recipe id");
+				centrifuging.put(recipe.id(), recipe);
+				merged.remove(recipe.id());
+			}
+			return ResourceRecipeIndex.build(revision, merged.values(), centrifuging.values());
 		} catch (RuntimeException | LinkageError failure) {
-			try { event.finish(); } catch (RuntimeException closeFailure) { failure.addSuppressed(closeFailure); }
-			throw failure;
+			if (!finished) {
+				try {
+					event.finish();
+				} catch (RuntimeException closeFailure) {
+					failure.addSuppressed(closeFailure);
+				}
+			}
+			declaredBees.addAll(event.declaredBeeTypes());
+			declaredCentrifugeBees.addAll(event.declaredCentrifugeBeeTypes());
+			throw new RegistrationFailure(failure, declaredBees, declaredCentrifugeBees);
 		}
-		var merged = new LinkedHashMap<ResourceLocation, RecipeHolder<ResourceProductionRecipe>>();
-		for (var recipe : event.finish()) merged.put(recipe.id(), recipe);
-		var centrifuging = new LinkedHashMap<ResourceLocation, RecipeHolder<com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeRecipe>>();
-		for (var recipe : event.finishedCentrifuging()) centrifuging.put(recipe.id(), recipe);
-		var seenDatapackIds = new java.util.HashSet<ResourceLocation>();
-		for (var recipe : datapackRecipes) {
-			if (!seenDatapackIds.add(recipe.id())) throw new IllegalArgumentException("Duplicate datapack recipe id");
-			merged.put(recipe.id(), recipe);
-			centrifuging.remove(recipe.id());
-		}
-		for (var recipe : centrifugeRecipes) {
-			if (!seenDatapackIds.add(recipe.id())) throw new IllegalArgumentException("Duplicate datapack recipe id");
-			centrifuging.put(recipe.id(), recipe);
-			merged.remove(recipe.id());
-		}
-		return ResourceRecipeIndex.build(revision, merged.values(), centrifuging.values());
 	}
 }

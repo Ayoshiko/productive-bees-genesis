@@ -63,6 +63,8 @@ final class Ae2ResourceInputGate {
     private MEStorage storage;
     private IActionSource actionSource;
     private ResourceRecipeIndex recipeIndex;
+    private boolean registrationFailed;
+    private boolean resourceReloadBlocked;
     private long recipeVersion = Long.MIN_VALUE;
     private long tick;
     private long probeTick = Long.MIN_VALUE;
@@ -89,29 +91,43 @@ final class Ae2ResourceInputGate {
             try {
                 nextAccount = resourceHost.account(next);
                 nextReady = nextAccount.canExtract(nextSource);
-            } catch (IllegalStateException unavailable) {
+            } catch (RuntimeException | LinkageError unavailable) {
                 nextReady = false;
+                report(next, unavailable);
             }
         }
         boolean enabled = inputHost.productivebeesgenesis$isOutputPushEnabled()
                 && (resourceHost == null || resourceHost.meOutputEnabled());
         long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
+        boolean nextReloadBlocked = nextLevel != null && ResourceRuntime.reloadBlocked(nextLevel.getServer());
         long nextNativeRevision = resourceHost == null ? 0 : resourceHost.nativeConfig().revision();
         if (invalidated || host != next || this.storage != storage || recipeVersion != version || meEnabled != enabled
                 || nativeRevision != nextNativeRevision
                 || nativeConfig != (resourceHost == null ? null : resourceHost.nativeConfig())
-                || account != nextAccount || !java.util.Objects.equals(source, nextSource) || accountReady != nextReady) {
+                || account != nextAccount || !java.util.Objects.equals(source, nextSource) || accountReady != nextReady
+                || resourceReloadBlocked != nextReloadBlocked) {
             invalidated = false;
             routes.clear();
             recipes.clear();
             checks.clear();
+            waiting.clear();
             var managed = holder.getAe2GridNode();
             actionSource = managed instanceof IManagedGridNode node && node.getNode() != null
                     ? IActionSource.ofMachine(node::getNode) : IActionSource.empty();
         }
         host = next;
         level = nextLevel;
-        recipeIndex = nextLevel == null ? null : ResourceRuntime.recipes(nextLevel.getServer());
+        registrationFailed = nextLevel != null && ResourceRuntime.recipeRegistrationFailed(nextLevel.getServer());
+        recipeIndex = null;
+        if (nextLevel != null && !registrationFailed) {
+            try {
+                recipeIndex = ResourceRuntime.recipes(nextLevel.getServer());
+            } catch (IllegalStateException failure) {
+                if (!ResourceRuntime.recipeRegistrationFailed(nextLevel.getServer())) throw failure;
+                registrationFailed = true;
+            }
+        }
+        resourceReloadBlocked = nextReloadBlocked;
         this.holder = holder;
         this.buffers = buffers;
         this.storage = storage;
@@ -149,6 +165,10 @@ final class Ae2ResourceInputGate {
     }
 
     boolean resourcesAvailable(AEItemKey key) {
+        if (registrationFailed || resourceReloadBlocked) {
+            return ResourceRuntime.centrifugeAdmission(level.getServer(), key.getReadOnlyStack())
+                    == ResourceRuntime.CentrifugeAdmission.UNMANAGED;
+        }
         if (recipeIndex == null || recipeIndex.centrifugeRecipes().isEmpty()) return true;
         try {
             var recipe = recipeIndex.centrifuge(key.getReadOnlyStack());
@@ -178,6 +198,9 @@ final class Ae2ResourceInputGate {
     }
 
     Decision decision(AEItemKey key) {
+        if (registrationFailed || resourceReloadBlocked) {
+            return resourcesAvailable(key) ? Decision.ACCEPTED : Decision.REJECTED;
+        }
         if (recipeIndex == null || recipeIndex.centrifugeRecipes().isEmpty()) return Decision.ACCEPTED;
         try {
             var recipe = recipeIndex.centrifuge(key.getReadOnlyStack());
@@ -199,6 +222,7 @@ final class Ae2ResourceInputGate {
     }
 
     Decision decision(ResourceCentrifugeRecipe recipe) {
+        if (registrationFailed || resourceReloadBlocked) return Decision.REJECTED;
         var result = evaluate(recipe);
 		var resourceHost = host == null ? null : ResourceHiveHost.existing(host);
 		if (resourceHost != null && result != Decision.DEFERRED) {

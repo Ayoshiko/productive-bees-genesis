@@ -5,6 +5,7 @@ import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
+import cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper;
 import net.minecraft.FieldsAreNonnullByDefault;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.resources.ResourceLocation;
@@ -135,31 +136,37 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 
 	/** 获取随机蜜脾（排除万象创世自身） */
 	public static ItemStack getRandomHoneycomb() {
+		if (!isMyriadCreationsEnabled()) return ItemStack.EMPTY;
 		return RandomHoneycombSelector.generateRandomHoneycomb(MyriadBeeTypeCache.cachedHoneycombTemplates());
 	}
 
 	/** 获取随机蜜脾块 */
 	public static ItemStack getRandomCombBlock() {
+		if (!isMyriadCreationsEnabled()) return ItemStack.EMPTY;
 		return RandomHoneycombSelector.generateRandomCombBlock(MyriadBeeTypeCache.cachedCombBlockTemplates());
 	}
 
 	/** 批量获取随机蜜脾 */
 	public static List<ItemStack> getRandomHoneycombs(int count) {
+		if (!isMyriadCreationsEnabled()) return List.of();
 		return RandomHoneycombSelector.generateRandomHoneycombs(count, MyriadBeeTypeCache.cachedHoneycombTemplates());
 	}
 
 	/** 批量获取随机蜜脾块 */
 	public static List<ItemStack> getRandomCombBlocks(int count) {
+		if (!isMyriadCreationsEnabled()) return List.of();
 		return RandomHoneycombSelector.generateRandomCombBlocks(count, MyriadBeeTypeCache.cachedCombBlockTemplates());
 	}
 
 	/** 批量追加随机蜜脾到输出列表 */
 	public static void appendRandomHoneycombs(List<ItemStack> out, int count) {
+		if (!isMyriadCreationsEnabled()) return;
 		RandomHoneycombSelector.appendRandomHoneycombs(out, count, MyriadBeeTypeCache.cachedHoneycombTemplates());
 	}
 
 	/** 批量追加随机蜜脾块到输出列表 */
 	public static void appendRandomCombBlocks(List<ItemStack> out, int count) {
+		if (!isMyriadCreationsEnabled()) return;
 		RandomHoneycombSelector.appendRandomCombBlocks(out, count, MyriadBeeTypeCache.cachedCombBlockTemplates());
 	}
 
@@ -212,21 +219,21 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 	 * processPbRecipesAndUpdate 每 tick 调 32 次（16 myriad + 16 comb）isMyriadCreationsEnabled()，
 	 * 每次需 2 次 volatile read（ModConfigSpec.isLoaded + myraidConfigValue.get()）。
 	 * 缓存到 volatile 字段后单次访问仅 1 次 volatile read，
-	 * ModConfigEvent.Reloading 时通过 {@link #invalidateEnabledCache()} 同步更新。
+	 * 配置加载和重载时通过 {@link #invalidateEnabledCache()} 同步更新。
 	 */
 	private static volatile boolean cachedMyriadEnabled = true;
 
 	/** 检查万象创世蜜蜂功能是否启用（配置未加载时默认启用，向后兼容） */
 	public static boolean isMyriadCreationsEnabled() {
-		// 单次 volatile 读 — 启动时默认 true，配置重载时由 invalidateEnabledCache 同步
+		// 单次 volatile 读；玩法配置加载和重载时同步，不依赖机器配置的加载顺序。
 		return cachedMyriadEnabled;
 	}
 
 	/**
-	 * 同步万象创世启用状态缓存值 — 由 {@link ProductiveBeesGenesis} 在 ModConfigEvent.Reloading 中调用
+	 * 同步万象创世启用状态；只读取归属的玩法规格，避免等待无关机器规格。
 	 */
 	public static void invalidateEnabledCache() {
-		if (!ModConfig.areServerSpecsLoaded()) {
+		if (!ModConfig.GAMEPLAY_SERVER_SPEC.isLoaded()) {
 			cachedMyriadEnabled = true;
 		} else {
 			cachedMyriadEnabled = ModConfig.SERVER.myriadCreationsEnabled.get();
@@ -238,9 +245,13 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		return beeType != null && PBConstants.MYRIADCREATIONS_TYPE.equals(beeType);
 	}
 
+	/** 身份识别不受配置影响；只对完整万象蜂种 ID 停止行为。 */
+	public static boolean isMyriadCreationsDisabled(ResourceLocation beeType) {
+		return isMyriadCreationsBeeType(beeType) && !isMyriadCreationsEnabled();
+	}
+
 	/** 检查是否为万象创世蜜脾 */
 	public static boolean isMyriadCreationsHoneycomb(ItemStack stack) {
-		if (!isMyriadCreationsEnabled()) return false;
 		if (stack == null || stack.isEmpty()) return false;
 		try {
 			if (stack.getItem() == com.ayoshiko.productivebeesgenesis.util.PbCombItemRefs.honeycomb()) {
@@ -259,7 +270,6 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 
 	/** 检查是否为万象创世蜜脾块 */
 	public static boolean isMyriadCreationsCombBlock(ItemStack stack) {
-		if (!isMyriadCreationsEnabled()) return false;
 		if (stack == null || stack.isEmpty()) return false;
 		try {
 			if (stack.getItem() == com.ayoshiko.productivebeesgenesis.util.PbCombItemRefs.combBlock()) {
@@ -310,6 +320,10 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 
 	/** 空转拦截统一检查方法 */
 	public static boolean shouldBlockOperation(IItemHandlerModifiable handler) {
+		if (!isMyriadCreationsEnabled()
+				&& isMyriadCreationsItem(handler.getStackInSlot(InventoryHandlerHelper.INPUT_SLOT))) {
+			return true;
+		}
 		return CombBlockCheckCache.checkBlockOperation(handler, MyriadCreationsEventHandler::isConfigurableItem,
 			BLOCK_CHECK_CACHES);
 	}
@@ -328,6 +342,7 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		int productivityModifier,
 		List<ItemStack> reservedOutputs
 	) {
+		if (!isMyriadCreationsEnabled()) return !isMyriadCreationsItem(input);
 		MyriadBeeTypeCache.BeeTypeCacheSnapshot snapshot = MyriadBeeTypeCache.snapshot();
 		return appendRandomCombsInternal(
 				input, invHandler, random, productivityModifier,
@@ -338,15 +353,18 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 
 	/** 从蜜蜂缓存中随机选取指定数量的不同类型 */
 	public static List<ResourceLocation> selectDistinctBeeTypes(int count, RandomSource random) {
+		if (!isMyriadCreationsEnabled()) return List.of();
 		return RandomHoneycombSelector.selectDistinctBeeTypes(count, random, MyriadBeeTypeCache.cachedBeeTypes());
 	}
 
 	/** 带缓存的随机类型选择（Task 23） */
 	public static List<ResourceLocation> selectDistinctBeeTypesCached(int count, Level level) {
+		if (!isMyriadCreationsEnabled()) return List.of();
 		return MyriadSelectionCache.selectDistinctBeeTypesCached(count, level, MyriadBeeTypeCache.cachedBeeTypes());
 	}
 
 	public static List<ResourceLocation> selectDistinctBeeTypesCached(int count, Level level, boolean blocks) {
+		if (!isMyriadCreationsEnabled()) return List.of();
 		return MyriadSelectionCache.selectDistinctBeeTypesCached(count, level, MyriadBeeTypeCache.cachedBeeTypes(blocks));
 	}
 

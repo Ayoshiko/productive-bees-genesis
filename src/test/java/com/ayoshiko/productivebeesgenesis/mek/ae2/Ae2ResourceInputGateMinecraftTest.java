@@ -12,6 +12,11 @@ import com.ayoshiko.productivebeesgenesis.resource.ResourceProductionRecipe;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceTypes;
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.api.resource.RegisterResourceRecipesEvent;
+import net.minecraft.world.item.crafting.RecipeManager;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -26,6 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -274,6 +280,52 @@ class Ae2ResourceInputGateMinecraftTest {
         when(host.getBlockPos()).thenReturn(BlockPos.ZERO);
         when(((IAe2InputHost) host).productivebeesgenesis$isOutputPushEnabled()).thenReturn(true);
         return host;
+    }
+
+    @Test
+    void failedRegistrationRejectsOnlyDeclaredResourceInputAndReloadDropsOldWaiting() {
+        var recipe = recipe(ResourceTypes.FE);
+        var server = mock(MinecraftServer.class);
+        var manager = mock(RecipeManager.class);
+        var level = mock(ServerLevel.class);
+        when(server.isSameThread()).thenReturn(true);
+        when(server.getRecipeManager()).thenReturn(manager);
+        when(level.getServer()).thenReturn(server);
+        var host = host(level);
+        var gate = new Ae2ResourceInputGate();
+        var holder = new Ae2OutputStateHolder();
+        var buffers = new Ae2PushBuffers();
+        var storage = mock(MEStorage.class);
+        var resourceKey = AEItemKey.of(recipe.input(false));
+        var ordinary = AEItemKey.of(new ItemStack(Items.HONEYCOMB));
+        var calls = new AtomicInteger();
+        Consumer<RegisterResourceRecipesEvent> listener = event -> {
+            calls.incrementAndGet();
+            event.registerCentrifuging(id("isolated"), recipe);
+            throw new IllegalStateException("Injected registration failure");
+        };
+        long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
+        NeoForge.EVENT_BUS.addListener(listener);
+        try {
+            gate.prepare((IAe2InputHost) host, holder, buffers, storage, 1);
+            assertFalse(gate.resourcesAvailable(resourceKey));
+            assertFalse(gate.canReceive(resourceKey));
+            assertTrue(gate.resourcesAvailable(ordinary));
+            assertTrue(gate.canReceive(ordinary));
+            for (int i = 0; i < 20; i++) gate.prepare((IAe2InputHost) host, holder, buffers, storage, i + 2);
+            assertEquals(1, calls.get());
+            verifyNoInteractions(storage);
+            NeoForge.EVENT_BUS.unregister(listener);
+            ProductiveBeesGenesis.RECIPE_VERSION.incrementAndGet();
+            gate.prepare((IAe2InputHost) host, holder, buffers, storage, 30);
+            assertTrue(gate.resourcesAvailable(resourceKey));
+            assertTrue(gate.canReceive(resourceKey));
+            assertFalse(gate.hasWaitingRecipes());
+        } finally {
+            NeoForge.EVENT_BUS.unregister(listener);
+            ResourceRuntime.stopped(new ServerStoppedEvent(server));
+            ProductiveBeesGenesis.RECIPE_VERSION.set(version);
+        }
     }
 
     private static ResourceCentrifugeRecipe recipe(ResourceKey resource) {

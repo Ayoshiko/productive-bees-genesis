@@ -363,6 +363,13 @@ public class PbRecipeProcessor {
 		int virtualTicks = Math.max(1, tickMultiplier);
 		tickMultiplier = 1;
 
+		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()
+				&& MyriadCreationsEventHandler.isMyriadCreationsItem(input)) {
+			pbProcessing[processIndex] = false;
+			context.setPbActiveState(false, processIndex);
+			return false;
+		}
+
 		var resourceResult = MekResourceCentrifuge.tick(context, processIndex, virtualTicks, energyBudget,
 				(paid, required, working) -> {
 					pbOperatingTicks[processIndex] = paid;

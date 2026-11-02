@@ -1,11 +1,14 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayDeque;
@@ -48,6 +51,11 @@ public final class ApiaryOutputBuffer {
 	private final ListTag quarantined = new ListTag();
 	private CompoundTag invalidRoot;
 	private boolean draining;
+	private long recoveryVersion = Long.MIN_VALUE;
+	private int recoveryRemaining;
+	private boolean productionRecoveryPending;
+	private boolean recoveryQueued;
+	private static final int RECOVERY_ENTRIES_PER_CALL = 8;
 	public int freeGroups() { return Math.max(0, MAX_BUFFER_GROUPS - getBufferedGroupCount()); }
 	public boolean hasInvalidData() { return invalidRoot != null || !quarantined.isEmpty(); }
 	public boolean productionBlocked() { return hasInvalidData() || bufferedStacks.size() >= MAX_BUFFER_GROUPS; }
@@ -331,6 +339,9 @@ public final class ApiaryOutputBuffer {
 	}
 
 	public synchronized void load(HolderLookup.Provider provider, CompoundTag tag) {
+		recoveryVersion = Long.MIN_VALUE;
+		recoveryRemaining = 0;
+		productionRecoveryPending = false;
 		bufferedStacks.clear(); clearIndex(); quarantined.clear(); invalidRoot = null;
 		tile.productionState().load(provider, new CompoundTag());
 		if (tag == null) return;
@@ -346,15 +357,67 @@ public final class ApiaryOutputBuffer {
 		for (var raw : list) {
 			CompoundTag entry = (CompoundTag) raw;
 			try {
-				if (entry.contains(NBT_KEY_STACK_COUNT) && !entry.contains(NBT_KEY_STACK_COUNT, Tag.TAG_INT))
-					throw new IllegalArgumentException("Invalid buffered count type");
-				ItemStack stack = ItemStack.parse(provider, entry).orElseThrow();
-				int count = entry.contains(NBT_KEY_STACK_COUNT) ? entry.getInt(NBT_KEY_STACK_COUNT) : stack.getCount();
-				if (stack.isEmpty() || count <= 0) throw new IllegalArgumentException("Invalid buffered item");
-				bufferedStacks.addLast(stack.copyWithCount(count));
-			} catch (RuntimeException error) { quarantined.add(entry.copy()); }
+				bufferedStacks.addLast(parseEntry(provider, entry));
+			} catch (RuntimeException | LinkageError error) { quarantined.add(entry.copy()); }
 		}
 		rebuildIndex();
+	}
+
+	private static ItemStack parseEntry(HolderLookup.Provider provider, CompoundTag entry) {
+		if (entry.contains(NBT_KEY_STACK_COUNT) && !entry.contains(NBT_KEY_STACK_COUNT, Tag.TAG_INT)) {
+			throw new IllegalArgumentException("Invalid buffered count type");
+		}
+		ItemStack stack = ItemStack.parse(provider, entry).orElseThrow();
+		int count = entry.contains(NBT_KEY_STACK_COUNT) ? entry.getInt(NBT_KEY_STACK_COUNT) : stack.getCount();
+		if (stack.isEmpty() || count <= 0) throw new IllegalArgumentException("Invalid buffered item");
+		return stack.copyWithCount(count);
+	}
+
+	/** 读档或重载后按原文校验一次；每调用最多八个条目，失败条目不删、不逐刻重试。 */
+	public synchronized void tickRecovery(ServerLevel level) {
+		if (invalidRoot != null || quarantined.isEmpty() && !tile.productionState().hasInvalidData()) {
+			if (recoveryQueued) stopRecovery();
+			return;
+		}
+		if (ResourceRuntime.reloadInProgress(level.getServer())) return;
+		long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
+		if (recoveryVersion != version) {
+			recoveryVersion = version;
+			recoveryRemaining = quarantined.size();
+			productionRecoveryPending = tile.productionState().hasInvalidData();
+		}
+		if (recoveryRemaining == 0 && !productionRecoveryPending) return;
+		recoveryQueued = true;
+		if (!ResourceRuntime.claimRecovery(level.getServer(), tile)) return;
+		recoveryQueued = false;
+		boolean recovered = false;
+		if (productionRecoveryPending) {
+			productionRecoveryPending = false;
+			recovered = tile.productionState().retryInvalid(level.registryAccess());
+		}
+		int attempted = Math.min(RECOVERY_ENTRIES_PER_CALL, recoveryRemaining);
+		for (int i = 0; i < attempted; i++) {
+			CompoundTag original = (CompoundTag) quarantined.remove(0);
+			try {
+				bufferedStacks.addLast(parseEntry(level.registryAccess(), original));
+				recovered = true;
+			} catch (RuntimeException | LinkageError unavailable) {
+				// 解析尚未提交任何交接；保存同一原文，等待下一次实际重载。
+				quarantined.add(original);
+			}
+		}
+		recoveryRemaining -= attempted;
+		if (recovered) {
+			rebuildIndex();
+			markContentsChanged();
+		}
+	}
+
+	void stopRecovery() {
+		if (tile.getLevel() instanceof ServerLevel level) {
+			ResourceRuntime.releaseRecovery(level.getServer(), tile);
+		}
+		recoveryQueued = false;
 	}
 
 	public synchronized void retryQuarantined(HolderLookup.Provider provider) {

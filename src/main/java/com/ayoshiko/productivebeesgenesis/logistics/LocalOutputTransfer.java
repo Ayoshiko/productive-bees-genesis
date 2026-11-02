@@ -19,9 +19,10 @@ public final class LocalOutputTransfer {
                 ItemStack current;
                 try { current = slot.getStack(); } catch (RuntimeException error) { return stack.getCount() - remaining; }
                 if (pass == 0 ? current.isEmpty() || !ItemStack.isSameItemSameComponents(current, stack) : !current.isEmpty()) continue;
-                ItemStack offered = stack.copyWithCount(remaining);
-                int handed = custody.handoffItem(offered, "machine-slot", () ->
-                        ItemPushHelper.accepted(offered, slot.insertItem(offered.copy(), Action.EXECUTE, AutomationType.INTERNAL)));
+                int requested = remaining;
+                int handed = (int) custody.handoffItem(stack, requested, "machine-slot", () ->
+                        ItemPushHelper.accepted(stack, requested,
+                                slot.insertItem(stack.copyWithCount(requested), Action.EXECUTE, AutomationType.INTERNAL)));
                 remaining -= handed;
             }
         }

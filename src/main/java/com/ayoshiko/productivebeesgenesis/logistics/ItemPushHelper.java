@@ -62,10 +62,10 @@ public final class ItemPushHelper {
 				try { current = target.getStackInSlot(i); } catch (RuntimeException e) { return remaining; }
 				if (pass == 0 ? current.isEmpty() || !ItemStack.isSameItemSameComponents(current, remaining) : !current.isEmpty()) continue;
 				int slot = i;
-				ItemStack offered = remaining.copy();
-				int handed = custody.handoffItem(offered, destination + "/" + slot, () -> {
-					ItemStack rest = target.insertItem(slot, offered.copy(), false);
-					return accepted(offered, rest);
+				int requested = remaining.getCount();
+				int handed = (int) custody.handoffItem(remaining, requested, destination + "/" + slot, () -> {
+					ItemStack rest = target.insertItem(slot, remaining.copy(), false);
+					return accepted(remaining, rest);
 				});
 				remaining.shrink(handed);
 			}
@@ -74,8 +74,15 @@ public final class ItemPushHelper {
 	}
 
 	public static int accepted(ItemStack offered, ItemStack rest) {
-		if (rest == null || (!rest.isEmpty() && (!ItemStack.isSameItemSameComponents(offered, rest)
-				|| rest.getCount() > offered.getCount()))) throw new IllegalStateException("Invalid item receipt");
-		return offered.getCount() - (rest.isEmpty() ? 0 : rest.getCount());
+		return accepted(offered, offered.getCount(), rest);
+	}
+
+	/** 请求量独立于模板；接收方只得到副本，回执仍核对完整身份与原请求上限。 */
+	public static int accepted(ItemStack template, int requested, ItemStack rest) {
+		if (requested < 0 || rest == null || (!rest.isEmpty()
+				&& (!ItemStack.isSameItemSameComponents(template, rest) || rest.getCount() > requested))) {
+			throw new IllegalStateException("Invalid item receipt");
+		}
+		return requested - (rest.isEmpty() ? 0 : rest.getCount());
 	}
 }

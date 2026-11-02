@@ -70,7 +70,19 @@ public enum BeeState {
 	WAITING_OUTPUT_BUFFER(0xE6A23C),
 
 	/** 蜂种已停用；实体、物品和已付周期保留以便恢复。 */
-	RETIRED_BEE(0x90A4AE);
+	RETIRED_BEE(0x90A4AE),
+
+	/** 万象创世总开关关闭；原蜜蜂、进度和已付周期保留。 */
+	MYRIAD_DISABLED(0x90A4AE),
+
+	/** 新配方代际正在发布，完成后自动恢复。 */
+	WAITING_RELOAD(0x90A4AE),
+
+	/** 扩展重载失败只影响声明资源产出的蜂种。 */
+	WAITING_RESOURCE_RELOAD(0xD49A45),
+
+	/** 扩展配方或对应资源依赖不可用，等待成功重载。 */
+	WAITING_RESOURCE_RECIPE(0xD49A45);
 
 	/** 状态颜色 RGB int 值（供 GUI 状态灯渲染） */
 	private final int color;
