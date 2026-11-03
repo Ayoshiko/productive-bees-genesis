@@ -1,7 +1,7 @@
 # Productive Bees Genesis
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-Download-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.2.1-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.2.2-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -11,7 +11,7 @@
 
 **Languages**: [English](README.md) · [中文](README_zh.md)
 
-**Version 1.2.1: clearer editor tools, bulk selection and cross-pack migration.** Released on 2026-10-31 with text, search, import/export and compatibility improvements. See the [CHANGELOG](CHANGELOG.md#121---2026-10-31).
+**Version 1.2.2: production recovery, performance maintenance and clearer first-use guidance.** Released on 2026-11-03 with safe Myriad Creations disabling, full-output recovery, AE2 logistics fixes and a tutorial that leads to applying or exporting your bee. Update both clients and servers. See the [CHANGELOG](CHANGELOG.md#122---2026-11-03).
 
 **Download**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
@@ -778,7 +778,7 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-The local build is `build/libs/productivebeesgenesis-1.2.1.jar`.
+The local build is `build/libs/productivebeesgenesis-1.2.2.jar`.
 
 `./gradlew runClient --no-daemon` automatically loads the resource-bee examples through the development-only `devExamples` source set. Bees such as `example:energy`, `example:hydrogen` and `example:mixed` are available for testing; optional resource types still require their owning mods. The examples are not bundled in release jars, and `verifyReleaseArtifact` checks that boundary.
 

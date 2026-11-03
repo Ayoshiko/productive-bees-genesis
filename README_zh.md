@@ -1,7 +1,7 @@
 # 资源蜜蜂：创世
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-下载-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.2.1-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.2.2-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -11,7 +11,7 @@
 
 **语言**: [English](README.md) · [中文](README_zh.md)
 
-**1.2.1：更清楚的编辑器工具、批量选择与跨整合包迁移。** 于 2026-10-31 正式发布，包含文字、搜索、导入导出和兼容修复。完整变更见 [CHANGELOG](CHANGELOG.md#121---2026-10-31)。
+**1.2.2：生产恢复、性能维护与首次教程引导。** 于 2026-11-03 正式发布，修复万象创世禁用不完整、满载等待输出及 AE2 物流问题，首次教程引导到应用和导出按钮。客户端和服务端请一起更新。完整变更见 [CHANGELOG](CHANGELOG.md#122---2026-11-03)。
 
 **下载**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
@@ -779,7 +779,7 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-本地构建产物为 `build/libs/productivebeesgenesis-1.2.1.jar`。
+本地构建产物为 `build/libs/productivebeesgenesis-1.2.2.jar`。
 
 运行 `./gradlew runClient --no-daemon` 会通过仅开发环境使用的 `devExamples` sourceSet 自动加载资源蜜蜂示例，可测试 `example:energy`、`example:hydrogen`、`example:mixed` 等蜂种。可选资源仍需安装对应模组。示例不会打入发布 JAR，`verifyReleaseArtifact` 会检查这一隔离边界。
 

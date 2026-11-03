@@ -31,6 +31,12 @@
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-03
+
+**生产恢复与性能维护更新。** 本版修复万象创世禁用不完整、满载反复重试及旧蜂箱等待输出问题，改善 AE2 拉取与回送，并把编辑器首次教程引导到应用和导出按钮。客户端和服务端请一起更新到 1.2.2。
+
+扩展资源故障只暂停使用对应资源的蜂种和车道，普通蜜蜂与 Wanna 抽蜂仍可正常生产。已有产物和已付周期继续保管；暂时不可用的数据可在加载或成功重载后恢复，损坏数据与结果不明的交付仍保留等待核验。
+
 ### 变更
 
 - 减少机械蜂箱与离心机重复准备产出上界、解析旧工作和编码产物审计文本的开销，并减少空批次结算、高倍率熔炼及物流交接的临时分配。缓存按完整物品组件区分身份，随配方、升级、原文或注册表变化失效；实际容量、费用和接收结果仍实时校验。
@@ -48,6 +54,10 @@
 - 修复高倍率熔炼使用完整 tick 更新前的旧配方缓存，以及中途失败后部分车道的批次未正确结束的问题。已开始的批次仍逐一清理，合并费用只结算一次，并保留最初失败及后续清理错误。
 
 ### English
+
+**Production recovery and performance maintenance update.** This version fixes incomplete Myriad Creations disabling, repeated full-output retries and retained work in old apiaries, improves AE2 pulling and returns, and guides the editor's first tutorial to application and export. Update both clients and servers to 1.2.2.
+
+Extended resource faults pause only the bees and lanes using the affected resources; ordinary bees and Wanna Bees can keep producing. Existing products and paid cycles remain retained. Temporarily unavailable data can recover on loading or a successful reload, while damaged data and transfers with unknown results stay retained for review.
 
 #### Changed
 
