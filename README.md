@@ -1,7 +1,7 @@
 # Productive Bees Genesis
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-Download-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.2.2-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.2.3-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -11,7 +11,7 @@
 
 **Languages**: [English](README.md) · [中文](README_zh.md)
 
-**Version 1.2.2: production recovery, performance maintenance and clearer first-use guidance.** Released on 2026-11-03 with safe Myriad Creations disabling, full-output recovery, AE2 logistics fixes and a tutorial that leads to applying or exporting your bee. Update both clients and servers. See the [CHANGELOG](CHANGELOG.md#122---2026-11-03).
+**Version 1.2.3: faster editor search, reliable drafts and clearer Myriad JEI outputs.** Released on 2026-11-04 with batch draft application, PB native bee recipe editing and further production optimizations. Update both clients and servers. See the [CHANGELOG](CHANGELOG.md#123---2026-11-04).
 
 **Download**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
@@ -276,6 +276,10 @@ Both centrifuges and apiaries can act as **AE2 grid nodes** connecting to the ME
 ### Resource Bee Editor
 
 Get the BeeBee Support Handbook in Creative mode and right-click to open the Resource Bee Editor. Create or edit a bee, its appearance, attributes, flowers, acquisition and multiple outputs. The handbook is usable only in Creative mode; applying on a dedicated server requires OP level 2 or above. Creative non-OP players can edit, save and export locally. Inventory and hotbar remain visible; dragging a material copies its complete components without consuming items.
+
+The catalog includes both PB JSON bees and registered native bee entities. Blue Banded Bees, Creeper Bees and other native bees can be found by their localized names, Chinese characters or Pinyin. Native bees open on Acquisition and support acquisition, ordinary production and world conversion data recipes; their appearance, attributes, breeding restrictions and special behavior remain provided by the original mod.
+
+Select multiple edited drafts in the Draft Library, choose “Import selected into world”, review the list, then choose “Validate and apply all”. Drafts keep their original IDs. The server validates the entire batch, dependencies, recipes and baselines before reloading the world once. Conflicts, unfinished input or validation failures retain every draft; success updates all draft baselines together. Dedicated servers still require OP level 2, and an unknown result must be queried before resubmitting.
 
 Drag the title bar to move the editor, drag its edges or corners to resize, and use the pin to lock it. Resize cursors appear near an edge. Movement is bounded by the screen and bottom inventory; JEI adapts to the actual occupied areas. The designer adjusts its internal density at 3×/4× GUI scale, and bottom buttons grow with the window. The inventory stays outside with matching light/dark textures; fitting pages and common tools remain visible, with remaining actions under More. Ctrl+0 resets the layout, F2 switches the theme, Ctrl+F focuses search, and Ctrl+S saves the current draft. Ctrl+Z/Y and Edit History restore session snapshots with specific field changes; local drafts have their own library. Revision History records successful applications to the current world. Saving a draft or exporting locally does not create a published revision.
 
@@ -778,7 +782,7 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-The local build is `build/libs/productivebeesgenesis-1.2.2.jar`.
+The local build is `build/libs/productivebeesgenesis-1.2.3.jar`.
 
 `./gradlew runClient --no-daemon` automatically loads the resource-bee examples through the development-only `devExamples` source set. Bees such as `example:energy`, `example:hydrogen` and `example:mixed` are available for testing; optional resource types still require their owning mods. The examples are not bundled in release jars, and `verifyReleaseArtifact` checks that boundary.
 

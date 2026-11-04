@@ -1,7 +1,7 @@
 # 资源蜜蜂：创世
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-下载-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.2.2-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.2.3-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -11,7 +11,7 @@
 
 **语言**: [English](README.md) · [中文](README_zh.md)
 
-**1.2.2：生产恢复、性能维护与首次教程引导。** 于 2026-11-03 正式发布，修复万象创世禁用不完整、满载等待输出及 AE2 物流问题，首次教程引导到应用和导出按钮。客户端和服务端请一起更新。完整变更见 [CHANGELOG](CHANGELOG.md#122---2026-11-03)。
+**1.2.3：编辑器搜索、草稿保存与万象 JEI 显示更新。** 于 2026-11-04 正式发布，支持批量应用草稿与 PB 原生蜜蜂配方编辑，修复未编辑也提示保存的问题，并继续优化生产热路径。客户端和服务端请一起更新。完整变更见 [CHANGELOG](CHANGELOG.md#123---2026-11-04)。
 
 **下载**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
@@ -279,6 +279,10 @@ PB 升级系统与 Mekanism 原版升级（SPEED / ENERGY / MUFFLING）完全独
 ### 资源蜜蜂编辑器
 
 在创造模式取得“蜂蜂应援手册”并右键打开资源蜜蜂编辑器，可新建蜂种或读取已有蜂种，编辑外观、属性、采蜜材料、获得方式与多种产物。手册只允许创造模式使用；独立服务端应用到世界要求 OP 等级至少 2，创造模式普通玩家可本地编辑、保存和导出。背包和快捷栏常驻；拖入材料只复制完整组件，不消耗物品。
+
+目录同时收录 PB 的 JSON 蜂种和原生实体蜜蜂；蓝色条纹蜜蜂、苦力怕蜜蜂等可按中文本名、单字或拼音搜索。原生蜂种打开后进入获取配方页，可编辑获取、普通产物和世界转化的数据配方；外观、属性、繁殖限制及特殊行为保持原模组实现。
+
+在“草稿库”多选已编辑好的草稿，点击“批量导入到世界”，核对名单后选择“检查并应用全部”。所选草稿保持原 ID，服务器先检查整批依赖、配方和基准，全部通过后只重载一次世界。冲突、未完成输入或检查失败时保留全部草稿；成功后一起更新草稿基准。独立服务端仍需 OP2，结果未明时先查询应用结果。
 
 拖动标题栏移动编辑器，拖动边缘或四角缩放，使用图钉固定窗口。靠近边缘会显示相应缩放光标；窗口移动只受屏幕与底部背包约束，JEI 根据实际占用区自行避让。3×／4× 自动调整设计器内部密度，底部按钮随窗口尺寸扩大。背包使用同风格明暗材质；导航按文字宽度保留直接栏目，常用工具优先显示，剩余操作进入“更多”。Ctrl+0 恢复布局，F2 切换主题，Ctrl+F 聚焦搜索，Ctrl+S 保存当前草稿。Ctrl+Z／Y 和“编辑历史”恢复会话快照，并显示字段的具体变化；本机草稿有独立草稿库。“修订历史”记录成功应用到当前世界的发布，存草稿和本地导出不会产生发布修订。
 
@@ -779,7 +783,7 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-本地构建产物为 `build/libs/productivebeesgenesis-1.2.2.jar`。
+本地构建产物为 `build/libs/productivebeesgenesis-1.2.3.jar`。
 
 运行 `./gradlew runClient --no-daemon` 会通过仅开发环境使用的 `devExamples` sourceSet 自动加载资源蜜蜂示例，可测试 `example:energy`、`example:hydrogen`、`example:mixed` 等蜂种。可选资源仍需安装对应模组。示例不会打入发布 JAR，`verifyReleaseArtifact` 会检查这一隔离边界。
 

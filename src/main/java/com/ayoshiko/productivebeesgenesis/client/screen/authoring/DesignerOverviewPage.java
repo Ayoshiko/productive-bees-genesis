@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerNativeBees;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineRecipes;
 import com.google.gson.JsonObject;
 import net.minecraft.network.chat.Component;
@@ -21,52 +22,56 @@ final class DesignerOverviewPage {
 		String bee = document.get("id").getAsString();
 		screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) ->
 				screen.beeButton(x, y, w, bee, () -> locate.accept("definition"))));
-		heading(screen, "appearance", () -> locate.accept("definition/renderer"));
-		screen.scope("names");
-		JsonObject names = BeeDesignerDocument.object(document, "names");
-		screen.field("name_zh", names, "zh_cn", "");
-		screen.field("name_en", names, "en_us", "");
-		screen.scope("definition");
-		DesignerBeeModels.add(screen, definition);
-		for (String color : List.of("primaryColor", "secondaryColor", "particleColor", "tertiaryColor")) {
-			screen.field(color, definition, color, "#FFFFFF");
-		}
-		screen.number("size", definition, "size", "1");
-		screen.number("pollinatedSize", definition, "pollinatedSize", BeeDesignerDocument.text(definition, "size", "1"));
-		screen.toggle("colorCycle", definition, "colorCycle", false);
-		screen.toggle("useGlowLayer", definition, "useGlowLayer", BeeDesignerDocument.text(definition, "renderer", "default").equals("default_crystal"));
-		screen.toggle("createComb", definition, "createComb", true);
-		heading(screen, "attributes", () -> locate.accept("definition/speed"));
-		screen.number("speed", definition, "speed", "1");
-		screen.number("attack", definition, "attack", "2");
-		DesignerBeeFields.breedingFood(screen, definition);
-		screen.number("breedingItemCount", definition, "breedingItemCount", "1");
-		for (String flower : List.of("flowerItem", "flowerBlock", "flowerTag", "flowerFluid", "flowerResource")) {
-			if (definition.has(flower)) {
-				if (flower.equals("flowerResource")) {
-					DesignerResourceFields.add(screen, definition.getAsJsonObject(flower), true);
-				} else if (flower.equals("flowerItem")) {
-					screen.item("flower", definition, flower, "minecraft:poppy");
-				} else if (flower.equals("flowerBlock")) {
-					screen.blockFlower(definition);
-				} else if (flower.equals("flowerTag")) {
-					DesignerBeeFields.flowerTag(screen, definition);
-				} else {
-					screen.field("flower", definition, flower, "");
+		if (BeeDesignerNativeBees.recipesOnly(document)) {
+			screen.note("", DesignerFormScreen.tr("native_bee_help"));
+		} else {
+			heading(screen, "appearance", () -> locate.accept("definition/renderer"));
+			screen.scope("names");
+			JsonObject names = BeeDesignerDocument.object(document, "names");
+			screen.field("name_zh", names, "zh_cn", "");
+			screen.field("name_en", names, "en_us", "");
+			screen.scope("definition");
+			DesignerBeeModels.add(screen, definition);
+			for (String color : List.of("primaryColor", "secondaryColor", "particleColor", "tertiaryColor")) {
+				screen.field(color, definition, color, "#FFFFFF");
+			}
+			screen.number("size", definition, "size", "1");
+			screen.number("pollinatedSize", definition, "pollinatedSize", BeeDesignerDocument.text(definition, "size", "1"));
+			screen.toggle("colorCycle", definition, "colorCycle", false);
+			screen.toggle("useGlowLayer", definition, "useGlowLayer", BeeDesignerDocument.text(definition, "renderer", "default").equals("default_crystal"));
+			screen.toggle("createComb", definition, "createComb", true);
+			heading(screen, "attributes", () -> locate.accept("definition/speed"));
+			screen.number("speed", definition, "speed", "1");
+			screen.number("attack", definition, "attack", "2");
+			DesignerBeeFields.breedingFood(screen, definition);
+			screen.number("breedingItemCount", definition, "breedingItemCount", "1");
+			for (String flower : List.of("flowerItem", "flowerBlock", "flowerTag", "flowerFluid", "flowerResource")) {
+				if (definition.has(flower)) {
+					if (flower.equals("flowerResource")) {
+						DesignerResourceFields.add(screen, definition.getAsJsonObject(flower), true);
+					} else if (flower.equals("flowerItem")) {
+						screen.item("flower", definition, flower, "minecraft:poppy");
+					} else if (flower.equals("flowerBlock")) {
+						screen.blockFlower(definition);
+					} else if (flower.equals("flowerTag")) {
+						DesignerBeeFields.flowerTag(screen, definition);
+					} else {
+						screen.field("flower", definition, flower, "");
+					}
 				}
 			}
+			JsonObject genes = definition;
+			screen.gene("weatherTolerance", genes, "weather_tolerance", "weather_tolerance.none", "weather_tolerance.rain", "weather_tolerance.any");
+			screen.gene("temper", genes, "temper", "temper.passive", "temper.normal", "temper.hostile", "temper.aggressive");
+			screen.gene("behavior", genes, "behavior", "behavior.diurnal", "behavior.nocturnal", "behavior.metaturnal");
+			screen.gene("endurance", genes, "endurance", "endurance.weak", "endurance.normal", "endurance.medium", "endurance.strong");
+			screen.gene("productivity", genes, "productivity", "productivity.normal", "productivity.medium", "productivity.high", "productivity.very_high");
+			for (String trait : List.of("selfbreed", "waterproof", "fireproof", "coldResistant", "selfheal", "irradiated",
+					"withered", "blinding", "draconic", "slimy", "teleporting", "munchies", "redstoned", "stringy", "stingless", "translucent")) {
+				screen.toggle(trait, definition, trait, trait.equals("selfbreed"));
+			}
+			DesignerBeeFields.specialBehavior(screen, definition);
 		}
-		JsonObject genes = definition;
-		screen.gene("weatherTolerance", genes, "weather_tolerance", "weather_tolerance.none", "weather_tolerance.rain", "weather_tolerance.any");
-		screen.gene("temper", genes, "temper", "temper.passive", "temper.normal", "temper.hostile", "temper.aggressive");
-		screen.gene("behavior", genes, "behavior", "behavior.diurnal", "behavior.nocturnal", "behavior.metaturnal");
-		screen.gene("endurance", genes, "endurance", "endurance.weak", "endurance.normal", "endurance.medium", "endurance.strong");
-		screen.gene("productivity", genes, "productivity", "productivity.normal", "productivity.medium", "productivity.high", "productivity.very_high");
-		for (String trait : List.of("selfbreed", "waterproof", "fireproof", "coldResistant", "selfheal", "irradiated",
-				"withered", "blinding", "draconic", "slimy", "teleporting", "munchies", "redstoned", "stringy", "stingless", "translucent")) {
-			screen.toggle(trait, definition, trait, trait.equals("selfbreed"));
-		}
-		DesignerBeeFields.specialBehavior(screen, definition);
 		screen.scope("");
 		heading(screen, "acquisition", () -> locate.accept("acquisition"));
 		JsonObject recipes = document.getAsJsonObject("recipes");

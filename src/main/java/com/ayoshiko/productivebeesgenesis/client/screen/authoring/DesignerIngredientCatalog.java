@@ -59,6 +59,13 @@ final class DesignerIngredientCatalog {
 		return SOURCES.computeIfAbsent(kind + (nestsFirst ? ":nests" : ":ordinary"), unused -> new Source(kind, nestsFirst));
 	}
 
+	static void warmup() {
+		Source items = source("item");
+		if (!items.ready()) {
+			items.advance();
+		}
+	}
+
 	static void clear() {
 		SOURCES.clear();
 		level.clear();
@@ -73,16 +80,16 @@ final class DesignerIngredientCatalog {
 		private final List<Entry> entries = new ArrayList<>();
 		private boolean ready;
 		private long indexingNanos;
+		private final DesignerSearch.Index<Entry> index;
 		private String lastQuery;
-		private DesignerSearch.Query compiledQuery;
-		private final Map<String, List<Entry>> recentQueries = new LinkedHashMap<>(8, 0.75F, true);
 		private int searched;
-		private final List<Entry> filtered = new ArrayList<>();
-		private List<Entry> active = filtered;
+		private List<Entry> active = List.of();
 
 		private Source(String kind, boolean nestsFirst) {
 			this.kind = kind;
 			this.nestsFirst = nestsFirst;
+			index = new DesignerSearch.Index<>(Comparator.comparingInt((Entry entry) -> nestsFirst && entry.nest ? 0 : 1)
+					.thenComparing(entry -> entry.idText));
 			base = nestsFirst ? source(kind, false) : null;
 			if (base != null) {
 				registry = java.util.Collections.emptyIterator();
@@ -118,12 +125,13 @@ final class DesignerIngredientCatalog {
 				Entry entry = entry(value);
 				if (entry != null) {
 					entries.add(entry);
+					index.add(entry, entry.id.getNamespace(), entry.searchable(), entry.tags());
 				}
 			}
 			if (!registry.hasNext()) {
 				entries.sort(Comparator.comparingInt((Entry entry) -> nestsFirst && entry.nest ? 0 : 1).thenComparing(entry -> entry.idText));
+				index.finish();
 				lastQuery = null;
-				recentQueries.clear();
 				ready = true;
 			}
 			indexingNanos += System.nanoTime() - started;
@@ -178,48 +186,21 @@ final class DesignerIngredientCatalog {
 		}
 
 		List<Entry> search(String query) {
-			String normalized = query.toLowerCase(Locale.ROOT).strip();
-			if (normalized.isEmpty()) {
-				lastQuery = normalized;
-				searched = entries.size();
-				active = entries;
-				return active;
-			}
-			if (!normalized.equals(lastQuery)) {
-				lastQuery = normalized;
-				compiledQuery = DesignerSearch.compile(normalized);
-				searched = 0;
-				filtered.clear();
-				active = filtered;
-				List<Entry> cached = ready ? recentQueries.get(normalized) : null;
-				if (cached != null) {
-					active = cached;
-					searched = entries.size();
-					return active;
+			if (!query.equals(lastQuery) || searched != size()) {
+				lastQuery = query;
+				if (base == null) {
+					active = index.search(query);
+				} else {
+					active = new ArrayList<>(base.search(query));
+					active.sort(Comparator.comparingInt((Entry entry) -> entry.nest ? 0 : 1).thenComparing(entry -> entry.idText));
 				}
-			}
-			long started = System.nanoTime();
-			int budget = 512;
-			boolean names = compiledQuery.needsName();
-			boolean tags = compiledQuery.needsTags();
-			while (searched < entries.size() && budget-- > 0 && System.nanoTime() - started < 2_000_000L) {
-				Entry entry = entries.get(searched++);
-				if (compiledQuery.matches(entry.id.getNamespace(), names ? entry.searchable() : entry.idText,
-						tags ? entry.tags() : List.of())) {
-					filtered.add(entry);
-				}
-			}
-			if (ready && searched == entries.size() && !recentQueries.containsKey(normalized)) {
-				if (recentQueries.size() == 8) {
-					recentQueries.remove(recentQueries.keySet().iterator().next());
-				}
-				recentQueries.put(normalized, List.copyOf(filtered));
+				searched = size();
 			}
 			return active;
 		}
 
 		boolean searching() {
-			return lastQuery == null || searched < entries.size();
+			return lastQuery == null || searched < size();
 		}
 
 		boolean ready() {
@@ -231,7 +212,7 @@ final class DesignerIngredientCatalog {
 		}
 
 		int size() {
-			return entries.size();
+			return base == null ? entries.size() : base.size();
 		}
 	}
 

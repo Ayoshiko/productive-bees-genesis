@@ -499,6 +499,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 
 	@Override
 	public void onRuntimeUnavailable() {
+		MyriadJeiOutputs.clear();
 		com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient.recipeViewer((id, stack) -> "designer.jei_unavailable");
 		com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient.externalIngredients(java.util.Collections::emptyIterator);
 	}

@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerNativeBees;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineRecipes;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerProduction;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerWorldConversions;
@@ -30,24 +31,29 @@ final class DesignerRecipesPage {
 		var mc = Minecraft.getInstance();
 		Set<String> grouped = new HashSet<>();
 		if (production) {
-			screen.section("production_nodes");
-			screen.note("", DesignerFormScreen.tr("production_nodes_help"));
-			screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> screen.primaryButton(x, y, w,
-					DesignerFormScreen.tr("add_production"), () -> mc.setScreen(new DesignerProductionScreen(screen, document,
-							"node_" + UUID.randomUUID().toString().substring(0, 8))))));
-			int number = 0;
-			JsonObject nodes = document.has("production_nodes") ? document.getAsJsonObject("production_nodes") : new JsonObject();
-			for (var entry : nodes.entrySet()) {
-				String id = entry.getKey();
-				JsonObject node = entry.getValue().getAsJsonObject();
-				node.getAsJsonArray("recipe_ids").forEach(value -> grouped.add(value.getAsString()));
-				int index = ++number;
-				screen.recipeHeading(DesignerFormScreen.option(node.get("route").getAsString()).copy().append(" · " + index), id,
-						() -> mc.setScreen(new DesignerProductionScreen(screen, document, id)),
-						() -> remove.accept(id, () -> BeeDesignerProduction.remove(document, id)));
-				screen.note("", DesignerFormScreen.tr(node.get("route").getAsString().equals("direct") ? "flow_direct" : "flow_centrifuge"));
+			if (!BeeDesignerNativeBees.recipesOnly(document)) {
+				screen.section("production_nodes");
+				screen.note("", DesignerFormScreen.tr("production_nodes_help"));
+				screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> screen.primaryButton(x, y, w,
+						DesignerFormScreen.tr("add_production"), () -> mc.setScreen(new DesignerProductionScreen(screen, document,
+								"node_" + UUID.randomUUID().toString().substring(0, 8))))));
+				int number = 0;
+				JsonObject nodes = document.has("production_nodes") ? document.getAsJsonObject("production_nodes") : new JsonObject();
+				for (var entry : nodes.entrySet()) {
+					String id = entry.getKey();
+					JsonObject node = entry.getValue().getAsJsonObject();
+					node.getAsJsonArray("recipe_ids").forEach(value -> grouped.add(value.getAsString()));
+					int index = ++number;
+					screen.recipeHeading(DesignerFormScreen.option(node.get("route").getAsString()).copy().append(" · " + index), id,
+							() -> mc.setScreen(new DesignerProductionScreen(screen, document, id)),
+							() -> remove.accept(id, () -> BeeDesignerProduction.remove(document, id)));
+					screen.note("", DesignerFormScreen.tr(node.get("route").getAsString().equals("direct") ? "flow_direct" : "flow_centrifuge"));
+				}
 			}
 			screen.section("individual_recipes");
+			if (BeeDesignerNativeBees.recipesOnly(document)) {
+				screen.note("", DesignerFormScreen.tr("native_bee_help"));
+			}
 			screen.note("", DesignerFormScreen.tr("individual_recipes_help"));
 			screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> screen.button(x, y, w,
 					DesignerFormScreen.tr("add_individual_recipe"), () -> mc.setScreen(new RecipeTypeScreen(screen, document, true)))));

@@ -714,9 +714,16 @@ final class DesignerTheme {
 
 		@Override
 		public void setResponder(java.util.function.Consumer<String> responder) {
+			String[] previous = {getValue()};
 			super.setResponder(value -> {
+				String current = getValue();
+				// 原生 EditBox 的光标移动也调用 responder，只有文字变化才属于编辑。
+				if (current.equals(previous[0])) {
+					return;
+				}
+				previous[0] = current;
 				invalid(false);
-				responder.accept(value);
+				responder.accept(current);
 			});
 		}
 		Input(Font font, int x, int y, int width, int height, Component label) {

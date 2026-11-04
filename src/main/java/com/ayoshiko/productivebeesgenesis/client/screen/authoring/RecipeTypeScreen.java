@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerNativeBees;
 import com.google.gson.JsonObject;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -28,7 +29,8 @@ final class RecipeTypeScreen extends DesignerFormScreen {
 				"productivebees:bee_fishing", "minecraft:crafting_shapeless", "minecraft:crafting_shaped"}) {
 			boolean isProduction = type.endsWith("advanced_beehive") || type.endsWith("centrifuge") || type.startsWith("productivebeesgenesis:")
 					|| com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerWorldConversions.supports(type);
-			if (isProduction != production) {
+			if (isProduction != production || BeeDesignerNativeBees.recipesOnly(document)
+					&& !BeeDesignerNativeBees.supportsRecipe(BeeDesignerDocument.recipe(type))) {
 				continue;
 			}
 			rows.add(new Row("", (x, y, w) -> button(left, y, contentWidth, option(type), () -> {

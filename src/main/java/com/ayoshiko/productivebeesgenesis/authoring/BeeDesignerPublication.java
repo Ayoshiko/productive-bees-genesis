@@ -265,7 +265,12 @@ final class BeeDesignerPublication {
 		ResourceLocation path = ResourceLocation.parse(document.get("definition_path").getAsString());
 		String raw = BeeDesignerSources.definitions.get(path);
 		var definition = server.getResourceManager().getResource(path.withPath("productivebees/" + path.getPath() + ".json"));
-		if (BeeReloadListener.INSTANCE.getData(ResourceLocation.parse(id)) == null || raw == null
+		if (BeeDesignerNativeBees.recipesOnly(document)) {
+			BeeDesignerNativeBees.validate(document);
+			if (definition.isPresent() && definition.get().sourcePackId().equals(packId)) {
+				throw new IllegalStateException("A native bee was replaced by a configurable definition: " + id);
+			}
+		} else if (BeeReloadListener.INSTANCE.getData(ResourceLocation.parse(id)) == null || raw == null
 				|| !document.get("definition").equals(JsonParser.parseString(raw)) || definition.isEmpty()
 				|| !BeeDesignerMyriad.recipesOnly(document) && !definition.get().sourcePackId().equals(packId)) {
 			throw new IllegalStateException("Bee definition was not activated: " + id);

@@ -3,7 +3,6 @@ package com.ayoshiko.productivebeesgenesis.authoring;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 
@@ -20,14 +19,17 @@ final class BeeDesignerImportBatch {
 	final UUID token;
 	final long generation;
 	private final int expected;
+	private final boolean drafts;
 	private final Map<String, JsonObject> documents = new LinkedHashMap<>();
 	private final Map<String, JsonObject> originals = new LinkedHashMap<>();
+	private final Map<String, JsonObject> managedBaselines = new LinkedHashMap<>();
 	private int bytes;
 	private long touched = System.nanoTime();
 
 	BeeDesignerImportBatch(JsonObject request) {
 		token = UUID.fromString(request.get("token").getAsString());
 		expected = request.get("count").getAsInt();
+		drafts = request.has("drafts") && request.get("drafts").getAsBoolean();
 		if (expected < 1 || expected > BeeDesignerCollection.MAX_BEES) {
 			throw new IllegalArgumentException("designer.error.collection_count");
 		}
@@ -46,6 +48,21 @@ final class BeeDesignerImportBatch {
 	void add(JsonObject source, JsonObject original) {
 		BeeDesignerCompiler.validateStructure(source);
 		String id = source.get("id").getAsString();
+		if (drafts) {
+			String baseline = BeeDesignerDocument.text(source, "baseline", "new");
+			String managed = BeeDesignerSources.managed.get(id);
+			boolean matchesManaged = original != null && managed != null
+					&& baseline.equals(BeeDesignerDocument.fingerprint(BeeDesignerProtocol.parse(managed)));
+			if (!baseline.equals(original == null ? "new" : original.get("baseline").getAsString())) {
+				if (!matchesManaged) {
+					throw new IllegalArgumentException("designer.error.draft_conflict|" + id);
+				}
+				managedBaselines.put(id, BeeDesignerProtocol.parse(managed));
+			}
+		}
+		if (BeeDesignerNativeBees.contains(ResourceLocation.parse(id)) || BeeDesignerNativeBees.recipesOnly(source)) {
+			BeeDesignerNativeBees.validate(source);
+		}
 		if (documents.containsKey(id) || documents.size() >= expected) {
 			throw new IllegalArgumentException("designer.error.migration_duplicate|" + id);
 		}
@@ -63,7 +80,7 @@ final class BeeDesignerImportBatch {
 				document.add("names", original.get("names").deepCopy());
 				BeeDesignerMyriad.validateRecipes(original, document);
 			}
-			JsonArray disabled = new JsonArray();
+			JsonArray disabled = original.has("disabled_recipes") ? original.getAsJsonArray("disabled_recipes").deepCopy() : new JsonArray();
 			for (String recipe : original.getAsJsonObject("recipes").keySet()) {
 				if (!document.getAsJsonObject("recipes").has(recipe)) {
 					disabled.add(recipe);
@@ -105,8 +122,12 @@ final class BeeDesignerImportBatch {
 			if (original != null && !BeeDesignerReader.unchanged(server, original)) {
 				throw new IllegalArgumentException("designer.error.collection_changed");
 			}
+			JsonObject baseline = managedBaselines.get(id);
+			if (baseline != null && !BeeDesignerReader.unchanged(server, baseline)) {
+				throw new IllegalArgumentException("designer.error.draft_conflict|" + id);
+			}
 			var conflicts = BeeDesignerImportConflicts.inspect(id,
-					BeeReloadListener.INSTANCE.getData().keySet().stream().map(Object::toString).toList(), documents.keySet());
+					BeeDesignerEggs.bees(), documents.keySet());
 			if (!conflicts.canKeepIdentity()) {
 				throw new IllegalArgumentException("designer.import_name_conflict|" + String.join(", ", conflicts.nameCollisions()));
 			}

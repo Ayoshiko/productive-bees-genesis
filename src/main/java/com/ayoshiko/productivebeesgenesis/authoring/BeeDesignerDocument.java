@@ -94,6 +94,9 @@ public final class BeeDesignerDocument {
 	}
 
 	public static JsonObject copyAs(JsonObject source, String newId) {
+		if (BeeDesignerNativeBees.recipesOnly(source)) {
+			throw new IllegalArgumentException("designer.error.native_recipe_scope|" + source.get("id").getAsString());
+		}
 		ResourceLocation id = ResourceLocation.parse(newId);
 		String previous = source.get("id").getAsString();
 		if (newId.equals(previous) || !id.getPath().matches("[a-z0-9_.-]{1,96}")) {

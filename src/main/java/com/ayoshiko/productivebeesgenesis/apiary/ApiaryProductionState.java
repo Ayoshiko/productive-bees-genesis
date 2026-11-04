@@ -48,7 +48,7 @@ public final class ApiaryProductionState {
                 cached = new BeeSnapshot(source, source.copy());
                 beeSnapshots[slot] = cached;
             }
-            bees[slot].setBeeData(cached.data());
+            bees[slot].setProductionSnapshot(cached.data(), bee);
             changed.run();
         }
     }

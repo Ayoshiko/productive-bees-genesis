@@ -19,10 +19,14 @@ public final class BeeDesignerOrigins {
 		} else {
 			origin = new JsonObject();
 			String pack = "";
-			try {
-				pack = BeeDesignerSources.sourcePacks.getOrDefault(BeeDesignerReader.definitionPath(bee), "");
-			} catch (IllegalArgumentException missing) {
-				// 未应用的新草稿没有资源路径；来源尚未确定，不猜为 PB 原版。
+			if (BeeDesignerNativeBees.contains(bee)) {
+				pack = "mod/" + bee.getNamespace();
+			} else {
+				try {
+					pack = BeeDesignerSources.sourcePacks.getOrDefault(BeeDesignerReader.definitionPath(bee), "");
+				} catch (IllegalArgumentException missing) {
+					// 未应用的新草稿没有资源路径；来源尚未确定，不猜为 PB 原版。
+				}
 			}
 			String kind;
 			if (managed != null) {

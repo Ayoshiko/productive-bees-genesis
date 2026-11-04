@@ -78,6 +78,7 @@
     "client.ResourceSideConfigurationMixin",
     "client.PbContainerFlowerJeiMixin",
     "client.PbCentrifugeJeiLayoutMixin",
+    "client.PbMyriadBeehiveJeiMixin",
     "client.MyriadGuideHotkeyMixin",
     "client.ContainerSlotCountMixin",
     "client.MekGuiBlockItemDepthMixin",

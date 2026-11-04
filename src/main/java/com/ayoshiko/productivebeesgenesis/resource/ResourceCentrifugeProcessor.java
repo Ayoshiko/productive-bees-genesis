@@ -269,8 +269,17 @@ public final class ResourceCentrifugeProcessor {
 			var capacityUsed = account.reservedCapacity();
 			for (var entry : perInput.entrySet()) {
 				if (ResourceTypes.EMC.equals(entry.getKey())) continue;
-                BigInteger room = BigInteger.valueOf(host.capacity()).subtract(capacityUsed.getOrDefault(entry.getKey(), BigInteger.ZERO));
-                long inputs = room.max(BigInteger.ZERO).divide(entry.getValue()).min(BigInteger.valueOf(Long.MAX_VALUE)).longValueExact();
+				long capacity = host.capacity();
+				BigInteger used = capacityUsed.getOrDefault(entry.getKey(), BigInteger.ZERO);
+				BigInteger perUnit = entry.getValue();
+				long inputs;
+				if (used.signum() >= 0 && used.bitLength() < 64 && perUnit.signum() > 0 && perUnit.bitLength() < 64) {
+					long room = Math.max(0, capacity - used.longValueExact());
+					inputs = room / perUnit.longValueExact();
+				} else {
+					BigInteger room = BigInteger.valueOf(capacity).subtract(used).max(BigInteger.ZERO);
+					inputs = room.divide(perUnit).min(BigInteger.valueOf(Long.MAX_VALUE)).longValueExact();
+				}
                 allowedInputs = Math.min(allowedInputs, inputs);
 			}
 			LocalPlan local = work.ordinaryRecipe == null ? null : access.localPlan(work.ordinaryRecipe);

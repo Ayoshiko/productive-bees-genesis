@@ -79,18 +79,20 @@ public final class BeeDesignerReader {
 
 	public static JsonObject beeData(MinecraftServer server, ResourceLocation bee) {
 		var data = BeeReloadListener.INSTANCE.getData(bee);
-		if (data == null) {
+		boolean nativeBee = BeeDesignerNativeBees.contains(bee);
+		if (data == null && !nativeBee) {
 			throw new IllegalArgumentException("designer.error.bee_missing|" + bee);
 		}
-		ResourceLocation path = definitionPath(bee);
+		ResourceLocation path = nativeBee ? bee : definitionPath(bee);
 		JsonObject response = new JsonObject();
 		response.addProperty("id", bee.toString());
 		response.addProperty("definition_path", path.toString());
 		response.addProperty("managed", BeeDesignerSources.managed.containsKey(bee.toString()));
 		response.add("origin", BeeDesignerOrigins.describe(bee));
 		response.addProperty("generation", BeeDesignerSources.generation);
-		response.add("definition", JsonParser.parseString(BeeDesignerSources.definitions.get(path)));
-		response.add("runtime", CompoundTag.CODEC.encodeStart(server.registryAccess().createSerializationContext(JsonOps.INSTANCE),
+		response.addProperty(BeeDesignerNativeBees.RECIPES_ONLY, nativeBee);
+		response.add("definition", nativeBee ? new JsonObject() : JsonParser.parseString(BeeDesignerSources.definitions.get(path)));
+		response.add("runtime", data == null ? new JsonObject() : CompoundTag.CODEC.encodeStart(server.registryAccess().createSerializationContext(JsonOps.INSTANCE),
 				data.copy()).getOrThrow());
 		server.getResourceManager().getResource(path.withPath("productivebees/" + path.getPath() + ".json"))
 				.ifPresent(resource -> response.addProperty("source_pack", resource.sourcePackId()));
@@ -101,13 +103,16 @@ public final class BeeDesignerReader {
 		if (com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime.reloadBlocked(server)) {
 			throw new IllegalStateException("designer.error.reload_incomplete");
 		}
-		if (BeeReloadListener.INSTANCE.getData(bee) == null) {
+		boolean nativeBee = BeeDesignerNativeBees.contains(bee);
+		if (BeeReloadListener.INSTANCE.getData(bee) == null && !nativeBee) {
 			throw new IllegalArgumentException("designer.error.bee_missing|" + bee);
 		}
-		ResourceLocation definitionPath = definitionPath(bee);
-		JsonObject document = BeeDesignerDocument.create(bee.toString());
+		ResourceLocation definitionPath = nativeBee ? bee : definitionPath(bee);
+		JsonObject document = nativeBee ? BeeDesignerNativeBees.document(bee) : BeeDesignerDocument.create(bee.toString());
 		document.addProperty("definition_path", definitionPath.toString());
-		document.add("definition", JsonParser.parseString(BeeDesignerSources.definitions.get(definitionPath)));
+		if (!nativeBee) {
+			document.add("definition", JsonParser.parseString(BeeDesignerSources.definitions.get(definitionPath)));
+		}
 		document.add("_editor_origin", BeeDesignerOrigins.describe(bee));
 		String managed = BeeDesignerSources.managed.get(bee.toString());
 		if (managed != null) {
@@ -345,7 +350,12 @@ public final class BeeDesignerReader {
 	public static boolean unchanged(MinecraftServer server, JsonObject original) {
 		ResourceLocation path = ResourceLocation.parse(original.get("definition_path").getAsString());
 		String raw = BeeDesignerSources.definitions.get(path);
-		if (raw == null || !JsonParser.parseString(raw).equals(original.get("definition"))) {
+		if (BeeDesignerNativeBees.recipesOnly(original)) {
+			if (!BeeDesignerNativeBees.contains(ResourceLocation.parse(original.get("id").getAsString()))
+					|| !original.getAsJsonObject("definition").isEmpty()) {
+				return false;
+			}
+		} else if (raw == null || !JsonParser.parseString(raw).equals(original.get("definition"))) {
 			return false;
 		}
 		String id = original.get("id").getAsString();

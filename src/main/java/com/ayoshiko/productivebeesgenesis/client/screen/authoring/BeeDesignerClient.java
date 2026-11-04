@@ -307,6 +307,9 @@ public final class BeeDesignerClient {
 	@SubscribeEvent
 	public static void frameFinished(net.neoforged.neoforge.client.event.RenderFrameEvent.Post event) {
 		DesignerFonts.betweenFrames();
+		if (Minecraft.getInstance().screen instanceof DesignerFormScreen) {
+			DesignerIngredientCatalog.warmup();
+		}
 	}
 
 	@SubscribeEvent
@@ -332,6 +335,7 @@ public final class BeeDesignerClient {
 	public static void logout(ClientPlayerNetworkEvent.LoggingOut event) {
 		DesignerSearch.clear();
 		DesignerIngredientCatalog.clear();
+		DesignerBeeCatalog.clear();
 		if (net.neoforged.fml.ModList.get().isLoaded("ae2")) {
 			DesignerAeKeyPicker.clear();
 		}
@@ -357,6 +361,7 @@ public final class BeeDesignerClient {
 		Minecraft.getInstance().execute(() -> {
 			DesignerSearch.clear();
 			DesignerIngredientCatalog.clear();
+		DesignerBeeCatalog.clear();
 			if (net.neoforged.fml.ModList.get().isLoaded("ae2")) {
 				DesignerAeKeyPicker.clear();
 			}

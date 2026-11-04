@@ -509,7 +509,7 @@ class BeeSlotTickProcessor {
 			if (slot.isEmpty()) {
 				continue;
 			}
-			ResourceLocation beeTypeKey = BeeNbtHelper.resolveBeeTypeKey(slot.getBeeData());
+			ResourceLocation beeTypeKey = slot.getBeeTypeKey();
 			if (beeTypeKey == null) {
 				continue;
 			}
@@ -551,7 +551,7 @@ class BeeSlotTickProcessor {
                     break;
                 }
                 attempted++;
-                ResourceLocation type = BeeNbtHelper.resolveBeeTypeKey(retained.bees[index].getBeeData());
+                ResourceLocation type = retained.bees[index].getBeeTypeKey();
                 if (type == null) {
                     continue;
                 }

@@ -84,7 +84,8 @@ final class BeeDesignerItemPicker extends DesignerFormScreen {
             query = value;
             gridScroll.jump(0);
             highlighted = -1;
-            searchAt = System.currentTimeMillis() + 150;
+            searchAt = 0;
+            filter();
         });
         addRenderableWidget(search);
         gridTop = searchY + 24;

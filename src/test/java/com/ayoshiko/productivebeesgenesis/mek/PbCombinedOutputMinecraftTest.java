@@ -420,6 +420,33 @@ class PbCombinedOutputMinecraftTest {
         assertEquals(List.of(first, sameIdentity), List.copyOf(overflow.getPendingOutputs().keySet()));
     }
 
+
+    @Test void encodedPendingTemplatesKeepIndependentReceiptsAndRefreshChangedComponents() {
+        var owner = new PbRecipeCompleter(context());
+        var batch = owner.prepare(recipe(1), 4, 91, false);
+        var first = batch.saveCommittedPending(REGISTRIES);
+        var expected = first.copy();
+        first.getList("items", 10).getCompound(0).putString("external", "mutation");
+        assertEquals(expected, batch.saveCommittedPending(REGISTRIES));
+        var equivalentBatch = owner.prepare(recipe(1), 4, 91, false);
+        var equivalentReceipt = equivalentBatch.saveCommittedPending(REGISTRIES);
+        assertEquals(expected, equivalentReceipt);
+        equivalentReceipt.getList("items", 10).getCompound(0).putInt("count", 31);
+        assertEquals(expected, batch.saveCommittedPending(REGISTRIES));
+        ItemStack template = batch.getPendingOutputs().keySet().iterator().next();
+        template.set(DataComponents.CUSTOM_NAME, Component.literal("changed after caching"));
+        var changed = batch.saveCommittedPending(REGISTRIES);
+        assertNotEquals(expected, changed);
+        var restored = new PbRecipeCompleter(context());
+        restored.loadCommittedPending(changed, REGISTRIES);
+        assertEquals(changed, restored.saveCommittedPending(REGISTRIES));
+        assertTrue(restored.getPendingOutputs().keySet().stream()
+                .anyMatch(stack -> stack.getHoverName().getString().equals("changed after caching")));
+        owner.acceptPrepared(batch);
+        assertNull(batch.saveCommittedPending(REGISTRIES));
+        assertEquals(changed, owner.saveCommittedPending(REGISTRIES));
+    }
+
     @Test void emptyFlushKeepsFluidOnlyAndInputOnlyCommitSemantics() {
         var context = context();
         var owner = new PbRecipeCompleter(context);

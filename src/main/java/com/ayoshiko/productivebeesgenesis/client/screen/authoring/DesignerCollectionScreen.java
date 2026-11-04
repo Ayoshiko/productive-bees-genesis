@@ -3,6 +3,8 @@ package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCredits;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCollection;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerEggs;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerNativeBees;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.network.chat.Component;
@@ -250,6 +252,9 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 	}
 
 	private void captureName(JsonObject document) {
+		if (BeeDesignerNativeBees.recipesOnly(document)) {
+			return;
+		}
 		JsonObject names = document.getAsJsonObject("names");
 		String locale = minecraft.options.languageCode;
 		String key = BeeDesignerDocument.translationKey(document.get("id").getAsString());
@@ -285,7 +290,7 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 				status = Component.translatable("designer.status.exported", path.toString()).getString();
 				rebuildIfVisible();
 				if (generation >= 0 && !localDrafts && minecraft.getSingleplayerServer() != null) {
-					List<String> registered = cy.jdkdigital.productivebees.setup.BeeReloadListener.INSTANCE.getData().keySet().stream().map(Object::toString).sorted().toList();
+					List<String> registered = BeeDesignerEggs.bees();
 					if (named.keySet().equals(java.util.Set.copyOf(registered)) && editingSnapshots.isEmpty()
 							&& selected.stream().noneMatch(DesignerDraftIndex::pending)) {
 						DesignerProjectFiles.saveRegisteredCatalog(named, registered, generation, () -> {}, message -> {

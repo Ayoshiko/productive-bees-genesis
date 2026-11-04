@@ -1,6 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerNativeBees;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.entity.animal.Bee;
 import com.google.gson.JsonObject;
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
 import cy.jdkdigital.productivebees.init.ModEntities;
@@ -18,7 +21,7 @@ import org.joml.Vector3f;
 
 /** 预览覆盖仅属于未加入世界的实体实例；不临时替换 PB 全局蜂种表。 */
 final class DesignerPreview {
-	private ConfigurableBee bee;
+	private Bee bee;
 	private JsonObject definition;
 	private String beeId = "";
 	private String problem = "";
@@ -40,9 +43,20 @@ final class DesignerPreview {
 		definition = source.deepCopy();
 		beeId = id;
 		try {
+			if (BeeDesignerNativeBees.recipesOnly(document)) {
+				var entity = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(id)).create(mc.level);
+				if (!(entity instanceof Bee nativeBee)) {
+					throw new IllegalStateException("Native bee factory returned no bee: " + id);
+				}
+				bee = nativeBee;
+				bee.setNoAi(true);
+				bee.setNoGravity(true);
+				problem = "";
+				return;
+			}
 			CompoundTag parsed = BeeCreator.create(ResourceLocation.parse(document.get("id").getAsString()),
 					document.getAsJsonObject("definition").deepCopy());
-			if (bee == null || bee.level() != mc.level) {
+			if (!(bee instanceof ConfigurableBee) || bee.level() != mc.level) {
 				bee = ModEntities.CONFIGURABLE_BEE.get().create(mc.level);
 				if (bee == null) {
 					throw new IllegalStateException("PB configurable bee factory returned no entity");
@@ -50,10 +64,11 @@ final class DesignerPreview {
 				bee.setNoAi(true);
 				bee.setNoGravity(true);
 			}
-			((DesignerPreviewData) bee).productivebeesgenesis$setPreviewData(parsed);
-			bee.setBeeType(document.get("id").getAsString());
-			bee.refreshDimensions();
-			String renderer = bee.getRenderer().isEmpty() ? "default" : bee.getRenderer();
+			ConfigurableBee configurable = (ConfigurableBee) bee;
+			((DesignerPreviewData) configurable).productivebeesgenesis$setPreviewData(parsed);
+			configurable.setBeeType(document.get("id").getAsString());
+			configurable.refreshDimensions();
+			String renderer = configurable.getRenderer().isEmpty() ? "default" : configurable.getRenderer();
 			if (ModList.get().isLoaded("geckolib")) {
 				ResourceLocation model = parsed.contains("model") ? ResourceLocation.parse(parsed.getString("model"))
 						: ResourceLocation.fromNamespaceAndPath("productivebees", "geo/entity/" + renderer + ".geo.json");
@@ -61,12 +76,12 @@ final class DesignerPreview {
 					throw new IllegalArgumentException("designer.error.preview_resource|" + model);
 				}
 			}
-			String texture = bee.hasBeeTexture() ? bee.getBeeTexture() : "productivebees:textures/entity/bee/base/" + renderer + "/bee";
+			String texture = configurable.hasBeeTexture() ? configurable.getBeeTexture() : "productivebees:textures/entity/bee/base/" + renderer + "/bee";
 			ResourceLocation location = ResourceLocation.parse(texture + ".png");
 			if (mc.getResourceManager().getResource(location).isEmpty()) {
 				throw new IllegalArgumentException("designer.error.preview_resource|" + location);
 			}
-			if (!ModList.get().isLoaded("geckolib") && bee.isColored()) {
+			if (!ModList.get().isLoaded("geckolib") && configurable.isColored()) {
 				var layers = BeeBodyLayer.baseTextures.get(renderer);
 				if (layers == null || !layers.containsKey("primary") || !layers.containsKey("abdomen")) {
 					throw new IllegalArgumentException("designer.error.preview_texture|" + renderer);
@@ -95,7 +110,7 @@ final class DesignerPreview {
 		int displayTop = y + (compact ? 2 : 25);
 		if (displayHeight >= 16) {
 			DesignerTheme.scissor(graphics, x + 5, displayTop, x + width - 5, displayTop + displayHeight);
-			float size = Math.max(0.01F, bee.getSizeModifier());
+			float size = bee instanceof ConfigurableBee configurable ? Math.max(0.01F, configurable.getSizeModifier()) : 1;
 			float scale = compact ? Math.min(width - 12, displayHeight - 4) / size
 					: Math.min(width - 24, displayHeight - 12) * 0.72F / size;
 			float body = bee.yBodyRot;
@@ -132,7 +147,7 @@ final class DesignerPreview {
 		}
 		JsonObject names = document.getAsJsonObject("names");
 		String locale = mc.options.languageCode;
-		String name = BeeDesignerDocument.text(names, locale, BeeDesignerDocument.text(names, "en_us", document.get("id").getAsString()));
+		String name = BeeDesignerDocument.text(names, locale, BeeDesignerDocument.text(names, "en_us", BeeDesignerClient.beeName(document.get("id").getAsString()).getString()));
 		graphics.drawString(DesignerFonts.body(), DesignerFonts.body().plainSubstrByWidth(name, width - 16), x + 8, textY, DesignerFormScreen.FOREGROUND, false);
 		graphics.drawString(DesignerFonts.body(), DesignerFonts.body().plainSubstrByWidth(document.get("id").getAsString(), width - 16), x + 8, textY + 14, DesignerFormScreen.MUTED, false);
 		if (textY + 47 < y + height) {

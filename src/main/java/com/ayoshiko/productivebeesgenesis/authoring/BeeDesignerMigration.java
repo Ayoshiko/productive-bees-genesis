@@ -69,6 +69,12 @@ public final class BeeDesignerMigration {
 				continue;
 			}
 			boolean copy = policy == Policy.COPY_ALL || policy == Policy.COPY_CONFLICTS && conflict || nameCollision;
+			if (BeeDesignerNativeBees.recipesOnly(source)) {
+				copy = false;
+				if (!world.contains(id) || nameCollision) {
+					throw new IllegalArgumentException("designer.error.native_recipe_scope|" + id);
+				}
+			}
 			if (BeeDesignerMyriad.recipesOnly(source)) {
 				copy = false;
 				if (!world.contains(id)) {

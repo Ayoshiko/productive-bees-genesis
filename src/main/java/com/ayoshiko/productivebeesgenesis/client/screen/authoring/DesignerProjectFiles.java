@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerArchive;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCollection;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCredits;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDrafts;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerProtocol;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineSources;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineRecipes;
@@ -19,6 +20,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -302,6 +304,24 @@ final class DesignerProjectFiles {
 	static void draft(String id, Consumer<JsonObject> loaded, Consumer<String> failed) {
 		Path directory = Minecraft.getInstance().gameDirectory.toPath().resolve("bee-designer");
 		submit(() -> BeeDesignerDrafts.read(directory, id), loaded, failed);
+	}
+
+	static void drafts(List<String> ids, Consumer<Map<String, String>> loaded, Consumer<String> failed) {
+		Path directory = workspace();
+		List<String> selected = List.copyOf(ids);
+		submit(() -> {
+			if (selected.isEmpty() || selected.size() > BeeDesignerCollection.MAX_BEES) {
+				throw new IllegalArgumentException("designer.error.collection_count");
+			}
+			Map<String, String> documents = new LinkedHashMap<>();
+			for (String id : selected) {
+				JsonObject document = BeeDesignerDrafts.read(directory, id);
+				if (document == null || !id.equals(BeeDesignerDocument.text(document, "id", "")) || documents.putIfAbsent(id, document.toString()) != null) {
+					throw new IllegalArgumentException("designer.error.collection_identity");
+				}
+			}
+			return Map.copyOf(documents);
+		}, loaded, failed);
 	}
 
 	static void archiveDraft(String id, Runnable archived, Consumer<String> failed) {

@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerNativeBees;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineRecipes;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerLifecycle;
@@ -152,8 +153,20 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				}
 				library.add(this);
 			}
-			case 1 -> DesignerBeeFields.appearance(this, document, advanced);
-			case 2 -> DesignerBeeFields.attributes(this, document.getAsJsonObject("definition"), advanced);
+			case 1 -> {
+				if (BeeDesignerNativeBees.recipesOnly(document)) {
+					note("", tr("native_bee_help"));
+				} else {
+					DesignerBeeFields.appearance(this, document, advanced);
+				}
+			}
+			case 2 -> {
+				if (BeeDesignerNativeBees.recipesOnly(document)) {
+					note("", tr("native_bee_help"));
+				} else {
+					DesignerBeeFields.attributes(this, document.getAsJsonObject("definition"), advanced);
+				}
+			}
 			case 3 -> recipes(false);
 			case 4 -> recipes(true);
 			case 5 -> {
@@ -452,9 +465,10 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		savedPending = "";
 		applied = BeeDesignerDocument.text(document, "baseline", "new").equals("new") ? "" : BeeDesignerDocument.fingerprint(document);
 		diagnostics = null;
-		tab = com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMyriad.recipesOnly(document) ? 3 : 1;
+		tab = com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMyriad.recipesOnly(document)
+				|| BeeDesignerNativeBees.recipesOnly(document) ? 3 : 1;
 		page = 0;
-		status = "designer.status.draft";
+		status = unfinishedDraft() ? "designer.status.draft" : "";
 		minecraft.setScreen(this);
 	}
 
@@ -956,6 +970,9 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 
 	@Override
 	protected void renderContent(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+		if (tab == 0) {
+			library.frame(this);
+		}
 		super.renderContent(graphics, mouseX, mouseY, partialTick);
 		if (tab == 0) {
 			library.renderFooter(this, graphics);
@@ -1109,7 +1126,8 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 			}
 		}
 		String id = imported.get("id").getAsString();
-		if (cy.jdkdigital.productivebees.setup.BeeReloadListener.INSTANCE.getData(net.minecraft.resources.ResourceLocation.parse(id)) != null) {
+		if (cy.jdkdigital.productivebees.setup.BeeReloadListener.INSTANCE.getData(net.minecraft.resources.ResourceLocation.parse(id)) != null
+				|| BeeDesignerNativeBees.contains(net.minecraft.resources.ResourceLocation.parse(id))) {
 			importAfterLoad = clean;
 			loadBee(id);
 			minecraft.setScreen(this);

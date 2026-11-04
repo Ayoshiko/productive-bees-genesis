@@ -49,6 +49,10 @@ public final class BeeDesignerCompiler {
 		HolderLookup.Provider registries = server.registryAccess();
 		validateStructure(document);
 		ResourceLocation bee = ResourceLocation.parse(string(document, "id"));
+		boolean nativeBee = BeeDesignerNativeBees.contains(bee);
+		if (nativeBee || BeeDesignerNativeBees.recipesOnly(document)) {
+			BeeDesignerNativeBees.validate(document);
+		}
 		JsonObject definition = document.getAsJsonObject("definition");
 		if (definition == null) {
 			throw new IllegalArgumentException("Missing bee definition");
@@ -147,7 +151,9 @@ public final class BeeDesignerCompiler {
 			}
 		}
 		conditions(definition, "conditions", server, bee, batchBees);
-		BeeCreator.create(bee, definition.deepCopy());
+		if (!nativeBee) {
+			BeeCreator.create(bee, definition.deepCopy());
+		}
 		JsonObject recipes = document.getAsJsonObject("recipes");
 		if (recipes == null || recipes.size() > 64) {
 			throw new IllegalArgumentException("A bee can contain at most 64 recipes");
@@ -398,6 +404,9 @@ public final class BeeDesignerCompiler {
 				BeeDesignerMyriad.validateRecipes(document, document);
 			}
 			ResourceLocation bee = ResourceLocation.parse(document.get("id").getAsString());
+			if (BeeDesignerNativeBees.contains(bee) || BeeDesignerNativeBees.recipesOnly(document)) {
+				BeeDesignerNativeBees.validate(document);
+			}
 			if (!entry.getKey().equals(bee.toString())) {
 				throw new IllegalArgumentException("Managed index identity mismatch");
 			}
@@ -405,7 +414,7 @@ public final class BeeDesignerCompiler {
 				throw new IllegalArgumentException("PB name key is shared by bees with the same path: " + bee.getPath());
 			}
 			ResourceLocation definition = ResourceLocation.parse(document.get("definition_path").getAsString());
-			if (!BeeDesignerMyriad.recipesOnly(document)) {
+			if (!BeeDesignerMyriad.recipesOnly(document) && !BeeDesignerNativeBees.recipesOnly(document)) {
 				putFile(files, "data/" + definition.getNamespace() + "/productivebees/" + definition.getPath() + ".json",
 						document.get("definition").toString());
 			}

@@ -4,7 +4,7 @@ import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMigration;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import cy.jdkdigital.productivebees.setup.BeeReloadListener;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerEggs;
 import net.minecraft.network.chat.Component;
 
 import java.util.Map;
@@ -19,6 +19,7 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 	private final BeeDesignerScreen editor;
 	private final DesignerFormScreen parent;
 	private final Map<String, String> sources;
+	private final boolean drafts;
 	private String policy = "copy_conflicts";
 	private BeeDesignerMigration.Plan plan;
 	private boolean writing;
@@ -35,15 +36,27 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 	private Object connection;
 
 	DesignerBatchImportScreen(BeeDesignerScreen editor, DesignerFormScreen parent, Map<String, String> sources) {
-		super(tr("batch_import"));
+		this(editor, parent, sources, false);
+	}
+
+	DesignerBatchImportScreen(BeeDesignerScreen editor, DesignerFormScreen parent, Map<String, String> sources, boolean drafts) {
+		super(tr(drafts ? "drafts_apply" : "batch_import"));
 		this.editor = editor;
 		this.parent = parent;
 		editorParent = parent;
 		this.sources = Map.copyOf(sources);
+		this.drafts = drafts;
+		saved = drafts;
 	}
 
 	private void prepare() {
-		var world = BeeReloadListener.INSTANCE.getData().keySet().stream().map(Object::toString).toList();
+		if (drafts) {
+			Map<String, String> identities = new LinkedHashMap<>();
+			sources.keySet().forEach(id -> identities.put(id, id));
+			plan = new BeeDesignerMigration.Plan(sources, identities, java.util.List.of());
+			return;
+		}
+		var world = BeeDesignerEggs.bees();
 		var recipes = minecraft.level.getRecipeManager().getRecipes().stream().map(holder -> holder.id().toString()).toList();
 		plan = BeeDesignerMigration.plan(sources, world, DesignerDraftIndex.allIds(), recipes,
 				BeeDesignerMigration.Policy.valueOf(policy.toUpperCase(Locale.ROOT)));
@@ -52,11 +65,12 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 	@Override
 	protected void init() {
 		begin();
-		note("", tr("batch_import_help"));
+		note("", tr(drafts ? "drafts_apply_help" : "batch_import_help"));
 		if (status.startsWith("designer.error.") || status.equals("designer.batch_import_unknown")) {
 			note("error", statusMessage(status));
 		}
-		rows.add(new Row("import_conflict_policy", (x, y, w) -> selection(x, y, w, policy,
+		if (!drafts) {
+			rows.add(new Row("import_conflict_policy", (x, y, w) -> selection(x, y, w, policy,
 				new String[]{"copy_conflicts", "keep_identities", "skip_conflicts", "copy_all"}, value -> {
 					if (!writing && !transferring && !uncertain) {
 						policy = value;
@@ -66,6 +80,7 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 						rebuild();
 					}
 				})));
+		}
 		try {
 			if (plan == null && !writing && !transferring) {
 				prepare();
@@ -86,7 +101,7 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 			plan = null;
 			note("error", statusMessage(failure.getMessage()));
 		}
-		if (saved) {
+		if (applied || saved && !drafts) {
 			note("", tr(applied ? "batch_import_applied" : "batch_import_saved"));
 		}
 		if (transferring) {
@@ -161,6 +176,7 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 		pending = new ArrayDeque<>(plan.documents().entrySet().stream().sorted(Map.Entry.comparingByKey()).toList());
 		JsonObject query = message();
 		query.addProperty("count", plan.documents().size());
+		query.addProperty("drafts", drafts);
 		send("import_begin", query);
 		rebuild();
 	}

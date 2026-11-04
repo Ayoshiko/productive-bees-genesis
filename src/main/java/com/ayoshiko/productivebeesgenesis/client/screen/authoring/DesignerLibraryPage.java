@@ -3,10 +3,12 @@ package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import cy.jdkdigital.productivebees.setup.BeeReloadListener;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerEggs;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerNativeBees;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.client.gui.components.Button;
 
 import java.util.LinkedHashMap;
@@ -18,14 +20,23 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.Rect2i;
 import org.lwjgl.glfw.GLFW;
 
-/** 目录自己管理搜索节流、分页和响应序号，迟到的搜索不能替换新结果。 */
+/** 本地索引负责逐字匹配，可见卡片的来源按服务端序号更新。 */
 final class DesignerLibraryPage {
 	private String query = "";
-	private long searchAt;
+		private long searchAt;
+	private DesignerBeeCatalog.Source source;
+	private List<String> matches = List.of();
+	private int indexedSize = -1;
+	private boolean refreshResults;
+	private boolean metadataRefresh;
+	private long catalogGeneration = -1;
+	private final Map<String, JsonObject> origins = new LinkedHashMap<>();
+	private final java.util.Set<String> unavailable = new java.util.HashSet<>();
+	private List<String> requestedIds = List.of();
 	private long request = -1;
 	private long requestAt;
 	private String problem = "";
-	private String requestedQuery = "";
+
 	private int total = -1;
 	private int serverPages = 1;
 	private int columns = 1;
@@ -52,7 +63,8 @@ final class DesignerLibraryPage {
 		var mc = Minecraft.getInstance();
 		toolbar.add(screen, selecting, query, value -> {
 			query = value;
-			searchAt = System.currentTimeMillis() + 350;
+			refreshResults = true;
+			searchAt = 0;
 		}, this::actionLabel, value -> enabled(screen, value), value -> action(screen, value));
 		if (DesignerPreferences.enabled("catalog_help") && DesignerPreferences.enabled("tutorial_seen") && screen.frameHeight >= 300 && !selecting) {
 			Component help = DesignerFormScreen.tr("catalog_guide");
@@ -91,7 +103,13 @@ final class DesignerLibraryPage {
 						continue;
 					}
 					String id = catalog.getAsJsonArray("ids").get(index % 32).getAsString();
-					JsonObject origin = catalog.getAsJsonObject("origins").getAsJsonObject(id);
+					JsonObject origin = origins.get(id);
+					if (origin == null) {
+						origin = new JsonObject();
+						origin.addProperty("kind", "unknown");
+						origin.addProperty("edited", false);
+						origin.addProperty("source_pack", "");
+					}
 					boolean deleting = DesignerDraftIndex.deletingIds().contains(id);
 					screen.addRenderableWidget(new DesignerBeeButton(cardX, y, card - 4, id, DesignerDraftIndex.name(id), DesignerDraftIndex.pending(id),
 							() -> {
@@ -114,7 +132,9 @@ final class DesignerLibraryPage {
 						continue;
 					}
 					screen.menu(cardX + card - 28, y + 2, 24, "bee_actions",
-							new String[]{"copy", "delete_bee", "collection_export"}, value -> !value.equals("delete_bee") || screen.canPublish, value -> {
+							new String[]{"copy", "delete_bee", "collection_export"}, value -> (!value.equals("delete_bee") || screen.canPublish)
+									&& (!BeeDesignerNativeBees.contains(ResourceLocation.parse(id))
+											|| value.equals("collection_export")), value -> {
 								if (value.equals("copy")) {
 									screen.changeDocument(() -> screen.copyBee(id));
 								} else if (value.equals("delete_bee")) {
@@ -234,44 +254,94 @@ final class DesignerLibraryPage {
 
 	void request() {
 		cancelQuickSelection();
+		BeeDesignerClient.cancelRequest(request);
+		request = -1;
 		searchAt = 0;
 		selection.resetOrder();
 		pressed = false;
 		boxing = false;
 		problem = "";
-		pages.clear();
-		total = -1;
+		origins.clear();
+		unavailable.clear();
+		requestedIds = List.of();
+		refreshResults = true;
 		resetPosition = true;
-		requestPage(0);
+		DesignerDraftIndex.ensureLoaded();
 	}
 
-	private void requestPage(int page) {
-		JsonObject search = new JsonObject();
-		search.addProperty("search", query);
-		search.addProperty("page", page);
-		JsonArray names = new JsonArray();
-		String normalized = query.toLowerCase(java.util.Locale.ROOT);
-		var filter = DesignerSearch.compile(query);
-		if (!normalized.isBlank()) {
-			for (String id : DesignerDraftIndex.pendingIds()) {
-				Component name = DesignerDraftIndex.name(id);
-				if (names.size() < 128 && name != null && filter.matches(id.split(":", 2)[0], filter.needsName() ? DesignerSearch.indexed(id + " " + name.getString()) : id, List.of())) {
-					names.add(id);
-				}
-			}
-			BeeReloadListener.INSTANCE.getData().keySet().stream().map(Object::toString).sorted()
-					.filter(id -> filter.matches(id.split(":", 2)[0], filter.needsName() ? DesignerSearch.indexed(id + " " + BeeDesignerScreen.beeName(id).getString()) : id, List.of()))
-					.filter(id -> !names.contains(new JsonPrimitive(id)))
-					.limit(128 - names.size()).forEach(names::add);
+	void frame(BeeDesignerScreen screen) {
+		DesignerBeeCatalog.Source current = DesignerBeeCatalog.source();
+		boolean changed = source != current;
+		if (changed) {
+			BeeDesignerClient.cancelRequest(request);
+			request = -1;
+			requestedIds = List.of();
+			origins.clear();
+			unavailable.clear();
+			problem = "";
 		}
-		search.add("names", names);
+		source = current;
+		changed |= source.advance();
+		if (!refreshResults && !metadataRefresh && !changed && indexedSize == source.size()) {
+			return;
+		}
+		boolean reset = refreshResults || changed;
+		refreshResults = false;
+		metadataRefresh = false;
+		indexedSize = source.size();
+		List<String> filtered = source.search(query);
+		List<String> nextMatches = filtered.stream().filter(id -> !unavailable.contains(id)).toList();
+		reset |= !matches.equals(nextMatches);
+		matches = nextMatches;
+		total = matches.size();
+		serverPages = Math.max(1, (total + 31) / 32);
+		pages.clear();
+		for (int offset = 0; offset < total; offset += 32) {
+			JsonArray ids = new JsonArray();
+			for (int index = offset; index < Math.min(total, offset + 32); index++) {
+				ids.add(matches.get(index));
+			}
+			JsonObject page = new JsonObject();
+			page.add("ids", ids);
+			pages.put(offset / 32, page);
+		}
+		if (reset) {
+			selection.resetOrder();
+			selection.resolve(this::idAt);
+			pressed = false;
+			boxing = false;
+		}
+		resetPosition |= reset;
+		screen.refreshScrollingRows();
+	}
+
+	boolean searching() {
+		return source == null || !source.ready() || refreshResults;
+	}
+
+	private void requestVisible(BeeDesignerScreen screen) {
+		int first = Math.max(0, screen.page - firstCatalogRow) * columns;
+		int last = Math.min(total, first + (rowsPerView + 2) * columns);
+		List<String> missing = new ArrayList<>();
+		for (int index = first; index < last && missing.size() < 32; index++) {
+			String id = matches.get(index);
+			if (!origins.containsKey(id)) {
+				missing.add(id);
+			}
+		}
+		if (missing.isEmpty()) {
+			return;
+		}
+		JsonObject query = new JsonObject();
+		JsonArray ids = new JsonArray();
+		missing.forEach(ids::add);
+		query.add("entries", ids);
 		JsonArray preferred = new JsonArray();
-		DesignerDraftIndex.pendingIds().stream().limit(128).forEach(preferred::add);
-		search.add("preferred", preferred);
-		DesignerDraftIndex.ensureLoaded();
-		requestedQuery = query;
+		missing.stream().filter(DesignerDraftIndex::pending).forEach(preferred::add);
+		query.add("preferred", preferred);
+		requestedIds = List.copyOf(missing);
 		try {
-			request = BeeDesignerClient.request("catalog", search);
+			request = BeeDesignerClient.request("catalog", query);
 			requestAt = System.currentTimeMillis();
 			if (request < 0) {
 				problem = "designer.error.designer_session";
@@ -324,41 +394,37 @@ final class DesignerLibraryPage {
 			}
 			updateBox(screen);
 		}
-		if (request >= 0 || total < 0 || searchAt != 0) {
+		if (request >= 0 || total < 0 || quickSelection != null) {
 			return;
 		}
-		int missing = selection.missing(this::idAt);
-		if (missing >= 0) {
-			requestPage(missing / 32);
-			return;
-		}
-		int row = Math.max(0, screen.page - firstCatalogRow);
-		int first = row * columns / 32;
-		int last = Math.min(serverPages - 1, (row + rowsPerView + 2) * columns / 32);
-		for (int page = first; page <= last; page++) {
-			if (!pages.containsKey(page)) {
-				requestPage(page);
-				return;
-			}
-		}
+		requestVisible(screen);
 	}
 
 	boolean receive(long sequence, JsonObject data) {
 		if (quickSelection != null && quickSelection.receive(sequence, data)) {
 			return false;
 		}
-		if (sequence != request || !requestedQuery.equals(query)) {
+		if (sequence != request || !data.has("metadata")) {
 			return false;
 		}
 		request = -1;
 		problem = "";
-		total = data.get("total").getAsInt();
-		serverPages = data.get("pages").getAsInt();
-		pages.put(data.get("page").getAsInt(), data);
-		selection.resolve(this::idAt);
-		if (pages.size() > (DesignerCatalogSelection.LIMIT + 31) / 32) {
-			pages.remove(pages.keySet().iterator().next());
+		long generation = data.get("generation").getAsLong();
+		if (generation != catalogGeneration) {
+			catalogGeneration = generation;
+			origins.clear();
+			unavailable.clear();
 		}
+		JsonObject received = data.getAsJsonObject("origins");
+		for (String id : requestedIds) {
+			if (received.has(id)) {
+				origins.put(id, received.getAsJsonObject(id));
+			} else {
+				unavailable.add(id);
+			}
+		}
+		requestedIds = List.of();
+		metadataRefresh = true;
 		return true;
 	}
 

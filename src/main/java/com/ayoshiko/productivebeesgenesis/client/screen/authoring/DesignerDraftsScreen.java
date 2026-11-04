@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDrafts;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerNativeBees;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 
@@ -69,7 +71,7 @@ final class DesignerDraftsScreen extends DesignerFormScreen {
 						selected.add(entry.id());
 					}
 					rebuild();
-				}).active = entry.problem().isBlank()));
+				}).active = !busy && entry.problem().isBlank()));
 				rows.add(new Row("", (x, y, w) -> {
 					addRenderableWidget(new DesignerBeeButton(x, y, w - 56, entry.id(), Component.literal(name), entry.pending(), () -> {
 						if (!entry.problem().isBlank()) {
@@ -92,7 +94,8 @@ final class DesignerDraftsScreen extends DesignerFormScreen {
 								minecraft.setScreen(new NewBeeScreen(parent, document));
 							}
 						}, this::failed);
-					}).active = !busy && entry.problem().isBlank();
+					}).active = !busy && entry.problem().isBlank()
+							&& !BeeDesignerNativeBees.contains(ResourceLocation.parse(entry.id()));
 					var archive = button(x + w - 22, y, 22, Component.literal("×"), () -> archive(entry.id()));
 					archive.active = !busy;
 					archive.setTooltip(Tooltip.create(tr("archive_draft")));
@@ -108,7 +111,9 @@ final class DesignerDraftsScreen extends DesignerFormScreen {
 			}
 		}
 		rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("recycle_bin"), () -> minecraft.setScreen(new DesignerRecycleScreen(parent)))));
-		rows.add(new Row("", (x, y, w) -> primaryButton(x, y, w, Component.translatable("designer.export_selection", selected.size()),
+		rows.add(new Row("", (x, y, w) -> primaryButton(x, y, w, Component.translatable("designer.drafts_apply_selection", selected.size()),
+				this::applySelected).active = !busy && parent.canPublish && !selected.isEmpty()));
+		rows.add(new Row("", (x, y, w) -> button(x, y, w, Component.translatable("designer.export_selection", selected.size()),
 				() -> minecraft.setScreen(new DesignerCollectionScreen(this, java.util.List.copyOf(selected), null, true))).active = !selected.isEmpty()));
 		rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("file_locations"), () -> minecraft.setScreen(new DesignerFileLocationsScreen(this)))));
 		finishRows();
@@ -123,11 +128,28 @@ final class DesignerDraftsScreen extends DesignerFormScreen {
 		DesignerProjectFiles.drafts(entries -> {
 			busy = false;
 			drafts = entries;
+			selected.retainAll(entries.stream().filter(entry -> entry.problem().isBlank()).map(BeeDesignerDrafts.Entry::id).toList());
 			if (minecraft.screen == this) {
 				rebuild();
 			}
 		}, this::failed);
 		DesignerDraftIndex.refresh();
+	}
+
+	private void applySelected() {
+		if (busy || !parent.canPublish || selected.isEmpty()) {
+			return;
+		}
+		busy = true;
+		var connection = minecraft.getConnection();
+		DesignerProjectFiles.drafts(List.copyOf(selected), documents -> {
+			busy = false;
+			if (minecraft.screen == this && minecraft.getConnection() == connection) {
+				requested = false;
+				minecraft.setScreen(new DesignerBatchImportScreen(parent, this, documents, true));
+			}
+		}, this::failed);
+		rebuild();
 	}
 
 	private String name(BeeDesignerDrafts.Entry entry) {

@@ -29,7 +29,43 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
-## [Unreleased]
+## [1.2.3] - 2026-11-04
+
+**编辑器搜索、草稿与万象 JEI 显示更新。** 本版优化蜂种和材料搜索及重复打开，修复未编辑也提示保存的问题，支持批量应用草稿与 PB 原生蜂种配方编辑，并继续减少蜂箱和离心机生产热路径的开销。客户端和服务端请一起更新到 1.2.3。
+
+### 新增
+
+- 蜜蜂编辑器的草稿库可多选已编辑好的草稿并批量导入当前世界。保持原蜂种 ID，整批检查配方、依赖和服务器基准后只重载一次世界；失败、冲突或结果未明时保留草稿，成功后一起更新基准。
+
+### 变更
+
+- 优化蜂种目录与材料浏览器的逐字搜索，保留中文、拼音及模组／标签筛选；分帧预建并在同一连接复用材料索引，减少首次载入和重复打开时的等待。
+- 减少机械蜂箱结算已付生产周期时对蜂种、生产力和基因属性的重复解析；花源类型沿既有版本缓存，容器内部内容仍逐真实 tick 核验。离心机复用准备规划与已付产物编码，减少常见容量计算的临时对象；真实容量与输出接收仍逐次复核。
+
+### 修复
+
+- 修复仅打开蜂种、浏览页面或移动文字光标也被判定为未保存并自动生成草稿的问题；未编辑的已生效工程显示正确状态，真实修改及未确认输入仍保留保存保护。
+- 万象创世蜂箱的 JEI 页面保留万象蜜脾并同时展示三个随机蜜脾槽；万象蜜脾与蜜脾块的离心页面也展示三个随机槽，保留蜂蜜等配方副产物。槽内轮播当前可用候选，明确说明实际产出受服务器配置、配方和升级影响，避免仅显示蜂蜜造成误解。
+- 修复蜜蜂编辑器目录只读取 JSON 蜂种，遗漏蓝色条纹蜜蜂、苦力怕蜜蜂等 PB 原生实体蜜蜂的问题。目录与名称搜索统一使用真实蜂种身份，可按中文名称、单字或拼音查找；原生蜂种支持数据配方编辑，保留原实体外观、属性和特殊行为。
+
+### English
+
+**Editor search, drafts and Myriad JEI display update.** This version improves bee and material searches and reopening, fixes save prompts without edits, adds batch draft application and PB native bee recipe editing, and continues reducing repeated work in apiary and centrifuge production. Update both clients and servers to 1.2.3.
+
+#### Added
+
+- The bee editor's Draft Library can apply multiple edited drafts to the current world. Original bee IDs are retained, and the server checks all recipes, dependencies and baselines before a single world reload. Failures, conflicts or unknown results preserve drafts; success updates their baselines together.
+
+#### Changed
+
+- Improved per-keystroke searches in the bee catalog and material browser, preserving Chinese, Pinyin, mod and tag filters. Material indexes are built across frames and reused within the same connection, reducing waits on initial loading and reopening.
+- Reduced repeated bee type, productivity and gene parsing while mechanical apiaries settle paid production cycles. Flower types follow the existing cache version; container contents are still checked every real tick. Centrifuges reuse preparation planners and committed-output encodings and avoid temporary objects in common capacity calculations. Actual capacity and output receipts are still checked on every attempt.
+
+#### Fixed
+
+- Fixed opening a bee, browsing pages or moving a text cursor being mistaken for an unsaved edit and creating a draft. Unedited active projects show the correct status; real edits and unconfirmed input retain their save protection.
+- The Myriad Creations beehive JEI page keeps its own comb and shows three random comb slots. Centrifuging Myriad combs or comb blocks also shows three random slots alongside recipe byproducts such as honey. Slots cycle through currently available candidates and explain that actual output follows server configuration, recipes and upgrades, avoiding the misleading honey-only display.
+- Fixed the bee editor catalog reading only JSON bees and omitting PB native entity bees such as Blue Banded Bees and Creeper Bees. Catalog and name searches now use the same real bee identities, including localized names, Chinese characters and Pinyin. Native bees support data recipe editing while retaining their original entity appearance, attributes and special behavior.
 
 ## [1.2.2] - 2026-11-03
 

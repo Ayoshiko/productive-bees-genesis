@@ -17,7 +17,9 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 
 import it.unimi.dsi.fastutil.objects.Reference2ObjectLinkedOpenHashMap;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -65,7 +67,8 @@ public class PbRecipeCompleter {
 	private final PbRecipeContext context;
 
 	/** flush 执行器 — 持有 simStacks 等执行相关实例字段,与 completer 生命周期一致 */
-	private final PbRecipeFlusher flusher = new PbRecipeFlusher();
+	private final PbRecipeFlusher flusher;
+	private final PendingTemplates pendingTemplates;
 
 	/**
 	 * 本 tick 尚未插入的 PB 配方输出(按 ItemStack key 累加数量)
@@ -106,7 +109,13 @@ public class PbRecipeCompleter {
 	private PbOutputCapacityCache capacityCache;
 
 	public PbRecipeCompleter(PbRecipeContext context) {
+		this(context, new PbRecipeFlusher(), new PendingTemplates());
+	}
+
+	private PbRecipeCompleter(PbRecipeContext context, PbRecipeFlusher flusher, PendingTemplates pendingTemplates) {
 		this.context = context;
+		this.flusher = flusher;
+		this.pendingTemplates = pendingTemplates;
 	}
 
 	/**
@@ -257,7 +266,7 @@ public class PbRecipeCompleter {
 
 	/** 在原聚合器中准备独占结果；不修改本实例、库存、进度或费用。 */
 	PbRecipeCompleter prepare(CentrifugeRecipe recipe, int inputs, long seed, boolean maximum) {
-		var batch = new PbRecipeCompleter(context);
+		var batch = new PbRecipeCompleter(context, flusher, pendingTemplates);
 		prepareInto(batch, recipe, inputs, seed, maximum);
 		return batch;
 	}
@@ -600,7 +609,7 @@ public class PbRecipeCompleter {
 		for (Map.Entry<ItemStack, Integer> entry : pendingOutputs.entrySet()) {
 			int count = Math.max(0, entry.getValue());
 			if (count <= 0 || entry.getKey().isEmpty()) continue;
-			Tag encoded = entry.getKey().copyWithCount(1).save(provider);
+			Tag encoded = pendingTemplates.item(entry.getKey(), provider);
 			if (encoded instanceof CompoundTag stackTag) {
 				stackTag.putInt(NBT_PENDING_COUNT, count);
 				items.add(stackTag);
@@ -614,7 +623,39 @@ public class PbRecipeCompleter {
 		return root.isEmpty() ? null : root;
 	}
 
+
+	/** 仅同一机器的服务端线程复用；批次产物和返回 NBT 始终独立保管。 */
+	private static final class PendingTemplates {
+		private final List<EncodedItem> items = new ArrayList<>(4);
+		private HolderLookup.Provider provider;
+
+		Tag item(ItemStack template, HolderLookup.Provider registries) {
+			if (provider != registries) {
+				items.clear();
+				provider = registries;
+			}
+			// 转换升级会重建等价模板；比较独立快照，既能复用编码也不会受源模板修改影响。
+			for (int index = 0; index < items.size(); index++) {
+				EncodedItem cached = items.get(index);
+				if (ItemStack.isSameItemSameComponents(template, cached.template())) {
+					return cached.encoded().copy();
+				}
+			}
+			ItemStack snapshot = template.copyWithCount(1);
+			Tag encoded = snapshot.save(registries);
+			if (items.size() == 32) {
+				items.removeFirst();
+			}
+			items.add(new EncodedItem(snapshot, encoded));
+			return encoded.copy();
+		}
+
+		private record EncodedItem(ItemStack template, Tag encoded) {}
+	}
+
 	void loadCommittedPending(CompoundTag root, HolderLookup.Provider provider) {
+		pendingTemplates.items.clear();
+		pendingTemplates.provider = null;
 		invalidPending = null;
 		resetPendingRecipe();
 		try {

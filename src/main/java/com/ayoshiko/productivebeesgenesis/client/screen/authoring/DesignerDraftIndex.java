@@ -16,6 +16,7 @@ import java.util.Map;
 final class DesignerDraftIndex {
 	private static final Map<String, BeeDesignerDrafts.Entry> ENTRIES = new LinkedHashMap<>();
 	private static long generation;
+	private static long revision;
 	private static long lifecycle;
 	private static boolean loaded;
 	private static boolean loading;
@@ -77,7 +78,7 @@ final class DesignerDraftIndex {
 	}
 
 	static long version() {
-		return generation;
+		return revision;
 	}
 
 	static List<String> pendingIds() {
@@ -121,6 +122,7 @@ final class DesignerDraftIndex {
 
 	static void clear() {
 		generation++;
+		revision++;
 		lifecycle++;
 		ENTRIES.clear();
 		loaded = false;
@@ -129,6 +131,7 @@ final class DesignerDraftIndex {
 	}
 
 	private static void updated() {
+		revision++;
 		if (Minecraft.getInstance().screen instanceof BeeDesignerScreen screen) {
 			screen.draftsUpdated();
 		}

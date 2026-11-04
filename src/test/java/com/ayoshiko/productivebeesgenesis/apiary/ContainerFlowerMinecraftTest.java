@@ -121,7 +121,8 @@ class ContainerFlowerMinecraftTest {
             assertTrue(feeder.hasValidFlower(BEE));
             feeder.toggleSlotDisabled(0); assertFalse(feeder.hasValidFlower(BEE));
             feeder.toggleSlotDisabled(0); assertTrue(feeder.hasValidFlower(BEE));
-            var cachedBee = mock(BeeSlot.class); when(cachedBee.consumeCachedFlowerValid(anyInt())).thenReturn(true);
+            var cachedBee = new BeeSlot();
+            cachedBee.setCachedFlowerValid(feeder.getFlowerCacheVersion(), true);
             feeder.getFeederSlot(0).getStack().getCapability(mekanism.common.capabilities.Capabilities.CHEMICAL.item()).setChemicalInTank(0, ChemicalStack.EMPTY);
             ServerTickClock.tick();
             assertFalse(ApiaryFlowerValidation.check(cachedBee, BEE, feeder.getFlowerCacheVersion(), feeder));

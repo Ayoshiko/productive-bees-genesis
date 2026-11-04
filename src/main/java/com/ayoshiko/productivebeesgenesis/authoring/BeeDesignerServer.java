@@ -126,7 +126,7 @@ public final class BeeDesignerServer {
 							response -> send(player, session, request.sequence(), "status", response),
 							message -> result(player, session, request.sequence(), false, message));
 				}
-				case "catalog" -> catalog(player, session, request.sequence(), data);
+				case "catalog" -> send(player, session, request.sequence(), "catalog", BeeDesignerCatalog.bees(data));
 				case "materials" -> send(player, session, request.sequence(), "materials", BeeDesignerCatalog.page(player.server, data, session.materials));
 				case "bee_data" -> send(player, session, request.sequence(), "bee_data",
 						BeeDesignerReader.beeData(player.server, ResourceLocation.parse(data.get("id").getAsString())));
@@ -189,52 +189,9 @@ public final class BeeDesignerServer {
 		}
 	}
 
-	private static void catalog(ServerPlayer player, Session session, long sequence, JsonObject query) {
-		String search = BeeDesignerDocument.text(query, "search", "").toLowerCase(java.util.Locale.ROOT);
-		if (search.length() > 128 || query.has("names") && query.getAsJsonArray("names").size() > 128) {
-			throw new IllegalArgumentException("Search exceeds the catalog budget");
-		}
-		Set<String> names = new HashSet<>();
-		Map<String, Integer> preferred = new LinkedHashMap<>();
-		if (query.has("preferred")) {
-			if (query.getAsJsonArray("preferred").size() > 256) {
-				throw new IllegalArgumentException("designer.error.draft_limit");
-			}
-			for (var value : query.getAsJsonArray("preferred")) {
-				String id = ResourceLocation.parse(value.getAsString()).toString();
-				preferred.putIfAbsent(id, preferred.size());
-			}
-		}
-		if (query.has("names")) {
-			query.getAsJsonArray("names").forEach(value -> names.add(value.getAsString()));
-		}
-		Set<String> candidates = new HashSet<>(preferred.keySet());
-		BeeReloadListener.INSTANCE.getData().keySet().forEach(id -> candidates.add(id.toString()));
-		boolean trash = query.has("trash") && query.get("trash").getAsBoolean();
-		List<String> ids = candidates.stream().filter(id -> BeeDesignerLifecycle.deleted(ResourceLocation.parse(id)) == trash
-					|| !trash && preferred.containsKey(id))
-				.filter(id -> !trash || !BeeDesignerLifecycle.purged(ResourceLocation.parse(id)))
-				.filter(id -> id.contains(search) || names.contains(id))
-				.sorted(java.util.Comparator.comparingInt((String id) -> preferred.getOrDefault(id, Integer.MAX_VALUE)).thenComparing(id -> id)).toList();
-		int pages = Math.max(1, (ids.size() + 31) / 32);
-		int page = Math.max(0, Math.min(pages - 1, query.has("page") ? query.get("page").getAsInt() : 0));
-		JsonObject data = new JsonObject();
-		JsonArray entries = new JsonArray();
-		ids.stream().skip((long) page * 32).limit(32).forEach(entries::add);
-		data.add("ids", entries);
-		JsonObject origins = new JsonObject();
-		ids.stream().skip((long) page * 32).limit(32).forEach(id -> origins.add(id, BeeDesignerOrigins.describe(ResourceLocation.parse(id))));
-		data.add("origins", origins);
-		data.addProperty("page", page);
-		data.addProperty("pages", pages);
-		data.addProperty("total", ids.size());
-		data.addProperty("generation", BeeDesignerSources.generation);
-		send(player, session, sequence, "catalog", data);
-	}
-
 	private static void copyId(ServerPlayer player, Session session, long sequence, JsonObject document) {
 		Set<String> reserved = new HashSet<>(BeeDesignerSources.managed.keySet());
-		BeeReloadListener.INSTANCE.getData().keySet().forEach(id -> reserved.add(id.toString()));
+		reserved.addAll(BeeDesignerEggs.bees());
 		if (document.has("_copy_reserved_ids")) {
 			JsonArray drafts = document.remove("_copy_reserved_ids").getAsJsonArray();
 			if (drafts.size() > BeeDesignerCollection.MAX_BEES) {
@@ -471,7 +428,7 @@ public final class BeeDesignerServer {
 		batch.check(query);
 		JsonObject source = query.getAsJsonObject("document").deepCopy();
 		ResourceLocation bee = ResourceLocation.parse(source.get("id").getAsString());
-		if (BeeReloadListener.INSTANCE.getData(bee) == null) {
+		if (BeeReloadListener.INSTANCE.getData(bee) == null && !BeeDesignerNativeBees.contains(bee)) {
 			batch.add(source, null);
 			importReceipt(player, session, sequence, "import_staged", batch.document(bee.toString()));
 			return;
@@ -620,9 +577,12 @@ public final class BeeDesignerServer {
 		}
 		String id = document.get("id").getAsString();
 		ResourceLocation bee = ResourceLocation.parse(id);
-		if (BeeReloadListener.INSTANCE.getData().keySet().stream().anyMatch(other -> !other.equals(bee)
-				&& BeeDesignerDocument.translationKey(other.toString()).equals(BeeDesignerDocument.translationKey(id)))) {
+		if (BeeDesignerEggs.bees().stream().anyMatch(other -> !other.equals(id)
+				&& BeeDesignerDocument.translationKey(other).equals(BeeDesignerDocument.translationKey(id)))) {
 			throw new IllegalArgumentException("Another bee already uses the PB display name key: " + bee.getPath());
+		}
+		if (BeeDesignerNativeBees.contains(bee) || BeeDesignerNativeBees.recipesOnly(document)) {
+			BeeDesignerNativeBees.validate(document);
 		}
 		if (bee.equals(PBConstants.MYRIADCREATIONS_TYPE)) {
 			if (session.original != null && BeeDesignerMyriad.recipesOnly(session.original) && !BeeDesignerLifecycle.deleted(document)) {
@@ -640,7 +600,7 @@ public final class BeeDesignerServer {
 			throw new IllegalArgumentException("designer.error.delete_confirmation");
 		}
 		if (baseline.equals("new")) {
-			if (BeeReloadListener.INSTANCE.getData(bee) != null || BeeDesignerSources.managed.containsKey(id)) {
+			if (BeeReloadListener.INSTANCE.getData(bee) != null || BeeDesignerNativeBees.contains(bee) || BeeDesignerSources.managed.containsKey(id)) {
 				throw new IllegalArgumentException("designer.error.exists");
 			}
 			document.addProperty("definition_path", id);

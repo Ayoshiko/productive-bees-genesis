@@ -179,7 +179,8 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	private static final Set<String> JEI_MIXINS = Set.of(
 			"JeiGhostIngredientDragMixin",
 			"PbContainerFlowerJeiMixin",
-			"PbCentrifugeJeiLayoutMixin"
+			"PbCentrifugeJeiLayoutMixin",
+			"PbMyriadBeehiveJeiMixin"
 	);
 
 	/**
