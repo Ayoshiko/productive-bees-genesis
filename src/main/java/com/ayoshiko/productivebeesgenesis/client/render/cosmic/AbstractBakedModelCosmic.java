@@ -153,8 +153,8 @@ public abstract class AbstractBakedModelCosmic extends WrappedItemModel implemen
 		if (mc.level == null || mc.player == null) {
 			return;
 		}
-		// 着色器注册失败时跳过 cosmic 层渲染，避免 RenderType 供应器返回 null 导致渲染管线 NPE
-		if (getShader() == null) {
+		// 着色器或星纹理不可用时保留基础模型，避免占位图与旧 UV 被提交给效果层。
+		if (getShader() == null || !CosmicShaders.isCosmicAtlasReady()) {
 			return;
 		}
 		float yaw = 0.0F;

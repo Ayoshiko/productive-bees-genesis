@@ -124,21 +124,36 @@ public class CosmicShaders {
 		}
 	}
 
+	public static boolean isCosmicAtlasReady() {
+		return cosmicUvSnapshot.get() != CosmicUvSnapshot.EMPTY;
+	}
+
 	@SubscribeEvent
 	public static void onTextureAtlasStitched(TextureAtlasStitchedEvent event) {
-		if (event.getAtlas().location().equals(InventoryMenu.BLOCK_ATLAS)) {
-			// 构建完整快照后原子替换：避免渲染线程读到部分更新的数组元素
-			float[] newUvs = new float[40];
-			TextureAtlasSprite[] newSprites = new TextureAtlasSprite[10];
-			for (int i = 0; i < newSprites.length; i++) {
-				newSprites[i] = event.getAtlas().getSprite(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
-					"misc/cosmic/cosmic_" + i));
-				newUvs[i * 4 + 0] = newSprites[i].getU0();
-				newUvs[i * 4 + 1] = newSprites[i].getV0();
-				newUvs[i * 4 + 2] = newSprites[i].getU1();
-				newUvs[i * 4 + 3] = newSprites[i].getV1();
-			}
-			cosmicUvSnapshot.set(new CosmicUvSnapshot(newUvs, newSprites));
+		if (!event.getAtlas().location().equals(InventoryMenu.BLOCK_ATLAS)) {
+			return;
 		}
+		float[] newUvs = new float[40];
+		TextureAtlasSprite[] newSprites = new TextureAtlasSprite[10];
+		for (int i = 0; i < newSprites.length; i++) {
+			ResourceLocation id = ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID,
+					"misc/cosmic/cosmic_" + i);
+			TextureAtlasSprite sprite = event.getAtlas().getSprite(id);
+			if (!sprite.contents().name().equals(id)) {
+				// 缺图时撤销整个旧快照；基础模型保留，不让效果采样占位图或旧图集。
+				cosmicUvSnapshot.set(CosmicUvSnapshot.EMPTY);
+				ProductiveBeesGenesis.LOGGER.warn("缺少星空精灵 {}，本次重载停用星空层", id);
+				return;
+			}
+			newSprites[i] = sprite;
+			// 端点取首尾纹素中心，旋转／翻转得到 0 或 1 时仍留在本精灵内；单纹素两端重合。
+			float halfU = 0.5F / sprite.contents().width();
+			float halfV = 0.5F / sprite.contents().height();
+			newUvs[i * 4 + 0] = sprite.getU(halfU);
+			newUvs[i * 4 + 1] = sprite.getV(halfV);
+			newUvs[i * 4 + 2] = sprite.getU(1.0F - halfU);
+			newUvs[i * 4 + 3] = sprite.getV(1.0F - halfV);
+		}
+		cosmicUvSnapshot.set(new CosmicUvSnapshot(newUvs, newSprites));
 	}
 }

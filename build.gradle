@@ -387,6 +387,37 @@ def verifyReleaseArtifact = tasks.register('verifyReleaseArtifact') {
                 }
             }
 
+            // 共享图集只追加明确归属本模组的精灵，防止目录扫描覆盖第三方裁切结果。
+            def atlasDefinitions = zip.entries().findAll { entry ->
+                entry.name.startsWith('assets/') && entry.name.contains('/atlases/')
+                        && entry.name.endsWith('.json')
+            }
+            atlasDefinitions.each { entry ->
+                def atlas = new groovy.json.JsonSlurper().parse(zip.getInputStream(entry), 'UTF-8')
+                if (!(atlas.sources instanceof List)) {
+                    throw new GradleException("Atlas sources must be a list: ${entry.name}")
+                }
+                def spriteIds = new HashSet<String>()
+                atlas.sources.each { source ->
+                    if (!(source.type in ['single', 'minecraft:single'])) {
+                        throw new GradleException("Atlas must use explicit single sources: ${entry.name}")
+                    }
+                    String resource = source.resource
+                    String sprite = source.sprite ?: resource
+                    String namespace = releaseModId + ':'
+                    if (!resource?.startsWith(namespace) || !sprite?.startsWith(namespace)) {
+                        throw new GradleException("Atlas resource and sprite must belong to ${releaseModId}: ${entry.name}")
+                    }
+                    if (!spriteIds.add(sprite)) {
+                        throw new GradleException("Duplicate atlas sprite ${sprite}: ${entry.name}")
+                    }
+                    String texture = "assets/${releaseModId}/textures/${resource.substring(namespace.length())}.png"
+                    if (zip.getEntry(texture) == null) {
+                        throw new GradleException("Atlas texture is missing from JAR: ${texture}")
+                    }
+                }
+            }
+
             def iconEntry = zip.getEntry('productivebeesgenesis.png')
             if (iconEntry.size > 32 * 1024L) {
                 throw new GradleException("Mod icon entry is larger than 32 KiB: ${iconEntry.size}")

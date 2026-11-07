@@ -28,6 +28,7 @@ import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -151,6 +152,9 @@ public final class ProductiveBeesGenesisClient {
 
 		@SubscribeEvent
 		public static void onTextureAtlasStitched(TextureAtlasStitchedEvent event) {
+			if (!event.getAtlas().location().equals(InventoryMenu.BLOCK_ATLAS)) {
+				return;
+			}
 			CosmicShaders.onTextureAtlasStitched(event);
 			// 失效 halo 四边形缓存：图集重建后 UV 可能变化，旧缓存会导致 halo 渲染错位或采样错误纹理
 			BakedModelHalo.invalidateCache();

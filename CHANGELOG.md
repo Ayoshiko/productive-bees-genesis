@@ -29,6 +29,20 @@
 > 已统一迁移为 `dev-v...` 标签、`dev-...` 标题和 GitHub Pre-release。本文件中的对应章节
 > 也使用 `dev-...` 前缀。历史 JAR 保持原文件名与校验和，避免破坏既有下载和验证记录。
 
+## [Unreleased]
+
+### 修复
+
+- 修复方块图集重复扫描其它模组的方块、物品与杂项纹理，可能用整张 PNG 覆盖其裁切精灵的问题；额外精灵仅逐项登记本模组星纹理，减少资源重载中的重复枚举和无关纹理拼接。
+- 修复星空与地狱效果在精灵边缘采到相邻纹理的风险；采样端点限制到首尾纹素中心，缺少星纹理时保留基础模型并停用效果层，资源恢复后重新启用。
+
+### English
+
+#### Fixed
+
+- Fixed repeated block-atlas scans of other mods' block, item and miscellaneous textures potentially replacing cropped sprites with whole PNGs. Additional sprites now explicitly register only this mod's star textures, reducing repeated enumeration and unrelated texture stitching during resource reloads.
+- Fixed cosmic and hell effects potentially sampling neighboring textures at sprite edges. Sampling endpoints stay at the first and last texel centers; missing star textures keep the base model and disable the effect layer until the resources are restored.
+
 ## [1.2.3] - 2026-11-04
 
 **编辑器搜索、草稿与万象 JEI 显示更新。** 本版优化蜂种和材料搜索及重复打开，修复未编辑也提示保存的问题，支持批量应用草稿与 PB 原生蜂种配方编辑，并继续减少蜂箱和离心机生产热路径的开销。客户端和服务端请一起更新到 1.2.3。
