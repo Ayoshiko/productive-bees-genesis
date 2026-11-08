@@ -10,7 +10,7 @@
 | 模组 ID | `productivebeesgenesis` |
 | 内部/构建版本 | 以 `gradle.properties` 的 `mod_version` 为准；当前开发版本为 `1.2.4` |
 | CurseForge 版本 | 以 `curseforge_release_version` 为准；当前开发版本为 `1.2.4` |
-| 发布状态 | 当前 `1.2.4` 为 Unreleased 待发布候选；本地默认构建、产物检查、换料与独立恢复、真实重连和 42 个编辑表单已有受限证据。提交后须核对对应 GitHub Build 及其附件；本地候选不代替远端构建证明，既有 `v1.2.3` 附件保持原状 |
+| 发布状态 | 当前 `1.2.4` 为 Unreleased 待发布候选；本地默认构建、换料与独立恢复、真实重连和 42 个编辑表单已有受限证据。生产提交 `500c11e` 的 [GitHub Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/42483843621) 已成功，25 项固定开发依赖下载及 JAR／构建证明已核验；正式分发仍须完成下列来源条件，既有 `v1.2.3` 附件保持原状 |
 | CurseForge 渠道 | Release |
 | Minecraft | `1.21.1` |
 | 模组加载器 | NeoForge |
