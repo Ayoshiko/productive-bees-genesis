@@ -103,9 +103,10 @@ tasks.named('jar', Jar) {
 }
 
 tasks.named('verifyReleaseArtifact') {
+    def artifactFile = tasks.named('jar', Jar).flatMap { it.archiveFile }
     inputs.file(sourceManifest)
     doLast {
-        File artifact = tasks.named('jar', Jar).get().archiveFile.get().asFile
+        File artifact = artifactFile.get().asFile
         def digest = { byte[] bytes -> MessageDigest.getInstance('SHA-256').digest(bytes).encodeHex().toString() }
         new ZipFile(artifact).withCloseable { zip ->
             ['NOTICE', 'META-INF/license-manifest.json', 'META-INF/license-entry-hashes.json'].each { path ->

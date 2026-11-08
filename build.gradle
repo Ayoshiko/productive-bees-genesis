@@ -365,10 +365,11 @@ def verifyReleaseArtifact = tasks.register('verifyReleaseArtifact') {
     description = 'Verifies the distributable JAR metadata and required release files.'
     def releaseJar = tasks.named('jar', Jar)
     dependsOn releaseJar
-    inputs.file(releaseJar.flatMap { it.archiveFile })
+    def artifactFile = releaseJar.flatMap { it.archiveFile }
+    inputs.file(artifactFile)
 
     doLast { task ->
-        File artifact = releaseJar.get().archiveFile.get().asFile
+        File artifact = artifactFile.get().asFile
         if (!artifact.isFile()) {
             throw new GradleException("Release artifact was not created: ${artifact}")
         }
