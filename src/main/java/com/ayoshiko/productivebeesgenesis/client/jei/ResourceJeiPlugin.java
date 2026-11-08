@@ -6,6 +6,7 @@ import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRecipeView;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
+import mezz.jei.api.recipe.IRecipeManager;
 import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.registration.*;
 import mezz.jei.api.runtime.IJeiRuntime;
@@ -13,7 +14,12 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /** 独立 JEI 插件使可选查看器及其生命周期与资源生产保持隔离。 */
 @JeiPlugin
@@ -63,9 +69,6 @@ public final class ResourceJeiPlugin implements IModPlugin {
 		var nextIngredients = ingredients(next);
 		if (shown.equals(next) && ingredients.equals(nextIngredients)) return;
 		var manager = runtime.getRecipeManager();
-		// JEI 按注册实例管理隐藏状态，不能临时重建相等的配方对象来撤销旧目录。
-		manager.hideRecipes(PRODUCTION, shownProduction);
-		manager.hideRecipes(CENTRIFUGING, shownCentrifuging);
 		var ingredientManager = runtime.getIngredientManager();
 		var oldSet = new java.util.HashSet<>(ingredients);
 		var nextSet = new java.util.HashSet<>(nextIngredients);
@@ -73,12 +76,66 @@ public final class ResourceJeiPlugin implements IModPlugin {
 		var added = nextIngredients.stream().filter(value -> !oldSet.contains(value)).toList();
 		if (!removed.isEmpty()) ingredientManager.removeIngredientsAtRuntime(ResourceIngredient.TYPE, removed);
 		if (!added.isEmpty()) ingredientManager.addIngredientsAtRuntime(ResourceIngredient.TYPE, added);
-		shownProduction = recipes(next, false);
-		shownCentrifuging = recipes(next, true);
-		manager.addRecipes(PRODUCTION, shownProduction);
-		manager.addRecipes(CENTRIFUGING, shownCentrifuging);
-		shown = next; ingredients = nextIngredients;
+		shownProduction = updateRecipes(manager, PRODUCTION, shownProduction, recipes(next, false));
+		shownCentrifuging = updateRecipes(manager, CENTRIFUGING, shownCentrifuging, recipes(next, true));
+		shown = next;
+		ingredients = nextIngredients;
 	}
+	/** JEI 无公开删除接口；完整内容相同的旧对象从 JEI 自身索引取回，避免再次注册。 */
+	static List<ResourceJeiRecipe> updateRecipes(IRecipeManager manager, RecipeType<ResourceJeiRecipe> type,
+			List<ResourceJeiRecipe> previous, List<ResourceJeiRecipe> next) {
+		if (previous.equals(next)) {
+			return previous;
+		}
+		if (next.isEmpty()) {
+			if (!previous.isEmpty()) {
+				manager.hideRecipes(type, previous);
+			}
+			return List.of();
+		}
+
+		Set<ResourceJeiRecipe> nextSet = new HashSet<>(next);
+		Map<ResourceJeiRecipe, ResourceJeiRecipe> registered = new HashMap<>();
+		for (ResourceJeiRecipe recipe : previous) {
+			if (nextSet.contains(recipe)) {
+				registered.putIfAbsent(recipe, recipe);
+			}
+		}
+		if (registered.size() < nextSet.size()) {
+			try (var existing = manager.createRecipeLookup(type).includeHidden().get()) {
+				existing.filter(nextSet::contains).forEach(recipe -> registered.putIfAbsent(recipe, recipe));
+			}
+		}
+
+		Set<ResourceJeiRecipe> previousSet = new HashSet<>(previous);
+		List<ResourceJeiRecipe> removed = previous.stream().filter(recipe -> !nextSet.contains(recipe)).toList();
+		List<ResourceJeiRecipe> visible = new ArrayList<>(next.size());
+		List<ResourceJeiRecipe> reactivated = new ArrayList<>();
+		List<ResourceJeiRecipe> added = new ArrayList<>();
+		for (ResourceJeiRecipe recipe : next) {
+			ResourceJeiRecipe original = registered.get(recipe);
+			if (original == null) {
+				original = recipe;
+				registered.put(original, original);
+				added.add(original);
+			} else if (!previousSet.contains(original)) {
+				reactivated.add(original);
+			}
+			visible.add(original);
+		}
+
+		if (!removed.isEmpty()) {
+			manager.hideRecipes(type, removed);
+		}
+		if (!reactivated.isEmpty()) {
+			manager.unhideRecipes(type, reactivated);
+		}
+		if (!added.isEmpty()) {
+			manager.addRecipes(type, added);
+		}
+		return List.copyOf(visible);
+	}
+
 	public static void clear() { refresh(); discard(); }
 	private static void discard() {
 		runtime = null; shown = List.of(); ingredients = List.of();
@@ -93,11 +150,5 @@ public final class ResourceJeiPlugin implements IModPlugin {
 				registration.addRecipeCatalyst(new ItemStack(block), CENTRIFUGING);
 			}
 		}
-		for (String id : List.of("advanced_oak_beehive")) catalyst(registration, id, PRODUCTION);
-		for (String id : List.of("centrifuge", "powered_centrifuge", "heated_centrifuge")) catalyst(registration, id, CENTRIFUGING);
-	}
-	private static void catalyst(IRecipeCatalystRegistration registration, String id, RecipeType<ResourceJeiRecipe> type) {
-		var item = BuiltInRegistries.ITEM.get(ResourceLocation.fromNamespaceAndPath("productivebees", id));
-		if (item != net.minecraft.world.item.Items.AIR) registration.addRecipeCatalyst(new ItemStack(item), type);
 	}
 }

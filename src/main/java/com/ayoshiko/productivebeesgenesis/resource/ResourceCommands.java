@@ -43,6 +43,12 @@ public final class ResourceCommands {
                         })))))
 				.then(Commands.literal("status").then(Commands.argument("source", UuidArgument.uuid())
 						.executes(ctx -> run(ctx, () -> status(ctx)))))
+				.then(Commands.literal("request").then(Commands.argument("source", UuidArgument.uuid())
+						.then(Commands.argument("generation", LongArgumentType.longArg(1))
+								.then(Commands.argument("sequence", LongArgumentType.longArg(1))
+										.executes(ctx -> run(ctx, () -> request(ctx, 1)))
+										.then(Commands.argument("page", IntegerArgumentType.integer(1))
+												.executes(ctx -> run(ctx, () -> request(ctx, IntegerArgumentType.getInteger(ctx, "page")))))))))
 				.then(Commands.literal("bind").requires(source -> source.hasPermission(2))
 						.then(Commands.argument("pos", BlockPosArgument.blockPos())
 								.executes(ctx -> run(ctx, () -> bind(ctx)))))
@@ -107,9 +113,22 @@ public final class ResourceCommands {
 					Component.translatable(PREFIX + "phase." + account.productionPhase(account.productionTicket()).toLowerCase(java.util.Locale.ROOT)));
 		}
 		if (account.transferTicket() != null) reply(source, "transfer", account.transferTicket().sequence());
+		if (!account.requestSequences().isEmpty()) reply(source, "requests", account.requestSequences().toString());
 		if (!account.suspension().isEmpty()) reply(source, "suspended");
 		if (ResourceRuntime.accounts(source.getServer()).sessionIsolated()) reply(source, "session_isolated");
 		return 1;
+	}
+
+	private static int request(CommandContext<CommandSourceStack> ctx, int page) throws CommandSyntaxException {
+		var account = account(ctx);
+		var ticket = new ResourceAccount.Ticket(reference(ctx, account), LongArgumentType.getLong(ctx, "sequence"));
+		String data = account.requestData(ticket).toString();
+		int pageLength = 2048;
+		int pages = Math.max(1, (data.length() + pageLength - 1) / pageLength);
+		if (page > pages) throw new IllegalArgumentException("Invalid request page");
+		int start = (page - 1) * pageLength;
+		return reply(ctx.getSource(), "request", ticket.sequence(), page, pages,
+				data.substring(start, Math.min(data.length(), start + pageLength)));
 	}
 
 	private static void summary(CommandSourceStack source, ResourceAccount account) {
@@ -163,6 +182,7 @@ public final class ResourceCommands {
 		var storage = ResourceRuntime.accounts(ctx.getSource().getServer()).accounts();
 		if (!storage.persistenceFailure().isEmpty() || storage.hasInvalidData())
 			throw new IllegalStateException("Resource storage is isolated; host recovery must not change local state");
+		account.validateProductionResolution(ticket, completed);
 		var context = account.productionContext(ticket);
 		if (account.binding() != null) {
 			var host = ResourceCommandAccess.boundHive(ctx.getSource(), account);
@@ -179,7 +199,7 @@ public final class ResourceCommands {
 				throw new IllegalArgumentException("empty_hive_first");
 			if (adapter != null) adapter.resolveProduction(host, context, completed);
 		}
-		var frozen = account.frozenProduction();
+		var frozen = account.frozenProductionExact();
 		account.resolveProduction(account.owner(), ticket, completed);
 		audit(ctx, completed ? "production-completed" : "production-no-output", ticket + " frozen=" + frozen);
 		return reply(ctx.getSource(), "resolved");

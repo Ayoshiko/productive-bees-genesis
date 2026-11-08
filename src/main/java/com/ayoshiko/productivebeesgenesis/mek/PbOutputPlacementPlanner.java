@@ -58,8 +58,8 @@ final class PbOutputPlacementPlanner {
 	// ===== 产物模板快照（复用并按需扩容） =====
 	/** 快照而非直接遍历 pendingOutputs：延迟提交需要边写边改该 Map。 */
 	private ItemStack[] templates = new ItemStack[INITIAL_TEMPLATE_CAPACITY];
-	private int[] requested = new int[INITIAL_TEMPLATE_CAPACITY];
-	private int[] placed = new int[INITIAL_TEMPLATE_CAPACITY];
+	private long[] requested = new long[INITIAL_TEMPLATE_CAPACITY];
+	private long[] placed = new long[INITIAL_TEMPLATE_CAPACITY];
 	private final int[][] slotContributions = new int[MAX_SLOTS][INITIAL_TEMPLATE_CAPACITY];
 	private int templateCount;
 
@@ -67,7 +67,7 @@ final class PbOutputPlacementPlanner {
 	private boolean placedAll = true;
 	private boolean placedAny;
 	private boolean unplaceableType;
-	private int maxDeferredPerType;
+	private long maxDeferredPerType;
 	private int slotCapacity = FALLBACK_SLOT_CAPACITY;
 
 	/**
@@ -80,20 +80,20 @@ final class PbOutputPlacementPlanner {
 	 * @param pendingOutputs   待写出的产物数量表（identity key）
 	 * @return 模板数量
 	 */
-	int snapshot(Iterable<ItemStack> orderedTemplates, Map<ItemStack, Integer> pendingOutputs) {
+	int snapshot(Iterable<ItemStack> orderedTemplates, Map<ItemStack, ? extends Number> pendingOutputs) {
 		templateCount = 0;
 		for (ItemStack template : orderedTemplates) {
-			Integer count = pendingOutputs.get(template);
-			if (count == null || count <= 0) continue;
-			append(template, count);
+			Number count = pendingOutputs.get(template);
+			if (count == null || count.longValue() <= 0) continue;
+			append(template, count.longValue());
 		}
 		// 防御：pending 中若有不在配方输出表里的条目（存档恢复、配方热重载），也必须参与放置
 		if (templateCount < pendingOutputs.size()) {
-			for (Map.Entry<ItemStack, Integer> entry : pendingOutputs.entrySet()) {
-				Integer count = entry.getValue();
-				if (count == null || count <= 0) continue;
+			for (Map.Entry<ItemStack, ? extends Number> entry : pendingOutputs.entrySet()) {
+				Number count = entry.getValue();
+				if (count == null || count.longValue() <= 0) continue;
 				if (contains(entry.getKey())) continue;
-				append(entry.getKey(), count);
+				append(entry.getKey(), count.longValue());
 			}
 		}
 		return templateCount;
@@ -134,8 +134,8 @@ final class PbOutputPlacementPlanner {
 
 		for (int t = 0; t < templateCount; t++) {
 			ItemStack template = templates[t];
-			int remaining = requested[t];
-			int written = 0;
+			long remaining = requested[t];
+			long written = 0;
 			boolean sawSpace = false;
 			for (int i = 0; i < slotCount && remaining > 0; i++) {
 				IInventorySlot slot = slots.get(i);
@@ -146,7 +146,7 @@ final class PbOutputPlacementPlanner {
 					if (limit > observedCapacity) observedCapacity = limit;
 					if (limit <= 0) continue;
 					sawSpace = true;
-					int canFit = Math.min(remaining, limit);
+					int canFit = (int) Math.min(remaining, limit);
 					simStacks[i] = template;
 					simCounts[i] = canFit;
 					simLimits[i] = limit;
@@ -161,7 +161,7 @@ final class PbOutputPlacementPlanner {
 					int space = simLimits[i] - simCounts[i];
 					if (space <= 0) continue;
 					sawSpace = true;
-					int canFit = Math.min(remaining, space);
+					int canFit = (int) Math.min(remaining, space);
 					simCounts[i] += canFit;
 					addAmounts[i] += canFit;
 					slotContributions[i][t] += canFit;
@@ -257,7 +257,7 @@ final class PbOutputPlacementPlanner {
 	}
 
 	/** 单种产物需要延迟的最大数量（0 表示无延迟） */
-	int maxDeferredPerType() {
+	long maxDeferredPerType() {
 		return maxDeferredPerType;
 	}
 
@@ -274,15 +274,15 @@ final class PbOutputPlacementPlanner {
 		return templates[index];
 	}
 
-	int requestedAt(int index) {
+	long requestedAt(int index) {
 		return requested[index];
 	}
 
-	int placedAt(int index) {
+	long placedAt(int index) {
 		return placed[index];
 	}
 
-	private void append(ItemStack template, int count) {
+	private void append(ItemStack template, long count) {
 		ensureCapacity(templateCount + 1);
 		templates[templateCount] = template;
 		requested[templateCount] = count;

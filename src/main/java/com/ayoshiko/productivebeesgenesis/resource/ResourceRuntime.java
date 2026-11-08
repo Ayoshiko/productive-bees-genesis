@@ -375,6 +375,11 @@ public final class ResourceRuntime {
 		STATES.computeIfAbsent(server, ignored -> new State()).worldSaveFailed = true;
 	}
 
+	@SubscribeEvent
+	public static void started(net.neoforged.neoforge.event.server.ServerStartedEvent event) {
+		ProductiveBeesGenesis.acceptRecipeManager(event.getServer().getRecipeManager(), false);
+	}
+
 	/** 停服清理引用与未完成保存，防止同一进程再次进世界时复用旧账户。 */
 	@SubscribeEvent
 	public static void stopped(ServerStoppedEvent event) {

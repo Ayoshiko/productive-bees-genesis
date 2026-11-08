@@ -182,10 +182,10 @@ public final class BatchProbabilitySampler {
 	 * 算法：L = exp(-λ), k = 0, p = 1; do { k++; p *= uniform(); } while (p > L); return k-1。
 	 * <br/>
 	 * 适用场景：N ≥ 30 且 λ = N×p &lt; 5（二项分布退化为 Poisson）。
-	 * λ &lt; 5 时循环次数 ≤ 5，性能优于 CLT 的 nextGaussian 计算。
+	 * 平均循环次数为 λ+1，上限由 n 截断；低均值不代表每次至多五次循环。
 	 * <br/>
 	 * 数学性质：Poisson(λ) 是 Binomial(N,p) 在 N→∞、p→0、Np=λ 时的极限分布。
-	 * 当 N ≥ 30 且 λ &lt; 5 时近似误差 &lt; 1%。
+	 * 该分支保留既有近似玩法；其方差与尾部概率不等同于有限 N 的二项分布。
 	 *
 	 * @param random 线程局部随机数生成器
 	 * @param lambda Poisson 参数（= N×p，&gt; 0）
@@ -200,8 +200,8 @@ public final class BatchProbabilitySampler {
 			k++;
 			p *= random.nextDouble();
 		} while (p > L && k < n);
-		// k 此时为首次使 p ≤ L 的整数，返回 k-1；若因 k<n 截断，返回 n
-		return k < n ? k - 1 : n;
+		// 第 n 次已跨过阈值时仍对应 n-1；仅尚未跨过阈值的尾部合并至 n。
+		return p <= L ? k - 1 : n;
 	}
 
 	/**
@@ -209,7 +209,7 @@ public final class BatchProbabilitySampler {
 	 * <br/>
 	 * Binomial(N,p) 在 N 大且 p 不极端时近似 Normal(Np, Np(1-p))。
 	 * <br/>
-	 * 适用场景：N &gt; 30 且 λ ≥ 5（CLT 近似误差 &lt; 1%）。
+	 * 适用场景：N &gt; 30 且 λ ≥ 5；保留截断、取整后的正态近似，不承诺统一误差界。
 	 * <br/>
 	 * 退化处理：方差极小（stdDev &lt; 0.5）时直接取均值，避免 Normal 离散化误差。
 	 *

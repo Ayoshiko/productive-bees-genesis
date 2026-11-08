@@ -72,6 +72,8 @@ public class CosmicShaders {
 
 	@SubscribeEvent
 	public static void onRegisterShaders(RegisterShadersEvent event) {
+		clearShaders();
+		CosmicRenderQueue.clear();
 		// 两个 shader 独立 try-catch：单个 shader 注册失败只记录 warn，不影响其他 shader 注册
 		// 原共用 try-catch 会导致首个失败时后续 shader 全部跳过（如 cosmic 失败则 armor/hell 均不注册）
 		//
@@ -86,8 +88,6 @@ public class CosmicShaders {
 				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"),
 				DefaultVertexFormat.NEW_ENTITY),
 				shader -> {
-				COSMIC_SHADER = shader;
-				COSMIC_ARMOR_SHADER = shader;
 				cosmicTime = shader.safeGetUniform("time");
 				cosmicYaw = shader.safeGetUniform("yaw");
 				cosmicPitch = shader.safeGetUniform("pitch");
@@ -100,7 +100,8 @@ public class CosmicShaders {
 				cosmicArmorExternalScale = cosmicExternalScale;
 				cosmicArmorOpacity = cosmicOpacity;
 				cosmicArmorUVs = cosmicUVs;
-				shader.apply();
+				COSMIC_SHADER = shader;
+				COSMIC_ARMOR_SHADER = shader;
 			});
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("注册 cosmic 着色器失败", e);
@@ -110,18 +111,42 @@ public class CosmicShaders {
 				ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "hell"),
 				DefaultVertexFormat.NEW_ENTITY),
 				shader -> {
+				hellTime = shader.safeGetUniform("time");
+				hellYaw = shader.safeGetUniform("yaw");
+				hellPitch = shader.safeGetUniform("pitch");
+				hellExternalScale = shader.safeGetUniform("externalScale");
+				hellOpacity = shader.safeGetUniform("opacity");
+				hellUVs = shader.safeGetUniform("cosmicuvs");
 				HELL_SHADER = shader;
-				hellTime = HELL_SHADER.safeGetUniform("time");
-				hellYaw = HELL_SHADER.safeGetUniform("yaw");
-				hellPitch = HELL_SHADER.safeGetUniform("pitch");
-				hellExternalScale = HELL_SHADER.safeGetUniform("externalScale");
-				hellOpacity = HELL_SHADER.safeGetUniform("opacity");
-				hellUVs = HELL_SHADER.safeGetUniform("cosmicuvs");
-				HELL_SHADER.apply();
 			});
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.warn("注册 hell 着色器失败", e);
 		}
+	}
+
+	/** 引擎拥有并关闭实例；这里只撤销借用引用，防止失败重载继续使用旧 GL 程序。 */
+	static void clearShaders() {
+		COSMIC_SHADER = null;
+		COSMIC_ARMOR_SHADER = null;
+		HELL_SHADER = null;
+		cosmicTime = null;
+		cosmicYaw = null;
+		cosmicPitch = null;
+		cosmicExternalScale = null;
+		cosmicOpacity = null;
+		cosmicUVs = null;
+		cosmicArmorTime = null;
+		cosmicArmorYaw = null;
+		cosmicArmorPitch = null;
+		cosmicArmorExternalScale = null;
+		cosmicArmorOpacity = null;
+		cosmicArmorUVs = null;
+		hellTime = null;
+		hellYaw = null;
+		hellPitch = null;
+		hellExternalScale = null;
+		hellOpacity = null;
+		hellUVs = null;
 	}
 
 	public static boolean isCosmicAtlasReady() {

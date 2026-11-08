@@ -18,7 +18,7 @@ class WannaBeeBatchPlanTest {
 	void acceleratedBatchKeepsBoundedEventSamplesWithoutLosingWeight() {
 		int productionCount = 1_000;
 		int sampleCount = WannaBeeBatchPlan.sampleCount(productionCount);
-		int totalWeight = 0;
+		long totalWeight = 0;
 		for (int i = 0; i < sampleCount; i++) {
 			totalWeight += WannaBeeBatchPlan.weightAt(productionCount, i);
 		}
@@ -29,7 +29,7 @@ class WannaBeeBatchPlanTest {
 
 	@Test
 	void maximumBatchKeepsExactWeightWithoutOverflow() {
-		int productionCount = Integer.MAX_VALUE;
+		long productionCount = 4_096_000_000L;
 		int sampleCount = WannaBeeBatchPlan.sampleCount(productionCount);
 		long totalWeight = 0;
 		for (int i = 0; i < sampleCount; i++) {
@@ -57,7 +57,7 @@ class WannaBeeBatchPlanTest {
 
 	@Test
 	void mixedLevelsShareOneGroupBudget() {
-		int[] samples = WannaBeeBatchPlan.allocateSampleCounts(new int[] {256, 128, 64, 32});
+		int[] samples = WannaBeeBatchPlan.allocateSampleCounts(new long[] {256, 128, 64, 32});
 		int total = 0;
 		for (int sample : samples) total += sample;
 		assertEquals(16, total);
@@ -68,10 +68,10 @@ class WannaBeeBatchPlanTest {
 
 	@Test
 	void allocatedWeightsRemainExactPerLevel() {
-		int[] rollCounts = {100, 37, 5};
+		long[] rollCounts = {100, 37, 5};
 		int[] samples = WannaBeeBatchPlan.allocateSampleCounts(rollCounts);
 		for (int level = 0; level < rollCounts.length; level++) {
-			int represented = 0;
+			long represented = 0;
 			for (int i = 0; i < samples[level]; i++) {
 				represented += WannaBeeBatchPlan.weightAt(rollCounts[level], samples[level], i);
 			}

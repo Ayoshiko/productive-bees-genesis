@@ -111,7 +111,7 @@ class Ae2PerformanceRecoveryMinecraftTest {
         when(storage.extract(eq(key), eq(5L), eq(Actionable.MODULATE), any(IActionSource.class))).thenReturn(5L);
         when(slot.insertItem(any(), any(), any())).thenAnswer(call -> call.getArgument(0));
         holder.getPushState().getReturnBackoff().recordFailure(System.nanoTime());
-        Ae2InputPuller.pullBatchForType(level, holder, key, 5, -1, new KeyCounter(), storage,
+        Ae2InputExecution.pullBatchForType(level, holder, key, 5, -1, storage,
             IActionSource.empty(), List.of(slot), new long[] {5}, null, key.toStack(1), 0,
             BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget());
         assertEquals(5, holder.getPendingItemBuffer().getTotalAmount());

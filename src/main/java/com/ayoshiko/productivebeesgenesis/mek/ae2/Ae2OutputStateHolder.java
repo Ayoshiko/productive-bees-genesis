@@ -39,6 +39,7 @@ public final class Ae2OutputStateHolder {
 
 	/** AE2 输入抽取后无法立即归还的物品，宿主级有界持久化状态。 */
 	private final Ae2PendingItemBuffer pendingItemBuffer = new Ae2PendingItemBuffer();
+	private final Ae2EnergyTransfer energyTransfer = new Ae2EnergyTransfer();
 
 	/** AE2 输出确认式结算账本。 */
 	private final Ae2OutputLedger outputLedger = new Ae2OutputLedger();
@@ -275,6 +276,7 @@ public final class Ae2OutputStateHolder {
 		pushState.reset();
 		pendingItemBuffer.clear();
 		outputLedger.clear();
+		energyTransfer.clear();
 	}
 
 	/**
@@ -312,6 +314,8 @@ public final class Ae2OutputStateHolder {
 
 	/** 获取 AE2 输入剩余物缓冲。 */
 	public Ae2PendingItemBuffer getPendingItemBuffer() { return pendingItemBuffer; }
+
+	public Ae2EnergyTransfer getEnergyTransfer() { return energyTransfer; }
 
 	/** 获取 AE2 输出确认式结算账本。 */
 	public Ae2OutputLedger getOutputLedger() { return outputLedger; }
@@ -743,11 +747,12 @@ public final class Ae2OutputStateHolder {
 	}
 
 	public boolean hasDeferredInputFilter() {
-		return deferredInputFilter != null;
+		return deferredInputFilter != null || aeTagFilter.hasInvalidData();
 	}
 
 	public boolean retryInputFilterData() {
-		return Ae2PerTileStateNbtCodec.restoreInputFilter(this);
+		aeTagFilter.retryDecode();
+		return Ae2PerTileStateNbtCodec.restoreInputFilter(this) && !aeTagFilter.hasInvalidData();
 	}
 
 	/** 获取 per-tile smelt 输入标签过滤（永不为 null）。 */

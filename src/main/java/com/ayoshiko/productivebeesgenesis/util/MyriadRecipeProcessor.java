@@ -17,6 +17,7 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.biome.Biome;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -108,9 +109,14 @@ public final class MyriadRecipeProcessor {
 		if (!ModConfig.SERVER.fishingEnabled.get()) {
 			return null;
 		}
-		HolderSet<Biome> biomes = ingredientFactory.createBiomeHolderSet(ModConfig.SERVER.fishingBiomes.get());
+		Optional<HolderSet<Biome>> biomes = ingredientFactory.createBiomeHolderSet(ModConfig.SERVER.fishingBiomes.get());
+		if (biomes.isEmpty()) {
+			ProductiveBeesGenesis.LOGGER.warn("万象钓鱼配方 '{}' 的群系限制 {} 无效，已停用该配方",
+					holder.id(), ModConfig.SERVER.fishingBiomes.get());
+			return null;
+		}
 		float chance = ModConfig.SERVER.fishingChance.get().floatValue();
-		BeeFishingRecipe newRecipe = new BeeFishingRecipe(fishing.output, biomes, chance);
+		BeeFishingRecipe newRecipe = new BeeFishingRecipe(fishing.output, biomes.get(), chance);
 		return new RecipeHolder<>(holder.id(), newRecipe);
 	}
 
@@ -150,8 +156,13 @@ public final class MyriadRecipeProcessor {
 			return MyriadRecipeGate.withoutMyriad(new RecipeHolder<>(holder.id(), spawning));
 		}
 		Ingredient ingredient = RecipeIngredientFactory.createIngredient(ModConfig.SERVER.spawningNest.get());
-		HolderSet<Biome> biomes = ingredientFactory.createBiomeHolderSetFromString(ModConfig.SERVER.spawningBiomes.get());
-		BeeSpawningRecipe newRecipe = new BeeSpawningRecipe(ingredient, spawning.spawnItem, spawning.output, biomes);
+		Optional<HolderSet<Biome>> biomes = ingredientFactory.createBiomeHolderSetFromString(ModConfig.SERVER.spawningBiomes.get());
+		if (biomes.isEmpty()) {
+			ProductiveBeesGenesis.LOGGER.warn("万象生成配方 '{}' 的群系限制 '{}' 无效，已移除万象结果",
+					holder.id(), ModConfig.SERVER.spawningBiomes.get());
+			return MyriadRecipeGate.withoutMyriad(new RecipeHolder<>(holder.id(), spawning));
+		}
+		BeeSpawningRecipe newRecipe = new BeeSpawningRecipe(ingredient, spawning.spawnItem, spawning.output, biomes.get());
 		return new RecipeHolder<>(holder.id(), newRecipe);
 	}
 

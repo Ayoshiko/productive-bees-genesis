@@ -18,7 +18,7 @@ import java.util.Set;
 	 * 本类作为聚合入口持有三个 {@link ModConfigSpec} 与配置实例：
 	 * <ul>
 	 *   <li>{@link ClientConfig} — 客户端渲染/显示配置</li>
-	 *   <li>{@link CommonConfig} — 跨端同步配置</li>
+	 *   <li>{@link CommonConfig} — 两端分别加载的本地通用显示配置</li>
 	 *   <li>{@link ServerConfig} — 存档级别配置</li>
 	 * </ul>
 	 * 外部访问路径 {@code ModConfig.CLIENT.xxx} / {@code ModConfig.SERVER.xxx} 保持不变。

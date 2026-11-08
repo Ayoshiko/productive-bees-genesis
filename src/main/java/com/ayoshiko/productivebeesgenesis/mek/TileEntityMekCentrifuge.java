@@ -228,19 +228,22 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	 */
 	@Override
 	public boolean containsRecipe(@NotNull ItemStack input) {
-		if (pbProcessor.acceptsResourceInput(input)) return pbProcessor.allowsNewResourceInput(input);
+		if (pbProcessor.acceptsResourceInput(input)) {
+			return pbProcessor.allowsNewResourceInput(input) || pbProcessor.hasRetainedInput(input);
+		}
 		if (MyriadCreationsEventHandler.isMyriadCreationsItem(input)) {
 			return true;
 		}
 		// 熔炉配方兼容关闭时只接受 PB 离心配方输入
 		if (!MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this)) {
-			return pbProcessor.findPbRecipe(input) != null;
+			return pbProcessor.findPbRecipe(input) != null || pbProcessor.hasRetainedInput(input);
 		}
 		// Bug 2: PB 蜜脾/蜜脾块强制走 PB 配方路径，避免 SMELTING（c:honeycombs 标签）误匹配
 		if (productivebeesgenesis$isPbCombInput(input)) {
-			return pbProcessor.findPbRecipe(input) != null;
+			return pbProcessor.findPbRecipe(input) != null || pbProcessor.hasRetainedInput(input);
 		}
-		return super.containsRecipe(input) || pbProcessor.findPbRecipe(input) != null;
+		return super.containsRecipe(input) || pbProcessor.findPbRecipe(input) != null
+				|| pbProcessor.hasRetainedInput(input);
 	}
 
 	/** 重写getRecipe — PB配方存在时返回null阻止SMELTING抢占（modularbees 为 c:honeycombs 注册熔炉配方被SMELTING包含） */
@@ -430,6 +433,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	/** 基础机器不用计数器，hasActiveProcess 直接读 pbProcessor 状态 */
 	@Override
 	public boolean productivebeesgenesis$hasActiveProcess() { return pbProcessor.isPbProcessing(0); }
+
+	public PbRecipeProcessor productivebeesgenesis$getPbProcessor() { return pbProcessor; }
 	/** 基础机器不用计数器，激活/失活为 no-op */
 	@Override
 	public void productivebeesgenesis$onProcessActivated(int process) { /* no-op */ }
@@ -479,6 +484,22 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Override
 	public IItemHandlerModifiable getUpgradeHandler() { return pbUpgradeInstallHandler; }
 
+	@Override
+	public boolean productivebeesgenesis$canUpgradeProduction() {
+		return !pbProcessor.hasUnresolvedWork() && !pbUpgradeHandler.hasUnresolvedData()
+				&& !hasUnresolvedFluidState();
+	}
+
+	@Override
+	public boolean hasUnresolvedInput() {
+		return productivebeesgenesis$getAe2StateHolder().getPendingItemBuffer().isBlocked()
+				|| hasUnresolvedFluidState() || pbUpgradeHandler.hasUnresolvedData();
+	}
+
+	boolean hasUnresolvedFluidState() {
+		return saveHandler != null && saveHandler.hasUnresolvedFluidState();
+	}
+
 	// ===== 客户端同步和持久化（委托 saveHandler） =====
 
 	/** 同步PB进度、PB升级数量/安装进度和 AE2 开关 — 委托 {@link MekCentrifugeSaveHandler#addContainerTrackers} */
@@ -526,8 +547,9 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Override
 	public void setConfigurationData(@NotNull HolderLookup.Provider provider,
 			@Nullable Player player, @NotNull CompoundTag data) {
-		super.setConfigurationData(provider, player, data);
-		saveHandler.setConfigurationData(data, player);
+		if (saveHandler.setConfigurationData(data, player)) {
+			super.setConfigurationData(provider, player, data);
+		}
 	}
 
 	// ===== 工厂安装器升级数据持久化（委托 saveHandler） =====
@@ -548,7 +570,8 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@org.jetbrains.annotations.Nullable
 	@Override
 	public CentrifugeUpgradeData getUpgradeData(HolderLookup.Provider provider) {
-		if (!com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.canUpgrade(this)) return null;
+		if (!productivebeesgenesis$canUpgradeProduction()
+				|| !com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.canUpgrade(this)) return null;
 		var resourceUpgrade = com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.prepareUpgrade(this);
 		CentrifugeUpgradeData data = saveHandler.buildUpgradeData(provider, redstone, getControlType(),
 				getOperatingTicks(), getComponents());

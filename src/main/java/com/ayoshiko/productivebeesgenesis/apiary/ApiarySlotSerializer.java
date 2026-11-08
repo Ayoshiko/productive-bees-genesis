@@ -15,6 +15,8 @@ import net.minecraft.nbt.Tag;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
 	 * 蜜蜂槽序列化器
@@ -27,7 +29,7 @@ import java.io.ByteArrayOutputStream;
 	 * </ul>
 	 * <p>
 	 * 通过组合关系持有 {@link ApiarySlotManager} 引用，访问蜜蜂槽数组。
-	 * 无自有可变状态，NBT key 为静态常量。
+	 * 无法完整解码的原标签由本实例保管，恢复前不写入新蜜蜂。
 	 * <p>
 	 * 线程安全：序列化在服务端主线程执行；网络同步的 dirty 检查基于数组 hashCode，
 	 * SyncableByteArray 内部保证同步线程安全。
@@ -42,6 +44,7 @@ public class ApiarySlotSerializer {
 
 	/** 所属槽位管理器 — 访问蜜蜂槽数组与数量 */
 	private final ApiarySlotManager manager;
+	private Tag invalidBeeSlots;
 
 	/** per-slot 序列化缓存 — beeData 引用未变时复用字节数组，避免每 gameTick 重复 NBT 压缩（v1.0.2） */
 	private byte[][] serializedBeeDataCache;
@@ -70,6 +73,10 @@ public class ApiarySlotSerializer {
 	 * @param nbt 目标 NBT 标签
 	 */
 	void saveBeeSlots(CompoundTag nbt) {
+		if (invalidBeeSlots != null) {
+			nbt.put(NBT_KEY_BEE_SLOTS, invalidBeeSlots.copy());
+			return;
+		}
 		ListTag list = new ListTag();
 		BeeSlot[] beeSlots = manager.getBeeSlots();
 		int beeSlotCount = manager.getBeeSlotCount();
@@ -99,29 +106,33 @@ public class ApiarySlotSerializer {
 	 * 从 NBT 加载蜜蜂槽数组
 	 * <br/>
 	 * 兼容空槽位（ListTag 长度 < beeSlotCount 时，剩余槽位保持空状态）。
-	 * 兼容旧版存档：若 ListTag 长度大于当前 beeSlotCount（如从工厂版降级到初始版），
-	 * 仅加载前 beeSlotCount 个槽位，多余数据忽略。
+	 * 兼容无索引旧列表；重复索引、越界或错误类型保留完整原标签。
 	 *
 	 * @param nbt 源 NBT 标签
 	 */
 	void loadBeeSlots(CompoundTag nbt) {
+		Tag raw = nbt.get(NBT_KEY_BEE_SLOTS);
+		invalidBeeSlots = null;
 		BeeSlot[] beeSlots = manager.getBeeSlots();
 		int beeSlotCount = manager.getBeeSlotCount();
 		// 先清空所有槽位，防止旧数据残留
 		for (int i = 0; i < beeSlotCount; i++) {
 			beeSlots[i].clear();
 		}
-		if (!nbt.contains(NBT_KEY_BEE_SLOTS, Tag.TAG_LIST)) return;
-		ListTag list = nbt.getList(NBT_KEY_BEE_SLOTS, Tag.TAG_COMPOUND);
+		if (raw == null) return;
+		ListTag list;
+		try {
+			list = validatedBeeSlots(raw, beeSlotCount);
+		} catch (IllegalArgumentException e) {
+			invalidBeeSlots = raw.copy();
+			DevLog.warn("nbt_serialize", "蜜蜂槽原始数据已保管，停止覆盖: {}", e.getMessage());
+			return;
+		}
 		for (int i = 0; i < list.size(); i++) {
 			CompoundTag slotNbt = list.getCompound(i);
 			// 优先按保存的绝对索引还原（防止压缩存储导致槽位左移、绝对索引错位）；
 			// 旧存档无 slot_index 键时回退到顺序填充
-			int target = slotNbt.contains("slot_index", Tag.TAG_ANY_NUMERIC)
-					? slotNbt.getInt("slot_index") : i;
-			if (target < 0 || target >= beeSlotCount) {
-				continue;
-			}
+			int target = slotNbt.contains("slot_index") ? slotNbt.getInt("slot_index") : i;
 			BeeSlot slot = beeSlots[target];
 			if (slotNbt.contains("entity_data", Tag.TAG_COMPOUND)) {
 				// .copy() 防止共享 NBT 引用导致意外修改
@@ -148,15 +159,57 @@ public class ApiarySlotSerializer {
 				slot.setBaseMinOccupationTicks((oldMinTicks > 0 && oldMinTicks <= upperBound) ? oldMinTicks : 0);
 			}
 			slot.setHasNectar(slotNbt.getBoolean("has_nectar"));
-			try {
-				slot.setState(BeeState.valueOf(slotNbt.getString("state")));
-			} catch (IllegalArgumentException e) {
-				// 未知状态名（可能来自未来版本），回退到 IDLE
-				DevLog.warn("nbt_serialize", "加载蜜蜂槽位时遇到未知状态: {}", slotNbt.getString("state"));
-				slot.setState(BeeState.IDLE);
-			}
+			slot.setState(slotNbt.contains("state") ? BeeState.valueOf(slotNbt.getString("state")) : BeeState.IDLE);
 			slot.setProgress(slotNbt.getFloat("progress"));
 		}
+	}
+
+	boolean hasInvalidBeeData() {
+		return invalidBeeSlots != null;
+	}
+
+	boolean retryInvalidBeeData() {
+		if (invalidBeeSlots == null) return false;
+		CompoundTag saved = new CompoundTag();
+		saved.put(NBT_KEY_BEE_SLOTS, invalidBeeSlots.copy());
+		loadBeeSlots(saved);
+		if (invalidBeeSlots != null) return false;
+		manager.getTile().setChanged();
+		return true;
+	}
+
+	/** 旧版无索引列表仍按顺序解释；重复、越界和错误类型不得覆盖另一只蜜蜂。 */
+	public static ListTag validatedBeeSlots(Tag raw, int capacity) {
+		if (!(raw instanceof ListTag list) || !list.isEmpty() && list.getElementType() != Tag.TAG_COMPOUND) {
+			throw new IllegalArgumentException("Invalid bee slot list");
+		}
+		Set<Integer> indices = new HashSet<>();
+		for (int i = 0; i < list.size(); i++) {
+			CompoundTag entry = list.getCompound(i);
+			if (!entry.contains("entity_data", Tag.TAG_COMPOUND) || entry.getCompound("entity_data").isEmpty()
+					|| entry.contains("slot_index") && !entry.contains("slot_index", Tag.TAG_INT)) {
+				throw new IllegalArgumentException("Invalid bee slot identity");
+			}
+			int index = entry.contains("slot_index") ? entry.getInt("slot_index") : i;
+			if (index < 0 || index >= capacity || !indices.add(index)) {
+				throw new IllegalArgumentException("Duplicate or out-of-range bee slot");
+			}
+			for (String key : Set.of("ticks_in_hive", "min_occupation_ticks", "base_min_occupation_ticks")) {
+				if (entry.contains(key) && (!entry.contains(key, Tag.TAG_INT) || entry.getInt(key) < 0)) {
+					throw new IllegalArgumentException("Invalid bee progress");
+				}
+			}
+			if (entry.contains("has_nectar") && !entry.contains("has_nectar", Tag.TAG_BYTE)
+					|| entry.contains("progress") && (!entry.contains("progress", Tag.TAG_FLOAT)
+							|| !Float.isFinite(entry.getFloat("progress")))) {
+				throw new IllegalArgumentException("Invalid bee state");
+			}
+			if (entry.contains("state")) {
+				if (!entry.contains("state", Tag.TAG_STRING)) throw new IllegalArgumentException("Invalid bee state");
+				BeeState.valueOf(entry.getString("state"));
+			}
+		}
+		return list;
 	}
 
 	// ===== 网络同步框架 =====

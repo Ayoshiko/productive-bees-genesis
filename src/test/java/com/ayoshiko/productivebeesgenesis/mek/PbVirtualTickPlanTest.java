@@ -8,6 +8,16 @@ import org.junit.jupiter.api.Test;
 class PbVirtualTickPlanTest {
 
 	@Test
+	void paidCompletionSettlesWithoutChargingOrStartingAnotherCycle() {
+		var ready = PbVirtualTickPlan.create(19, 0, 5, 2, 2, 100, 0);
+		assertEquals(new PbVirtualTickPlan(2, 0, 0, 0), ready);
+		var before = PbVirtualTickPlan.create(0, 19, 20, 2, 1, 1, 100);
+		var after = PbVirtualTickPlan.create(before.remainingProgress(), 1, 20, 2, 2, 1, 100);
+		assertEquals(2, after.completedOperations());
+		assertEquals(21, before.energyUsed() + after.energyUsed());
+	}
+
+	@Test
 	void accelerationAdvancesProgressForSingleInput() {
 		PbVirtualTickPlan plan = PbVirtualTickPlan.create(0, 256, 200, 256, 1, 40L, Long.MAX_VALUE);
 

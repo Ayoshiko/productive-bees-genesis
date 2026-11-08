@@ -234,13 +234,13 @@ dependencies {
     // @WailaPlugin 注解确保仅 Jade 安装时才加载集成类
     compileOnly name: 'Jade-1.21.1-NeoForge-15.10.5'
     // GuideME 的热键索引只按物品 ID；客户端适配补充可配置蜂的组件筛选。
-    compileOnly files('run/mods/guideme-21.1.16.jar')
+    compileOnly files('libs/guideme-21.1.16.jar')
 
     // KubeJS（可选依赖，编译时需要访问 KubeJSPlugin/EventGroup 等 API）
     // 运行时通过 kubejs.plugins.txt 声明插件，未安装 KubeJS 时插件类不会被加载
     compileOnly name: 'kubejs-neoforge-2101.7.2-build.368'
     // Rhino（KubeJS 的 JS 引擎依赖，编译时 KubeJS API 类签名引用 Rhino 类型）
-    compileOnly name: 'rhino-2101.2.7-build.85'
+    compileOnly files('libs/upstream/rhino-2101.2.7-build.85.jar')
 
     // 单元测试依赖（JUnit 5）
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
@@ -368,7 +368,7 @@ def verifyReleaseArtifact = tasks.register('verifyReleaseArtifact') {
     inputs.file(releaseJar.flatMap { it.archiveFile })
 
     doLast { task ->
-        File artifact = task.inputs.files.singleFile
+        File artifact = releaseJar.get().archiveFile.get().asFile
         if (!artifact.isFile()) {
             throw new GradleException("Release artifact was not created: ${artifact}")
         }
@@ -537,6 +537,8 @@ def reportReleaseArtifact = tasks.register('reportReleaseArtifact') {
         logger.lifecycle("Release artifact: ${artifact.length()} bytes; report: ${destination}")
     }
 }
+
+apply from: 'gradle/license-manifest.gradle'
 
 tasks.named('check') {
     dependsOn verifyReleaseArtifact

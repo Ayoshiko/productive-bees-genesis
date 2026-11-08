@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.authoring;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,7 +32,11 @@ final class BeeDesignerStore {
 	private BeeDesignerStore() {
 	}
 
-	record Revision(Path world, Path source, String digest, boolean export) {
+	record Revision(Path world, Path source, String digest, boolean export, BeeDesignerOperation operation) {
+		Revision(Path world, Path source, String digest, boolean export) {
+			this(world, source, digest, export, null);
+		}
+
 		Path installed() {
 			return world.resolve("datapacks").resolve(source.getFileName());
 		}
@@ -64,13 +69,24 @@ final class BeeDesignerStore {
 	}
 
 	static Revision write(Path world, Map<String, String> files, boolean export) throws IOException {
+		return write(world, files, export, null);
+	}
+
+	static Revision write(Path world, Map<String, String> files, boolean export, BeeDesignerOperation operation) throws IOException {
 		validateFiles(files);
 		world = world.toAbsolutePath().normalize();
-		String revision = PREFIX + UUID.randomUUID();
+		String revision = PREFIX + (operation == null ? UUID.randomUUID() : operation.token());
 		Path directory = root(world).resolve(export ? "exports" : "revisions");
 		checkParents(world, directory);
 		Files.createDirectories(directory);
 		Path zip = directory.resolve(revision + ".zip");
+		if (operation != null) {
+			if (export || Files.exists(operationPath(world, operation.token()), LinkOption.NOFOLLOW_LINKS)
+					|| Files.exists(zip, LinkOption.NOFOLLOW_LINKS)) {
+				throw new IOException("Publication token already has a retained revision");
+			}
+			record(new Revision(world, zip, "", false, operation), "writing", "Revision snapshot is being written");
+		}
 		writeZip(zip, files);
 		if (export) {
 			Map<String, String> names = new LinkedHashMap<>();
@@ -82,7 +98,11 @@ final class BeeDesignerStore {
 			names.put("pack.mcmeta", "{\"pack\":{\"pack_format\":34,\"description\":\"Bee Designer names\"}}");
 			writeZip(directory.resolve(revision + "-names.zip"), names);
 		}
-		return new Revision(world, zip, digest(zip), export);
+		Revision result = new Revision(world, zip, digest(zip), export, operation);
+		if (operation != null) {
+			record(result, "prepared", "Revision snapshot retained before installation");
+		}
+		return result;
 	}
 
 	static void install(Revision revision) throws IOException {
@@ -148,10 +168,66 @@ final class BeeDesignerStore {
 			idle.addProperty("phase", "idle");
 			return idle;
 		}
-		if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || Files.size(path) > BeeDesignerProtocol.MAX_BYTES) {
+		if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || Files.size(path) > MAX_PACK_BYTES) {
 			throw new IOException("Invalid authoring operation journal");
 		}
-		return BeeDesignerProtocol.parse(Files.readString(path, StandardCharsets.UTF_8));
+		String source = Files.readString(path, StandardCharsets.UTF_8);
+		BeeDesignerProtocol.checkDepth(source);
+		return JsonParser.parseString(source).getAsJsonObject();
+	}
+
+	static JsonObject operation(Path world, UUID token, UUID owner, String requestDigest) throws IOException {
+		Path path = operationPath(world, token);
+		JsonObject journal = inspect(world);
+		JsonObject data = token.toString().equals(BeeDesignerDocument.text(journal, "token", "")) ? journal : readOperation(world, path);
+		if (data == null) {
+			return null;
+		}
+		if (!token.toString().equals(BeeDesignerDocument.text(data, "token", ""))
+				|| !(PREFIX + token + ".zip").equals(BeeDesignerDocument.text(data, "revision", ""))) {
+			throw new IOException("Publication identity does not match its retained revision");
+		}
+		if (!owner.toString().equals(BeeDesignerDocument.text(data, "owner", ""))) {
+			throw new IllegalArgumentException("designer.error.permission");
+		}
+		if (!requestDigest.isEmpty() && !requestDigest.equals(BeeDesignerDocument.text(data, "request_digest", ""))) {
+			throw new IllegalArgumentException("designer.error.collection_changed");
+		}
+		return data;
+	}
+
+	static JsonObject operationDocument(Path world, JsonObject record, String id, int offset) throws IOException {
+		String revision = BeeDesignerDocument.text(record, "revision", "");
+		if (!managedPack("file/" + revision)) {
+			throw new IOException("Invalid retained publication revision");
+		}
+		Path source = root(world).resolve("revisions").resolve(revision);
+		verify(world, source, BeeDesignerDocument.text(record, "sha256", ""));
+		String document = readRevision(world, revision).get(id);
+		if (document == null) {
+			throw new IllegalArgumentException("designer.error.collection_changed");
+		}
+		return BeeDesignerOperation.documentChunk(record, id, document, offset);
+	}
+
+	private static Path operationPath(Path world, UUID token) {
+		return root(world).resolve("revisions").resolve(PREFIX + token + ".json");
+	}
+
+	private static JsonObject readOperation(Path world, Path path) throws IOException {
+		checkParents(world, path);
+		if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+			return null;
+		}
+		if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || Files.size(path) > MAX_PACK_BYTES) {
+			throw new IOException("Invalid retained publication record");
+		}
+		JsonObject data = JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
+		if (!data.has("token") || !data.has("owner") || !data.has("baselines") || !data.has("fingerprints")
+				|| !BeeDesignerDocument.text(data, "request_digest", "").matches("[a-f0-9]{64}")) {
+			throw new IOException("Retained publication record has no complete identity");
+		}
+		return data;
 	}
 
 	static JsonObject history(Path world, int requested) throws IOException {
@@ -217,11 +293,21 @@ final class BeeDesignerStore {
 		if (journal.has("revision")) {
 			String name = journal.get("revision").getAsString();
 			String checksum = journal.get("sha256").getAsString();
-			if (!managedPack("file/" + name) || !checksum.matches("[a-f0-9]{64}")) {
-				throw new IOException("Invalid revision journal identity or digest");
+			if (!managedPack("file/" + name)) {
+				throw new IOException("Invalid revision journal identity");
 			}
 			pending = new Revision(world, root(world).resolve("revisions").resolve(name), checksum, false);
-			verify(world, pending.source, checksum);
+			if (checksum.isEmpty() && journal.has("token")) {
+				if (selected.contains(pending.packId()) || Files.exists(pending.installed(), LinkOption.NOFOLLOW_LINKS)
+						|| !List.of("writing", "uncertain", "rejected").contains(BeeDesignerDocument.text(journal, "phase", ""))) {
+					throw new IOException("An incomplete revision cannot be treated as installed");
+				}
+			} else {
+				if (!checksum.matches("[a-f0-9]{64}")) {
+					throw new IOException("Invalid revision journal digest");
+				}
+				verify(world, pending.source, checksum);
+			}
 		}
 		List<String> managed = selected.stream().filter(BeeDesignerStore::managedPack).toList();
 		if (managed.size() > 1) {
@@ -274,17 +360,33 @@ final class BeeDesignerStore {
 			}
 			complete(audit.active, audit.installed);
 		}
+		if (audit.pending != null && (audit.active == null || !audit.pending.packId().equals(audit.active.packId()))) {
+			record(audit.pending, "rejected", "Verified current resources use another revision");
+		}
 	}
 
 	private static void record(Revision revision, String phase, String message) throws IOException {
-		JsonObject data = new JsonObject();
+		Path retained = revision.source.resolveSibling(revision.source.getFileName().toString().replace(".zip", ".json"));
+		JsonObject data = revision.operation == null ? readOperation(revision.world, retained) : revision.operation.json();
+		if (data == null) {
+			JsonObject journal = inspect(revision.world);
+			data = revision.source.getFileName().toString().equals(BeeDesignerDocument.text(journal, "revision", ""))
+					&& journal.has("token") ? journal : new JsonObject();
+		}
 		data.addProperty("revision", revision.source.getFileName().toString());
 		data.addProperty("sha256", revision.digest);
 		data.addProperty("phase", phase);
 		data.addProperty("message", message);
-		Path path = root(revision.world).resolve("operation.json");
-		checkParents(revision.world, path);
-		Path temporary = path.resolveSibling("operation-" + UUID.randomUUID() + ".pending");
+		// 最新日志先保管完整身份；若旁车写入中断，查询仍可据此核实原 token。
+		writeRecord(revision.world, root(revision.world).resolve("operation.json"), data);
+		if (data.has("token")) {
+			writeRecord(revision.world, retained, data);
+		}
+	}
+
+	private static void writeRecord(Path world, Path path, JsonObject data) throws IOException {
+		checkParents(world, path);
+		Path temporary = path.resolveSibling(path.getFileName() + "-" + UUID.randomUUID() + ".pending");
 		Files.writeString(temporary, data.toString(), StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
 		Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
 	}

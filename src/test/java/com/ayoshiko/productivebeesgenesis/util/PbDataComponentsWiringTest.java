@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  *       （仅次于 {@code Unsafe.park} 的空闲等待）；</li>
  *   <li>NKn1ZLQN2W：同方法 468ms / 0.78%。</li>
  * </ul>
- * 调用栈显示它来自 {@code Ae2InputPuller$PullEntry.matchesComponents} 等热路径里对
+ * 当时调用栈来自 {@code Ae2InputPuller$PullEntry.matchesComponents}（现迁入 Ae2InputExecution）等热路径里对
  * {@code ModDataComponents.BEE_TYPE.get()} 的重复注册表查找（单次调用内最多 4 次）。
  * <p>
  * {@code DataComponentType} 在静态注册表中注册一次即恒定，因此改为经
@@ -33,7 +33,7 @@ class PbDataComponentsWiringTest {
 
 	/** 必须走缓存访问器的热路径文件（每 tick 或每槽 × 每类型被调用）。 */
 	private static final List<String> HOT_PATH_FILES = List.of(
-			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java",
+			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputExecution.java",
 			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputLaneSnapshot.java",
 			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/CombFuzzyMatcher.java",
 			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/PbRecipeFinder.java",
@@ -42,8 +42,7 @@ class PbDataComponentsWiringTest {
 			"src/main/java/com/ayoshiko/productivebeesgenesis/mek/MyriadBatchPlanner.java",
 			"src/main/java/com/ayoshiko/productivebeesgenesis/MyriadCreationsEventHandler.java",
 			"src/main/java/com/ayoshiko/productivebeesgenesis/util/InputValidationCache.java",
-			"src/main/java/com/ayoshiko/productivebeesgenesis/util/InputOutputCompatibilityCache.java",
-			"src/main/java/com/ayoshiko/productivebeesgenesis/util/RecipeCacheManager.java");
+			"src/main/java/com/ayoshiko/productivebeesgenesis/util/InputOutputCompatibilityCache.java");
 
 	private static String read(String relativePath) throws Exception {
 		return Files.readString(Path.of(relativePath));
@@ -71,7 +70,7 @@ class PbDataComponentsWiringTest {
 	@DisplayName("组件匹配内层循环不再做注册表/组件表查找，改由预采签名驱动")
 	void componentMatchUsesPrecomputedSignatures() throws Exception {
 		String source = read(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputExecution.java");
 		int methodStart = source.indexOf("boolean matchesComponents(");
 		assertTrue(methodStart > 0, "找不到 matchesComponents 方法");
 		int methodEnd = source.indexOf("\n\t\t/**", methodStart);

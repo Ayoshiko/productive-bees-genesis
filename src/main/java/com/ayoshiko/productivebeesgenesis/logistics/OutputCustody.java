@@ -29,6 +29,9 @@ public final class OutputCustody {
     private boolean executing;
     private boolean resolved;
     private CompoundTag invalid;
+    private long sourceDebitPending;
+    private boolean sourceDebitUnknown;
+    private boolean receiptKnown;
 
     public OutputCustody(Runnable changed) { this.changed = changed; }
 
@@ -69,6 +72,86 @@ public final class OutputCustody {
     public long handoffFluid(FluidStack template, long requested, String target, LongSupplier insert) {
         if (blocked() || template.isEmpty() || requested <= 0) return 0;
         return handoff(ItemStack.EMPTY, template.copyWithAmount(1), requested, target, insert);
+    }
+
+    /** 已有源罐的交付必须等待本地扣源确认；已知接收量不能提前退役。 */
+    public long handoffFluidFromTank(FluidStack template, long requested, String target, LongSupplier insert) {
+        if (blocked() || template.isEmpty() || requested <= 0) return 0;
+        return handoff(template.copyWithAmount(1), requested, target, insert);
+    }
+
+    private long handoff(FluidStack template, long requested, String target, LongSupplier insert) {
+        fluid = template;
+        item = ItemStack.EMPTY;
+        amount = requested;
+        destination = target;
+        failure = "";
+        resolved = false;
+        receiptKnown = false;
+        sourceDebitPending = requested;
+        sourceDebitUnknown = false;
+        executing = true;
+        changed.run();
+        try {
+            long accepted = insert.getAsLong();
+            if (accepted < 0 || accepted > requested) {
+                throw new IllegalStateException("Invalid output receipt: " + accepted);
+            }
+            if (accepted == 0) {
+                clear();
+            } else {
+                amount = accepted;
+                sourceDebitPending = accepted;
+                receiptKnown = true;
+            }
+            return accepted;
+        } catch (RuntimeException | LinkageError exception) {
+            sequence();
+            failure = exception.getClass().getSimpleName() + ": " + String.valueOf(exception.getMessage());
+            if (failure.length() > 512) failure = failure.substring(0, 512);
+            ProductiveBeesGenesis.LOGGER.error("Fluid output suspended: request={}, target={}, amount={}",
+                    sequence, destination, amount, exception);
+            return requested;
+        } finally {
+            if (sourceDebitPending > 0) sequence();
+            executing = false;
+            changed.run();
+        }
+    }
+
+    public long sourceDebitPending() { return sourceDebitPending; }
+    public boolean sourceDebitUnknown() { return sourceDebitUnknown; }
+
+    public void confirmSourceDebit(long actual) {
+        if (sourceDebitUnknown || actual < 0 || actual > sourceDebitPending) {
+            throw new IllegalStateException("Invalid source debit confirmation");
+        }
+        sourceDebitPending -= actual;
+        if (sourceDebitPending == 0 && receiptKnown) {
+            clear();
+        }
+        changed.run();
+    }
+
+    public void markSourceDebitUnknown(Throwable error) {
+        sourceDebitUnknown = true;
+        failure = "Source debit unknown: " + error.getClass().getSimpleName() + ": " + error.getMessage();
+        if (failure.length() > 512) failure = failure.substring(0, 512);
+        sequence();
+        changed.run();
+        ProductiveBeesGenesis.LOGGER.error("Fluid source debit suspended: request={}, target={}, remaining={}",
+                sequence, destination, sourceDebitPending, error);
+    }
+
+    /** 管理员核验并完成源端实际扣量后确认；此方法不补扣或再次对外输出。 */
+    public void confirmSourceSettled(UUID expected) {
+        if (expected == null || !expected.equals(sequence) || sourceDebitPending <= 0) {
+            throw new IllegalStateException("Stale source debit confirmation");
+        }
+        sourceDebitPending = 0;
+        sourceDebitUnknown = false;
+        if (receiptKnown) clear();
+        changed.run();
     }
 
     private long handoff(ItemStack template, FluidStack fluidTemplate, long requested,
@@ -133,7 +216,8 @@ public final class OutputCustody {
 
     /** 管理员已在两端核验实际接收量；剩余仍留本机，不能由命令直接发给玩家或生成掉落。 */
     public void resolve(UUID expected, long accepted) {
-        if (executing || invalid != null || sequence == null || !sequence.equals(expected)
+        if (executing || invalid != null || sourceDebitPending > 0 || sourceDebitUnknown
+                || sequence == null || !sequence.equals(expected)
                 || resolved || accepted < 0 || accepted > amount) {
             throw new IllegalStateException("Stale or invalid output resolution");
         }
@@ -149,7 +233,7 @@ public final class OutputCustody {
     }
 
     public FluidStack recoveredFluid() {
-        return invalid == null && resolved && !fluid.isEmpty() ? fluid.copyWithAmount((int) Math.min(Integer.MAX_VALUE, amount)) : FluidStack.EMPTY;
+        return invalid == null && sourceDebitPending == 0 && !sourceDebitUnknown && resolved && !fluid.isEmpty() ? fluid.copyWithAmount((int) Math.min(Integer.MAX_VALUE, amount)) : FluidStack.EMPTY;
     }
 
     /** 已知余量尝试回到本机；回填执行抛错后同样转为未知，不反复补偿。 */
@@ -186,6 +270,9 @@ public final class OutputCustody {
         failure = "";
         destination = "";
         resolved = false;
+        sourceDebitPending = 0;
+        sourceDebitUnknown = false;
+        receiptKnown = false;
         changed.run();
     }
 
@@ -193,12 +280,17 @@ public final class OutputCustody {
         if (invalid != null) return invalid.copy();
         var tag = new CompoundTag();
         if (sequence() == null) return tag;
-        tag.putInt("version", 1);
+        tag.putInt("version", sourceDebitPending > 0 || sourceDebitUnknown ? 2 : 1);
         tag.putUUID("sequence", sequence);
         tag.putLong("amount", amount);
         tag.putString("destination", destination);
         tag.putString("failure", failure);
         tag.putBoolean("resolved", resolved);
+        if (sourceDebitPending > 0 || sourceDebitUnknown) {
+            tag.putLong("source_debit_pending", sourceDebitPending);
+            tag.putBoolean("source_debit_unknown", sourceDebitUnknown);
+            tag.putBoolean("receipt_known", receiptKnown);
+        }
         if (!item.isEmpty()) tag.put("item", item.save(provider));
         if (!fluid.isEmpty()) tag.put("fluid", fluid.save(provider));
         return tag;
@@ -220,8 +312,9 @@ public final class OutputCustody {
         clear();
         if (tag.isEmpty()) return;
         try {
-            if (!Set.of("version", "sequence", "amount", "destination", "failure", "resolved", "item", "fluid")
-                    .containsAll(tag.getAllKeys()) || !tag.contains("version", Tag.TAG_INT) || tag.getInt("version") != 1
+            if (!Set.of("version", "sequence", "amount", "destination", "failure", "resolved", "item", "fluid",
+                    "source_debit_pending", "source_debit_unknown", "receipt_known")
+                    .containsAll(tag.getAllKeys()) || !tag.contains("version", Tag.TAG_INT) || (tag.getInt("version") != 1 && tag.getInt("version") != 2)
                     || !tag.hasUUID("sequence") || !tag.contains("amount", Tag.TAG_LONG) || tag.getLong("amount") <= 0
                     || !tag.contains("destination", Tag.TAG_STRING) || !tag.contains("failure", Tag.TAG_STRING)
                     || !tag.contains("resolved", Tag.TAG_BYTE) || tag.getByte("resolved") < 0 || tag.getByte("resolved") > 1
@@ -242,6 +335,21 @@ public final class OutputCustody {
             destination = tag.getString("destination");
             failure = tag.getString("failure");
             resolved = tag.getBoolean("resolved");
+            if (tag.getInt("version") == 2) {
+                if (!tag.contains("source_debit_pending", Tag.TAG_LONG)
+                        || tag.getLong("source_debit_pending") <= 0
+                        || tag.getLong("source_debit_pending") > amount
+                        || !tag.contains("source_debit_unknown", Tag.TAG_BYTE)
+                        || !tag.contains("receipt_known", Tag.TAG_BYTE) || fluid.isEmpty() || resolved) {
+                    throw new IllegalArgumentException("Invalid source debit record");
+                }
+                sourceDebitPending = tag.getLong("source_debit_pending");
+                sourceDebitUnknown = tag.getBoolean("source_debit_unknown");
+                receiptKnown = tag.getBoolean("receipt_known");
+            } else if (tag.contains("source_debit_pending") || tag.contains("source_debit_unknown")
+                    || tag.contains("receipt_known")) {
+                throw new IllegalArgumentException("Unexpected source debit fields");
+            }
         } catch (RuntimeException exception) {
             invalid = tag.copy();
             failure = "Invalid output custody; original data preserved";

@@ -200,6 +200,7 @@ public final class FactoryUpgradeStateHelper {
 		int batchMultiplier = skipState.getBatchMultiplier();
 		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 		TileEntityFactoryAccessor accessor = (TileEntityFactoryAccessor) factory;
+		factory.pbProcessor.reconcileInputWork();
 		long energyBeforeSuper = factory.energyContainer().getEnergy();
 		boolean sendUpdatePacket = batchMultiplier > 1
 				? factory.productivebeesgenesis$runSmeltingBatch(batchMultiplier, superCall)
@@ -255,6 +256,7 @@ public final class FactoryUpgradeStateHelper {
 		// 与 onUpdateServer 的 !skipPb 分支对齐：tryConnectNode 与能量注入在 super 前执行
 		factory.productivebeesgenesis$getAe2LifecycleHandler().tryConnectNode(factory);
 		factory.productivebeesgenesis$injectAe2Energy(batchMultiplier);
+		factory.pbProcessor.reconcileInputWork();
 		long energyBeforeSuper = factory.energyContainer().getEnergy();
 		boolean sendUpdatePacket = batchMultiplier > 1
 				? factory.productivebeesgenesis$runSmeltingBatch(batchMultiplier, superCall)

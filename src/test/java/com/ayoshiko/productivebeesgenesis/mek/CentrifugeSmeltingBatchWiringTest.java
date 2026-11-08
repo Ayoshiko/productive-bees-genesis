@@ -180,22 +180,32 @@ class CentrifugeSmeltingBatchWiringTest {
 				"Ae2EnergyInjector.injectEnergy(this, batchMultiplier, requiredEnergy)"),
 				"宿主必须把已计算需求传入注能器，避免再次扫描全部输入槽");
 
-		String injector = methodBody(read(AE2_ENERGY_INJECTOR),
+		String injectorSource = read(AE2_ENERGY_INJECTOR);
+		String injector = methodBody(injectorSource,
 				"public static long injectEnergy(IAe2OutputHostBase host, int batchMultiplier, long requiredEnergy)",
 				AE2_ENERGY_INJECTOR);
-		int normalizeIndex = injector.indexOf("long normalizedRequired = Math.max(0L, requiredEnergy)");
-		int shortfallIndex = injector.indexOf("Ae2EnergyMath.requiredShortfall(", normalizeIndex);
-		int extractionGuardIndex = injector.indexOf("if (toExtract <= 0L) return 0;", shortfallIndex);
-		String compactInjector = injector.replaceAll("\\s+", "");
+		assertTrue(injector.contains(
+				"extractAndCredit(host, container, transfer, grid, true, batchMultiplier, requiredEnergy)")
+				&& injector.contains(
+						"extractAndCredit(host, container, transfer, grid, false, batchMultiplier, requiredEnergy)"),
+				"Applied Flux 与 AE 原生注能必须都传递调用方提供的预计算批次需求");
+		String extraction = methodBody(injectorSource, "private static long extractAndCredit(", AE2_ENERGY_INJECTOR);
+		int normalizeIndex = extraction.indexOf("long required = Math.max(0L, requiredEnergy)");
+		int shortfallIndex = extraction.indexOf("Ae2EnergyMath.requiredShortfall(", normalizeIndex);
+		int extractionGuardIndex = extraction.indexOf("if (shortfall <= 0) return 0;", shortfallIndex);
+		int externalExtractionIndex = extraction.indexOf("transfer.beginExtract(", extractionGuardIndex);
+		String compactExtraction = extraction.replaceAll("\\s+", "");
 
-		assertTrue(normalizeIndex >= 0, "注能器必须先规范化调用方提供的批次需求");
+		assertTrue(normalizeIndex >= 0, "提取前必须规范化调用方提供的批次需求");
 		assertTrue(shortfallIndex > normalizeIndex, "活动批次必须按已有库存计算实际缺口");
-		assertTrue(compactInjector.contains(
-				"Ae2EnergyMath.requiredShortfall(currentEnergy,normalizedRequired,remainingCapacity)"),
+		assertTrue(compactExtraction.contains(
+				"Ae2EnergyMath.requiredShortfall(currentEnergy,required,capacity)"),
 				"缺口计算必须使用当前库存、批次需求和物理剩余容量");
-		assertTrue(extractionGuardIndex > shortfallIndex, "零缺口必须在访问 AE2 网格前短路");
-		assertFalse(injector.contains("productivebeesgenesis$getRequiredEnergyForBatch("),
-				"三参数入口不得重复扫描输入槽计算批次需求");
+		assertTrue(extractionGuardIndex > shortfallIndex && externalExtractionIndex > extractionGuardIndex,
+				"零缺口必须在登记请求与实际 AE2 提取前短路");
+		assertFalse(injector.contains("productivebeesgenesis$getRequiredEnergyForBatch(")
+				|| extraction.contains("productivebeesgenesis$getRequiredEnergyForBatch("),
+				"三参数入口及提取辅助方法不得重复扫描输入槽计算批次需求");
 	}
 
 	@Test

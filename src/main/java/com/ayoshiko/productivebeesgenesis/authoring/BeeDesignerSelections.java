@@ -8,6 +8,7 @@ import mekanism.api.chemical.ChemicalStack;
 import mekanism.api.MekanismAPI;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -18,6 +19,19 @@ import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
 /** 背包、内置目录与 JEI 共用的选择转换；只读取副本，不提取库存或调用能力。 */
 public final class BeeDesignerSelections {
 	private BeeDesignerSelections() {
+	}
+
+	public static JsonObject selection(Object ingredient, HolderLookup.Provider registries) {
+		if (ingredient instanceof ItemStack stack) {
+			return item(stack, registries);
+		}
+		if (ingredient instanceof FluidStack stack) {
+			return fluid(stack, registries);
+		}
+		if (ingredient instanceof ChemicalStack stack) {
+			return chemical(stack);
+		}
+		throw new IllegalArgumentException("Unsupported selection");
 	}
 
 	public static JsonObject item(ItemStack stack, HolderLookup.Provider registries) {
@@ -62,6 +76,32 @@ public final class BeeDesignerSelections {
 		requireKind(selection, "fluid");
 		return FluidStack.CODEC.parse(registries.createSerializationContext(JsonOps.INSTANCE), selection.get("stack"))
 				.getOrThrow().copyWithAmount(1);
+	}
+
+	public static String plainItemId(ItemStack stack) {
+		if (stack.isEmpty() || !stack.getComponentsPatch().isEmpty()) {
+			throw new IllegalArgumentException("designer.error.flower_components");
+		}
+		return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+	}
+
+	public static String plainFluidId(JsonObject selection, HolderLookup.Provider registries) {
+		FluidStack stack = fluid(selection, registries);
+		if (stack.isEmpty() || !stack.getComponentsPatch().isEmpty()) {
+			throw new IllegalArgumentException("designer.error.flower_components");
+		}
+		return BuiltInRegistries.FLUID.getKey(stack.getFluid()).toString();
+	}
+
+	public static JsonObject bottlerFluid(JsonObject selection, JsonObject previous, HolderLookup.Provider registries) {
+		String id = plainFluidId(selection, registries);
+		JsonObject fluid = previous == null ? new JsonObject() : previous.deepCopy();
+		fluid.remove("tag");
+		fluid.addProperty("fluid", id);
+		if (!fluid.has("amount")) {
+			fluid.addProperty("amount", 250);
+		}
+		return fluid;
 	}
 
 	public static JsonElement ingredient(JsonObject selection, HolderLookup.Provider registries, boolean exact) {

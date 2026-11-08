@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.authoring;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import net.minecraft.network.Connection;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -11,13 +12,14 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 /** 每个请求只处理一只蜂；限制实际 UTF-8 字节，低于原版服务端自定义包上限。 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID)
 public final class BeeDesignerProtocol {
 	public static final int MAX_BYTES = 28_000;
-	public static Consumer<Response> clientReceiver = response -> {};
+	static final int MAX_DEPTH = 32;
+	public static BiConsumer<Response, Connection> clientReceiver = (response, connection) -> {};
 
 	private BeeDesignerProtocol() {
 	}
@@ -41,6 +43,10 @@ public final class BeeDesignerProtocol {
 	}
 
 	static void checkDepth(String json) {
+		checkDepth(json, MAX_DEPTH);
+	}
+
+	static void checkDepth(String json, int maxDepth) {
 		int depth = 0;
 		boolean quoted = false;
 		boolean escaped = false;
@@ -57,8 +63,8 @@ public final class BeeDesignerProtocol {
 			} else if (value == '"') {
 				quoted = true;
 			} else if (value == '{' || value == '[') {
-				if (++depth > 32) {
-					throw new IllegalArgumentException("Designer JSON nesting exceeds 32 levels");
+				if (++depth > maxDepth) {
+					throw new IllegalArgumentException("Designer JSON nesting exceeds " + maxDepth + " levels");
 				}
 			} else if (value == '}' || value == ']') {
 				depth--;
@@ -118,9 +124,9 @@ public final class BeeDesignerProtocol {
 
 	@SubscribeEvent
 	public static void register(RegisterPayloadHandlersEvent event) {
-		var registrar = event.registrar("2");
+		var registrar = event.registrar("3");
 		registrar.playToServer(Request.TYPE, Request.CODEC, (payload, context) ->
 				BeeDesignerServer.handle(context.player(), payload));
-		registrar.playToClient(Response.TYPE, Response.CODEC, (payload, context) -> clientReceiver.accept(payload));
+		registrar.playToClient(Response.TYPE, Response.CODEC, (payload, context) -> clientReceiver.accept(payload, context.connection()));
 	}
 }

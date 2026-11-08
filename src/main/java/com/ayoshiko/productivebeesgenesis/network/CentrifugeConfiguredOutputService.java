@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.network;
 
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import mekanism.api.Action;
 import mekanism.api.RelativeSide;
 import mekanism.api.inventory.IInventorySlot;
@@ -25,7 +26,6 @@ import java.util.Set;
 
 /** 按 Mekanism 物品侧面配置，将离心机输入物品转移到相邻容器。 */
 final class CentrifugeConfiguredOutputService {
-	private static final int RESTORE_ATTEMPTS = 3;
 
 	private CentrifugeConfiguredOutputService() {
 	}
@@ -40,12 +40,14 @@ final class CentrifugeConfiguredOutputService {
 			return new Result(0L, targets.configuredOutputSides(), targets.handlers().size());
 		}
 
+		OutputCustody custody = OutputCustody.of(blockEntity);
 		long transferred = 0L;
 		for (IInventorySlot source : inputSlots) {
 			if (source == null || source.isEmpty()) continue;
 			for (IItemHandler target : targets.handlers()) {
-				if (source.isEmpty()) break;
-				transferred += transferToTarget(source, target);
+				if (source.isEmpty() || custody.blocked()) break;
+				transferred += transferToTarget(source, target, custody,
+						level.dimension().location() + ":" + sourcePos + ":input-return");
 			}
 		}
 		return new Result(transferred, targets.configuredOutputSides(), targets.handlers().size());
@@ -77,16 +79,17 @@ final class CentrifugeConfiguredOutputService {
 		return new Targets(configuredOutputSides, List.copyOf(handlers));
 	}
 
-	private static int transferToTarget(IInventorySlot source, IItemHandler target) {
+	static int transferToTarget(IInventorySlot source, IItemHandler target, OutputCustody custody,
+			String destination) {
+		if (custody.blocked()) return 0;
 		ItemStack sourceSnapshot = source.getStack().copy();
-		int requested = Math.max(0, sourceSnapshot.getCount());
+		int requested = sourceSnapshot.getCount();
 		if (requested <= 0) return 0;
-		ItemStack candidate = sourceSnapshot.copy();
-		candidate.setCount(requested);
 		int accepted;
 		try {
-			ItemStack simulatedRemainder = ItemHandlerHelper.insertItemStacked(target, candidate, true);
-			accepted = requested - clampRemainder(requested, simulatedRemainder);
+			ItemStack candidate = sourceSnapshot.copy();
+			ItemStack remainder = ItemHandlerHelper.insertItemStacked(target, candidate, true);
+			accepted = requested - remainderCount(sourceSnapshot, requested, remainder);
 			accepted = Math.min(accepted, source.shrinkStack(accepted, Action.SIMULATE));
 		} catch (LinkageError | RuntimeException e) {
 			LogThrottle.warn("centrifuge_input_return_local_simulate",
@@ -94,63 +97,39 @@ final class CentrifugeConfiguredOutputService {
 			return 0;
 		}
 		if (accepted <= 0) return 0;
-
-		ItemStack extractedStack = sourceSnapshot.copy();
-		int extracted;
-		try {
-			extracted = source.shrinkStack(accepted, Action.EXECUTE);
-		} catch (RuntimeException e) {
-			LogThrottle.warn("centrifuge_input_return_local_extract",
-					"从离心机输入槽提取待输出物品失败: {}", e.toString());
-			return 0;
+		// 原生槽位没有外部提交回调；先把确切快照移入保管，再允许邻居接收。
+		ItemStack extracted = sourceSnapshot.copyWithCount(accepted);
+		source.setStack(sourceSnapshot.copyWithCount(requested - accepted));
+		long handed = custody.handoffItem(extracted, destination, () -> {
+			ItemStack remainder = ItemHandlerHelper.insertItemStacked(target, extracted.copy(), false);
+			return acceptedCount(extracted, remainder);
+		});
+		int knownRemainder = accepted - (int) handed;
+		if (knownRemainder > 0) {
+			// 只返还明确未被接收的数量；未知结果由 custody 持有，绝不回填整份快照。
+			custody.retainItem(extracted.copyWithCount(knownRemainder), destination + ":known-remainder");
+			custody.recoverItem(stack -> {
+				ItemStack current = source.getStack();
+				if (!current.isEmpty() && !ItemStack.isSameItemSameComponents(current, stack)) return 0;
+				int space = Math.max(0, source.getLimit(stack) - current.getCount());
+				int restored = Math.min(space, stack.getCount());
+				if (restored > 0) source.setStack(stack.copyWithCount(current.getCount() + restored));
+				return restored;
+			});
 		}
-		extracted = Math.max(0, Math.min(accepted, extracted));
-		if (extracted <= 0) return 0;
-		extractedStack.setCount(extracted);
-
-		int remainderCount;
-		try {
-			ItemStack remainder = ItemHandlerHelper.insertItemStacked(target, extractedStack, false);
-			remainderCount = clampRemainder(extracted, remainder);
-		} catch (LinkageError | RuntimeException e) {
-			LogThrottle.warn("centrifuge_input_return_local_insert",
-					"向离心机相邻容器输出物品失败，回滚源槽: {}", e.toString());
-			remainderCount = extracted;
-		}
-		int transferred = extracted - remainderCount;
-		if (remainderCount > 0) restoreSourceSnapshot(source, sourceSnapshot, transferred);
-		return transferred;
+		return custody.blocked() && !custody.failure().isEmpty() ? 0 : (int) handed;
 	}
 
-	/** 按操作前快照恢复未送达数量；仅允许源槽恢复与日志告警，禁止世界掉落兜底。 */
-	private static void restoreSourceSnapshot(IInventorySlot source, ItemStack sourceSnapshot,
-			int transferred) {
-		int retained = Math.max(0, sourceSnapshot.getCount() - transferred);
-		ItemStack expected = retained <= 0 ? ItemStack.EMPTY : sourceSnapshot.copy();
-		if (!expected.isEmpty()) expected.setCount(retained);
-		RuntimeException lastFailure = null;
-		for (int attempt = 0; attempt < RESTORE_ATTEMPTS; attempt++) {
-			try {
-				if (matches(source.getStack(), expected)) return;
-				source.setStack(expected.copy());
-				if (matches(source.getStack(), expected)) return;
-			} catch (RuntimeException e) {
-				lastFailure = e;
-			}
+	private static int acceptedCount(ItemStack offered, ItemStack remainder) {
+		return offered.getCount() - remainderCount(offered, offered.getCount(), remainder);
+	}
+
+	private static int remainderCount(ItemStack offered, int requested, ItemStack remainder) {
+		if (remainder == null || remainder.getCount() > requested
+				|| !remainder.isEmpty() && !ItemStack.isSameItemSameComponents(offered, remainder)) {
+			throw new IllegalStateException("Invalid item insertion remainder");
 		}
-		LogThrottle.warn("centrifuge_input_return_local_restore",
-				"离心机输入返还连续 {} 次恢复源槽失败，未生成世界掉落物: {}",
-				RESTORE_ATTEMPTS, lastFailure == null ? "槽位状态校验失败" : lastFailure.toString());
-	}
-
-	private static boolean matches(ItemStack actual, ItemStack expected) {
-		if (expected.isEmpty()) return actual.isEmpty();
-		return actual.getCount() == expected.getCount()
-				&& ItemStack.isSameItemSameComponents(actual, expected);
-	}
-
-	private static int clampRemainder(int requested, ItemStack remainder) {
-		return remainder == null ? requested : Math.max(0, Math.min(requested, remainder.getCount()));
+		return remainder.isEmpty() ? 0 : remainder.getCount();
 	}
 
 	record Result(long transferred, int configuredOutputSides, int targetContainers) {

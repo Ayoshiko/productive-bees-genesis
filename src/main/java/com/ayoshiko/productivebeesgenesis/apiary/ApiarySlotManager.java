@@ -2,10 +2,12 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
 import cy.jdkdigital.productivebees.common.item.HoneyTreat;
 import cy.jdkdigital.productivebees.init.ModFluids;
 import cy.jdkdigital.productivebees.init.ModItems;
+import mekanism.api.AutomationType;
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
@@ -301,6 +303,9 @@ public class ApiarySlotManager {
 		FluidTankHelper helper = FluidTankHelper.forSideWithConfig(tile);
 		// 验证器：仅接受 PB 蜂蜜流体，拒绝其他流体自动化注入
 		fluidTank = BasicFluidTank.create(fluidTankCapacity,
+				(stack, automation) -> !tile.hasInvalidFluidData()
+						&& (automation == AutomationType.INTERNAL || !OutputCustody.of(tile).blocked()),
+				(stack, automation) -> !tile.hasInvalidFluidData(),
 				stack -> stack.getFluid() == ModFluids.HONEY.get(),
 				listener);
 		helper.addTank(fluidTank);
@@ -317,6 +322,14 @@ public class ApiarySlotManager {
 	/** 从 NBT 加载蜜蜂槽数组 — 委托至 {@link ApiarySlotSerializer} */
 	void loadBeeSlots(CompoundTag nbt) {
 		serializer.loadBeeSlots(nbt);
+	}
+
+	public boolean hasInvalidBeeData() {
+		return serializer.hasInvalidBeeData();
+	}
+
+	public boolean retryInvalidBeeData() {
+		return serializer.retryInvalidBeeData();
 	}
 
 	/** 添加容器追踪器 — 委托至 {@link ApiarySlotSerializer} */

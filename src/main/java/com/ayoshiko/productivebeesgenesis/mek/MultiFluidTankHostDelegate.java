@@ -2,7 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
@@ -42,7 +42,7 @@ public final class MultiFluidTankHostDelegate {
 	private boolean isMultiFluidModeSynced = false;
 	/** Task 6: 孤儿多流体槽 NBT — MULTI→SINGLE 降级时保留的多流体槽数据,saveAdditional 显式写出确保持久化 */
 	@Nullable
-	private CompoundTag orphanedMultiFluidTanksNbt;
+	private Tag orphanedMultiFluidTanksNbt;
 
 	/** 宿主 Level 提供器 — 用于判断客户端/服务端,不直接持有 TileEntity 引用避免循环依赖 */
 	private final Supplier<Level> levelSupplier;
@@ -98,11 +98,11 @@ public final class MultiFluidTankHostDelegate {
 		return isMultiFluidModeSynced;
 	}
 
-	public void setOrphanedMultiFluidTanksNbt(@Nullable CompoundTag nbt) {
+	public void setOrphanedMultiFluidTanksNbt(@Nullable Tag nbt) {
 		this.orphanedMultiFluidTanksNbt = nbt;
 	}
 
-	public @Nullable CompoundTag getOrphanedMultiFluidTanksNbt() {
+	public @Nullable Tag getOrphanedMultiFluidTanksNbt() {
 		return orphanedMultiFluidTanksNbt;
 	}
 

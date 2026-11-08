@@ -18,7 +18,7 @@ class Ae2NetworkCostWiringTest {
 	@Test
 	void productionPathsDoNotUseLegacyGlobalHardGate() throws Exception {
 		for (String name : new String[] {
-				"Ae2InputPuller.java", "Ae2OutputMergedPass.java", "Ae2OutputSlotPass.java",
+				"Ae2InputExecution.java", "Ae2OutputMergedPass.java", "Ae2OutputSlotPass.java",
 				"Ae2DirectItemPushSession.java", "Ae2FluidPusher.java"}) {
 			assertFalse(read(name).contains("Ae2GlobalInsertBudget.isExhausted("),
 					name + " 不得让一个网络耗尽旧全服预算后阻塞其它网络");
@@ -27,7 +27,7 @@ class Ae2NetworkCostWiringTest {
 
 	@Test
 	void exceptionalExtractAndFluidInsertStillTeachNetworkCoordinator() throws Exception {
-		String input = read("Ae2InputPuller.java").replaceAll("\\s+", " ");
+		String input = read("Ae2InputExecution.java").replaceAll("\\s+", " ");
 		assertTrue(input.contains("catch (LinkageError | RuntimeException error) { long extractCost"));
 		assertTrue(input.contains("holder.recordNetworkExtractCost(meStorage, gameTick, extractCost"));
 

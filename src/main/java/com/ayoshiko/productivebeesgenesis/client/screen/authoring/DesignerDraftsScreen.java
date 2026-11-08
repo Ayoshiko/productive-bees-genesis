@@ -78,22 +78,10 @@ final class DesignerDraftsScreen extends DesignerFormScreen {
 							status = entry.problem();
 							return;
 						}
-						busy = true;
-						DesignerProjectFiles.draft(entry.id(), document -> {
-							busy = false;
-							if (minecraft.screen == this) {
-								parent.importDocument(document);
-							}
-						}, this::failed);
+						parent.loadLocalDraft(entry.id(), this, false);
 					})).active = !busy;
 					button(x + w - 52, y, 24, Component.literal("+"), () -> {
-						busy = true;
-						DesignerProjectFiles.draft(entry.id(), document -> {
-							busy = false;
-							if (minecraft.screen == this) {
-								minecraft.setScreen(new NewBeeScreen(parent, document));
-							}
-						}, this::failed);
+						parent.loadLocalDraft(entry.id(), this, true);
 					}).active = !busy && entry.problem().isBlank()
 							&& !BeeDesignerNativeBees.contains(ResourceLocation.parse(entry.id()));
 					var archive = button(x + w - 22, y, 22, Component.literal("×"), () -> archive(entry.id()));

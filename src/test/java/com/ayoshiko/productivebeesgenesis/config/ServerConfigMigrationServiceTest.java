@@ -338,6 +338,52 @@ class ServerConfigMigrationServiceTest {
 		assertTargetContents(testTargets.targets(), originals);
 	}
 
+	@Test
+	void preparationRereadsRecoveredRealSpecsBeforeDecidingWhichPlayerValuesToKeep() throws Exception {
+		Path world = tempDir.resolve("world").resolve("serverconfig");
+		Path base = tempDir.resolve("config");
+		Path defaults = tempDir.resolve("defaultconfigs");
+		Files.createDirectories(world);
+		Files.createDirectories(base);
+		Files.createDirectories(defaults);
+		var targets = LegacyPackMigrationAssertions.defaultTargets(world);
+		var player = targets.getFirst();
+		player.current().set(ModConfig.SERVER.myriadCreationsEnabled.getPath(), false);
+		for (var target : targets) {
+			writeToml(target.path(), target.current());
+		}
+		Path rollback = player.path().resolveSibling(
+				"." + player.path().getFileName() + ".migration.rollback");
+		Files.copy(player.path(), rollback);
+		writeToml(player.path(), LegacyPackMigrationAssertions
+				.defaultTargets(world).getFirst().current());
+		Files.writeString(world.resolve(".productivebeesgenesis-server-migration.pending"), "pending\n");
+		CommentedConfig legacy = CommentedConfig.inMemory();
+		legacy.set(ModConfig.SERVER.balancePreset.getPath(), BalancePreset.CUSTOM.name());
+		legacy.set(ModConfig.SERVER.myriadCreationsEnabled.getPath(), true);
+		legacy.set(ModConfig.SERVER.mekCentrifugeSmeltingCompatEnabled.getPath(), false);
+		writeToml(world.resolve(ModConfig.LEGACY_SERVER_FILE_NAME), legacy);
+
+		ServerConfigMigrationService.prepare(world, base, defaults);
+
+		assertEquals(false, ServerConfigMigrationFiles.parse(player.path())
+				.get(ModConfig.SERVER.myriadCreationsEnabled.getPath()));
+		assertEquals(false, ServerConfigMigrationFiles.parse(targets.get(1).path())
+				.get(ModConfig.SERVER.mekCentrifugeSmeltingCompatEnabled.getPath()));
+		for (var target : targets) {
+			assertTrue(target.spec().isCorrect(ServerConfigMigrationFiles.parse(target.path())));
+		}
+		assertFalse(Files.exists(rollback));
+		assertFalse(Files.exists(world.resolve(".productivebeesgenesis-server-migration.pending")));
+		assertTrue(Files.isRegularFile(ServerConfigMigrationBackups.primaryBackup(world)));
+	}
+
+	private static void writeToml(Path path, CommentedConfig config) throws IOException {
+		try (var writer = Files.newBufferedWriter(path)) {
+			new com.electronwill.nightconfig.toml.TomlWriter().write(config, writer);
+		}
+	}
+
 	private ServerConfigMigrationService.MigrationPlan basicPlan(TestTargets targets) throws Exception {
 		CommentedConfig legacy = CommentedConfig.inMemory();
 		legacy.set("balanceProfile", BalancePreset.BASIC.name());

@@ -128,7 +128,7 @@ final class DesignerBeeFields {
 			}));
 		} else if (flower.equals("flowerTag")) {
 			flowerTag(screen, definition);
-		} else {
+		} else if (!screen.invalidField("flower", definition, "flowerResource", "object")) {
 			DesignerResourceFields.add(screen, definition.getAsJsonObject("flowerResource"), true);
 		}
 		screen.section("breeding_section");
@@ -197,7 +197,13 @@ final class DesignerBeeFields {
 			}
 			Component help = DesignerFormScreen.tr("breeding_food_help");
 			screen.button(x + 6, y, sizes[0], DesignerFormScreen.tr(actions[0]), () -> Minecraft.getInstance().setScreen(new BeeDesignerItemPicker(screen,
-					stack -> definition.addProperty("breedingItem", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))))
+					stack -> {
+						try {
+							definition.addProperty("breedingItem", BeeDesignerSelections.plainItemId(stack));
+						} catch (IllegalArgumentException invalid) {
+							screen.status = invalid.getMessage();
+						}
+					})))
 					.setTooltip(Tooltip.create(DesignerFormScreen.tr(actions[0]).copy().append("\n").append(help)));
 			screen.button(x + 10 + sizes[0], y, sizes[1], DesignerFormScreen.tr(actions[1]), () -> Minecraft.getInstance().setScreen(
 					DesignerResourcePicker.open(screen, "item_tag", value -> definition.addProperty("breedingItem", "#" + value.get("id").getAsString()))))

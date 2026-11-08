@@ -94,6 +94,52 @@ public final class WeightedAllocation {
 		return result;
 	}
 
+
+	/** 长数量仍按同一权重比例分配，余数只补一次，总数不通过 int 中转。 */
+	public static Map<ResourceLocation, Long> allocateByWeight(
+			long total, List<ResourceLocation> types, double[] weights) {
+		Map<ResourceLocation, Long> result = new java.util.LinkedHashMap<>();
+		int size = types.size();
+		if (total <= 0 || size == 0) return result;
+		if (total <= Integer.MAX_VALUE) {
+			allocateByWeight((int) total, types, weights).forEach((type, amount) -> result.put(type, amount.longValue()));
+			return result;
+		}
+		boolean valid = weights != null && weights.length == size;
+		double sum = 0;
+		if (valid) {
+			for (double weight : weights) {
+				if (!Double.isFinite(weight)) {
+					valid = false;
+					break;
+				}
+				sum += Math.max(0, weight);
+			}
+			valid &= Double.isFinite(sum) && sum > 0;
+		}
+		long[] allocated = new long[size];
+		long remaining = total;
+		for (int i = 0; i < size; i++) {
+			long count = valid ? (long) Math.floor((double) total * Math.max(0, weights[i]) / sum) : total / size;
+			allocated[i] = Math.min(remaining, Math.max(0, count));
+			remaining -= allocated[i];
+		}
+		Integer[] order = new Integer[size];
+		for (int i = 0; i < size; i++) order[i] = i;
+		if (valid) java.util.Arrays.sort(order, (left, right) -> {
+			int comparison = Double.compare(weights[right], weights[left]);
+			return comparison == 0 ? Integer.compare(left, right) : comparison;
+		});
+		long rounds = remaining / size;
+		int extra = (int) (remaining % size);
+		for (int i = 0; i < size; i++) {
+			int index = order[i];
+			long amount = allocated[index] + rounds + (i < extra ? 1 : 0);
+			if (amount > 0) result.merge(types.get(index), amount, Math::addExact);
+		}
+		return result;
+	}
+
 	private static int safeMapCapacity(int size) {
 		return (int) Math.min(1L << 30, Math.max(0L, (long) size * 2L));
 	}

@@ -26,6 +26,8 @@ import java.io.UncheckedIOException;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /** 注册表与运行中配方在服务器线程取快照，源 JSON 的 IO 只读取封闭的资源引用。 */
 public final class BeeDesignerReader {
@@ -347,6 +349,30 @@ public final class BeeDesignerReader {
 		return BeeDesignerDocument.containsBee(recipe.get(field), bee);
 	}
 
+	/** 生命周期及受管附加字段不能被“定义和配方看起来相同”绕过。 */
+	static boolean sameManagedState(JsonObject original, JsonObject current) {
+		if (!Objects.equals(original.get(BeeDesignerLifecycle.FIELD),
+				current == null ? null : current.get(BeeDesignerLifecycle.FIELD))) {
+			return false;
+		}
+		JsonElement disabled = original.has("disabled_recipes") ? original.get("disabled_recipes") : new JsonArray();
+		JsonElement currentDisabled = current != null && current.has("disabled_recipes")
+				? current.get("disabled_recipes") : new JsonArray();
+		if (!disabled.equals(currentDisabled)) {
+			return false;
+		}
+		if (current == null) {
+			return true;
+		}
+		for (var entry : current.entrySet()) {
+			if (!Set.of("baseline", "recipes", "disabled_recipes", "_editor_origin", "_editor_recovery", "machine_sources").contains(entry.getKey())
+					&& !Objects.equals(entry.getValue(), original.get(entry.getKey()))) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	public static boolean unchanged(MinecraftServer server, JsonObject original) {
 		ResourceLocation path = ResourceLocation.parse(original.get("definition_path").getAsString());
 		String raw = BeeDesignerSources.definitions.get(path);
@@ -360,7 +386,8 @@ public final class BeeDesignerReader {
 		}
 		String id = original.get("id").getAsString();
 		String managed = BeeDesignerSources.managed.get(id);
-		if (managed != null && !JsonParser.parseString(managed).getAsJsonObject().get("names").equals(original.get("names"))) {
+		JsonObject managedDocument = managed == null ? null : JsonParser.parseString(managed).getAsJsonObject();
+		if (!sameManagedState(original, managedDocument)) {
 			return false;
 		}
 		var ops = server.registryAccess().createSerializationContext(JsonOps.INSTANCE);

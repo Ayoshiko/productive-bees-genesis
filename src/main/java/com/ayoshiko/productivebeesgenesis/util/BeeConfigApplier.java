@@ -1,9 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import com.ayoshiko.productivebeesgenesis.config.ServerConfigRuntime;
 import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -14,100 +13,120 @@ import net.minecraft.util.FastColor;
 	 * 蜜蜂属性配置覆盖工具类
 	 * <p>
 	 * 被 {@link com.ayoshiko.productivebeesgenesis.mixin.BeeConfigReloadMixin} 和主类事件处理器调用。
-	 * 将 ModConfig 中的值写入 BeeReloadListener 已加载的 CompoundTag 上。
+	 * 配置事件只构造封闭快照，当前会话在游戏线程写入 BeeReloadListener 的 CompoundTag。
 	 */
 public final class BeeConfigApplier {
 
 	private BeeConfigApplier() {}
 
-	/** 应用配置覆盖到万象创世蜜蜂数据 */
+	/** 数据包重新装载后，在当前会话的游戏线程重用已发布配置。 */
 	public static void applyOverrides() {
-		// 配置未加载时跳过（首次启动时常见）
-		if (!ModConfig.areServerSpecsLoaded()) {
-			return;
+		ServerConfigRuntime.reapplyBeeOverrides();
+	}
+
+	/** 只读取配置并构造独占数据，不接触 PB 的共享蜜蜂 NBT。 */
+	public static Snapshot captureOverrides() {
+		if (!ModConfig.areServerSpecsLoaded() || !ModConfig.SERVER.myriadCreationsEnabled.get()) {
+			return new Snapshot(null);
+		}
+		var config = ModConfig.SERVER;
+		CompoundTag data = new CompoundTag();
+		// 外观
+		data.putInt("primaryColor", parseHexColor(config.primaryColor.get()));
+		data.putInt("secondaryColor", parseHexColor(config.secondaryColor.get()));
+		data.putInt("particleColor", parseHexColor(config.particleColor.get()));
+		data.putInt("glowColor", parseHexColor(config.glowColor.get()));
+		var appearance = config.beeAttributes();
+		data.putInt("tertiaryColor", appearance.tertiaryColor.get().isEmpty()
+				? data.getInt("primaryColor") : parseHexColor(appearance.tertiaryColor.get()));
+		data.putFloat("pollinatedSize", appearance.pollinatedSize.get() == 0
+				? config.size.get().floatValue() : appearance.pollinatedSize.get().floatValue());
+		data.putBoolean("useGlowLayer", appearance.useGlowLayer.get());
+		optional(data, "attackResponse", appearance.attackResponse.get().equals("none") ? "" : appearance.attackResponse.get());
+		data.putString("renderTransform", appearance.renderTransform.get());
+		ListTag immunity = new ListTag();
+		appearance.invulnerability.get().forEach(value -> immunity.add(StringTag.valueOf(value)));
+		data.put("invulnerability", immunity);
+		data.putString("renderer", appearance.renderer.get());
+		optional(data, "model", appearance.model.get());
+		optional(data, "animation", appearance.animation.get());
+		optional(data, "beeTexture", appearance.beeTexture.get());
+		data.putString("particleType", appearance.particleType.get());
+		optional(data, "nestingPreference", appearance.nestingPreference.get());
+		optional(data, "postPollination", appearance.postPollination.get().equals("none") ? "" : appearance.postPollination.get());
+		appearance.traits.forEach((key, value) -> data.putBoolean(key, value.get()));
+
+		// 授粉
+		for (String field : new String[]{"flowerItem", "flowerBlock", "flowerTag", "flowerFluid"}) {
+			data.remove(field);
+		}
+		data.putBoolean("inverseFlower", false);
+		data.putString("flowerType", appearance.flowerType.get());
+		if (!appearance.flowerTag.get().isEmpty()) {
+			String tag = appearance.flowerTag.get();
+			data.putString("flowerTag", tag.startsWith("!") ? tag.substring(1) : tag);
+			data.putBoolean("inverseFlower", tag.startsWith("!"));
+		} else if (!appearance.flowerBlock.get().isEmpty()) {
+			data.putString("flowerBlock", appearance.flowerBlock.get());
+		} else if (!appearance.flowerFluid.get().isEmpty()) {
+			data.putString("flowerFluid", appearance.flowerFluid.get());
+		} else {
+			data.putString("flowerItem", config.flowerItem.get());
 		}
 
-		// 万象创世功能被禁用时，跳过配置覆盖
-		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
-		var config = ModConfig.SERVER;
+		// PB 属性
+		data.putString("weather_tolerance", config.weatherTolerance.get());
+		data.putString("temper", config.temper.get());
+		data.putString("behavior", config.behavior.get());
+		data.putString("endurance", config.endurance.get());
+		data.putString("productivity", config.productivity.get());
 
-		// 同步获取 data 引用并修改，防止 TOCTOU 竞态
-		// （重载事件可能在 getData 之后、synchronized 之前替换数据，导致修改写入旧数据）
-		synchronized (BeeConfigApplier.class) {
+		// 基础属性
+		data.putBoolean("createComb", config.createComb.get());
+		data.putFloat("size", config.size.get().floatValue());
+		data.putFloat("speed", config.speed.get().floatValue());
+		data.putDouble("attack", config.attack.get());
+
+		// 繁殖
+		data.putString("breedingItem", config.breedingItem.get());
+		data.putInt("breedingItemCount", config.breedingItemCount.get());
+		data.putBoolean("selfbreed", config.selfbreed.get());
+
+		// 环境耐受
+		data.putBoolean("waterproof", config.waterproof.get());
+		data.putBoolean("fireproof", config.fireproof.get());
+		return new Snapshot(data);
+	}
+
+	/** 内部 NBT 不向调用方暴露；仅由当前会话在游戏线程应用。 */
+	public static final class Snapshot {
+		private final CompoundTag values;
+
+		private Snapshot(CompoundTag values) {
+			this.values = values;
+		}
+
+		public void apply() {
+			if (values == null) {
+				return;
+			}
 			CompoundTag data = BeeReloadListener.INSTANCE.getData(PBConstants.MYRIADCREATIONS_TYPE);
 			if (data == null) {
-				// 不静默返回：记录警告便于排查 BeeReloadListener 未加载或类型未注册的问题
-				DevLog.warn("config_apply", "无法获取万象创世蜜蜂数据 (BeeReloadListener 未加载或类型 {} 未注册)，跳过配置覆盖",
+				DevLog.warn("config_apply", "无法获取万象创世蜜蜂数据 (类型 {} 未注册)，跳过配置覆盖",
 						PBConstants.MYRIADCREATIONS_TYPE);
 				return;
 			}
-
-			// 外观
-			data.putInt("primaryColor", parseHexColor(config.primaryColor.get()));
-			data.putInt("secondaryColor", parseHexColor(config.secondaryColor.get()));
-			data.putInt("particleColor", parseHexColor(config.particleColor.get()));
-			data.putInt("glowColor", parseHexColor(config.glowColor.get()));
-			var appearance = config.beeAttributes();
-			data.putInt("tertiaryColor", appearance.tertiaryColor.get().isEmpty()
-					? data.getInt("primaryColor") : parseHexColor(appearance.tertiaryColor.get()));
-			data.putFloat("pollinatedSize", appearance.pollinatedSize.get() == 0
-					? config.size.get().floatValue() : appearance.pollinatedSize.get().floatValue());
-			data.putBoolean("useGlowLayer", appearance.useGlowLayer.get());
-			optional(data, "attackResponse", appearance.attackResponse.get().equals("none") ? "" : appearance.attackResponse.get());
-			data.putString("renderTransform", appearance.renderTransform.get());
-			ListTag immunity = new ListTag();
-			appearance.invulnerability.get().forEach(value -> immunity.add(StringTag.valueOf(value)));
-			data.put("invulnerability", immunity);
-			data.putString("renderer", appearance.renderer.get());
-			optional(data, "model", appearance.model.get());
-			optional(data, "animation", appearance.animation.get());
-			optional(data, "beeTexture", appearance.beeTexture.get());
-			data.putString("particleType", appearance.particleType.get());
-			optional(data, "nestingPreference", appearance.nestingPreference.get());
-			optional(data, "postPollination", appearance.postPollination.get().equals("none") ? "" : appearance.postPollination.get());
-			appearance.traits.forEach((key, value) -> data.putBoolean(key, value.get()));
-
-			// 授粉
-			for (String field : new String[]{"flowerItem", "flowerBlock", "flowerTag", "flowerFluid"}) {
-				data.remove(field);
+			for (String key : OPTIONAL_FIELDS) {
+				data.remove(key);
 			}
-			data.putBoolean("inverseFlower", false);
-			data.putString("flowerType", appearance.flowerType.get());
-			if (!appearance.flowerTag.get().isEmpty()) {
-				String tag = appearance.flowerTag.get();
-				data.putString("flowerTag", tag.startsWith("!") ? tag.substring(1) : tag);
-				data.putBoolean("inverseFlower", tag.startsWith("!"));
-			} else if (!appearance.flowerBlock.get().isEmpty()) {
-				data.putString("flowerBlock", appearance.flowerBlock.get());
-			} else if (!appearance.flowerFluid.get().isEmpty()) {
-				data.putString("flowerFluid", appearance.flowerFluid.get());
-			} else {
-				data.putString("flowerItem", config.flowerItem.get());
-			}
-
-			// PB 属性
-			data.putString("weather_tolerance", config.weatherTolerance.get());
-			data.putString("temper", config.temper.get());
-			data.putString("behavior", config.behavior.get());
-			data.putString("endurance", config.endurance.get());
-			data.putString("productivity", config.productivity.get());
-
-			// 基础属性
-			data.putBoolean("createComb", config.createComb.get());
-			data.putFloat("size", config.size.get().floatValue());
-			data.putFloat("speed", config.speed.get().floatValue());
-			data.putDouble("attack", config.attack.get());
-
-			// 繁殖
-			data.putString("breedingItem", config.breedingItem.get());
-			data.putInt("breedingItemCount", config.breedingItemCount.get());
-			data.putBoolean("selfbreed", config.selfbreed.get());
-
-			// 环境耐受
-			data.putBoolean("waterproof", config.waterproof.get());
-			data.putBoolean("fireproof", config.fireproof.get());
+			data.merge(values.copy());
 		}
 	}
+
+	private static final String[] OPTIONAL_FIELDS = {
+			"attackResponse", "model", "animation", "beeTexture", "nestingPreference", "postPollination",
+			"flowerItem", "flowerBlock", "flowerTag", "flowerFluid"
+	};
 
 	private static int parseHexColor(String hex) {
 		try {

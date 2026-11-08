@@ -105,7 +105,7 @@ class Ae2PullDecisionMinecraftTest {
 		amounts.put(iron, 40, decision);
 		decision.set(true, false, false, -1);
 		amounts.put(gold, 60, decision);
-		var entry = new Ae2InputPuller.PullEntry(iron, amounts.get(iron));
+		var entry = new Ae2InputExecution.PullEntry(iron, amounts.get(iron));
 		amounts.apply(iron, entry, true);
 		assertEquals(40, entry.remaining);
 		assertTrue(entry.unlimited);
@@ -121,7 +121,7 @@ class Ae2PullDecisionMinecraftTest {
 
 	@Test
 	void validatorResultsStayBoundToTheirSlotWithinOnePlanningPass() {
-		var entry = new Ae2InputPuller.PullEntry(AEItemKey.of(Items.IRON_INGOT), 1);
+		var entry = new Ae2InputExecution.PullEntry(AEItemKey.of(Items.IRON_INGOT), 1);
 		var acceptedCalls = new AtomicInteger();
 		var rejectedCalls = new AtomicInteger();
 		var accepted = BasicInventorySlot.at(stack -> true, stack -> {

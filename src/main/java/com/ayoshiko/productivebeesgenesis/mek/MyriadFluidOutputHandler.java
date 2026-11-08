@@ -67,6 +67,7 @@ public class MyriadFluidOutputHandler {
 	/** 每进程的流体诊断日志冷却器 — 避免流体不产出时 WARN 刷屏 */
 	private final LogThrottle[] fluidDiagThrottles;
 	private final long[] pendingFluidAmounts;
+	private Tag invalidPendingFluid;
 
 	/**
 	 * Task 3 性能优化：每 tick 缓存的流体槽满载状态
@@ -277,12 +278,9 @@ public class MyriadFluidOutputHandler {
 	}
 
 	public boolean flushPendingFluid(int processIndex) {
+		if (invalidPendingFluid != null) return false;
 		long pending = pendingFluidAmounts[processIndex];
 		if (pending <= 0L) return true;
-		if (context.suppressesUselessByproducts()) {
-			setPendingFluid(processIndex, 0L);
-			return true;
-		}
 
 		FluidStack honey = new FluidStack(ModFluids.HONEY.get(), 1);
 		if (context.productivebeesgenesis$isDirectAeOutputEnabled()) {
@@ -316,17 +314,32 @@ public class MyriadFluidOutputHandler {
 		context.productivebeesgenesis$markForSave();
 	}
 
+	public boolean hasUnresolvedState() {
+		return invalidPendingFluid != null;
+	}
+
 	public void saveAdditional(CompoundTag nbt) {
-		nbt.putLongArray(NBT_PENDING_FLUID, pendingFluidAmounts);
+		if (invalidPendingFluid != null) nbt.put(NBT_PENDING_FLUID, invalidPendingFluid.copy());
+		else nbt.putLongArray(NBT_PENDING_FLUID, pendingFluidAmounts);
 	}
 
 	public void loadAdditional(CompoundTag nbt) {
-		if (!nbt.contains(NBT_PENDING_FLUID, Tag.TAG_LONG_ARRAY)) return;
-		long[] saved = nbt.getLongArray(NBT_PENDING_FLUID);
-		int length = Math.min(saved.length, pendingFluidAmounts.length);
-		for (int i = 0; i < length; i++) {
-			pendingFluidAmounts[i] = Math.max(0L, saved[i]);
+		java.util.Arrays.fill(pendingFluidAmounts, 0);
+		invalidPendingFluid = null;
+		Tag raw = nbt.get(NBT_PENDING_FLUID);
+		if (raw == null) return;
+		if (!(raw instanceof net.minecraft.nbt.LongArrayTag values)) {
+			invalidPendingFluid = raw.copy();
+			return;
 		}
+		long[] saved = values.getAsLongArray();
+		for (int process = 0; process < saved.length; process++) {
+			if (saved[process] < 0 || process >= pendingFluidAmounts.length && saved[process] > 0) {
+				invalidPendingFluid = raw.copy();
+				return;
+			}
+		}
+		System.arraycopy(saved, 0, pendingFluidAmounts, 0, Math.min(saved.length, pendingFluidAmounts.length));
 	}
 
 	/**
@@ -348,7 +361,7 @@ public class MyriadFluidOutputHandler {
 	 * @param processIndex 进程索引（用于日志冷却）
 	 * @return 解析出的流体输出栈（非 EMPTY）
 	 */
-	private FluidStack resolveFluidOutput(ItemStack input, int processIndex) {
+	FluidStack resolveFluidOutput(ItemStack input, int processIndex) {
 		// 路径 1：万象创世蜜脾/蜜脾块 — 无 PB 配方，蜂蜜为固定副产物
 		// v13 修复：与 PB 原版蜜脾(100mB)/蜜脾块(400mB)标准对齐,4 倍比例
 		// 之前硬编码 250mB 导致：1) 蜜脾产出比 PB 原版多 150mB；2) 蜜脾块产出比 PB 原版少 150mB

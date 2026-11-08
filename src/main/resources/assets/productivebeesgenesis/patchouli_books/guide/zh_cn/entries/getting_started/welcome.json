@@ -9,6 +9,11 @@
       "text": "资源蜜蜂：创世把 Productive Bees 的蜜蜂和蜜脾接入 Mekanism 机器。第一目标是一条小型手动生产线：给一台机械蜂箱供电，把蜜脾搬进一台离心机，再取走资源。确认这条线能跑后，再学习工厂、AE2 和高倍升级。$(br2)必需依赖为 NeoForge、Productive Bees、Productive Lib 和 Mekanism；AE2、Applied Flux 与 Mekanism 扩展属于后续可选联动。"
     },
     {
+      "type": "patchouli:text",
+      "title": "指南书与版本更新",
+      "text": "用书、蜜脾与空蜂笼或空坚固蜂笼合成指南书。装有蜜蜂的笼子不能作为材料，命名等无关组件不影响材料判定。$(br2)多人游戏更新到 1.2.4 时，客户端与服务器请一起更新，确保蜜蜂编辑器通信版本一致。"
+    },
+    {
       "type": "patchouli:spotlight",
       "item": "productivebeesgenesis:mek_apiary",
       "title": "从这里开始",

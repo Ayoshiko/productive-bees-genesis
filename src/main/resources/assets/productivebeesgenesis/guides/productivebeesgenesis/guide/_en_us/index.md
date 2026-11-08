@@ -10,6 +10,8 @@ navigation:
 
 This guide starts from a player's first powered machine. Follow the quick-start path to turn a bee's comb into a useful resource, then add factories, upgrades, and AE2 automation only after the basic line works.
 
+With Patchouli installed, craft its guide book with a book, honeycomb and an **empty Bee Cage or empty Sturdy Bee Cage**. A cage containing a bee is rejected; unrelated components such as a custom name do not disqualify an empty cage. When updating multiplayer to 1.2.4, **update clients and the server together** so the bee editor uses the same communication version.
+
 ## How to use this book
 
 **Every page lives in the left navigation**: the four chapters sit at the top level — click a chapter name to expand its sub-pages.

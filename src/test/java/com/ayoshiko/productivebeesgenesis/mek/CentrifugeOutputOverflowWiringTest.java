@@ -31,7 +31,7 @@ class CentrifugeOutputOverflowWiringTest {
 				"必须能区分「减半批量无效」的种类溢出");
 		assertTrue(planner.contains("if (!sawSpace) unplaceableType = true;"),
 				"某种产物在所有槽位都找不到空间才算种类溢出");
-		assertTrue(planner.contains("int maxDeferredPerType()") && planner.contains("int slotCapacity()"),
+		assertTrue(planner.contains("long maxDeferredPerType()") && planner.contains("int slotCapacity()"),
 				"需要延迟量与单槽容量以约束隐形缓冲规模");
 		assertTrue(planner.contains("boolean placedAny()"),
 				"部分写入是延迟提交的前提");
@@ -45,7 +45,7 @@ class CentrifugeOutputOverflowWiringTest {
 		assertTrue(flusher.contains("DEFERRED") && flusher.contains("DEFERRAL_TOO_LARGE"),
 				"flush 结果需区分「已部分提交」与「延迟量超预算」");
 		assertTrue(flusher.contains(
-						"int deferralBudget = alreadyCommitted ? Integer.MAX_VALUE : Math.max(0, maxDeferredPerType);"),
+						"long deferralBudget = alreadyCommitted ? Long.MAX_VALUE : Math.max(0, maxDeferredPerType);"),
 				"输入已扣除的 pending 不再有原子性约束，应允许无限次部分排空");
 		assertTrue(flusher.contains("if (deferralBudget <= 0) {"),
 				"默认仍是原子提交：空间不足时不做任何修改");
@@ -53,21 +53,36 @@ class CentrifugeOutputOverflowWiringTest {
 				"部分提交必须只扣减实际写出的数量，剩余数量保留在 pending");
 		assertTrue(flusher.contains("lastPlanUnplaceableType = false;"),
 				"诊断信息必须每次 flush 重置，避免流体满被误判为种类溢出");
+		assertTrue(flusher.contains("return planner.placedAll() || (planner.placedAny() || direct)")
+				&& flusher.contains("inputs == 1 || planner.maxDeferredPerType() <= planner.slotCapacity()"),
+				"准备计划只能在全部放下、单输入或余量不超过一槽预算时通过容量检查");
 	}
 
 	@Test
-	@DisplayName("重试策略按失败原因分流：数量不足减半，种类溢出改延迟提交")
-	void retryStrategySplitsByFailureReason() throws Exception {
+	@DisplayName("完成批次拒收后只排空已付结果，不重选产物或再次扣费")
+	void completedRetryPreservesFrozenResults() throws Exception {
 		String helper = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/PbRecipeFlushHelper.java");
+		String processor = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/PbRecipeProcessor.java");
 
-		assertTrue(helper.contains("if (!completer.lastPlanHasUnplaceableType()) {"),
-				"仅在数量不足时继续减半重试");
-		assertTrue(helper.contains("PbDeferralBatchMath.shrinkForDeferral("),
-				"种类溢出时按延迟量线性压缩批量，而非 O(log N) 减半");
-		assertTrue(helper.contains("int budget = trySize <= 1 ? Integer.MAX_VALUE : completer.lastPlanSlotCapacity();"),
-				"单次操作必须允许无限延迟，保证机器不会卡死");
-		assertTrue(helper.contains("completer.flushPendingPbOutputsWithDeferral(processIndex, budget)"),
-				"延迟提交入口必须接线");
+		assertTrue(helper.contains(
+				"return completer.commitCompletedInput(processIndex) && completer.flushPendingPbOutputs(processIndex);"),
+				"完成批次必须先交接一次原输入，再排空原冻结结果");
+		assertFalse(helper.contains("rebuildPendingBatch(") || helper.contains("accumulatePbRecipeOutputsBatch("),
+				"已完成批次拒收不得通过减半或重新采样改变已付结果");
+		assertFalse(helper.contains("payForPlan(") || helper.contains("energyContainer().extract("),
+				"完成批次的排空重试不得再次扣费");
+		String processing = processor.substring(processor.indexOf("private boolean tryProcessPbRecipeInternal("),
+				processor.indexOf("public boolean drainCommittedPendingOutputs("));
+		int pendingGuard = processing.indexOf("if (completer.hasPaidPendingOutputs()");
+		int drain = processing.indexOf("!PbRecipeFlushHelper.flushCompleted(completer, processIndex)", pendingGuard);
+		int inputRead = processing.indexOf("ItemStack input = context.inputSlot(processIndex).getStack()");
+		assertTrue(pendingGuard >= 0 && drain > pendingGuard && inputRead > drain,
+				"处理新输入前必须先排空已付结果，拒收时暂停后续生产");
+		int freeze = processing.indexOf("completer.freezeCompletedBatch(input)");
+		int payment = processing.indexOf("completer.payForPlan(plan", freeze);
+		int delivery = processing.indexOf("if (completed > 0) PbRecipeFlushHelper.flushCompleted(", payment);
+		assertTrue(freeze >= 0 && payment > freeze && delivery > payment,
+				"正常完成路径必须先冻结结果、再付款、最后交付，拒收后保持同一批次");
 	}
 
 	@Test
@@ -100,8 +115,19 @@ class CentrifugeOutputOverflowWiringTest {
 				"持续排空必须在一次性空闲清理的门控之外");
 		assertTrue(tickHandler.contains("pbProcessor.drainCommittedPendingOutputs(0);"),
 				"基础离心机空输入分支必须继续排空 pending");
-		assertTrue(processor.contains("if (!recipeCompleters[processIndex].hasCommittedPendingOutputs()) {\n"
-						+ "\t\t\t\t\trecipeCompleters[processIndex].resetPendingRecipe();"),
-				"配方切换不得丢弃已扣除输入的产物");
+		String stateHelper = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/"
+				+ "PbRecipeProcessorStateHelper.java");
+		assertTrue(processor.contains("if (!recipeCompleters[i].hasPaidPendingOutputs()) {"),
+				"配方重载不得重置已扣输入或尚在付款／交接中的冻结结果");
+		assertTrue(processor.contains("PbRecipeProcessorStateHelper.clearPbState(")
+				&& processor.contains("PbRecipeProcessorStateHelper.resetPbState("),
+				"空闲和强制重置必须继续委托带已付缓冲保护的正式实现");
+		String clearState = stateHelper.substring(stateHelper.indexOf("static void clearPbState("),
+				stateHelper.indexOf("static void resetPbState("));
+		String resetState = stateHelper.substring(stateHelper.indexOf("static void resetPbState("),
+				stateHelper.indexOf("static boolean isPbProcessing("));
+		String paidGuard = "if (!completer.hasPaidPendingOutputs()) completer.resetPendingRecipe();";
+		assertTrue(clearState.contains(paidGuard) && resetState.contains(paidGuard),
+				"两个状态清理入口均不得丢弃已付物品、流体或未决付款");
 	}
 }

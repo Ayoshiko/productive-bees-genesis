@@ -1,17 +1,17 @@
 # 资源蜜蜂：创世
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-下载-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.2.3-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.2.4--dev-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
-![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
+![Code license](https://img.shields.io/badge/project_code-MIT-blue?style=flat-square)
 ![Java](https://img.shields.io/badge/Java-21+-red?style=flat-square)
 
 > **资源蜜蜂**与**通用机械**附属模组 — 添加了**万象创世蜜蜂**（彩虹渐变，蜜脾可随机转化为其他资源蜜蜂的蜜脾），**通用机械离心机**以及 **通用机械蜂箱** 这些机器保留Mekanism原版机器的处理逻辑、GUI 风格、侧面配置和升级体系，同时深度集成**应用能源 2**，提供产物回网，蜜脾拉取，网络供电的能力。机器还实现了以Mekanism的升级安装方式安装资源蜜蜂的升级组件，提供了高效饲养蜜蜂处理蜜脾的新方式。
 
 **语言**: [English](README.md) · [中文](README_zh.md)
 
-**1.2.3：编辑器搜索、草稿保存与万象 JEI 显示更新。** 于 2026-11-04 正式发布，支持批量应用草稿与 PB 原生蜜蜂配方编辑，修复未编辑也提示保存的问题，并继续优化生产热路径。客户端和服务端请一起更新。完整变更见 [CHANGELOG](CHANGELOG.md#123---2026-11-04)。
+**1.2.4 开发中。** 本次维护更新修复机器访问、资产恢复、编辑器行为和构建可靠性问题，当前尚未发布。变更见 [Unreleased](CHANGELOG.md#unreleased)；最近正式版本仍为 [1.2.3](CHANGELOG.md#123---2026-11-04)。
 
 **下载**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
@@ -369,7 +369,7 @@ PB 数据字段新增第三颜色、循环配色、采蜜后体型、发光层�
 
 模组内置 **KubeJS** 脚本钩子，可在运行时动态注册蜜蜂配方，无需在整合包开发阶段编写静态数据包。
 
-- 在服务端脚本（`server_scripts`）中监听 `MyriadBeeEvents.REGISTER` 事件。
+- 在服务端脚本（`server_scripts`）中监听 `MyriadBeeEvents.register` 事件。
 - 事件对象上暴露的辅助方法：
   - `addBreeding(...)` — 注册繁殖配方（亲代 1 + 亲代 2 → 子代）。
   - `addFishing(...)` — 注册钓鱼获取配方（群系列表或标签 + 概率）。
@@ -379,6 +379,10 @@ PB 数据字段新增第三颜色、循环配色、采蜜后体型、发光层�
   - `addBeeProduce(...)` — 注册高级蜂箱产出配方。
   - `addMekData(...)` — 注册 Mekanism `mek_data` 有序合成配方。
 - 通过 KubeJS 注册的配方会在 `beforeRecipeLoading` 阶段注入到原版 `RecipeManager` 的 JSON 映射中，与数据包配方共存；同时被游戏内配方缓存和 JEI 配方查看器识别。
+
+监听写法为 `MyriadBeeEvents.register(event => { ... })`。插件还提供 `MYRIAD_CREATIONS`（`productivebees:myriadcreations`）和 `PB_MOD_ID`（`productivebees`）全局常量。KubeJS 通过模组中的 `kubejs.plugins.txt` 发现插件；使用这些钩子需要安装 KubeJS 及其 Rhino 前置。
+
+**万象规则优先级：**配方 ID 未列入蜜蜂编辑器受管 custom 条目时，`productivebeesgenesis-gameplay-server.toml` 优先于原生数据、数据包和这些辅助方法声明的万象获取及蜂箱产出规则。钓鱼概率与群系、繁殖亲代、巢穴与群系、转化参数和蜂箱产物都会按 TOML 覆盖；钓鱼与巢穴生成默认关闭。受管 custom 规则保留自身参数，万象总开关仍会阻止万象获取和生产。其他蜂种以及离心机、合成辅助方法保持原有行为。同 ID 注册会替换本轮重载中的同 ID 配方。
 
 #### 扩展资源蜜蜂
 
@@ -626,7 +630,7 @@ FE 使用原生 ENERGY 页：输入给工作电池充电，输出提供蜜蜂产
 | [Jade](https://www.curseforge.com/minecraft/mc-mods/jade) | AE2 网络状态悬停显示 + 蜂箱蜜蜂数量 / 生产进度 |
 | [Iris Shaders](https://www.curseforge.com/minecraft/mc-mods/irisshaders) | 宇宙渲染光影兼容 |
 | [Just Enough Items](https://www.curseforge.com/minecraft/mc-mods/jei) | 配方查看  |
-| [KubeJS](https://www.curseforge.com/minecraft/mc-mods/kubejs) | 通过 `MyriadBeeEvents.REGISTER` 在运行时注册蜜蜂配方 |
+| [KubeJS](https://www.curseforge.com/minecraft/mc-mods/kubejs) | 通过 `MyriadBeeEvents.register` 在运行时注册蜜蜂配方 |
 | [Super Factory Manager](https://www.curseforge.com/minecraft/mc-mods/super-factory-manager) | 通过 NeoForge capability 自动化物品、流体和能量 |
 | Just Dire Things Extras | 合并 256x/1024x 机器加速，避免每个虚拟 tick 重复完整管线 |
 | Building Gadgets 2 | 客户端方块实体渲染加载时序兼容 |
@@ -771,30 +775,30 @@ FE 使用原生 ENERGY 页：输入给工作电池充电，输出提供蜜蜂产
 5. 将 **通用机械蜂箱**或其工厂变体中放入蜜蜂，在饲养槽内放入蜜蜂采蜜材料，蜜蜂生产蜜脾。
 6. 通过智能线缆等方式将离心机/蜂箱连接到 AE2 网络，启用 ME 直接输出和 FE 能量输入。
 7. 在服务端配置中调整**平衡性配置**（基础 / 悖论无限 / 自定义），控制升级等级混装、离心机产量升级行为与升级上限。
-8. （可选）通过 **KubeJS** 服务端脚本监听 `MyriadBeeEvents.REGISTER`，在运行时动态注册自定义蜜蜂配方。
+8. （可选）通过 **KubeJS** 服务端脚本监听 `MyriadBeeEvents.register`，在运行时动态注册自定义蜜蜂配方。
 
 进度系统引导前期路线：获得通用机械离心机、首次加工物品、解锁副产物销毁升级配方与终极离心机。
 
 ## 构建
 
+需要 **Java 21**、**Python 3.11+**，以及用于下载固定开发依赖和 Gradle 仓库内容的网络连接。
+
 ```bash
 git clone https://github.com/Ayoshiko/productive-bees-genesis.git
 cd productive-bees-genesis
-./gradlew build
+python3 .github/scripts/build_dependencies.py
+./gradlew build --no-daemon
 ```
 
-本地构建产物为 `build/libs/productivebeesgenesis-1.2.3.jar`。
+Windows 使用 `python`（或 `py -3`）及 `.\gradlew`。产物名称来自 [gradle.properties](gradle.properties) 的 `mod_version`；当前基线生成 `build/libs/productivebeesgenesis-1.2.4.jar`。
 
-运行 `./gradlew runClient --no-daemon` 会通过仅开发环境使用的 `devExamples` sourceSet 自动加载资源蜜蜂示例，可测试 `example:energy`、`example:hydrogen`、`example:mixed` 等蜂种。可选资源仍需安装对应模组。示例不会打入发布 JAR，`verifyReleaseArtifact` 会检查这一隔离边界。
+本地与 CI 共用 [gradle/development-dependencies.json](gradle/development-dependencies.json)，记录标准构建依赖的准确来源 URL 和 SHA-256。准备脚本下载缺失文件，从 Productive Bees 提取固定 ProductiveLib 条目，并核验已有文件；摘要不符时明确拒绝，不覆盖本地 JAR。可用 `python3 .github/scripts/build_dependencies.py --check` 离线检查。第三方 JAR 不进入 Git 或发布 JAR，来源与许可见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
 
-> 需要 **Java 21**，且需联网从 Cursemaven / Modrinth Maven 下载 Mekanism、Productive Bees、AE2 等依赖。
->
-> **开发环境依赖（`libs/` 本地 jar）**：仓库不包含 `libs/` 下的二进制 jar，全新环境编译前需手动放置：
-> `productivebees-1.21.1-13.14.0.jar`、`productivelib-1.21.1-0.2.0.jar`、`Mekanism-1.21.1-10.7.19.85.jar`、
-> `mekanism_extras-1.21.1-1.4.0.jar`、`Evolved Mekanism-1.21.1-1.2.1-fix3.jar`、`EvolvedMekanismExtras-1.21.1-1.2.1.jar`、
-> `jdte-0.5.9-alpha1.jar`、`sponge-mixin.jar`、`jei-1.21.1-neoforge-19.36.0.360.jar`、
-> `appliedenergistics2-1.21.1-19.2.17.jar`、`AppliedFlux-1.21-2.1.5-neoforge.jar`、`Jade-1.21.1-NeoForge-15.10.5.jar`、
-> `kubejs-neoforge-2101.7.2-build.368.jar`、`rhino-2101.2.7-build.85.jar`。
+Mekanism Extras 有意使用 1.4.1 编译、1.4.0 运行；JEI 使用 19.36.0.360 编译、19.39.0.368 运行。GuideME 21.1.16 的编译输入位于 `libs/`。官方 Rhino 文件使用 `libs/upstream/`，保留 `libs/` 中已有的本地构建。清单还包括当前源码使用的 JDTE／JustDireThings 和可选资源 API；这些开发输入不会提高玩家依赖下界。
+
+`./gradlew runClient --no-daemon` 通过仅开发使用的 `devExamples` sourceSet 加载资源蜜蜂示例，可选资源仍需对应模组。原生 `-PminecraftTests` 场景还需 [build.gradle](build.gradle) 中明确列出的 `run/mods` 输入及其传递依赖，标准准备清单不是完整测试整合包。示例不进入发布 JAR；生成参考与合集按当前清单同步，删除或改名的示例不会残留在后续 ZIP 中。
+
+正式分发还须通过 `verifyDistributionPermissions` 及 [PLATFORM_RELEASE.md](PLATFORM_RELEASE.md) 的来源和附件检查。已记录的权限问题未闭合时，普通开发构建仍可使用。
 
 ## 架构
 
@@ -815,7 +819,7 @@ com.ayoshiko.productivebeesgenesis/
 │   └── screen/          配置界面和通用机械离心机 GUI + 状态管理
 ├── command/            仅 OP 可用的运行时开发诊断指令
 ├── compat/             可选模组集成
-│   ├── kubejs/          KubeJS 插件 — MyriadBeeEvents.REGISTER + 配方序列化器
+│   ├── kubejs/          KubeJS 插件 — MyriadBeeEvents.register + 配方序列化器
 │   ├── mekanism_extras/ 通用机械：扩展 方块、工厂、菜单与委托
 │   ├── emextras/        进化通用机械：扩展 方块 / 方块实体注册
 │   └── mekenergistics/  Mek Energistics 安装器/目标保护
@@ -876,9 +880,7 @@ com.ayoshiko.productivebeesgenesis/
 
 ## 许可证
 
-本项目采用 **MIT 许可证**，详见 [LICENSE](LICENSE) 文件。
-
-第三方资产与代码引用详见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
+自有代码、文档、技术资源和已有效采用 MIT 的既有自有素材，在权利人可授权范围内继续采用 **MIT 许可证**。第三方代码、字体和素材遵循各自条款，历史有效授权继续保留。详见 [LICENSE](LICENSE)、[NOTICE](NOTICE) 和 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。[逐文件清单](gradle/license-manifest.json) 记录署名及尚未闭合的来源或授权；这些分发条件必须在新公开发布前处理。
 
 ## 隐私与社区
 

@@ -324,7 +324,7 @@ class Ae2InputPullerTest {
 	@Test
 	void pullerRunsFairPassBeforeUnboundedFillPass() throws Exception {
 		String source = java.nio.file.Files.readString(java.nio.file.Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java"));
+				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputExecution.java"));
 		// 公平轮 + 补齐轮的双轮结构，且补齐轮只在被截断时才跑（避免重复 SIMULATE 探测）
 		assertTrue(source.contains("int passes = typeCount > 1 ? 2 : 1;"));
 		assertTrue(source.contains("Ae2InputLaneFairness.shouldRunPass(pass, fairPassTruncated)"));

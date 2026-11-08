@@ -14,6 +14,10 @@ final class NewBeeScreen extends DesignerFormScreen {
 	private final JsonObject source;
 	private long identityRequest = -1;
 	private boolean identityReady;
+	private boolean identityStarted;
+	private int identityAttempt;
+	private int identityRounds;
+	private String requestedIdentity = "";
 
 	NewBeeScreen(BeeDesignerScreen parent) {
 		this(parent, null);
@@ -41,13 +45,9 @@ final class NewBeeScreen extends DesignerFormScreen {
 	@Override
 	protected void init() {
 		begin();
-		if (source != null && identityRequest < 0) {
-			JsonObject query = new JsonObject();
-			query.add("id", source.get("id").deepCopy());
-			JsonArray reserved = new JsonArray();
-			DesignerDraftIndex.allIds().forEach(reserved::add);
-			query.add("_copy_reserved_ids", reserved);
-			identityRequest = BeeDesignerClient.request("copy_id", query);
+		if (source != null && !identityStarted) {
+			identityStarted = true;
+			requestIdentity();
 		}
 		section("identity");
 		field("id", options, "id", "");
@@ -131,17 +131,80 @@ final class NewBeeScreen extends DesignerFormScreen {
 				|| DesignerDraftIndex.allIds().stream().anyMatch(bee -> BeeDesignerDocument.translationKey(bee).equals(key));
 	}
 
+	private void requestIdentity() {
+		try {
+			if (identityRounds >= 16) {
+				throw new IllegalArgumentException("designer.error.copy_limit");
+			}
+			java.util.Set<String> occupied = new java.util.HashSet<>(DesignerDraftIndex.allIds());
+			BeeReloadListener.INSTANCE.getData().keySet().forEach(id -> occupied.add(id.toString()));
+			JsonObject query = copyIdentityQuery(source.get("id").getAsString(), identityAttempt, occupied);
+			identityAttempt = query.get("_copy_attempt").getAsInt();
+			requestedIdentity = options.get("id").getAsString();
+			identityRequest = BeeDesignerClient.request("copy_id", query);
+			identityRounds++;
+			if (identityRequest < 0) {
+				throw new IllegalStateException("designer.error.designer_session");
+			}
+		} catch (RuntimeException exception) {
+			identityRequest = -1;
+			status = exception.getMessage() == null ? "designer.error.copy_limit" : exception.getMessage();
+		}
+	}
+
+	static JsonObject copyIdentityQuery(String source, int attempt, java.util.Collection<String> occupied) {
+		ResourceLocation previous = ResourceLocation.parse(source);
+		String path = previous.getPath();
+		String stem = previous.getNamespace() + ":" + path.substring(0, Math.min(80, path.length())) + "_copy";
+		java.util.Set<String> names = new java.util.HashSet<>();
+		occupied.forEach(id -> names.add(BeeDesignerDocument.translationKey(id)));
+		while (attempt < 4096 && names.contains(BeeDesignerDocument.translationKey(attempt == 0 ? stem : stem + "_" + (attempt + 1)))) {
+			attempt++;
+		}
+		if (attempt < 0 || attempt >= 4096) {
+			throw new IllegalArgumentException("designer.error.copy_limit");
+		}
+		JsonObject query = new JsonObject();
+		query.addProperty("id", source);
+		query.addProperty("_copy_attempt", attempt);
+		return query;
+	}
+
 	void receive(long sequence, JsonObject data) {
-		if (sequence != identityRequest) {
+		if (sequence != identityRequest || minecraft.screen != this) {
 			return;
 		}
-		options.add("id", data.get("id"));
-		identityReady = true;
+		identityRequest = -1;
+		String candidate = data.get("id").getAsString();
+		int attempt = data.get("attempt").getAsInt();
+		if (attempt < identityAttempt || attempt >= 4096) {
+			status = "designer.error.copy_limit";
+		} else if (nameExists(candidate)) {
+			identityAttempt = attempt + 1;
+			requestIdentity();
+		} else {
+			if (requestedIdentity.equals(options.get("id").getAsString())) {
+				options.addProperty("id", candidate);
+			}
+			identityReady = true;
+		}
 		rebuild();
+	}
+
+	boolean failed(long sequence, String message) {
+		if (sequence != identityRequest) {
+			return false;
+		}
+		identityRequest = -1;
+		status = message;
+		rebuild();
+		return true;
 	}
 
 	@Override
 	public void onClose() {
+		BeeDesignerClient.cancelRequest(identityRequest);
+		identityRequest = -1;
 		minecraft.setScreen(parent);
 	}
 }

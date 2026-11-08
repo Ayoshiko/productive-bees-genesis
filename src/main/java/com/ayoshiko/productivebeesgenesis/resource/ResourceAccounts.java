@@ -14,6 +14,8 @@ import java.util.UUID;
 public final class ResourceAccounts {
 	/** 初版内部容量门；满载只拒绝新建，不驱逐已有资产或凭证。 */
 	public static final int MAX_ACCOUNTS = 512;
+	static final long MAX_FILE_NBT_BYTES = 64L * 1024 * 1024;
+	private static final long STORAGE_BASE = storageBase();
 	private final Thread ownerThread = Thread.currentThread();
 	private final Map<UUID, ResourceAccount> accounts = new LinkedHashMap<>();
 	private final Runnable changed;
@@ -21,10 +23,47 @@ public final class ResourceAccounts {
 	private String persistenceFailure = "";
 	private boolean closed;
 	private long revision;
+	private final long storageLimit;
+	private long reservedStorage = STORAGE_BASE;
 
 	/** 创建空集合；changed 只允许标记保存 dirty，不执行资产交接或外部回调。 */
 	public ResourceAccounts(Runnable changed) {
+		this(changed, MAX_FILE_NBT_BYTES);
+	}
+
+	ResourceAccounts(Runnable changed, long storageLimit) {
 		this.changed = Objects.requireNonNull(changed);
+		if (storageLimit < STORAGE_BASE || storageLimit > MAX_FILE_NBT_BYTES) {
+			throw new IllegalArgumentException("Invalid resource storage budget");
+		}
+		this.storageLimit = storageLimit;
+	}
+
+	private static long storageBase() {
+		var data = new CompoundTag();
+		data.putInt("version", 1);
+		data.putLong("revision", 0);
+		data.put("accounts", new ListTag());
+		var file = new CompoundTag();
+		file.put("data", data);
+		net.minecraft.nbt.NbtUtils.addCurrentDataVersion(file);
+		return file.sizeInBytes();
+	}
+
+	long reservedStorage() { checkThread(); return reservedStorage; }
+
+	void admitStorage(ResourceAccount account, long nextBytes) {
+		long next = reservedStorage - account.storageBudget + nextBytes;
+		if (next > storageLimit) throw new IllegalStateException("Resource account save capacity reached");
+		beforeChange(account);
+		reservedStorage = next;
+		account.storageBudget = nextBytes;
+	}
+
+	void releaseStorage(ResourceAccount account) {
+		long next = ResourceAccountData.storageBudget(account) + 4L;
+		reservedStorage += next - account.storageBudget;
+		account.storageBudget = next;
 	}
 
 	/** 当前变更代际用于异步快照完成确认。 */
@@ -46,7 +85,7 @@ public final class ResourceAccounts {
 			id = UUID.randomUUID();
 		} while (accounts.containsKey(id));
 		var account = new ResourceAccount(this, id, owner, binding);
-		beforeChange();
+		admitStorage(account, ResourceAccountData.storageBudget(account) + 4L);
 		accounts.put(id, account);
 		return account;
 	}
@@ -59,8 +98,10 @@ public final class ResourceAccounts {
         if (account.binding != null || !account.available.isEmpty() || account.production != null || account.transfer != null
                 || !account.centrifugeWork.isEmpty() || !account.suspendedLanes.isEmpty()
                 || !account.suspendedTransfers.isEmpty() || !account.suspension.isEmpty()) return false;
-        beforeChange();
+        beforeChange(account);
         accounts.remove(account.id);
+        account.releaseSnapshots();
+        reservedStorage -= account.storageBudget;
         return true;
     }
 
@@ -111,7 +152,7 @@ public final class ResourceAccounts {
 		}
 	}
 
-	void beforeChange() {
+	void beforeChange(ResourceAccount account) {
 		checkThread();
 		if (preservedData != null || !persistenceFailure.isEmpty()) {
 			throw new IllegalStateException("Resource accounts are isolated: " + persistenceFailure);
@@ -119,6 +160,7 @@ public final class ResourceAccounts {
 		long next = Math.incrementExact(revision);
 		changed.run();
 		revision = next;
+		account.invalidateSnapshots();
 	}
 
 	void failPersistence(String reason) {
@@ -162,6 +204,8 @@ public final class ResourceAccounts {
 				if (result.accounts.putIfAbsent(account.id, account) != null) {
 					throw new IllegalArgumentException("Duplicate resource source identity");
 				}
+				account.storageBudget = ResourceAccountData.storageBudget(account) + 4L;
+				result.reservedStorage += account.storageBudget;
 			}
 		} catch (RuntimeException failure) {
 			result.accounts.clear();
@@ -174,6 +218,7 @@ public final class ResourceAccounts {
 	/** 关闭后拒绝旧引用；不删除账户或世界存档。 */
 	public void close() {
 		checkThread();
+		accounts.values().forEach(ResourceAccount::releaseSnapshots);
 		closed = true;
 	}
 }

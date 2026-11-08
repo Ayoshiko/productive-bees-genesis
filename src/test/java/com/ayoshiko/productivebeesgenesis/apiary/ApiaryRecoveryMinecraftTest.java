@@ -2,6 +2,8 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
+import mekanism.common.tile.component.ITileComponent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
@@ -27,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -182,6 +185,43 @@ class ApiaryRecoveryMinecraftTest {
     }
 
     @Test
+    void invalidBeeSlotsAndPendingFluidSurviveSaveAndUpgrade() {
+        var tile = tile(null);
+        var source = new CompoundTag();
+        var beeSlots = new ListTag();
+        var bee = new CompoundTag();
+        bee.putInt("slot_index", 0);
+        var entity = new CompoundTag();
+        entity.putString("id", "minecraft:bee");
+        bee.put("entity_data", entity);
+        beeSlots.add(bee);
+        beeSlots.add(bee.copy());
+        source.put(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS, beeSlots);
+        var pendingFluid = new CompoundTag();
+        pendingFluid.putLong("PendingAmount", 5_000_000_000L);
+        var template = new CompoundTag();
+        template.putString("id", "missing:fluid");
+        template.putInt("amount", 1);
+        pendingFluid.put("PendingFluid", template);
+        source.put("productivebeesgenesis_apiary_fluid", pendingFluid);
+
+        tile.nbtSerializer().loadApiaryState(source, registries());
+        assertTrue(tile.slotManager().hasInvalidBeeData());
+        assertTrue(tile.hasInvalidFluidData());
+        var saved = new CompoundTag();
+        tile.nbtSerializer().saveApiaryState(saved, registries());
+        assertEquals(beeSlots, saved.get(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS));
+        assertEquals(pendingFluid, saved.get("productivebeesgenesis_apiary_fluid"));
+        var upgrade = tile.nbtSerializer().buildUpgradeData(registries(), false, false);
+        var target = tile(null);
+        assertEquals(ApiaryNbtSerializer.UpgradeResult.APPLIED, target.nbtSerializer().applyUpgradeData(registries(), upgrade));
+        var savedAgain = new CompoundTag();
+        target.nbtSerializer().saveApiaryState(savedAgain, registries());
+        assertEquals(beeSlots, savedAgain.get(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS));
+        assertEquals(pendingFluid, savedAgain.get("productivebeesgenesis_apiary_fluid"));
+    }
+
+    @Test
     void frozenSnapshotRecoversOriginalOutputWhileUnknownRequestNeverReplays() {
         var generated = new BeeProduceProcessor.Generated(List.of(output(4, 701)), FluidStack.EMPTY, 0);
         var state = new ApiaryProductionState(2, () -> {});
@@ -212,4 +252,99 @@ class ApiaryRecoveryMinecraftTest {
         assertEquals(unknown, restored.save(registries()));
         assertThrows(IllegalStateException.class, () -> restored.begin(group));
     }
+    @Test
+    void partialUpgradeKeepsFullSourceAndSkipsResourceClaimAcrossReload() {
+        var source = tile(null);
+        source.getOutputSlots().getFirst().setStack(output(2, 7));
+        source.getOutputBuffer().accept(output(3, 19));
+        var data = source.nbtSerializer().buildUpgradeData(registries(), false, false);
+        var resource = mock(ResourceHiveHost.Upgrade.class);
+        data.resourceUpgrade = resource;
+        var target = tile(null);
+        var component = mock(ITileComponent.class);
+        doThrow(new IllegalStateException("Component restore failed after the output slots"))
+                .when(component).read(any(CompoundTag.class), any(HolderLookup.Provider.class));
+        target.addComponent(component);
+
+        target.parseUpgradeData(registries(), data);
+        assertTrue(target.upgradeRecovery().blocked());
+        assertTrue(target.upgradeRecovery().phase().startsWith("component/"));
+        assertEquals(7, target.getOutputSlots().getFirst().getCount());
+        assertEquals(data.sourceSnapshot, ((CompoundTag) target.upgradeRecovery().snapshot()).getCompound("source"));
+        verify(resource, never()).apply(any());
+        target.getOutputSlots().getFirst().setStackSize(3, mekanism.api.Action.EXECUTE);
+        assertEquals(ApiaryNbtSerializer.UpgradeResult.RETAINED, target.nbtSerializer().applyUpgradeData(registries(), data));
+        assertEquals(3, target.getOutputSlots().getFirst().getCount());
+
+        var saved = target.saveWithFullMetadata(registries());
+        var restored = tile(null);
+        restored.loadWithComponents(saved, registries());
+        assertTrue(restored.upgradeRecovery().blocked());
+        assertEquals(target.upgradeRecovery().snapshot(), restored.upgradeRecovery().snapshot());
+        assertEquals(3, restored.getOutputSlots().getFirst().getCount());
+        assertFalse(restored.onUpdateServer());
+        assertNull(restored.getUpgradeData(registries()));
+        assertThrows(IllegalStateException.class, () -> restored.upgradeRecovery().acknowledgeSettled(UUID.randomUUID()));
+        UUID request = restored.upgradeRecovery().request();
+        restored.upgradeRecovery().acknowledgeSettled(request);
+        assertFalse(restored.upgradeRecovery().blocked());
+        assertEquals(3, restored.getOutputSlots().getFirst().getCount());
+        assertEquals(data.sourceSnapshot, ((CompoundTag) restored.upgradeRecovery().snapshot()).getCompound("source"));
+        assertThrows(IllegalStateException.class, () -> restored.upgradeRecovery().acknowledgeSettled(request));
+    }
+
+    @Test
+    void sourceEncodingFailurePrecedesClearingInventoryAndPaidOutput() {
+        var source = tile(null);
+        source.getOutputSlots().getFirst().setStack(output(7, 13));
+        source.getOutputBuffer().accept(output(8, 29));
+        var before = source.getOutputBuffer().save(registries());
+        var component = mock(ITileComponent.class);
+        doThrow(new IllegalStateException("Source component encoding failed"))
+                .when(component).write(any(CompoundTag.class), any(HolderLookup.Provider.class));
+        source.addComponent(component);
+
+        assertNull(source.getUpgradeData(registries()));
+        assertEquals(13, source.getOutputSlots().getFirst().getCount());
+        assertEquals(before, source.getOutputBuffer().save(registries()));
+        assertFalse(source.upgradeRecovery().blocked());
+    }
+
+    @Test
+    void sourceAndTargetKeepOneUpgradeRequestAndSuccessfulTransferCannotReplay() {
+        var source = tile(null);
+        source.getOutputSlots().getFirst().setStack(output(9, 11));
+        source.getOutputBuffer().accept(output(10, 31));
+        var data = source.getUpgradeData(registries());
+        assertNotNull(data);
+        assertTrue(source.getOutputSlots().getFirst().isEmpty());
+        assertTrue(source.upgradeRecovery().blocked());
+        assertEquals("source_cleared", source.upgradeRecovery().phase());
+        assertNull(source.getUpgradeData(registries()));
+        var target = tile(null);
+        assertEquals(ApiaryNbtSerializer.UpgradeResult.APPLIED, target.nbtSerializer().applyUpgradeData(registries(), data));
+        assertFalse(source.upgradeRecovery().blocked());
+        assertFalse(target.upgradeRecovery().blocked());
+        assertEquals(11, target.getOutputSlots().getFirst().getCount());
+        assertEquals(31, target.getOutputBuffer().save(registries()).getList("stacks", 10)
+                .getCompound(0).getInt("productivebeesgenesis_count"));
+        target.getOutputSlots().getFirst().setStackSize(2, mekanism.api.Action.EXECUTE);
+        assertEquals(ApiaryNbtSerializer.UpgradeResult.RETAINED, target.nbtSerializer().applyUpgradeData(registries(), data));
+        assertEquals(2, target.getOutputSlots().getFirst().getCount());
+    }
+
+    @Test
+    void malformedUpgradeRecordIsPreservedAndCannotBeConfirmed() {
+        var source = tile(null);
+        var raw = net.minecraft.nbt.StringTag.valueOf("保留升级原文");
+        var saved = new CompoundTag();
+        saved.put(ApiaryUpgradeRecovery.NBT_KEY, raw);
+        source.nbtSerializer().loadApiaryState(saved, registries());
+        assertTrue(source.upgradeRecovery().blocked());
+        assertThrows(IllegalStateException.class, () -> source.upgradeRecovery().acknowledgeSettled(UUID.randomUUID()));
+        var roundtrip = new CompoundTag();
+        source.nbtSerializer().saveApiaryState(roundtrip, registries());
+        assertEquals(raw, roundtrip.get(ApiaryUpgradeRecovery.NBT_KEY));
+    }
+
 }

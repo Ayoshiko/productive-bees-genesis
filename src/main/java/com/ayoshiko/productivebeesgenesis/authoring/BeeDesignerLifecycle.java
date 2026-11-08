@@ -1,12 +1,14 @@
 package com.ayoshiko.productivebeesgenesis.authoring;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -95,6 +97,76 @@ public final class BeeDesignerLifecycle {
 		}
 	}
 
+	/** 获取路线中的全部蜂种所有者；机器按每个实际物品输出解析完整蜂蛋身份。 */
+	public static Set<String> recipeOwners(JsonObject recipe) {
+		String type = BeeDesignerDocument.text(recipe, "type", "");
+		if (BeeDesignerWorldConversions.supports(type)) {
+			return BeeDesignerWorldConversions.owners(recipe);
+		}
+		Set<String> owners = new HashSet<>();
+		if (type.equals("productivebees:bee_spawning")) {
+			for (var result : recipe.getAsJsonArray("results")) {
+				owners.add(result.getAsString());
+			}
+		} else if (BeeDesignerMachineRecipes.host(recipe) != null) {
+			for (var entry : BeeDesignerMachineRecipes.entries(recipe)) {
+				if (!entry.input() && entry.kind().equals("item")) {
+					ResourceLocation bee = BeeDesignerEggs.bee(BeeDesignerMachineRecipes.itemIdentity(entry));
+					if (bee != null) {
+						owners.add(bee.toString());
+					}
+				}
+			}
+		}
+		return Set.copyOf(owners);
+	}
+
+	/** 共享获取配方的修改或删除必须在同一批次取得所有所有者的一致声明。 */
+	static void validateSharedChanges(JsonObject original, JsonObject document,
+			Map<String, JsonObject> replacements) {
+		JsonObject before = original == null ? new JsonObject() : original.getAsJsonObject("recipes");
+		JsonObject after = document.getAsJsonObject("recipes");
+		Set<String> ids = new HashSet<>(before.keySet());
+		ids.addAll(after.keySet());
+		for (String id : ids) {
+			JsonElement previous = before.get(id);
+			JsonElement replacement = after.get(id);
+			if (Objects.equals(previous, replacement)) {
+				continue;
+			}
+			Set<String> oldOwners = previous == null ? Set.of() : recipeOwners(previous.getAsJsonObject());
+			Set<String> owners = new HashSet<>(oldOwners);
+			if (replacement != null) {
+				owners.addAll(recipeOwners(replacement.getAsJsonObject()));
+			}
+			if (owners.size() <= 1) {
+				continue;
+			}
+			JsonObject source = previous == null ? replacement.getAsJsonObject() : previous.getAsJsonObject();
+			String message = BeeDesignerWorldConversions.supports(BeeDesignerDocument.text(source, "type", ""))
+					? "designer.error.shared_conversion|" : "designer.error.shared_recipe_conflict|";
+			JsonElement finalRecipe = null;
+			for (JsonObject project : replacements.values()) {
+				JsonElement declaration = project.getAsJsonObject("recipes").get(id);
+				if (declaration != null) {
+					if (finalRecipe != null && !finalRecipe.equals(declaration)) {
+						throw new IllegalArgumentException(message + id);
+					}
+					finalRecipe = declaration;
+				}
+			}
+			Set<String> newOwners = finalRecipe == null ? Set.of() : recipeOwners(finalRecipe.getAsJsonObject());
+			owners.addAll(newOwners);
+			for (String owner : owners) {
+				JsonObject project = replacements.get(owner);
+				JsonElement expected = newOwners.contains(owner) ? finalRecipe : null;
+				if (project == null || !Objects.equals(expected, project.getAsJsonObject("recipes").get(id))) {
+					throw new IllegalArgumentException(message + id);
+				}
+			}
+		}
+	}
+
 	/** 返回实际发布内容；多蜂巢穴配方仅移除被删除的蜂种，保留其它结果。 */
 	public static JsonObject activeRecipe(JsonObject document, JsonObject recipe) {
         return activeRecipe(document, recipe, deleted(document) ? Set.of(document.get("id").getAsString()) : Set.of());
@@ -132,7 +204,17 @@ public final class BeeDesignerLifecycle {
 			}
             return null;
 		}
-        return deleted(document) ? null : recipe;
+		if (BeeDesignerMachineRecipes.host(recipe) != null) {
+			Set<String> owners = recipeOwners(recipe);
+			boolean anyRetired = owners.stream().anyMatch(retired::contains);
+			if (anyRetired && !retired.containsAll(owners)) {
+				throw new IllegalArgumentException("designer.error.shared_machine_retirement");
+			}
+			if (anyRetired) {
+				return null;
+			}
+		}
+		return deleted(document) ? null : recipe;
 	}
 
 	public static int retiredRecipes(JsonObject document) {

@@ -430,7 +430,7 @@ public final class WeightedTypeSelector {
 	 * @param type   蜜蜂类型
 	 * @param amount 产出数量
 	 */
-	public synchronized void recordOutput(ResourceLocation type, int amount) {
+	public synchronized void recordOutput(ResourceLocation type, long amount) {
 		if (type == null || amount <= 0) return;
 		Integer idx = typeIndex.get(type);
 		if (idx == null || idx >= pendingOutputs.length) return;
@@ -442,12 +442,11 @@ public final class WeightedTypeSelector {
 	 *
 	 * @param allocation 类型→数量映射
 	 */
-	public synchronized void recordOutputs(Map<ResourceLocation, Integer> allocation) {
+	public synchronized void recordOutputs(Map<ResourceLocation, ? extends Number> allocation) {
 		if (allocation == null || allocation.isEmpty()) return;
-		for (Map.Entry<ResourceLocation, Integer> e : allocation.entrySet()) {
-			ResourceLocation type = e.getKey();
-			Integer amt = e.getValue();
-			if (amt != null && amt > 0) recordOutput(type, amt);
+		for (var entry : allocation.entrySet()) {
+			Number amount = entry.getValue();
+			if (amount != null && amount.longValue() > 0) recordOutput(entry.getKey(), amount.longValue());
 		}
 	}
 

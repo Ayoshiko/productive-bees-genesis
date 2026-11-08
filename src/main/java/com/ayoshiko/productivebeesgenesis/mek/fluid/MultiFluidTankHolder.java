@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek.fluid;
 
+import mekanism.api.AutomationType;
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.common.capabilities.fluid.BasicFluidTank;
@@ -7,6 +8,7 @@ import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.NotNull;
@@ -19,6 +21,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
 
 /**
@@ -110,6 +113,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	 * 配置值 0 表示自动计算为 Math.max(1, maxTanks / 2)
 	 */
 	private final int maxTanksPerFluid;
+	private Tag unresolvedSavedData;
 
 	/**
 	 * 构造多流体槽管理器,预分配全部 maxTanks 个空槽
@@ -127,6 +131,12 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	 */
 	public MultiFluidTankHolder(int maxTanks, int tankCapacity, IContentsListener listener,
 			int maxTanksPerFluidConfig, @Nullable LongSupplier gameTimeSupplier) {
+		this(maxTanks, tankCapacity, listener, maxTanksPerFluidConfig, gameTimeSupplier, () -> true);
+	}
+
+	public MultiFluidTankHolder(int maxTanks, int tankCapacity, IContentsListener listener,
+			int maxTanksPerFluidConfig, @Nullable LongSupplier gameTimeSupplier,
+			BooleanSupplier externalExtractionAllowed) {
 		if (maxTanks < 1) {
 			throw new IllegalArgumentException("maxTanks 必须 >= 1，实际: " + maxTanks);
 		}
@@ -145,7 +155,11 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 		// 预分配 maxTanks 个空槽；监听器同时失效外部快照并转发原始 listener。
 		// output 模式:可提取不可外部插入,符合离心机输出槽语义
 		for (int i = 0; i < maxTanks; i++) {
-			tanksInOrder.add(BasicFluidTank.output(tankCapacity, this::onTankContentsChanged));
+			tanksInOrder.add(BasicFluidTank.create(tankCapacity,
+					(stack, automation) -> unresolvedSavedData == null
+							&& (automation == AutomationType.INTERNAL || externalExtractionAllowed.getAsBoolean()),
+					(stack, automation) -> unresolvedSavedData == null && automation == AutomationType.INTERNAL,
+					stack -> true, this::onTankContentsChanged));
 		}
 		this.unmodifiableTanksView = Collections.unmodifiableList(tanksInOrder);
 		this.gameTimeSupplier = gameTimeSupplier == null ? () -> 0L : gameTimeSupplier;
@@ -177,7 +191,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	 */
 	@Nullable
 	public IExtendedFluidTank getTankForInsert(FluidStack stack) {
-		if (stack.isEmpty()) {
+		if (unresolvedSavedData != null || stack.isEmpty()) {
 			return null;
 		}
 		FluidKey key = FluidKey.of(stack);
@@ -205,7 +219,7 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	 * 已有该类型映射时不扩容，避免预扫描把同一种流体占满全部槽位。
 	 */
 	public void reserveTankForType(FluidStack stack) {
-		if (stack.isEmpty()) return;
+		if (unresolvedSavedData != null || stack.isEmpty()) return;
 		FluidKey key = FluidKey.of(stack);
 		List<IExtendedFluidTank> existing = tanksByFluidKey.get(key);
 		if (existing == null || existing.isEmpty()) {
@@ -468,4 +482,38 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	AtomicInteger getEmptyTankCountForCodec() {
 		return emptyTankCount;
 	}
+	Tag getUnresolvedSavedData() {
+		return unresolvedSavedData;
+	}
+
+	public boolean hasUnresolvedSavedData() {
+		return unresolvedSavedData != null;
+	}
+
+	void preserveUnresolvedSavedData(Tag raw) {
+		unresolvedSavedData = raw.copy();
+	}
+
+	void restoreLayout(FluidStack[] layout) {
+		if (layout.length != tanksInOrder.size()) throw new IllegalArgumentException("Invalid fluid layout");
+		unresolvedSavedData = null;
+		for (int index = 0; index < layout.length; index++) tanksInOrder.get(index).setStack(layout[index]);
+		rebuildMappings();
+	}
+
+	/** 父类已恢复规范罐库存时只重建映射，不能再把自定义副本累加一次。 */
+	public void rebuildMappings() {
+		tanksByFluidKey.clear();
+		mappedTanks.clear();
+		emptyTankCount.set(maxTanks);
+		for (IExtendedFluidTank tank : tanksInOrder) {
+			FluidStack stack = tank.getFluid();
+			if (stack.isEmpty()) continue;
+			tanksByFluidKey.computeIfAbsent(FluidKey.of(stack), key -> new CopyOnWriteArrayList<>()).add(tank);
+			mappedTanks.add(tank);
+			emptyTankCount.decrementAndGet();
+		}
+		externalTankView.invalidate();
+	}
+
 }

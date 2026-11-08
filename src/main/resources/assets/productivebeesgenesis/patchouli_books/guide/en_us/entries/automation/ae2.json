@@ -2,6 +2,7 @@
   "name": "AE2 and Logistics",
   "icon": "ae2:fluix_smart_cable",
   "category": "productivebeesgenesis:automation",
+  "flag": "mod:ae2",
   "pages": [
     { "type": "patchouli:spotlight", "item": "ae2:fluix_smart_cable", "title": "Start with one machine", "text": "Confirm the ME network has power, a free channel and storage space, then connect the machine with cable. On the Items page of side configuration enable A (AE output); enable I only when the centrifuge should fetch materials itself. A fresh connection will not immediately drain storage." },
     { "type": "patchouli:text", "title": "Where the input window lives", "text": "Open the centrifuge, click Side Configuration at the top left, switch to the Items page, then click the I button in the second cell of the left column (tooltip \"AE2 input config\"). The window floats over the machine; close it with the top-left x or Esc (a pinned window ignores Esc)." },

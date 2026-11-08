@@ -13,7 +13,7 @@ public record PbVirtualTickPlan(int completedOperations, int remainingProgress,
 	public static PbVirtualTickPlan create(int currentProgress, int virtualTicks, int processingTime,
 			int operationsPerCycle, int availableInputs, long energyPerOperation, long availableEnergy) {
 		int required = Math.max(1, processingTime);
-		int progress = Math.max(0, Math.min(currentProgress, required - 1));
+		int progress = Math.max(0, currentProgress);
 		int ticksLeft = Math.max(0, virtualTicks);
 		int inputsLeft = Math.max(0, availableInputs);
 		int maxOperations = Math.max(1, operationsPerCycle);
@@ -23,6 +23,10 @@ public record PbVirtualTickPlan(int completedOperations, int remainingProgress,
 		int executed = 0;
 		long used = 0L;
 
+		if (progress >= required && inputsLeft > 0) {
+			// 旧工作已付到完成点；速度变化不能把它退回一刻后再收费。
+			return new PbVirtualTickPlan(Math.min(maxOperations, inputsLeft), 0, 0, 0L);
+		}
 		if (ticksLeft == 0 || inputsLeft == 0) {
 			return new PbVirtualTickPlan(0, progress, 0, 0L);
 		}

@@ -112,11 +112,14 @@ final class DesignerRecycleScreen extends DesignerFormScreen {
 				rows.add(new Row("", (x, y, w) -> {
 					int cell = (w - 12) / 3;
 					button(x, y, cell, tr("restore_draft"), () -> restoreDraft(archived)).active = !busy && entry.problem().isBlank();
-					button(x + cell + 6, y, cell, tr("copy_short"), () -> DesignerProjectFiles.recycledDraft(archived.token(), document -> {
-						if (minecraft.screen == this) {
-							minecraft.setScreen(new NewBeeScreen(parent, document));
-						}
-					}, this::failed)).active = !busy && entry.problem().isBlank();
+					button(x + cell + 6, y, cell, tr("copy_short"), () -> {
+						var identity = parent.editIdentity();
+						DesignerProjectFiles.recycledDraft(archived.token(), document -> {
+							if (parent.currentEdit(identity)) {
+								minecraft.setScreen(new NewBeeScreen(parent, document));
+							}
+						}, this::failed);
+					}).active = !busy && entry.problem().isBlank();
 					button(x + (cell + 6) * 2, y, cell, tr("recycle_delete_local"), () -> deleteDraft(archived)).active = !busy;
 				}, 20, true));
 				note("", Component.translatable("designer.draft_modified", DATE.format(Instant.ofEpochMilli(entry.modified()))).append(" · " + entry.id()));
@@ -163,7 +166,12 @@ final class DesignerRecycleScreen extends DesignerFormScreen {
 
 	private void restorePending(String id) {
 		busy = true;
+		var identity = parent.editIdentity();
 		DesignerProjectFiles.draft(id, document -> {
+			if (!parent.currentEdit(identity)) {
+				busy = false;
+				return;
+			}
 			if (BeeDesignerLifecycle.purged(document)) {
 				failed("designer.error.recycle_not_restorable");
 				return;
@@ -172,7 +180,7 @@ final class DesignerRecycleScreen extends DesignerFormScreen {
 			DesignerProjectFiles.saveDraft(restored.toString(), () -> {
 				DesignerDraftIndex.saved(restored);
 				busy = false;
-				if (minecraft.screen == this) {
+				if (parent.currentEdit(identity)) {
 					parent.importDocument(restored);
 				}
 			}, this::failed);

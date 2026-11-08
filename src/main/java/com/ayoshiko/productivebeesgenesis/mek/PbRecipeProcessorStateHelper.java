@@ -6,6 +6,7 @@ import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import java.util.List;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.inventory.container.MekanismContainer;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
@@ -80,7 +81,7 @@ final class PbRecipeProcessorStateHelper {
 		pbProcessingTime[processIndex] = 0;
 		cachedPbRecipes[processIndex] = null;
 		// v2.0.9 修复产物锁定 bug：清除 PB 状态时同步重置 completer
-		if (!completer.hasCommittedPendingOutputs()) completer.resetPendingRecipe();
+		if (!completer.hasPaidPendingOutputs()) completer.resetPendingRecipe();
 		// 关闭该进程的激活位，防止进度箭头残留
 		context.setPbActiveState(false, processIndex);
 	}
@@ -94,7 +95,7 @@ final class PbRecipeProcessorStateHelper {
 		pbProcessingTime[processIndex] = 0;
 		cachedPbRecipes[processIndex] = null;
 		// v2.0.9 修复产物锁定 bug：重置 PB 状态时同步重置 completer
-		if (!completer.hasCommittedPendingOutputs()) completer.resetPendingRecipe();
+		if (!completer.hasPaidPendingOutputs()) completer.resetPendingRecipe();
 	}
 
 	/** 检查指定进程是否正在处理PB配方 */
@@ -156,6 +157,9 @@ final class PbRecipeProcessorStateHelper {
 	/** 加载PB配方处理状态（兼容旧存档仅含 pb_progress 的情形） */
 	static void loadAdditional(@NotNull CompoundTag nbt, int[] pbOperatingTicks,
 			boolean[] pbProcessing, int[] pbProcessingTime) {
+		java.util.Arrays.fill(pbOperatingTicks, 0);
+		java.util.Arrays.fill(pbProcessing, false);
+		java.util.Arrays.fill(pbProcessingTime, 0);
 		if (nbt.contains("productivebeesgenesis_pb_progress", Tag.TAG_INT_ARRAY)) {
 			int[] saved = nbt.getIntArray("productivebeesgenesis_pb_progress");
 			System.arraycopy(saved, 0, pbOperatingTicks, 0, Math.min(pbOperatingTicks.length, saved.length));
@@ -168,6 +172,68 @@ final class PbRecipeProcessorStateHelper {
 		if (nbt.contains("productivebeesgenesis_pb_processing_time", Tag.TAG_INT_ARRAY)) {
 			int[] saved = nbt.getIntArray("productivebeesgenesis_pb_processing_time");
 			System.arraycopy(saved, 0, pbProcessingTime, 0, Math.min(pbProcessingTime.length, saved.length));
+		}
+	}
+
+
+	/** 正在付费的周期拥有完整输入身份与原配方；缓存重载不能改变这份工作的产物。 */
+	static final class PaidWork {
+		final ItemStack input;
+		final boolean myriad;
+		final int baseTicks;
+		final CompoundTag recipeSnapshot;
+		final RecipeHolder<CentrifugeRecipe> recipe;
+
+		private PaidWork(ItemStack input, boolean myriad, int baseTicks, CompoundTag recipeSnapshot,
+				RecipeHolder<CentrifugeRecipe> recipe) {
+			this.input = input.copyWithCount(1);
+			this.myriad = myriad;
+			this.baseTicks = baseTicks;
+			this.recipeSnapshot = recipeSnapshot;
+			this.recipe = recipe;
+		}
+
+		static PaidWork create(ItemStack input, RecipeHolder<CentrifugeRecipe> recipe, int baseTicks,
+				HolderLookup.Provider provider) {
+			CompoundTag snapshot = PbCentrifugeRecipeSnapshot.capture(recipe, provider);
+			return new PaidWork(input, false, baseTicks, snapshot,
+					PbCentrifugeRecipeSnapshot.restore(snapshot, input, provider));
+		}
+
+		static PaidWork myriad(ItemStack input, int baseTicks) {
+			return new PaidWork(input, true, baseTicks, null, null);
+		}
+
+		boolean matches(ItemStack current) {
+			return ItemStack.isSameItemSameComponents(input, current);
+		}
+
+		CompoundTag save(HolderLookup.Provider provider) {
+			CompoundTag tag = new CompoundTag();
+			tag.put("input", input.save(provider));
+			tag.putInt("base_ticks", baseTicks);
+			tag.putBoolean("myriad", myriad);
+			if (recipeSnapshot != null) tag.put("recipe", recipeSnapshot.copy());
+			return tag;
+		}
+
+		static PaidWork load(CompoundTag tag, HolderLookup.Provider provider) {
+			if (!java.util.Set.of("process", "input", "base_ticks", "myriad", "recipe").containsAll(tag.getAllKeys())
+					|| !tag.contains("input", Tag.TAG_COMPOUND) || !tag.contains("base_ticks", Tag.TAG_INT)
+					|| tag.getInt("base_ticks") < 0 || !tag.contains("myriad", Tag.TAG_BYTE))
+				throw new IllegalArgumentException("Invalid paid centrifuge work");
+			ItemStack input = ItemStack.parse(provider, tag.getCompound("input")).orElseThrow();
+			if (input.getCount() != 1) throw new IllegalArgumentException("Invalid paid input identity");
+			boolean myriad = tag.getBoolean("myriad");
+			if (myriad) {
+				if (tag.contains("recipe") || !MyriadCreationsEventHandler.isMyriadCreationsItem(input))
+					throw new IllegalArgumentException("Invalid myriad work");
+				return myriad(input, tag.getInt("base_ticks"));
+			}
+			if (!tag.contains("recipe", Tag.TAG_COMPOUND)) throw new IllegalArgumentException("Missing paid recipe");
+			CompoundTag snapshot = tag.getCompound("recipe").copy();
+			return new PaidWork(input, false, tag.getInt("base_ticks"), snapshot,
+					PbCentrifugeRecipeSnapshot.restore(snapshot, input, provider));
 		}
 	}
 

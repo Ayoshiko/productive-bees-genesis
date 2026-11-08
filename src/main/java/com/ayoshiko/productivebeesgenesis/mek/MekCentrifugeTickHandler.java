@@ -189,6 +189,7 @@ class MekCentrifugeTickHandler {
 
 		// super前保存能量，用于计算总消耗（SMELTING + PB），与工厂版逻辑保持一致
 		var energyContainer = tile.accessor().productivebeesgenesis$getEnergyContainer();
+		pbProcessor.reconcileInputWork();
 		long energyBefore = energyContainer.getEnergy();
 
 		// SMELTING 的首个真实 tick 与额外虚拟 tick 共享一次账本提交；

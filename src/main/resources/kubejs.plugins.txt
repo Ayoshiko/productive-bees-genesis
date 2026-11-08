@@ -1,0 +1,1 @@
+com.ayoshiko.productivebeesgenesis.compat.kubejs.ProductiveBeesGenesisKubeJSPlugin

@@ -9,8 +9,7 @@
 	 *   <li>着色器与渲染类型（{@code CosmicShaders}、{@code CosmicRenderTypes}）</li>
 	 *   <li>几何加载器（{@code AbstractMaskGeometryLoader}、{@code GeometryLoaderCosmic}、{@code
 	 * GeometryLoaderHell}、{@code GeometryLoaderHalo}）</li>
-	 *   <li>视角模型接口与工具（{@code PerspectiveModel}、{@code PerspectiveModelState}、{@code RenderUtils}、{@code
-	 * TransformUtils}）</li>
+	 *   <li>视角模型接口与工具（{@code PerspectiveModel}、{@code WrappedItemModel}、{@code RenderUtils}）</li>
 	 * </ol>
 	 */
 @ParametersAreNonnullByDefault

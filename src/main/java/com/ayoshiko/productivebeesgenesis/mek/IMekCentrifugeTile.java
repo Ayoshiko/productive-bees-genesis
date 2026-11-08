@@ -21,6 +21,9 @@ import net.minecraft.world.item.ItemStack;
 	 */
 public interface IMekCentrifugeTile {
 
+	/** 完整已付状态可解释且可迁移时才允许安装器索取升级数据。 */
+	boolean productivebeesgenesis$canUpgradeProduction();
+
 	/** Invalidates recipe and validation caches after the per-machine smelting mode changes. */
 	void productivebeesgenesis$onSmeltingCompatChanged();
 

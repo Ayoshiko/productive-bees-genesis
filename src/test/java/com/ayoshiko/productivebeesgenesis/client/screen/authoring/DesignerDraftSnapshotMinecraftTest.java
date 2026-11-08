@@ -11,6 +11,107 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("minecraft")
 class DesignerDraftSnapshotMinecraftTest {
 	@Test
+	void lateLoadIdentityRejectsAnotherProjectAnotherGenerationAndNewInput() {
+		JsonObject original = BeeDesignerDocument.create("test:original");
+		var identity = new BeeDesignerScreen.EditIdentity(7, original, original.toString(), null, "");
+		assertTrue(identity.matches(7, original));
+		assertFalse(identity.matches(8, original));
+		assertFalse(identity.matches(7, original.deepCopy()));
+		original.getAsJsonObject("names").addProperty("en_us", "Unsaved");
+		assertFalse(identity.matches(7, original));
+	}
+
+	@Test
+	void acceptedNormalizationKeepsGraphUndoAndPrivateJsonInput() throws ReflectiveOperationException {
+		JsonObject document = BeeDesignerDocument.create("test:receipt");
+		JsonObject definition = document.getAsJsonObject("definition");
+		JsonObject recipe = new JsonObject();
+		recipe.addProperty("type", "mbd2:machine");
+		document.getAsJsonObject("recipes").add("test:machine", recipe);
+		BeeDesignerScreen editor = new BeeDesignerScreen(true);
+		setField(editor, "document", document);
+		setField(editor, "editGeneration", 3L);
+		setField(editor, "submittedDocument", document);
+		setField(editor, "submittedGeneration", 3L);
+		setField(editor, "submittedSnapshot", document.deepCopy());
+		DesignerDraftHistory history = (DesignerDraftHistory) getField(editor, "history");
+		history.reset(document);
+		DesignerJsonScreen json = new DesignerJsonScreen(editor, definition, "pending");
+		json.restoreText("{\"size\":7}");
+		JsonObject receipt = document.deepCopy();
+		receipt.add("disabled_recipes", new JsonArray());
+		receipt.getAsJsonObject("recipes").getAsJsonObject("test:machine").addProperty("id", "test:machine");
+		receipt.addProperty("baseline", BeeDesignerDocument.fingerprint(receipt));
+
+		assertTrue(editor.acceptApplied(receipt));
+		assertSame(document, editor.editingDocument());
+		assertSame(definition, document.getAsJsonObject("definition"));
+		assertSame(recipe, document.getAsJsonObject("recipes").getAsJsonObject("test:machine"));
+		assertEquals("test:machine", recipe.get("id").getAsString());
+		assertEquals(receipt.get("baseline").getAsString(), BeeDesignerDocument.fingerprint(document));
+		assertTrue(history.canUndo());
+		JsonObject recovery = DesignerDraftSnapshot.capture(editor, json, document).getAsJsonArray("_editor_recovery").get(0).getAsJsonObject();
+		assertEquals("{\"size\":7}", recovery.get("text").getAsString());
+		var commit = DesignerJsonScreen.class.getDeclaredMethod("commitChanges");
+		commit.setAccessible(true);
+		assertEquals(true, commit.invoke(json));
+		assertSame(definition, document.getAsJsonObject("definition"));
+		assertEquals(7, definition.get("size").getAsInt());
+		definition.addProperty("size", 9);
+		assertEquals(9, editor.editingDocument().getAsJsonObject("definition").get("size").getAsInt());
+		setField(editor, "editGeneration", 4L);
+		assertFalse(editor.acceptApplied(receipt));
+		assertEquals(9, definition.get("size").getAsInt());
+	}
+
+	@Test
+	void normalizationDoesNotOverwritePostSubmitFieldsOrReplaceNestedArrays() {
+		JsonObject current = BeeDesignerDocument.create("test:edited");
+		JsonObject node = new JsonObject();
+		node.addProperty("amount", 1);
+		JsonArray outputs = new JsonArray();
+		outputs.add(node);
+		current.add("outputs", outputs);
+		JsonObject submitted = current.deepCopy();
+		JsonObject normalized = current.deepCopy();
+		normalized.getAsJsonArray("outputs").get(0).getAsJsonObject().addProperty("unit", "FE");
+		normalized.getAsJsonObject("names").addProperty("en_us", "Server");
+		current.getAsJsonObject("names").addProperty("en_us", "Later local");
+		BeeDesignerScreen.mergeNormalized(current, submitted, normalized);
+		assertSame(outputs, current.getAsJsonArray("outputs"));
+		assertSame(node, outputs.get(0));
+		assertEquals("FE", node.get("unit").getAsString());
+		assertEquals("Later local", current.getAsJsonObject("names").get("en_us").getAsString());
+	}
+
+	@Test
+	void largeLocalCatalogUsesBoundedCopyNegotiationInsteadOfUploadingIds() {
+		java.util.List<String> occupied = new java.util.ArrayList<>();
+		occupied.add("test:source_copy");
+		occupied.add("test:source_copy_2");
+		for (int index = 2; index < 4096; index++) {
+			occupied.add("test:" + "long_name_".repeat(8) + index);
+		}
+		JsonObject request = NewBeeScreen.copyIdentityQuery("test:source", 0, occupied);
+		assertEquals(2, request.get("_copy_attempt").getAsInt());
+		assertEquals(java.util.Set.of("id", "_copy_attempt"), request.keySet());
+		assertDoesNotThrow(() -> com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerProtocol.checkSize(request.toString()));
+		assertTrue(request.toString().length() < 100);
+	}
+
+	private static void setField(BeeDesignerScreen editor, String name, Object value) throws ReflectiveOperationException {
+		var field = BeeDesignerScreen.class.getDeclaredField(name);
+		field.setAccessible(true);
+		field.set(editor, value);
+	}
+
+	private static Object getField(BeeDesignerScreen editor, String name) throws ReflectiveOperationException {
+		var field = BeeDesignerScreen.class.getDeclaredField(name);
+		field.setAccessible(true);
+		return field.get(editor);
+	}
+
+	@Test
 	void migrationFailureRetainsConcreteCauseAndLiteralSeparators() {
 		var migration = DesignerFormScreen.statusMessage("designer.error.migration_invalid|productivebees:aka_gem|designer.error.operation_detail|flowerItem: unknown item beebeeblock:aka_cube");
 		var translated = (net.minecraft.network.chat.contents.TranslatableContents) migration.getContents();

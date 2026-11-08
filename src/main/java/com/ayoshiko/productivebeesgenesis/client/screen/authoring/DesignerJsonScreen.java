@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerFieldTypes;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -453,6 +454,15 @@ final class DesignerJsonScreen extends DesignerFormScreen {
 	private boolean commitChanges() {
 		try {
 			JsonObject parsed = DesignerJsonCodec.parse(text);
+			if (value.has("schema_version") && parsed.has("definition")) {
+				BeeDesignerFieldTypes.validateDefinition(parsed.getAsJsonObject("definition"));
+			} else if (value.has("createComb") || value.has("primaryColor") || value.has("flowerItem")) {
+				BeeDesignerFieldTypes.validateDefinition(parsed);
+			}
+			BeeDesignerScreen.mergeNormalized(parsed, com.google.gson.JsonParser.parseString(original), value);
+			if (value.has("baseline")) {
+				parsed.add("baseline", value.get("baseline").deepCopy());
+			}
 			JsonElement recovery = value.has("_editor_recovery") ? value.get("_editor_recovery").deepCopy() : null;
 			value.keySet().clear();
 			parsed.entrySet().forEach(entry -> value.add(entry.getKey(), entry.getValue()));

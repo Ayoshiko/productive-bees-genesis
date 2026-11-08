@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.authoring;
 
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -23,6 +22,9 @@ final class BeeDesignerImportBatch {
 	private final Map<String, JsonObject> documents = new LinkedHashMap<>();
 	private final Map<String, JsonObject> originals = new LinkedHashMap<>();
 	private final Map<String, JsonObject> managedBaselines = new LinkedHashMap<>();
+	private final Map<String, String> managedSources = new LinkedHashMap<>();
+	private final Map<String, String> requestFingerprints = new LinkedHashMap<>();
+	private final Map<String, String> requestBaselines = new LinkedHashMap<>();
 	private int bytes;
 	private long touched = System.nanoTime();
 
@@ -108,6 +110,9 @@ final class BeeDesignerImportBatch {
 			throw new IllegalArgumentException("designer.error.export_budget");
 		}
 		documents.put(id, document);
+		managedSources.put(id, BeeDesignerSources.managed.get(id));
+		requestFingerprints.put(id, BeeDesignerDocument.fingerprint(source));
+		requestBaselines.put(id, BeeDesignerDocument.text(source, "baseline", "new"));
 	}
 
 	Map<String, String> validate(MinecraftServer server) {
@@ -119,6 +124,9 @@ final class BeeDesignerImportBatch {
 			String id = entry.getKey();
 			JsonObject document = entry.getValue();
 			JsonObject original = originals.get(id);
+			if (!Objects.equals(managedSources.get(id), BeeDesignerSources.managed.get(id))) {
+				throw new IllegalArgumentException("designer.error.draft_conflict|" + id);
+			}
 			if (original != null && !BeeDesignerReader.unchanged(server, original)) {
 				throw new IllegalArgumentException("designer.error.collection_changed");
 			}
@@ -141,7 +149,7 @@ final class BeeDesignerImportBatch {
 			if (BeeDesignerMyriad.recipesOnly(document)) {
 				BeeDesignerMyriad.validateRecipes(original, document);
 			}
-			validateShared(original, document);
+			BeeDesignerLifecycle.validateSharedChanges(original, document, documents);
 			for (var recipe : document.getAsJsonObject("recipes").entrySet()) {
 				boolean owned = original != null && original.getAsJsonObject("recipes").has(recipe.getKey());
 				if (!owned && server.getRecipeManager().byKey(ResourceLocation.parse(recipe.getKey())).isPresent()) {
@@ -163,32 +171,21 @@ final class BeeDesignerImportBatch {
 		return Map.copyOf(combined);
 	}
 
-	private void validateShared(JsonObject original, JsonObject document) {
-		JsonObject before = original == null ? new JsonObject() : original.getAsJsonObject("recipes");
-		JsonObject after = document.getAsJsonObject("recipes");
-		for (var entry : before.entrySet()) {
-			JsonObject recipe = entry.getValue().getAsJsonObject();
-			if (BeeDesignerWorldConversions.shared(recipe) && !entry.getValue().equals(after.get(entry.getKey()))) {
-				validateSharedOwners(entry.getKey(), BeeDesignerWorldConversions.owners(recipe), after.get(entry.getKey()));
-			}
-		}
-		for (var entry : after.entrySet()) {
-			JsonObject recipe = entry.getValue().getAsJsonObject();
-			if (BeeDesignerWorldConversions.shared(recipe) && !entry.getValue().equals(before.get(entry.getKey()))) {
-				validateSharedOwners(entry.getKey(), BeeDesignerWorldConversions.owners(recipe), entry.getValue());
-			}
-		}
+	String requestDigest() {
+		JsonObject request = new JsonObject();
+		request.addProperty("count", expected);
+		request.addProperty("drafts", drafts);
+		JsonObject fingerprints = new JsonObject();
+		requestFingerprints.forEach(fingerprints::addProperty);
+		request.add("documents", fingerprints);
+		JsonObject baselines = new JsonObject();
+		requestBaselines.forEach(baselines::addProperty);
+		request.add("baselines", baselines);
+		return BeeDesignerDocument.fingerprint(request);
 	}
 
-	private void validateSharedOwners(String recipeId, Set<String> owners, JsonElement replacement) {
-		Set<String> remaining = replacement == null ? Set.of() : BeeDesignerWorldConversions.owners(replacement.getAsJsonObject());
-		for (String owner : owners) {
-			JsonObject project = documents.get(owner);
-			JsonElement expected = remaining.contains(owner) ? replacement : null;
-			if (project == null || !Objects.equals(expected, project.getAsJsonObject("recipes").get(recipeId))) {
-				throw new IllegalArgumentException("designer.error.shared_conversion|" + recipeId);
-			}
-		}
+	Map<String, String> baselines() {
+		return Map.copyOf(requestBaselines);
 	}
 
 	JsonObject document(String id) {

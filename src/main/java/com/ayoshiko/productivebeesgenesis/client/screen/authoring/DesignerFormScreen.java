@@ -5,6 +5,7 @@ import net.minecraft.client.Minecraft;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerFieldTypes;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerSelections;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerEggs;
 import net.minecraft.client.gui.GuiGraphics;
@@ -20,8 +21,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.fluids.FluidStack;
-import mekanism.api.chemical.ChemicalStack;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -31,6 +30,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import com.ayoshiko.productivebeesgenesis.client.screen.authoring.DesignerFormLayout.Label;
+import com.ayoshiko.productivebeesgenesis.client.screen.authoring.DesignerFormLayout.PositionedWidget;
+import com.ayoshiko.productivebeesgenesis.client.screen.authoring.DesignerFormLayout.RecipeHeader;
+import com.ayoshiko.productivebeesgenesis.client.screen.authoring.DesignerFormLayout.RowView;
 
 /** 独立背包、固定操作区和按可见行实例化的连续滚动表单。 */
 public abstract class DesignerFormScreen extends Screen {
@@ -38,7 +41,8 @@ public abstract class DesignerFormScreen extends Screen {
 	static int FOREGROUND = 0xFFE7E9EC;
 	static int MUTED = 0xFFADB5BD;
 	static int ACCENT = 0xFFE6BD50;
-	protected final List<Row> rows = new ArrayList<>();
+	final DesignerFormLayout formLayout = new DesignerFormLayout(this);
+	protected final List<Row> rows = formLayout.rows;
 	private final java.util.Set<String> collapsedGroups = new java.util.HashSet<>();
 	private final java.util.Set<String> initializedGroups = new java.util.HashSet<>();
 	private final java.util.Map<String, String> locationGroups = new java.util.HashMap<>();
@@ -48,10 +52,7 @@ public abstract class DesignerFormScreen extends Screen {
 	protected int contentWidth;
 	protected int contentTop = 76;
 	protected String status = "";
-	private final List<Label> labels = new ArrayList<>();
-	private List<DesignerFormLayout.Band> bands = List.of();
-	private final List<Rect2i> sections = new ArrayList<>();
-	private final List<GhostTarget> targets = new ArrayList<>();
+	final DesignerGhostTargets ghosts = new DesignerGhostTargets(this);
 	protected int frameLeft;
 	protected int frameWidth;
 	protected int frameTop;
@@ -64,38 +65,25 @@ public abstract class DesignerFormScreen extends Screen {
 	private double scrollbarOffset;
 	protected int layoutWidth;
 	protected int layoutHeight;
-	private float uiScale = 1;
-	private float geometryScale = 1;
-	private int restoredSource = -1;
-	private int restoredWidth;
+	private DesignerWindowLayout.Viewport viewport = new DesignerWindowLayout.Viewport(1, 1, 0, 0, 0, 0, new DesignerWindowLayout.Bounds(0, 0, 0, 0));
 	private boolean returnButton;
 	protected int titleWidth;
-	private final DesignerTransition transition = new DesignerTransition();
+	final DesignerTransition transition = new DesignerTransition();
 	private boolean rebuilding;
 	private static boolean completingTransition;
-	private final DesignerScroll scroll = new DesignerScroll();
 	private final DesignerAutoScroll autoScroll = new DesignerAutoScroll();
 	private int autoScrollStoppedButton = -1;
-	private final Map<Integer, RowView> rowViews = new LinkedHashMap<>();
-	private final java.util.Set<GuiEventListener> scrollingControls = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-	private int[] bandOffsets = new int[]{0};
-	private int laidOutPage;
-	private boolean creatingRows;
 	private long lastScrollFrame;
 	private String markedStatus = "";
 	private int reservedStatusHeight;
 	private final Map<String, Integer> locations = new LinkedHashMap<>();
 	protected net.minecraft.client.gui.screens.Screen editorParent;
 	private String locationScope = "";
-	private int highlightedSource = -1;
-	private boolean highlightedError;
-	private long highlightUntil;
-	private final List<RecipeHeader> recipeHeaders = new ArrayList<>();
+	int highlightedSource = -1;
+	boolean highlightedError;
+	long highlightUntil;
 	private final Map<String, DesignerMotionValue> tabIndicators = new LinkedHashMap<>();
-	private DesignerOutputList.Transfer outputTransfer;
-	private Component draggedOutput = Component.empty();
-	private final java.util.NavigableSet<Integer> groupStarts = new java.util.TreeSet<>();
-	private List<GroupSurface> groupSurfaces = List.of();
+	final DesignerOutputList outputs = new DesignerOutputList(this);
 	private final DesignerFeedback feedback = new DesignerFeedback();
 
 	protected DesignerFormScreen(Component title) {
@@ -115,15 +103,15 @@ public abstract class DesignerFormScreen extends Screen {
 		if (!rebuilding) {
 			transition.enter();
 		}
-		outputTransfer = null;
+		outputs.outputTransfer = null;
 		clearWidgets();
-		rowViews.clear();
-		scrollingControls.clear();
+		formLayout.rowViews.clear();
+		formLayout.scrollingControls.clear();
 		markedStatus = "";
 		lastScrollFrame = 0;
 		rows.clear();
-		groupStarts.clear();
-		groupSurfaces = List.of();
+		formLayout.groupStarts.clear();
+		formLayout.groupSurfaces = List.of();
 		locations.clear();
 		locationGroups.clear();
 		buildingGroup = "";
@@ -131,34 +119,27 @@ public abstract class DesignerFormScreen extends Screen {
 		highlightUntil = 0;
 		highlightedError = false;
 		locationScope = "";
-		recipeHeaders.clear();
-		labels.clear();
-		bands = List.of();
-		sections.clear();
-		targets.clear();
+		formLayout.recipeHeaders.clear();
+		formLayout.labels.clear();
+		formLayout.bands = List.of();
+		formLayout.sections.clear();
+		ghosts.targets.clear();
 		popup = null;
-		double gameScale = minecraft.getWindow().getGuiScale();
-		double pixels = Math.max(1, Math.min(3, Math.round(gameScale)));
-		geometryScale = (float) Math.max(0.55, Math.min(1.15, pixels / gameScale));
-		uiScale = (float) Math.max(0.55, Math.min(1.15, pixels / gameScale * DesignerPreferences.number("ui_scale")));
-		layoutWidth = (int) Math.floor(width / uiScale);
-		layoutHeight = (int) Math.floor(height / uiScale);
-		int windowWidth = (int) Math.floor(width / geometryScale);
-		int windowHeight = (int) Math.floor(height / geometryScale);
-		int ingredientSpace = net.neoforged.fml.ModList.get().isLoaded("jei") && windowWidth >= 480
-				? Math.min(112, Math.max(60, (windowWidth - 580) / 2)) : 0;
-		var bounds = WINDOW.fit(windowWidth, windowHeight, ingredientSpace);
-		float factor = geometryScale / uiScale;
-		frameLeft = Math.round(bounds.left() * factor);
-		frameTop = Math.round(bounds.top() * factor);
-		frameWidth = Math.round(bounds.right() * factor) - frameLeft;
-		frameHeight = Math.round(bounds.bottom() * factor) - frameTop;
+		viewport = WINDOW.viewport(width, height, minecraft.getWindow().getGuiScale(),
+				DesignerPreferences.number("ui_scale"), net.neoforged.fml.ModList.get().isLoaded("jei"));
+		layoutWidth = viewport.layoutWidth();
+		layoutHeight = viewport.layoutHeight();
+		var bounds = viewport.contentBounds();
+		frameLeft = bounds.left();
+		frameTop = bounds.top();
+		frameWidth = bounds.width();
+		frameHeight = bounds.height();
 		updateStatusHeight();
 		left = frameLeft + 8;
 		contentWidth = frameWidth - 24;
 		contentTop = frameTop + 28;
 		titleWidth = frameWidth - 176;
-		inventory.layout(8, windowWidth - 16, windowHeight);
+		inventory.layout(8, viewport.windowWidth() - 16, viewport.windowHeight());
 		returnButton = !(this instanceof BeeDesignerScreen);
 		if (returnButton) {
 			addRenderableWidget(new DesignerTheme.Icon(frameLeft + 6, frameTop + 5, DesignerTheme.Symbol.BACK, this::onClose));
@@ -221,7 +202,7 @@ public abstract class DesignerFormScreen extends Screen {
 			x += w - fitted;
 		}
 		Button button = addRenderableWidget(new DesignerTheme.Action(x, y, fitted, message, action));
-		if (!creatingRows && y == footerY()) {
+		if (!formLayout.creatingRows && y == footerY()) {
 			fitFooter(button);
 		}
 		if (font.width(message) > w - 10) {
@@ -232,7 +213,7 @@ public abstract class DesignerFormScreen extends Screen {
 
 	@Override
 	protected <T extends GuiEventListener & Renderable & NarratableEntry> T addRenderableWidget(T widget) {
-		return creatingRows ? super.addWidget(widget) : super.addRenderableWidget(widget);
+		return formLayout.creatingRows ? super.addWidget(widget) : super.addRenderableWidget(widget);
 	}
 
 	void slider(int x, int y, int w, double value, java.util.function.DoubleFunction<Component> label, java.util.function.DoubleConsumer changed) {
@@ -241,7 +222,7 @@ public abstract class DesignerFormScreen extends Screen {
 
 	protected Button primaryButton(int x, int y, int w, Component message, Runnable action) {
 		Button button = addRenderableWidget(new DesignerTheme.Action(x, y, Math.max(20, w), message, action).primary());
-		if (!creatingRows && y == footerY()) {
+		if (!formLayout.creatingRows && y == footerY()) {
 			fitFooter(button);
 		}
 		return button;
@@ -307,8 +288,8 @@ public abstract class DesignerFormScreen extends Screen {
 
 	protected final void animatePage(int direction) {
 		autoScroll.stop();
-		scroll.jump(0);
-		realizeRows();
+		formLayout.scroll.jump(0);
+		formLayout.realizeRows();
 		transition.enter(direction);
 	}
 
@@ -467,6 +448,22 @@ public abstract class DesignerFormScreen extends Screen {
 		return addRenderableWidget(search);
 	}
 
+	final boolean invalidField(String label, JsonObject object, String key, String expected) {
+		var value = object.get(key);
+		if (BeeDesignerFieldTypes.matches(value, expected)
+				|| expected.equals("number") && value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
+			return false;
+		}
+		String raw = value.toString();
+		String error = "designer.error.field_type|" + key + "|" + expected;
+		rows.add(new Row(label, (x, y, w) -> {
+			Button repair = button(x, y, w, Component.literal(raw).withColor(DesignerTheme.colors().error()),
+					() -> minecraft.setScreen(new DesignerJsonScreen(this, object, tr(label).getString())));
+			repair.setTooltip(Tooltip.create(statusMessage(error).copy().append("\n" + raw).append("\n").append(tr("edit_json"))));
+		}));
+		return true;
+	}
+
 	protected void text(String label, String value, Consumer<String> changed) {
 		rows.add(new Row(label, (x, y, w) -> {
 			EditBox field = new DesignerTheme.Input(font, x + 4, y + 5, w - 8, 20, tr(label));
@@ -486,6 +483,9 @@ public abstract class DesignerFormScreen extends Screen {
 
 	protected void field(String label, JsonObject object, String key, String fallback, Runnable changed) {
 		anchor(key);
+		if (invalidField(label, object, key, "string")) {
+			return;
+		}
 		if (key.endsWith("Color")) {
 			rows.add(new Row(label, (x, y, w) -> {
 				String color = com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument.text(object, key, fallback);
@@ -525,6 +525,9 @@ public abstract class DesignerFormScreen extends Screen {
 
 	protected void number(String label, JsonObject object, String key, String fallback, DesignerNumberRange range, Consumer<String> changed) {
 		anchor(key);
+		if (invalidField(label, object, key, "number")) {
+			return;
+		}
 		boolean compact = key.equals("min") || key.equals("max") || key.toLowerCase(java.util.Locale.ROOT).contains("chance")
 				|| label.equals("fluid_amount") || label.equals("processing_time") || label.equals("machine_amount")
 				|| label.equals("machine_processing_time") || label.equals("machine_eu") || label.equals("machine_priority")
@@ -538,7 +541,7 @@ public abstract class DesignerFormScreen extends Screen {
 			input.setTooltip(Tooltip.create(range.description()));
 			((DesignerTheme.Input) input).invalid(!range.valid(input.getValue()));
 			if (!compact) {
-				labels.add(new Label(range.description(), x + 4, y + 22, Math.max(1, w - 8), 1, true));
+				formLayout.labels.add(new Label(range.description(), x + 4, y + 22, Math.max(1, w - 8), 1, true));
 			}
 			input.setResponder(value -> {
 				try {
@@ -567,6 +570,9 @@ public abstract class DesignerFormScreen extends Screen {
 
 	protected void toggle(String label, JsonObject object, String key, boolean fallback) {
 		anchor(key);
+		if (invalidField(label, object, key, "boolean")) {
+			return;
+		}
 		rows.add(new Row(label, (x, y, w) -> {
 			boolean value = object.has(key) ? object.get(key).getAsBoolean() : fallback;
 			DesignerTheme.Switch control = addRenderableWidget(new DesignerTheme.Switch(x, y, Math.min(w, 74), value, () -> {
@@ -583,6 +589,9 @@ public abstract class DesignerFormScreen extends Screen {
 
 	protected void choice(String label, JsonObject object, String key, String fallback, Runnable changed, String... values) {
 		anchor(key);
+		if (invalidField(label, object, key, "string")) {
+			return;
+		}
 		rows.add(new Row(label, (x, y, w) -> {
 			String selected = com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument.text(object, key, fallback);
 			dropdown(x, y, w, selected, values, value -> {
@@ -596,6 +605,9 @@ public abstract class DesignerFormScreen extends Screen {
 
 	void gene(String label, JsonObject definition, String key, String... values) {
 		anchor("attributes/" + key);
+		if (invalidField(label, definition, "attributes", "object")) {
+			return;
+		}
 		String[] choices = new String[values.length + 1];
 		choices[0] = "random";
 		System.arraycopy(values, 0, choices, 1, values.length);
@@ -632,7 +644,7 @@ public abstract class DesignerFormScreen extends Screen {
 		List<GeneChoice> choicesByRow = geneChoices(options, contentWidth - 12);
 		int height = 16 + (choicesByRow.getLast().row() + 1) * 23;
 		rows.add(new Row("", (x, y, w) -> {
-			labels.add(new Label(tr(label), x + 6, y + 2, w - 12, 1, true));
+			formLayout.labels.add(new Label(tr(label), x + 6, y + 2, w - 12, 1, true));
 			geneSegments(x + 6, y + 16, w - 12, current, options, key, select);
 		}, height, true));
 	}
@@ -699,7 +711,7 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	private void openOptions(Button anchor, String current, String[] values, Predicate<String> enabled, Consumer<String> selected) {
-		scroll.stop();
+		formLayout.scroll.stop();
 		popup = new DesignerDropdown(anchor.getX(), anchor.getY(), anchor.getWidth(), current, values, enabled, value -> {
 			popup = null;
 			selected.accept(value);
@@ -735,15 +747,15 @@ public abstract class DesignerFormScreen extends Screen {
 
 	protected void item(String label, JsonObject object, String key, String fallback) {
 		anchor(key);
+		if (invalidField(label, object, key, "string")) {
+			return;
+		}
 		rows.add(new Row(label, (x, y, w) -> {
 			String id = com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument.text(object, key, fallback);
 			com.google.gson.JsonObject item = new com.google.gson.JsonObject();
 			item.addProperty("id", id);
 			Consumer<ItemStack> chosen = stack -> {
-				if (!stack.getComponentsPatch().isEmpty()) {
-					throw new IllegalArgumentException("designer.error.flower_components");
-				}
-				object.addProperty(key, net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+				object.addProperty(key, BeeDesignerSelections.plainItemId(stack));
 			};
 			virtualItem(x, y, w, DesignerStackButton.decode(item), id, chosen);
 		}));
@@ -782,141 +794,16 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	protected void finishRows() {
-		bands = DesignerFormLayout.arrange(rows, contentWidth);
-		bandOffsets = new int[bands.size() + 1];
-		for (int index = 0; index < bands.size(); index++) {
-			int groupGap = index + 1 < bands.size() && groupStarts.contains(bands.get(index + 1).source()) ? 4 : 0;
-			bandOffsets[index + 1] = bandOffsets[index] + bands.get(index).height() + groupGap;
-		}
-		List<GroupSurface> surfaces = new ArrayList<>();
-		int first = 0;
-		for (int index = 1; index < bands.size(); index++) {
-			if (groupStarts.contains(bands.get(index).source())) {
-				surfaces.add(new GroupSurface(bandOffsets[first], bandOffsets[index] - 4));
-				first = index;
-			}
-		}
-		if (!bands.isEmpty()) {
-			surfaces.add(new GroupSurface(bandOffsets[first], bandOffsets[bands.size()]));
-		}
-		groupSurfaces = List.copyOf(surfaces);
-		scroll.extent(bandOffsets[bands.size()], editorBottom() - contentTop);
-		if (restoredSource >= 0 && restoredWidth != contentWidth) {
-			page = bandAt(restoredSource);
-			scroll.jump(bandOffsets[page]);
-		} else if (page != laidOutPage) {
-			scroll.jump(bandOffsets[Math.max(0, Math.min(page, bands.size()))]);
-		}
-		restoredSource = -1;
-		realizeRows();
-		addRenderableOnly(this::renderRows);
+		formLayout.finishRows();
+		addRenderableOnly(formLayout::renderRows);
 	}
 
-	private int bandAtPixel(double pixel) {
-		int low = 0;
-		int high = bands.size();
-		while (low < high) {
-			int middle = (low + high) / 2;
-			if (bandOffsets[middle + 1] <= pixel) {
-				low = middle + 1;
-			} else {
-				high = middle;
-			}
-		}
-		return Math.min(low, Math.max(0, bands.size() - 1));
-	}
-
-	private void realizeRows() {
-		if (bands.isEmpty()) {
-			return;
-		}
-		page = bandAtPixel(scroll.position());
-		laidOutPage = page;
-		int first = Math.max(0, page - 1);
-		int last = Math.min(bands.size() - 1, bandAtPixel(scroll.position() + editorBottom() - contentTop) + 1);
-		var iterator = rowViews.entrySet().iterator();
-		while (iterator.hasNext()) {
-			var entry = iterator.next();
-			if (entry.getKey() < first || entry.getKey() > last) {
-				RowView view = entry.getValue();
-				for (PositionedWidget positioned : view.widgets) {
-					if (getFocused() == positioned.widget) {
-						setFocused(null);
-					}
-					removeWidget(positioned.widget);
-					scrollingControls.remove(positioned.widget);
-				}
-				labels.removeAll(view.labels);
-				sections.removeAll(view.sections);
-				targets.removeAll(view.targets);
-				recipeHeaders.removeAll(view.headers);
-				iterator.remove();
-			}
-		}
-		for (int index = first; index <= last; index++) {
-			if (!rowViews.containsKey(index)) {
-				createBand(index);
-			}
-		}
-		int shift = (int) Math.floor(scroll.position());
-		for (RowView view : rowViews.values()) {
-			for (PositionedWidget positioned : view.widgets) {
-				positioned.widget.setY(positioned.y - shift);
-			}
-		}
-	}
-	private void createBand(int index) {
-		int childStart = children().size();
-		int labelStart = labels.size();
-		int sectionStart = sections.size();
-		int targetStart = targets.size();
-		int headerStart = recipeHeaders.size();
-		var band = bands.get(index);
-		int y = contentTop + bandOffsets[index];
-		creatingRows = true;
-		try {
-			for (var cell : band.cells()) {
-				placeRow(cell.row(), left + cell.x(), y, cell.width());
-			}
-		} finally {
-			creatingRows = false;
-		}
-		List<PositionedWidget> widgets = new ArrayList<>();
-		for (var child : children().subList(childStart, children().size())) {
-			if (child instanceof AbstractWidget widget) {
-				widgets.add(new PositionedWidget(widget, widget.getY()));
-				scrollingControls.add(widget);
-			}
-		}
-		rowViews.put(index, new RowView(y, band.height(), List.copyOf(widgets), List.copyOf(labels.subList(labelStart, labels.size())),
-				List.copyOf(sections.subList(sectionStart, sections.size())), List.copyOf(targets.subList(targetStart, targets.size())),
-				List.copyOf(recipeHeaders.subList(headerStart, recipeHeaders.size()))));
+	void removeRowWidget(GuiEventListener widget) {
+		removeWidget(widget);
 	}
 
 	protected final boolean isLeaving() {
 		return transition.leaving();
-	}
-
-	private void placeRow(Row row, int x, int y, int width) {
-		int childStart = children().size();
-		Component help = fieldHelp(row.label);
-		if (row.label.isBlank()) {
-			row.widget.create(x, y, width);
-		} else if (DesignerFormLayout.stacked(row, width)) {
-			labels.add(new Label(tr(row.label), x + 3, y + 2, width - 6, 1, true, help));
-			row.widget.create(x, y + 16, Math.min(360, width - 4));
-		} else {
-			int labelWidth = DesignerFormLayout.labelWidth(row, width);
-			labels.add(new Label(tr(row.label), x + 3, y + 4, labelWidth - 6, 1, true, help));
-			row.widget.create(x + labelWidth, y, Math.min(360, width - labelWidth - 4));
-		}
-		if (help != null && DesignerPreferences.enabled("context_hints")) {
-			for (var child : children().subList(childStart, children().size())) {
-				if (child instanceof DesignerTheme.Input || child instanceof DesignerTheme.Switch || child instanceof DesignerDropdown.Control) {
-					((AbstractWidget) child).setTooltip(Tooltip.create(tr(row.label).copy().append("\n").append(help)));
-				}
-			}
-		}
 	}
 
 	static Component fieldHelp(String key) {
@@ -924,17 +811,8 @@ public abstract class DesignerFormScreen extends Screen {
 		return net.minecraft.locale.Language.getInstance().has(translation) ? Component.translatable(translation) : null;
 	}
 
-	private int bandAt(int row) {
-		for (int index = 0; index < bands.size(); index++) {
-			if (bands.get(index).source() + bands.get(index).cells().size() > row) {
-				return index;
-			}
-		}
-		return Math.max(0, bands.size() - 1);
-	}
-
 	private int maxScrollRow() {
-		return scroll.maximum() > 0 ? bandAtPixel(scroll.maximum()) + 1 : 0;
+		return formLayout.scroll.maximum() > 0 ? formLayout.bandAtPixel(formLayout.scroll.maximum()) + 1 : 0;
 	}
 
 	protected boolean usesRowScrollbar() {
@@ -942,11 +820,11 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	protected final double scrollFraction() {
-		return scroll.maximum() <= 0 ? 0 : scroll.position() / scroll.maximum();
+		return formLayout.scroll.maximum() <= 0 ? 0 : formLayout.scroll.position() / formLayout.scroll.maximum();
 	}
 
 	protected final double scrollOffset() {
-		return scroll.position();
+		return formLayout.scroll.position();
 	}
 
 	protected DesignerScroll autoScrollAt(double x, double y) {
@@ -958,11 +836,11 @@ public abstract class DesignerFormScreen extends Screen {
 				return editor.autoScroll();
 			}
 		}
-		return usesRowScrollbar() ? scroll : null;
+		return usesRowScrollbar() ? formLayout.scroll : null;
 	}
 
 	protected final int rowOffset(int source) {
-		return bandOffsets[bandAt(source)];
+		return formLayout.bandOffsets[formLayout.bandAt(source)];
 	}
 
 	protected final double contentOffsetX() {
@@ -970,8 +848,8 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	protected final void scrollToFraction(double fraction) {
-		scroll.jump(Math.max(0, Math.min(1, fraction)) * scroll.maximum());
-		realizeRows();
+		formLayout.scroll.jump(Math.max(0, Math.min(1, fraction)) * formLayout.scroll.maximum());
+		formLayout.realizeRows();
 	}
 
 	protected final void pagination(int current, int total, boolean catalog, Runnable previous, Runnable next) {
@@ -979,7 +857,7 @@ public abstract class DesignerFormScreen extends Screen {
 		int y = footerY();
 		button(x, y, 20, Component.literal("‹"), previous).active = current > 0;
 		button(x + 24, y, 20, Component.literal("›"), next).active = current + 1 < total;
-		labels.add(new Label(Component.literal((current + 1) + "/" + total), x + 48, y + 6, 58));
+		formLayout.labels.add(new Label(Component.literal((current + 1) + "/" + total), x + 48, y + 6, 58));
 	}
 
 	protected final boolean compactHeight() {
@@ -1020,8 +898,8 @@ public abstract class DesignerFormScreen extends Screen {
 		String value = focused == null ? "" : focused.getValue();
 		int cursor = focused == null ? 0 : focused.getCursorPosition();
 		DesignerTheme.Input.State inputState = focused instanceof DesignerTheme.Input prior ? prior.state() : null;
-		restoredSource = page < bands.size() ? bands.get(page).source() : -1;
-		restoredWidth = contentWidth;
+		formLayout.restoredSource = page < formLayout.bands.size() ? formLayout.bands.get(page).source() : -1;
+		formLayout.restoredWidth = contentWidth;
 		setFocused(null);
 		rebuilding = true;
 		try {
@@ -1056,15 +934,15 @@ public abstract class DesignerFormScreen extends Screen {
 
 	/** 同一目录的分页数据刷新保留中键会话；几何变化仍按普通重建取消。 */
 	protected final void refreshScrollingRows() {
-		boolean resume = autoScroll.targets(scroll);
+		boolean resume = autoScroll.targets(formLayout.scroll);
 		double x = autoScroll.originX();
 		double y = autoScroll.originY();
-		Rect2i viewport = new Rect2i(left, contentTop, contentWidth, editorBottom() - contentTop);
-		float scale = uiScale;
+		Rect2i previousViewport = new Rect2i(left, contentTop, contentWidth, editorBottom() - contentTop);
+		float scale = viewport.uiScale();
 		rebuild();
-		if (resume && scale == uiScale && viewport.getX() == left && viewport.getY() == contentTop
-				&& viewport.getWidth() == contentWidth && viewport.getHeight() == editorBottom() - contentTop) {
-			autoScroll.start(scroll, x, y);
+		if (resume && scale == viewport.uiScale() && previousViewport.getX() == left && previousViewport.getY() == contentTop
+				&& previousViewport.getWidth() == contentWidth && previousViewport.getHeight() == editorBottom() - contentTop) {
+			autoScroll.start(formLayout.scroll, x, y);
 		}
 	}
 
@@ -1075,41 +953,41 @@ public abstract class DesignerFormScreen extends Screen {
 			status = "";
 		}
 		updateStatusHeight();
-		scroll.extent(bandOffsets[bandOffsets.length - 1], Math.max(1, editorBottom() - contentTop));
+		formLayout.scroll.extent(formLayout.bandOffsets[formLayout.bandOffsets.length - 1], Math.max(1, editorBottom() - contentTop));
 		if (autoScroll.active()) {
 			if (!minecraft.isWindowActive() || minecraft.screen != this || popup != null || transition.leaving()) {
 				autoScroll.stop();
 			} else {
-				autoScroll.advance(mouseY / uiScale, lastScrollFrame == 0 ? 0 : (now - lastScrollFrame) / 1_000_000_000.0);
+				autoScroll.advance(mouseY / viewport.uiScale(), lastScrollFrame == 0 ? 0 : (now - lastScrollFrame) / 1_000_000_000.0);
 			}
 		}
-		if (outputTransfer != null && lastScrollFrame != 0 && mouseX / uiScale >= left && mouseX / uiScale < left + contentWidth) {
-			double y = mouseY / uiScale;
+		if (outputs.outputTransfer != null && lastScrollFrame != 0 && mouseX / viewport.uiScale() >= left && mouseX / viewport.uiScale() < left + contentWidth) {
+			double y = mouseY / viewport.uiScale();
 			int direction = 0;
 			if (y < contentTop + 18) {
 				direction = -1;
 			} else if (y > editorBottom() - 18) {
 				direction = 1;
 			}
-			scroll.by(direction * Math.min(0.05, (now - lastScrollFrame) / 1_000_000_000.0) * 180);
+			formLayout.scroll.by(direction * Math.min(0.05, (now - lastScrollFrame) / 1_000_000_000.0) * 180);
 		}
 		if (lastScrollFrame != 0 && popup == null && !scrollbarDragging && !transition.leaving()) {
-			scroll.advance((now - lastScrollFrame) / 1_000_000_000.0, DesignerPreferences.animate());
-			realizeRows();
+			formLayout.scroll.advance((now - lastScrollFrame) / 1_000_000_000.0, DesignerPreferences.animate());
+			formLayout.realizeRows();
 		}
 		lastScrollFrame = now;
 		graphics.flush();
 		graphics.pose().pushPose();
-		graphics.pose().scale(uiScale, uiScale, 1);
+		graphics.pose().scale(viewport.uiScale(), viewport.uiScale(), 1);
 		try {
-			renderContent(graphics, (int) (mouseX / uiScale), (int) (mouseY / uiScale), partialTick);
+			renderContent(graphics, (int) (mouseX / viewport.uiScale()), (int) (mouseY / viewport.uiScale()), partialTick);
 			if (autoScroll.active()) {
 				DesignerTheme.autoScrollMarker(graphics, (int) Math.round(autoScroll.originX()),
 						(int) Math.round(autoScroll.originY()), autoScroll.direction());
 			}
 			DesignerTutorialScreen guide = DesignerTutorialScreen.current(this);
 			if (guide != null && !jeiDragging) {
-				guide.render(this, graphics, (int) (mouseX / uiScale), (int) (mouseY / uiScale));
+				guide.render(this, graphics, (int) (mouseX / viewport.uiScale()), (int) (mouseY / viewport.uiScale()));
 			}
 		} finally {
 			graphics.flush();
@@ -1122,7 +1000,7 @@ public abstract class DesignerFormScreen extends Screen {
 		var titleFont = DesignerFonts.title();
 		graphics.drawString(titleFont, titleFont.plainSubstrByWidth(title.getString(), Math.max(1, titleWidth)),
 				frameLeft + (returnButton ? 54 : 28), frameTop + 9, FOREGROUND, false);
-		for (Label label : labels) {
+		for (Label label : formLayout.labels) {
 			if (label.scrolling) {
 				continue;
 			}
@@ -1138,13 +1016,13 @@ public abstract class DesignerFormScreen extends Screen {
 			}
 		}
 		for (var widget : children()) {
-			if (outputTransfer == null && widget instanceof DesignerStackButton stack && stack.isHovered() && visibleControl(stack, mouseY)) {
+			if (outputs.outputTransfer == null && widget instanceof DesignerStackButton stack && stack.isHovered() && visibleControl(stack, mouseY)) {
 				stack.renderDetails(graphics, mouseX, mouseY);
 			} else if (widget instanceof DesignerMachineEntryButton entry && entry.isHovered() && visibleControl(entry, mouseY)) {
 				entry.renderDetails(graphics, mouseX, mouseY);
 			}
 		}
-		float inventoryScale = geometryScale / uiScale;
+		float inventoryScale = viewport.geometryScale() / viewport.uiScale();
 		graphics.pose().pushPose();
 		graphics.pose().scale(inventoryScale, inventoryScale, 1);
 		inventory.render(graphics, (int) (mouseX / inventoryScale), (int) (mouseY / inventoryScale));
@@ -1185,8 +1063,8 @@ public abstract class DesignerFormScreen extends Screen {
 		}
 		DesignerCursor.update(minecraft.getWindow().getWindow(), popup == null && !autoScroll.active() ? WINDOW.edgeAt(mouseX / inventoryScale, mouseY / inventoryScale) : 0);
 		if (inventory.isDragging()) {
-			for (GhostTarget target : targets) {
-				Rect2i area = visibleTargetArea(target);
+			for (GhostTarget target : ghosts.targets) {
+				Rect2i area = ghosts.visibleTargetArea(target);
 				boolean accepted = target.accepts.test(inventory.dragged());
 				DesignerTheme.dropTarget(graphics, area.getX(), area.getY(), area.getWidth(), area.getHeight(), accepted,
 						target.replacing, area.contains(mouseX, mouseY));
@@ -1199,23 +1077,7 @@ public abstract class DesignerFormScreen extends Screen {
 				}
 			}
 		}
-		if (outputTransfer != null) {
-			for (GhostTarget target : targets) {
-				if (target.accepts.test(outputTransfer)) {
-					Rect2i area = visibleTargetArea(target);
-					if (area.getHeight() > 0 && area.getWidth() > 0) {
-						graphics.renderOutline(area.getX(), area.getY(), area.getWidth(), area.getHeight(), ACCENT);
-					}
-				}
-			}
-			graphics.pose().pushPose();
-			graphics.pose().translate(0, 0, 450);
-			int previewWidth = Math.min(230, font.width(draggedOutput) + 16);
-			int previewX = Math.min(mouseX + 10, layoutWidth - previewWidth - 4);
-			DesignerTheme.panel(graphics, "card", previewX, mouseY + 8, previewWidth, 24);
-			graphics.drawString(font, font.plainSubstrByWidth(draggedOutput.getString(), previewWidth - 12), previewX + 6, mouseY + 16, FOREGROUND, false);
-			graphics.pose().popPose();
-		}
+		outputs.renderDrag(graphics, mouseX, mouseY);
 		if (!WINDOW.pinned()) {
 			int right = frameLeft + frameWidth - 3;
 			int bottom = frameTop + frameHeight - 3;
@@ -1232,127 +1094,8 @@ public abstract class DesignerFormScreen extends Screen {
 		feedback.render(graphics, left, editorBottom(), contentWidth, net.minecraft.Util.getMillis());
 	}
 
-	private void renderRows(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-		if (rowViews.isEmpty()) {
-			return;
-		}
-		int revealBottom = contentTop + (int) Math.ceil((editorBottom() - contentTop) * transition.reveal());
-		DesignerTheme.scissor(graphics, left, contentTop, left + contentWidth, revealBottom);
-		int offset = (int) Math.floor(scroll.position());
-		boolean inside = mouseX >= left && mouseX < left + contentWidth && mouseY >= contentTop && mouseY < revealBottom;
-		float animatedX = transition.contentOffsetX();
-		int contentMouseX = (int) (mouseX - animatedX);
-		graphics.pose().pushPose();
-		graphics.pose().translate(animatedX, Math.floor(scroll.position()) - scroll.position(), 0);
-		try {
-			for (GroupSurface group : groupSurfaces) {
-				int top = contentTop + group.top - offset;
-				int bottom = contentTop + group.bottom - offset - DesignerPreferences.rowGap();
-				if (bottom >= contentTop && top < editorBottom()) {
-					if (DesignerAeSkin.enabled()) {
-						DesignerTheme.panel(graphics, "card", left, top, contentWidth, bottom - top);
-					} else {
-						var colors = DesignerTheme.colors();
-						int fill = DesignerPalette.mix(colors.panel(), colors.card(), 0.55F);
-						DesignerMaterials.surface(graphics, left, top, contentWidth, bottom - top, DesignerMaterials.CARD_RADIUS,
-								fill, DesignerPalette.mix(fill, colors.border(), 0.16F));
-					}
-				}
-			}
-			for (var entry : rowViews.entrySet()) {
-				RowView view = entry.getValue();
-				int y = view.y - offset;
-				if (DesignerPreferences.enabled("alternating_rows") && entry.getKey() % 2 == 0
-						&& !groupStarts.contains(bands.get(entry.getKey()).source())) {
-					DesignerMaterials.mask(graphics, left + 3, y + 2, contentWidth - 6, view.height - 4, DesignerMaterials.CONTROL_RADIUS,
-							DesignerPalette.mix(DesignerTheme.colors().card(), DesignerTheme.colors().panel(), 0.08F));
-				}
-				boolean lastInGroup = entry.getKey() + 1 >= bands.size()
-						|| groupStarts.contains(bands.get(entry.getKey() + 1).source());
-				for (Rect2i section : view.sections) {
-					if (!DesignerAeSkin.enabled()) {
-						DesignerMaterials.mask(graphics, section.getX() + 3, section.getY() - offset + 1, section.getWidth() - 6,
-								section.getHeight() - 2, DesignerMaterials.CONTROL_RADIUS,
-								DesignerPalette.mix(DesignerTheme.colors().panel(), DesignerTheme.colors().card(), 0.35F));
-					} else if (!lastInGroup) {
-						int inset = Math.min(10, section.getWidth() / 4);
-						int lineY = section.getY() + section.getHeight() - offset - 1;
-						graphics.fill(section.getX() + inset, lineY, section.getX() + section.getWidth() - inset, lineY + 1,
-								DesignerPalette.mix(DesignerTheme.colors().card(), DesignerTheme.colors().border(), 0.55F));
-					}
-				}
-				for (RecipeHeader header : view.headers) {
-					if (header.y == view.y) {
-						boolean removing = header.remove != null && inside && header.remove.isMouseOver(contentMouseX, mouseY);
-						int color = removing ? DesignerTheme.colors().error() : DesignerTheme.colors().accent();
-						DesignerMaterials.mask(graphics, left + 3, y + 2, contentWidth - 6, 22, DesignerMaterials.CONTROL_RADIUS,
-								DesignerPalette.mix(DesignerTheme.colors().card(), color, removing ? 0.14F : 0.05F));
-						if (removing) {
-							graphics.fill(left + 3, y + 6, left + 5, y + 20, color);
-						}
-					}
-				}
-				var band = bands.get(entry.getKey());
-				var highlighted = band.cell(highlightedSource);
-				if (highlighted != null
-						&& net.minecraft.Util.getMillis() < highlightUntil) {
-					int columnWidth = highlighted.width();
-					int columnX = left + highlighted.x();
-					int color = highlightedError ? DesignerTheme.colors().error() : ACCENT;
-					float strength = Math.min(1, (highlightUntil - net.minecraft.Util.getMillis()) / 600.0F);
-					DesignerMaterials.mask(graphics, columnX + 3, y + 2, columnWidth - 6, view.height - 4,
-							DesignerMaterials.CONTROL_RADIUS,
-							DesignerPalette.mix(DesignerTheme.colors().card(), color, strength * 0.09F));
-					for (PositionedWidget positioned : view.widgets) {
-						if (positioned.widget instanceof DesignerTheme.Action action
-								&& action.getX() >= columnX && action.getX() < columnX + columnWidth) {
-							action.highlight(highlightedError, highlightUntil);
-						}
-					}
-				}
-				for (PositionedWidget positioned : view.widgets) {
-					positioned.widget.render(graphics, inside ? contentMouseX : -1, inside ? mouseY : -1, partialTick);
-				}
-				for (Label label : view.labels) {
-					var lines = label.lines;
-					for (int index = 0; index < Math.min(label.maxLines, lines.size()); index++) {
-						boolean errorLabel = highlightedError && net.minecraft.Util.getMillis() < highlightUntil
-								&& highlighted != null && label.x >= left + highlighted.x()
-								&& label.x < left + highlighted.x() + highlighted.width();
-						graphics.drawString(font, lines.get(index), label.x, label.y - offset + index * 10,
-								errorLabel ? DesignerTheme.colors().error() : MUTED, false);
-					}
-				}
-			}
-		} finally {
-			graphics.flush();
-			graphics.pose().popPose();
-			graphics.disableScissor();
-		}
-		if (DesignerPreferences.animate()) {
-			for (int row = 0; row < 7; row++) {
-				int topAlpha = (int) (scroll.topFeedback() * (7 - row) * 9);
-				int bottomAlpha = (int) (scroll.bottomFeedback() * (7 - row) * 9);
-				graphics.fill(left, contentTop + row, left + contentWidth, contentTop + row + 1, topAlpha << 24 | ACCENT & 0xFFFFFF);
-				graphics.fill(left, editorBottom() - row - 1, left + contentWidth, editorBottom() - row, bottomAlpha << 24 | ACCENT & 0xFFFFFF);
-			}
-		}
-		if (inside) {
-			for (RowView view : rowViews.values()) {
-				for (Label label : view.labels) {
-					if (contentMouseX >= label.x && contentMouseX < label.x + label.width && mouseY >= label.y - offset - 3
-							&& mouseY < label.y - offset + label.maxLines * 10
-							&& (font.width(label.text) > label.width || label.help != null && DesignerPreferences.enabled("context_hints"))) {
-						Component hint = label.help == null ? label.text : label.text.copy().append("\n").append(label.help);
-						graphics.renderTooltip(font, font.split(hint, Math.min(300, layoutWidth - 30)), mouseX, mouseY);
-					}
-				}
-			}
-		}
-	}
-
 	private boolean visibleControl(GuiEventListener control, double mouseY) {
-		return !scrollingControls.contains(control)
+		return !formLayout.scrollingControls.contains(control)
 				|| mouseY >= contentTop && mouseY < contentTop + (editorBottom() - contentTop) * transition.reveal();
 	}
 
@@ -1380,6 +1123,9 @@ public abstract class DesignerFormScreen extends Screen {
 		}
 		if (parts.length == 2 && parts[0].startsWith("designer.error.field_")) {
 			return Component.translatable(parts[0], tr(parts[1]));
+		}
+		if (parts.length == 3 && parts[0].equals("designer.error.field_type")) {
+			return Component.translatable(parts[0], tr(parts[1]), parts[2]);
 		}
 		if (parts.length == 3 && parts[0].equals("designer.error.field_reference")) {
 			return Component.translatable(parts[0], tr(parts[1]), parts[2]);
@@ -1463,21 +1209,21 @@ public abstract class DesignerFormScreen extends Screen {
 	protected void note(String label, Component message) {
 		int available = label.isBlank() ? contentWidth - 8 : Math.max(60, contentWidth * 60 / 100 - 8);
 		int rowHeight = Math.max(20, font.split(message, Math.max(1, available)).size() * 10 + 6);
-		rows.add(new Row(label, (x, y, w) -> labels.add(new Label(message, x + 4, y + 4, w - 8, Math.max(1, rowHeight / 10))), rowHeight, true));
+		rows.add(new Row(label, (x, y, w) -> formLayout.labels.add(new Label(message, x + 4, y + 4, w - 8, Math.max(1, rowHeight / 10))), rowHeight, true));
 	}
 
 	final void fixedNote(Component message, int x, int y, int width, int height) {
-		labels.add(new Label(message, x + 4, y + 4, width - 8, Math.max(1, (height - 6) / 10), creatingRows));
+		formLayout.labels.add(new Label(message, x + 4, y + 4, width - 8, Math.max(1, (height - 6) / 10), formLayout.creatingRows));
 	}
 
 	protected void section(String key) {
 		buildingGroup = key;
 		anchor(key);
 		int rowHeight = compactHeight() ? 16 : 20;
-		groupStarts.add(rows.size());
+		formLayout.groupStarts.add(rows.size());
 		rows.add(new Row("", (x, y, w) -> {
-			sections.add(new Rect2i(x, y, w, rowHeight - 2));
-			labels.add(new Label(option(key).copy().withStyle(style -> style.withBold(true)).withColor(FOREGROUND & 0xFFFFFF),
+			formLayout.sections.add(new Rect2i(x, y, w, rowHeight - 2));
+			formLayout.labels.add(new Label(option(key).copy().withStyle(style -> style.withBold(true)).withColor(FOREGROUND & 0xFFFFFF),
 					x + 6, y + 4, w - 12, 1, true));
 		}, rowHeight));
 	}
@@ -1499,9 +1245,9 @@ public abstract class DesignerFormScreen extends Screen {
 			collapsedGroups.add(identity);
 		}
 		int heading = rows.size();
-		groupStarts.add(heading);
+		formLayout.groupStarts.add(heading);
 		rows.add(new Row("", (x, y, w) -> {
-			sections.add(new Rect2i(x, y, w, 20));
+			formLayout.sections.add(new Rect2i(x, y, w, 20));
 			addRenderableWidget(new DesignerTheme.GroupHeader(x, y, w, option(key), !collapsedGroups.contains(identity), () -> {
 				if (!collapsedGroups.remove(identity)) {
 					collapsedGroups.add(identity);
@@ -1512,7 +1258,7 @@ public abstract class DesignerFormScreen extends Screen {
 		fields.run();
 		if (collapsedGroups.contains(identity)) {
 			rows.subList(heading + 1, rows.size()).clear();
-			groupStarts.tailSet(heading + 1, true).clear();
+			formLayout.groupStarts.tailSet(heading + 1, true).clear();
 			locationGroups.forEach((path, group) -> {
 				if (group.equals(identity)) {
 					locations.put(path, heading);
@@ -1523,91 +1269,32 @@ public abstract class DesignerFormScreen extends Screen {
 
 	void recipeHeading(Component title, String id, Runnable edit, Runnable remove) {
 		anchor(id);
-		groupStarts.add(rows.size());
+		formLayout.groupStarts.add(rows.size());
 		rows.add(new Row("", (x, y, w) -> {
-			sections.add(new Rect2i(x, y, w, 24));
-			labels.add(new Label(title.copy().withColor(FOREGROUND & 0xFFFFFF), x + 4, y + 6, Math.max(40, w - 110), 1, true));
+			formLayout.sections.add(new Rect2i(x, y, w, 24));
+			formLayout.labels.add(new Label(title.copy().withColor(FOREGROUND & 0xFFFFFF), x + 4, y + 6, Math.max(40, w - 110), 1, true));
 			button(x + w - 100, y + 1, 68, tr("edit_entry"), edit).setTooltip(Tooltip.create(Component.literal(id)));
 			Button delete = addRenderableWidget(new DesignerTheme.Icon(x + w - 26, y + 1, DesignerTheme.Symbol.DELETE, remove));
 			delete.setTooltip(Tooltip.create(Component.translatable("designer.remove_named_recipe", title.getString()).append("\n" + id)));
-			recipeHeaders.add(new RecipeHeader(y, delete));
+			formLayout.recipeHeaders.add(new RecipeHeader(y, delete));
 		}, 26));
 	}
 
 	void overviewHeading(Component title, Runnable edit) {
-		groupStarts.add(rows.size());
+		formLayout.groupStarts.add(rows.size());
 		rows.add(new Row("", (x, y, w) -> {
-			sections.add(new Rect2i(x, y, w, 22));
-			labels.add(new Label(title.copy().withColor(FOREGROUND & 0xFFFFFF), x + 7, y + 6, Math.max(40, w - 84), 1, true));
+			formLayout.sections.add(new Rect2i(x, y, w, 22));
+			formLayout.labels.add(new Label(title.copy().withColor(FOREGROUND & 0xFFFFFF), x + 7, y + 6, Math.max(40, w - 84), 1, true));
 			button(x + w - 72, y + 1, 68, tr("edit_entry"), edit);
 		}, 24));
 	}
 
-	void outputHeading(Component title, JsonArray outputs, JsonObject output) {
-		groupStarts.add(rows.size());
-		int deleteWidth = Math.max(68, Math.min(120, font.width(tr("remove_output")) + 16));
-		int actionsWidth = deleteWidth + 62;
-		boolean twoRows = contentWidth < actionsWidth + 180;
-		int height = twoRows ? 52 : 30;
-		rows.add(new Row("", (x, y, w) -> {
-			sections.add(new Rect2i(x, y, w, height - 2));
-			int labelWidth = twoRows ? w - 34 : w - actionsWidth - 42;
-			labels.add(new Label(title.copy().withColor(FOREGROUND & 0xFFFFFF), x + 32, y + 7, Math.max(10, labelWidth), 1, true));
-			addRenderableWidget(new DesignerTheme.Grip(x + 5, y + 3, () -> beginOutputDrag(outputs, output, title)));
-			int actionY = twoRows ? y + 27 : y + 3;
-			int actionX = x + w - actionsWidth - 3;
-			int index = DesignerOutputList.index(outputs, output);
-			Button up = button(actionX, actionY, 26, Component.literal("↑"), () -> moveOutput(outputs, output, -1));
-			up.active = index > 0;
-			up.setTooltip(Tooltip.create(tr("output_move_up")));
-			Button down = button(actionX + 30, actionY, 26, Component.literal("↓"), () -> moveOutput(outputs, output, 1));
-			down.active = index >= 0 && index < outputs.size() - 1;
-			down.setTooltip(Tooltip.create(tr("output_move_down")));
-			Button delete = button(actionX + 60, actionY, deleteWidth, tr("remove_output"), () -> removeOutput(outputs, output));
-			delete.setTooltip(Tooltip.create(Component.translatable("designer.remove_named_output", title.getString())));
-			recipeHeaders.add(new RecipeHeader(y, delete));
-			ghost(x, y, w, height, value -> value instanceof DesignerOutputList.Transfer transfer && transfer.accepts(outputs),
-					value -> dropOutput((DesignerOutputList.Transfer) value, output));
-		}, height, true));
+	void outputHeading(Component title, JsonArray list, JsonObject output) {
+		outputs.outputHeading(title, list, output);
 	}
 
-	private void beginOutputDrag(JsonArray outputs, JsonObject output, Component title) {
-		outputTransfer = new DesignerOutputList.Transfer(outputs, output);
-		draggedOutput = title.copy();
-		status = "designer.output_drag_help";
-	}
-
-	private void dropOutput(DesignerOutputList.Transfer transfer, JsonObject target) {
-		if (transfer.drop(transfer.outputs(), target)) {
-			status = "designer.status.output_moved";
-		}
-	}
-
-	private void moveOutput(JsonArray outputs, JsonObject output, int direction) {
-		if (DesignerOutputList.move(outputs, output, DesignerOutputList.index(outputs, output) + direction)) {
-			status = "designer.status.output_moved";
-			rebuild();
-		}
-	}
-
-	private void removeOutput(JsonArray outputs, JsonObject output) {
-		if (DesignerOutputList.remove(outputs, output)) {
-			status = "designer.status.output_removed";
-			rebuild();
-		}
-	}
-
-	void virtualOutputItem(int x, int y, int w, ItemStack stack, String fallback, Consumer<ItemStack> chosen, JsonArray outputs, JsonObject output) {
-		DesignerStackButton button = addRenderableWidget(new DesignerStackButton(x, y, w, stack, fallback,
-				() -> minecraft.setScreen(new BeeDesignerItemPicker(this, chosen))).fitted());
-		button.outputActions(() -> removeOutput(outputs, output), () -> beginOutputDrag(outputs, output, button.getMessage()));
-		ghost(x, y, button.getWidth(), value -> value instanceof ItemStack || value instanceof DesignerOutputList.Transfer transfer && transfer.accepts(outputs), value -> {
-			if (value instanceof ItemStack item) {
-				chosen.accept(item.copyWithCount(1));
-			} else {
-				dropOutput((DesignerOutputList.Transfer) value, output);
-			}
-		});
+	void virtualOutputItem(int x, int y, int w, ItemStack stack, String fallback, Consumer<ItemStack> chosen, JsonArray list, JsonObject output) {
+		outputs.virtualOutputItem(x, y, w, stack, fallback, chosen, list, output);
 	}
 
 	protected final void scope(String path) {
@@ -1641,24 +1328,24 @@ public abstract class DesignerFormScreen extends Screen {
 				row = locations.get(path);
 			}
 		}
-		if (row == null || bands.isEmpty()) {
+		if (row == null || formLayout.bands.isEmpty()) {
 			return false;
 		}
 		transition.settle();
 		int index = 0;
-		while (index + 1 < bands.size() && bands.get(index + 1).source() <= row) {
+		while (index + 1 < formLayout.bands.size() && formLayout.bands.get(index + 1).source() <= row) {
 			index++;
 		}
-		int available = Math.max(0, editorBottom() - contentTop - bands.get(index).height());
+		int available = Math.max(0, editorBottom() - contentTop - formLayout.bands.get(index).height());
 		int margin = Math.min(12, available);
-		scroll.jump(Math.max(0, bandOffsets[index] - margin));
-		realizeRows();
-		if (bands.get(index).height() > editorBottom() - contentTop) {
-			var cell = bands.get(index).cell(row);
+		formLayout.scroll.jump(Math.max(0, formLayout.bandOffsets[index] - margin));
+		formLayout.realizeRows();
+		if (formLayout.bands.get(index).height() > editorBottom() - contentTop) {
+			var cell = formLayout.bands.get(index).cell(row);
 			int cellLeft = left + (cell == null ? 0 : cell.x());
 			int cellRight = cellLeft + (cell == null ? contentWidth : cell.width());
-			for (PositionedWidget positioned : rowViews.get(index).widgets) {
-				AbstractWidget widget = positioned.widget;
+			for (PositionedWidget positioned : formLayout.rowViews.get(index).widgets()) {
+				AbstractWidget widget = positioned.widget();
 				if (!widget.visible || widget.getX() < cellLeft || widget.getRight() > cellRight
 						|| widget.getHeight() > editorBottom() - contentTop) {
 					continue;
@@ -1670,8 +1357,8 @@ public abstract class DesignerFormScreen extends Screen {
 					adjustment = widget.getY() - contentTop;
 				}
 				if (adjustment != 0) {
-					scroll.jump(scroll.position() + adjustment);
-					realizeRows();
+					formLayout.scroll.jump(formLayout.scroll.position() + adjustment);
+					formLayout.realizeRows();
 				}
 				break;
 			}
@@ -1680,12 +1367,12 @@ public abstract class DesignerFormScreen extends Screen {
 		highlightedError = error;
 		highlightUntil = !error && DesignerTutorialScreen.current(this) != null ? 0 : net.minecraft.Util.getMillis() + 8000;
 		if (error) {
-			var band = bands.get(index);
+			var band = formLayout.bands.get(index);
 			var cell = band.cell(row);
 			int columnWidth = cell == null ? contentWidth : cell.width();
 			int columnX = left + (cell == null ? 0 : cell.x());
-			for (PositionedWidget positioned : rowViews.get(index).widgets) {
-				if (positioned.widget instanceof DesignerTheme.Input input && input.getX() >= columnX && input.getX() < columnX + columnWidth) {
+			for (PositionedWidget positioned : formLayout.rowViews.get(index).widgets()) {
+				if (positioned.widget() instanceof DesignerTheme.Input input && input.getX() >= columnX && input.getX() < columnX + columnWidth) {
 					input.invalid(true);
 					setFocused(input);
 				}
@@ -1699,11 +1386,11 @@ public abstract class DesignerFormScreen extends Screen {
 		if (row == null) {
 			return null;
 		}
-		for (int index = 0; index < bands.size(); index++) {
-			var cell = bands.get(index).cell(row);
+		for (int index = 0; index < formLayout.bands.size(); index++) {
+			var cell = formLayout.bands.get(index).cell(row);
 			if (cell != null) {
-				int top = Math.max(contentTop, contentTop + bandOffsets[index] - (int) scroll.position());
-				int bottom = Math.min(editorBottom(), contentTop + bandOffsets[index + 1] - (int) scroll.position());
+				int top = Math.max(contentTop, contentTop + formLayout.bandOffsets[index] - (int) formLayout.scroll.position());
+				int bottom = Math.min(editorBottom(), contentTop + formLayout.bandOffsets[index + 1] - (int) formLayout.scroll.position());
 				return bottom > top ? new Rect2i(left + cell.x(), top, cell.width(), bottom - top) : null;
 			}
 		}
@@ -1741,70 +1428,21 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	protected void ghost(int x, int y, int w, int h, boolean replacing, Predicate<Object> accepts, Consumer<Object> chosen) {
-		targets.add(new GhostTarget(new Rect2i(x, y, w, h), accepts, value -> {
-			try {
-				chosen.accept(value);
-				if (minecraft.screen == this) {
-					rebuild();
-				}
-			} catch (RuntimeException exception) {
-				status = exception.getMessage();
-			}
-		}, replacing));
+		ghosts.add(x, y, w, h, replacing, accepts, chosen);
+	}
+
+	public List<GhostTarget> ghostTargets() {
+		return ghosts.ghostTargets();
+	}
+
+	final Rect2i ghostTargetBounds(Rect2i near) {
+		return ghosts.ghostTargetBounds(near);
 	}
 
 	public record GhostTarget(Rect2i area, Predicate<Object> accepts, Consumer<Object> chosen, boolean replacing) {
 		public GhostTarget(Rect2i area, Predicate<Object> accepts, Consumer<Object> chosen) {
 			this(area, accepts, chosen, true);
 		}
-	}
-
-	public List<GhostTarget> ghostTargets() {
-		return popup == null && !transition.leaving() ? targets.stream().map(target -> new GhostTarget(screenArea(visibleTargetArea(target)), target.accepts, target.chosen, target.replacing))
-				.filter(target -> target.area.getWidth() > 0 && target.area.getHeight() > 0).toList() : List.of();
-	}
-
-	final Rect2i ghostTargetBounds(Rect2i near) {
-		Rect2i nearest = null;
-		int distance = Integer.MAX_VALUE;
-		for (GhostTarget target : targets) {
-			Rect2i area = visibleTargetArea(target);
-			if (area.getWidth() <= 0 || area.getHeight() <= 0
-					|| near != null && (area.getX() < near.getX() || area.getX() + area.getWidth() > near.getX() + near.getWidth()
-							|| area.getY() >= near.getY() + near.getHeight() || area.getY() + area.getHeight() <= near.getY())) {
-				continue;
-			}
-			int offset = near == null ? area.getY() - contentTop : Math.abs(area.getY() - near.getY());
-			if (offset < distance) {
-				nearest = area;
-				distance = offset;
-			}
-		}
-		return nearest;
-	}
-
-	private Rect2i targetArea(GhostTarget target) {
-		for (RowView view : rowViews.values()) {
-			if (view.targets.contains(target)) {
-				int top = Math.max(contentTop, target.area.getY() - (int) Math.floor(scroll.position()));
-				int bottom = Math.min(editorBottom(), target.area.getY() + target.area.getHeight() - (int) Math.floor(scroll.position()));
-				return new Rect2i(target.area.getX(), top, target.area.getWidth(), Math.max(0, bottom - top));
-			}
-		}
-		return target.area;
-	}
-
-	private Rect2i visibleTargetArea(GhostTarget target) {
-		Rect2i area = targetArea(target);
-		for (RowView view : rowViews.values()) {
-			if (view.targets.contains(target)) {
-				float movement = transition.contentOffsetX();
-				int x = Math.max(left, (int) Math.floor(area.getX() + movement));
-				int right = Math.min(left + contentWidth, (int) Math.ceil(area.getX() + area.getWidth() + movement));
-				return new Rect2i(x, area.getY(), Math.max(0, right - x), area.getHeight());
-			}
-		}
-		return area;
 	}
 
 	protected final boolean hasDropdown() {
@@ -1842,7 +1480,7 @@ public abstract class DesignerFormScreen extends Screen {
 		}
 		int top = control.getY();
 		int bottom = control.getBottom();
-		if (scrollingControls.contains(control)) {
+		if (formLayout.scrollingControls.contains(control)) {
 			top = Math.max(contentTop, top);
 			bottom = Math.min(editorBottom(), bottom);
 		}
@@ -1850,23 +1488,15 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	public Rect2i inventoryBounds() {
-		return screenArea(inventory.bounds(), geometryScale);
+		return viewport.geometryArea(inventory.bounds());
 	}
 
 	public Rect2i inventorySlotBounds(int index) {
-		return screenArea(inventory.slotBounds(index), geometryScale);
+		return viewport.geometryArea(inventory.slotBounds(index));
 	}
 
-	private Rect2i screenArea(Rect2i area) {
-		return screenArea(area, uiScale);
-	}
-
-	private Rect2i screenArea(Rect2i area, float scale) {
-		int x = (int) Math.floor(area.getX() * scale);
-		int y = (int) Math.floor(area.getY() * scale);
-		int right = (int) Math.ceil((area.getX() + area.getWidth()) * scale);
-		int bottom = (int) Math.ceil((area.getY() + area.getHeight()) * scale);
-		return new Rect2i(x, y, right - x, bottom - y);
+	final Rect2i screenArea(Rect2i area) {
+		return viewport.screenArea(area);
 	}
 
 	protected final boolean isInventoryDragging() {
@@ -1878,17 +1508,7 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	static JsonObject selection(Object ingredient) {
-		var registries = net.minecraft.client.Minecraft.getInstance().level.registryAccess();
-		if (ingredient instanceof ItemStack stack) {
-			return BeeDesignerSelections.item(stack, registries);
-		}
-		if (ingredient instanceof FluidStack stack) {
-			return BeeDesignerSelections.fluid(stack, registries);
-		}
-		if (ingredient instanceof ChemicalStack stack) {
-			return BeeDesignerSelections.chemical(stack);
-		}
-		throw new IllegalArgumentException("Unsupported selection");
+		return BeeDesignerSelections.selection(ingredient, Minecraft.getInstance().level.registryAccess());
 	}
 
 	@Override
@@ -1898,18 +1518,18 @@ public abstract class DesignerFormScreen extends Screen {
 			return true;
 		}
 		DesignerTutorialScreen guide = DesignerTutorialScreen.current(this);
-		if (guide != null && !jeiDragging && guide.click(this, x / uiScale, y / uiScale, button)) {
+		if (guide != null && !jeiDragging && guide.click(this, x / viewport.uiScale(), y / viewport.uiScale(), button)) {
 			return true;
 		}
 		if (transition.leaving()) {
 			return true;
 		}
-		double localY = y / uiScale;
+		double localY = y / viewport.uiScale();
 		transition.settle();
-		scroll.stop();
-		double localX = contentX(x / uiScale, localY);
+		formLayout.scroll.stop();
+		double localX = contentX(x / viewport.uiScale(), localY);
 		if (button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE && popup == null && !isDragging()
-				&& !inventory.isDragging() && !WINDOW.dragging() && outputTransfer == null
+				&& !inventory.isDragging() && !WINDOW.dragging() && outputs.outputTransfer == null
 				&& autoScroll.start(autoScrollAt(localX, localY), localX, localY)) {
 			return true;
 		}
@@ -1926,7 +1546,7 @@ public abstract class DesignerFormScreen extends Screen {
 			return true;
 		}
 		if (button == 0 && !inventory.isDragging()) {
-			float factor = geometryScale / uiScale;
+			float factor = viewport.geometryScale() / viewport.uiScale();
 			int edge = WINDOW.edgeAt(x / factor, y / factor);
 			if (edge != 0 && WINDOW.press(edge, x / factor, y / factor)) {
 				return true;
@@ -1945,7 +1565,7 @@ public abstract class DesignerFormScreen extends Screen {
 			scrollTo(y);
 			return true;
 		}
-		if (inventory.press(x * uiScale / geometryScale, y * uiScale / geometryScale, button)) {
+		if (inventory.press(x * viewport.uiScale() / viewport.geometryScale(), y * viewport.uiScale() / viewport.geometryScale(), button)) {
 			return true;
 		}
 		var control = getChildAt(x, y);
@@ -1971,19 +1591,16 @@ public abstract class DesignerFormScreen extends Screen {
 		if (autoScroll.active() && button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
 			return true;
 		}
-		return releaseContent(contentX(x / uiScale, y / uiScale), y / uiScale, button);
+		return releaseContent(contentX(x / viewport.uiScale(), y / viewport.uiScale()), y / viewport.uiScale(), button);
 	}
 
 	protected boolean releaseContent(double x, double y, int button) {
-		if (button == 0 && outputTransfer != null) {
-			DesignerOutputList.Transfer transfer = outputTransfer;
-			outputTransfer = null;
+		if (button == 0 && outputs.outputTransfer != null) {
+			DesignerOutputList.Transfer transfer = outputs.outputTransfer;
+			outputs.outputTransfer = null;
 			setDragging(false);
-			for (GhostTarget target : List.copyOf(targets)) {
-				if (targetArea(target).contains((int) x, (int) y) && target.accepts.test(transfer)) {
-					target.chosen.accept(transfer);
-					return true;
-				}
+			if (ghosts.drop(x, y, transfer)) {
+				return true;
 			}
 			status = "designer.status.output_no_target";
 			return true;
@@ -1999,11 +1616,8 @@ public abstract class DesignerFormScreen extends Screen {
 		scrollbarDragging = false;
 		if (button == 0 && inventory.isDragging()) {
 			ItemStack copy = inventory.release();
-			for (GhostTarget target : List.copyOf(targets)) {
-				if (targetArea(target).contains((int) x, (int) y) && target.accepts.test(copy)) {
-					target.chosen.accept(copy);
-					return true;
-				}
+			if (ghosts.drop(x, y, copy)) {
+				return true;
 			}
 			status = "designer.status.drag_no_target";
 			return true;
@@ -2017,9 +1631,9 @@ public abstract class DesignerFormScreen extends Screen {
 		if (transition.leaving()) {
 			return true;
 		}
-		double localY = y / uiScale;
+		double localY = y / viewport.uiScale();
 		transition.settle();
-		return scrollContent(contentX(x / uiScale, localY), localY, horizontal, vertical);
+		return scrollContent(contentX(x / viewport.uiScale(), localY), localY, horizontal, vertical);
 	}
 
 	protected boolean scrollContent(double x, double y, double horizontal, double vertical) {
@@ -2033,7 +1647,7 @@ public abstract class DesignerFormScreen extends Screen {
 			}
 		}
 		if (x >= left && x < left + contentWidth + 10 && y >= contentTop && y < editorBottom() && vertical != 0) {
-			if (scroll.by(-vertical * (20 + DesignerPreferences.rowGap()))) {
+			if (formLayout.scroll.by(-vertical * (20 + DesignerPreferences.rowGap()))) {
 				return true;
 			}
 		}
@@ -2041,30 +1655,30 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	protected boolean scrollRows(int delta) {
-		return scroll.by(delta * (20 + DesignerPreferences.rowGap()));
+		return formLayout.scroll.by(delta * (20 + DesignerPreferences.rowGap()));
 	}
 
 	protected final void scrollViewport(int direction) {
-		scroll.by(direction * Math.max(1, editorBottom() - contentTop));
+		formLayout.scroll.by(direction * Math.max(1, editorBottom() - contentTop));
 	}
 
 	private Rect2i scrollThumb() {
 		int track = Math.max(1, editorBottom() - contentTop);
-		int total = bandOffsets[bandOffsets.length - 1];
+		int total = formLayout.bandOffsets[formLayout.bandOffsets.length - 1];
 		int thumb = Math.min(track, Math.max(18, track * track / Math.max(track, total)));
-		int y = contentTop + (int) Math.round((track - thumb) * scroll.position() / Math.max(1, scroll.maximum()));
+		int y = contentTop + (int) Math.round((track - thumb) * formLayout.scroll.position() / Math.max(1, formLayout.scroll.maximum()));
 		return new Rect2i(left + contentWidth + 2, y, 7, thumb);
 	}
 
 	@Override
 	public final void mouseMoved(double x, double y) {
-		super.mouseMoved(contentX(x / uiScale, y / uiScale), y / uiScale);
+		super.mouseMoved(contentX(x / viewport.uiScale(), y / viewport.uiScale()), y / viewport.uiScale());
 	}
 
 	private void scrollTo(double y) {
 		int travel = editorBottom() - contentTop - scrollThumb().getHeight();
-		scroll.jump(Math.max(0, Math.min(1, (y - contentTop - scrollbarOffset) / Math.max(1, travel))) * scroll.maximum());
-		realizeRows();
+		formLayout.scroll.jump(Math.max(0, Math.min(1, (y - contentTop - scrollbarOffset) / Math.max(1, travel))) * formLayout.scroll.maximum());
+		formLayout.realizeRows();
 	}
 
 	@Override
@@ -2072,20 +1686,20 @@ public abstract class DesignerFormScreen extends Screen {
 		if (autoScroll.active() || autoScrollStoppedButton == button || transition.leaving()) {
 			return true;
 		}
-		return dragContent(contentX(x / uiScale, y / uiScale), y / uiScale, button, dx / uiScale, dy / uiScale);
+		return dragContent(contentX(x / viewport.uiScale(), y / viewport.uiScale()), y / viewport.uiScale(), button, dx / viewport.uiScale(), dy / viewport.uiScale());
 	}
 
 	private double contentX(double x, double y) {
-		return popup == null && x >= left && x < left + contentWidth && y >= contentTop && y < editorBottom()
-				? x - transition.contentOffsetX() : x;
+		return viewport.contentX(x, y, new Rect2i(left, contentTop, contentWidth, editorBottom() - contentTop),
+				transition.contentOffsetX(), popup != null);
 	}
 
 	protected boolean dragContent(double x, double y, int button, double dx, double dy) {
-		if (button == 0 && outputTransfer != null) {
+		if (button == 0 && outputs.outputTransfer != null) {
 			return true;
 		}
 		if (button == 0 && WINDOW.dragging()) {
-			if (WINDOW.drag(x * uiScale / geometryScale, y * uiScale / geometryScale)) {
+			if (WINDOW.drag(x * viewport.uiScale() / viewport.geometryScale(), y * viewport.uiScale() / viewport.geometryScale())) {
 				rebuild();
 			}
 			return true;
@@ -2106,8 +1720,8 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	protected boolean keyContent(int key, int scan, int modifiers) {
-		if (outputTransfer != null && key == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
-			outputTransfer = null;
+		if (outputs.outputTransfer != null && key == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+			outputs.outputTransfer = null;
 			setDragging(false);
 			status = "designer.status.output_no_target";
 			return true;
@@ -2194,7 +1808,7 @@ public abstract class DesignerFormScreen extends Screen {
 		autoScroll.stop();
 		autoScrollStoppedButton = -1;
 		transition.cancel();
-		scroll.stop();
+		formLayout.scroll.stop();
 		WINDOW.release();
 		inventory.release();
 		DesignerCursor.clear(minecraft.getWindow().getWindow());
@@ -2224,50 +1838,6 @@ public abstract class DesignerFormScreen extends Screen {
 		Row joined() {
 			return new Row(label, widget, height, wide, minimumControlWidth, flowWidth, true);
 		}
-	}
-
-	private static final class Label {
-		private final Component text;
-		private final int x;
-		private final int y;
-		private final int width;
-		private final int maxLines;
-		private final boolean scrolling;
-		private final Component help;
-		private final List<net.minecraft.util.FormattedCharSequence> lines;
-
-		private Label(Component text, int x, int y, int width, int maxLines, boolean scrolling, Component help) {
-			this.text = text.copy();
-			this.x = x;
-			this.y = y;
-			this.width = width;
-			this.maxLines = maxLines;
-			this.scrolling = scrolling;
-			this.help = help;
-			lines = List.copyOf(DesignerFonts.body().split(this.text, Math.max(1, width)));
-		}
-		private Label(Component text, int x, int y, int width, int maxLines, boolean scrolling) {
-			this(text, x, y, width, maxLines, scrolling, null);
-		}
-		private Label(Component text, int x, int y, int width) {
-			this(text, x, y, width, 1, false);
-		}
-
-		private Label(Component text, int x, int y, int width, int maxLines) {
-			this(text, x, y, width, maxLines, true);
-		}
-	}
-
-	private record PositionedWidget(AbstractWidget widget, int y) {
-	}
-
-	private record RecipeHeader(int y, Button remove) {
-	}
-
-	private record GroupSurface(int top, int bottom) {}
-
-	private record RowView(int y, int height, List<PositionedWidget> widgets, List<Label> labels,
-			List<Rect2i> sections, List<GhostTarget> targets, List<RecipeHeader> headers) {
 	}
 
 	@FunctionalInterface

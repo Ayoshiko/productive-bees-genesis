@@ -8,20 +8,20 @@ final class WannaBeeLootSelection {
 	private WannaBeeLootSelection() {
 	}
 
-	/**
-	 * 对 {@code rolls} 次均匀选择做索引计数，候选列表中的重复项仍保留各自权重。
-	 * <br/>
-	 * 该循环不再执行战利品表或 LootModifier，只推进 PB 原版已有的列表随机选择；
-	 * 始终使用世界随机源逐次抽取，保持准确的多项分布与原版随机序列语义。
-	 */
-	static int[] sampleCounts(RandomSource random, int rolls, int candidateCount) {
-		int[] counts = new int[Math.max(0, candidateCount)];
+	/** 小批次逐次选择，大批次用条件二项分布分配；重复候选项保留各自权重。 */
+	static long[] sampleCounts(RandomSource random, long rolls, int candidateCount) {
+		long[] counts = new long[Math.max(0, candidateCount)];
 		if (random == null || rolls <= 0 || candidateCount <= 0) return counts;
-		if (candidateCount == 1) {
-			counts[0] = rolls;
+		if (rolls <= 1_024) {
+			for (long i = 0; i < rolls; i++) counts[random.nextInt(candidateCount)]++;
 			return counts;
 		}
-		for (int i = 0; i < rolls; i++) counts[random.nextInt(candidateCount)]++;
+		long remaining = rolls;
+		for (int i = 0; i < candidateCount - 1; i++) {
+			counts[i] = ExactBinomialSampler.sample(random, remaining, 1.0 / (candidateCount - i));
+			remaining -= counts[i];
+		}
+		counts[candidateCount - 1] = remaining;
 		return counts;
 	}
 }

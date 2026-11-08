@@ -61,6 +61,7 @@ class MekCentrifugeSaveHandler {
 
 	/** AE2处理器 — 提供网格节点和 per-tile 状态的 NBT 保存/加载 */
 	private final MekCentrifugeAe2Handler ae2Handler;
+	private Tag unresolvedFluidState;
 
 	MekCentrifugeSaveHandler(PbRecipeProcessor pbProcessor, TileEntityMekCentrifuge tile,
 			MekCentrifugePbUpgradeHandler pbUpgradeHandler, MekCentrifugeAe2Handler ae2Handler) {
@@ -119,11 +120,9 @@ class MekCentrifugeSaveHandler {
 		ae2Handler.saveNodeNBT(nbt);
 		ae2Handler.savePerTileState(nbt);
 		ae2Handler.getStateHolder().savePendingItems(nbt);
-		// 修复 v14：序列化基础离心机单流体槽（DRY：复用 serializeFluidTank）
-		CompoundTag fluidNbt = serializeFluidTank(provider);
-		if (fluidNbt != null) {
-			nbt.put(MekCentrifugeNbtKeys.NBT_KEY_CENTRIFUGE_FLUID, fluidNbt);
-		}
+		// 规范流体由 Mekanism 的 fluid_tanks 保存；旧字段只保留尚未迁移的原文。
+		if (unresolvedFluidState != null) nbt.put(MekCentrifugeNbtKeys.NBT_KEY_CENTRIFUGE_FLUID, unresolvedFluidState.copy());
+		else nbt.remove(MekCentrifugeNbtKeys.NBT_KEY_CENTRIFUGE_FLUID);
 	}
 
 	/**
@@ -134,7 +133,6 @@ class MekCentrifugeSaveHandler {
 	 * PB 升级槽位与数量均从 NBT 恢复；持久化数量不受当前安装上限裁剪。
 	 */
 	void loadAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
-		load(nbt, provider);
 		pbUpgradeHandler.loadSlots(nbt, provider);
 		pbUpgradeHandler.loadCounts(nbt);
 		ae2Handler.loadNodeNBT(nbt);
@@ -144,6 +142,7 @@ class MekCentrifugeSaveHandler {
 		deserializeFluidTank(provider, nbt);
 		// 模块 3 Bug 1：反序列化输出槽/输入槽/能量槽（冗余备份，向后兼容：旧存档无此键时跳过）
 		deserializeDropSlots(nbt, provider);
+		load(nbt, provider);
 		MekCentrifugeEnergyScaling.normalizeCapacity(tile);
 	}
 
@@ -167,6 +166,7 @@ class MekCentrifugeSaveHandler {
 		if (fluidNbt != null) {
 			nbt.put(MekCentrifugeNbtKeys.NBT_KEY_CENTRIFUGE_FLUID, fluidNbt);
 		}
+		if (unresolvedFluidState != null) nbt.put(MekCentrifugeNbtKeys.NBT_KEY_CENTRIFUGE_FLUID, unresolvedFluidState.copy());
 		// 模块 3 Bug 1：序列化输出槽/输入槽/能量槽到自定义 NBT 键（冗余备份）
 		serializeDropSlots(nbt, provider);
 		BlockEntity.addEntityType(nbt, tile.getType());
@@ -279,13 +279,25 @@ class MekCentrifugeSaveHandler {
 	 * @param nbt      包含流体内容的 NBT
 	 */
 	private void deserializeFluidTank(@NotNull HolderLookup.Provider provider, @NotNull CompoundTag nbt) {
-		if (!nbt.contains(MekCentrifugeNbtKeys.NBT_KEY_CENTRIFUGE_FLUID, Tag.TAG_COMPOUND)) return;
-		CompoundTag fluidNbt = nbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_CENTRIFUGE_FLUID);
-		if (!fluidNbt.contains("Fluid", Tag.TAG_COMPOUND)) return;
-		FluidStack fluid = FluidStack.parseOptional(provider, fluidNbt.getCompound("Fluid"));
-		if (!fluid.isEmpty()) {
-			tile.fluidOutputTank().insert(fluid, Action.EXECUTE, AutomationType.INTERNAL);
+		unresolvedFluidState = null;
+		Tag raw = nbt.get(MekCentrifugeNbtKeys.NBT_KEY_CENTRIFUGE_FLUID);
+		if (raw == null) return;
+		try {
+			if (!(raw instanceof CompoundTag legacy) || !java.util.Set.of("Fluid").containsAll(legacy.getAllKeys())
+					|| !legacy.contains("Fluid", Tag.TAG_COMPOUND)) throw new IllegalArgumentException("Invalid legacy fluid");
+			FluidStack fluid = FluidStack.parse(provider, legacy.getCompound("Fluid")).orElseThrow();
+			// 父类已恢复规范库存；旧副本只用于缺失规范字段的旧物品／存档。
+			if (nbt.contains("fluid_tanks")) return;
+			if (fluid.getAmount() > tile.fluidOutputTank().getCapacity())
+				throw new IllegalArgumentException("Legacy fluid exceeds capacity");
+			tile.fluidOutputTank().setStack(fluid);
+		} catch (RuntimeException invalid) {
+			unresolvedFluidState = raw.copy();
 		}
+	}
+
+	boolean hasUnresolvedFluidState() {
+		return unresolvedFluidState != null;
 	}
 
 	// ===== 容器同步器总入口 =====
@@ -323,37 +335,11 @@ class MekCentrifugeSaveHandler {
 		ae2Handler.loadPerTileState(data);
 	}
 
-	/**
-	 * 设置配置卡数据 — 处理PB升级粘贴（含生存模式物品消耗）
-	 * <br/>
-	 * 由 {@link TileEntityMekCentrifuge#setConfigurationData} 在调用 super 后委托。
-	 */
-	void setConfigurationData(@NotNull CompoundTag data, @Nullable Player player) {
-		PbConfigCardDataHelper.readAndApplyPbUpgrades(data, player,
-				pbUpgradeHandler::installPbUpgrade,
-				this::clearAllPbUpgrades,
-				PbConfigCardDataHelper.MachineType.CENTRIFUGE);
+	/** 配置卡先完成升级交换；容量不足时不修改宿主配置。 */
+	boolean setConfigurationData(@NotNull CompoundTag data, @Nullable Player player) {
+		return pbUpgradeHandler.applyConfiguration(data, player);
 	}
 
-	/**
-	 * 清空所有已安装PB升级 — 供配置卡粘贴前调用
-	 * <br/>
-	 * 修复物品守恒：使用 removePbUpgrade 直接清空并返还物品栈列表，
-	 * 由调用方（PbConfigCardDataHelper.readAndApplyPbUpgrades）注入玩家物品栏或掉落地面。
-	 * 不再依赖 extractPbUpgradeByType（输出槽空间不足会截断物品）。
-	 *
-	 * @return 被清空的 PB 升级物品栈列表
-	 */
-	@NotNull
-	private java.util.List<net.minecraft.world.item.ItemStack> clearAllPbUpgrades() {
-		java.util.List<net.minecraft.world.item.ItemStack> dropped = new java.util.ArrayList<>();
-		for (PbUpgradeType type : PbUpgradeType.values()) {
-			if (!type.isBuiltin() && pbUpgradeHandler.getInstalledCount(type) > 0) {
-				dropped.addAll(pbUpgradeHandler.removePbUpgrade(type, true));
-			}
-		}
-		return dropped;
-	}
 
 	// ===== 工厂安装器升级数据 =====
 
@@ -393,7 +379,7 @@ class MekCentrifugeSaveHandler {
 				return Collections.singletonList(tile.fluidOutputTank());
 			}
 		};
-		return CentrifugeUpgradeDataHelper.buildUpgradeData(
+		CentrifugeUpgradeData data = CentrifugeUpgradeDataHelper.buildUpgradeData(
 				provider, redstone, controlType,
 				tile.energyContainer(), new int[]{ operatingTicks },
 				tile.accessor().productivebeesgenesis$getEnergySlot(),
@@ -402,6 +388,10 @@ class MekCentrifugeSaveHandler {
 				pbUpgradeHandler,
 				ae2Handler.getStateHolder(),
 				singleFluidHolder);
+		data.pbWorkState = new CompoundTag();
+		pbProcessor.saveAdditional(data.pbWorkState, provider);
+		data.unresolvedFluidState = unresolvedFluidState == null ? null : unresolvedFluidState.copy();
+		return data;
 	}
 
 	/**
@@ -449,6 +439,8 @@ class MekCentrifugeSaveHandler {
 					targetInputSlots,
 					targetOutputSlots,
 					targetEnergySlot);
+			if (data.pbWorkState != null) pbProcessor.loadAdditional(data.pbWorkState, provider);
+			unresolvedFluidState = data.unresolvedFluidState == null ? null : data.unresolvedFluidState.copy();
 		}
 	}
 

@@ -114,11 +114,13 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	 * 保留 public static 方法签名以兼容现有注册代码。
 	 */
 	public static void onServerTick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {
-		// 延迟重试时通过 BiConsumer 回调重建 BeeRecipeReloader 实例并执行配方覆盖
-		RecipeReloadRetryManager.onServerTick(context -> {
+		// 只处理仍属于服务器已接收代际的延迟任务。
+		RecipeReloadRetryManager.onServerTick(event.getServer(), context -> {
 			BeeRecipeReloader reloader = new BeeRecipeReloader(context.recipeManager(), context.registryAccess());
 			reloader.customRecipes = context.customRecipes();
-			reloader.overrideRecipesInternal();
+			if (reloader.overrideRecipesInternal()) {
+				ProductiveBeesGenesis.acceptRecipeManager(context.recipeManager(), true);
+			}
 		});
 	}
 
@@ -142,11 +144,11 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	/**
 	 * 内部配方覆盖逻辑 — 假设配置已加载
 	 */
-	private void overrideRecipesInternal() {
+	private boolean overrideRecipesInternal() {
 		// 防御性检查：确保配置已加载
 		if (!ModConfig.areServerSpecsLoaded()) {
 			DevLog.warn("recipe_reload", "配置未加载，跳过配方覆盖");
-			return;
+			return false;
 		}
 
 		// 就绪检查：BeeIngredientFactory 必须已加载 myriadcreations，否则 toNetwork 序列化时会 NPE
@@ -157,7 +159,7 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			// 让 retryCount 累积，达到 MAX_RETRY_COUNT 后放弃，避免无限重试。
 			// 此场景常见于首次进入世界时 PB 注册顺序晚于本模组的 reload listener。
 			RecipeReloadRetryManager.rescheduleRetry(this.recipeManager, this.registryAccess, customRecipes);
-			return;
+			return false;
 		}
 		List<RecipeHolder<?>> sourceRecipes = new ArrayList<>(recipeManager.getRecipes());
 		// 构建新列表，避免在遍历中通过索引 remove(i)/i-- 造成的易错写法
@@ -179,18 +181,9 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 
 		if (modified) {
 			recipeManager.replaceRecipes(processedRecipes);
-			PBReflectionCacheCleaner.clearBeeFishingCaches();
 		}
 
-		// 重建离心配方索引 — 确保服务端配方重载完成后索引必定更新
-		// 修复：onTagsReload 触发时 ServerLifecycleHooks.getCurrentServer() 可能为 null（服务器启动早期），
-		// 导致服务端跳过索引重建，所有配方查找走 FALLBACK 全量遍历路径（性能 O(N) 而非 O(1)）
-		CentrifugeRecipeIndex.rebuild(recipeManager);
-		// 延迟重试可能晚于 TagsUpdatedEvent 完成，必须在真正重建点同步清理长短两层查找缓存。
-		SharedPbRecipeCache.invalidate();
-		// 延迟重试可能晚于标签事件，蜂箱索引与万象模板也必须在实际完成点失效。
-		BeeInfoHelper.invalidateCache();
-		com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache.invalidate();
-		ProductiveBeesGenesis.RECIPE_VERSION.incrementAndGet();
+		// 候选管理器在整轮重载成功前不会发布到当前机器的共享索引。
+		return true;
 	}
 }

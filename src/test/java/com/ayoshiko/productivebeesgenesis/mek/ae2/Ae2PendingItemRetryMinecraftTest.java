@@ -41,7 +41,7 @@ class Ae2PendingItemRetryMinecraftTest {
 		holder.recordNetworkCost(storage, 20, 10_000_000, 150_000);
 		when(storage.insert(eq(key), anyLong(), any(Actionable.class), any(IActionSource.class)))
 				.thenAnswer(call -> call.getArgument(1));
-		Ae2InputPuller.retryPendingItems(level(), holder, storage, List.of(), 20);
+		Ae2LeftoverReturner.retryPendingItems(level(), holder, storage, List.of(), 20, null, IActionSource.empty());
 		assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
 		assertFalse(holder.getPendingItemBuffer().isBlocked());
 		verify(storage).insert(eq(key), eq(5L), eq(Actionable.MODULATE), any());
@@ -56,7 +56,7 @@ class Ae2PendingItemRetryMinecraftTest {
 		holder.getPendingItemBuffer().enqueueReturnToNetwork(fingerprint, 5, 20);
 		holder.getPendingItemBuffer().recordFailure(fingerprint, 20);
 		holder.recordNetworkExtractCost(storage, 21, 10_000_000, 300_000);
-		Ae2InputPuller.retryPendingItems(level(), holder, storage, List.of(), 21);
+		Ae2LeftoverReturner.retryPendingItems(level(), holder, storage, List.of(), 21, null, IActionSource.empty());
 		var deferred = holder.getPendingItemBuffer().snapshot(22).getFirst();
 		assertEquals(1, deferred.retries());
 		assertEquals(5, deferred.returnToNetworkAmount());
@@ -71,7 +71,7 @@ class Ae2PendingItemRetryMinecraftTest {
 		holder.getPendingItemBuffer().enqueue(fingerprint, 5, 20);
 		var slot = BasicInventorySlot.at(null, 0, 0);
 		holder.getPushState().getReturnBackoff().recordFailure(System.nanoTime());
-		Ae2InputPuller.retryPendingItems(level(), holder, null, List.of(slot), 20);
+		Ae2LeftoverReturner.retryPendingItems(level(), holder, null, List.of(slot), 20, null, IActionSource.empty());
 		assertEquals(5, slot.getCount());
 		assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
 		assertFalse(holder.getPendingItemBuffer().isBlocked());
@@ -89,7 +89,7 @@ class Ae2PendingItemRetryMinecraftTest {
 		assertEquals(5, pending.enqueue(localFingerprint, 5, 20));
 		var slot = BasicInventorySlot.at(null, 0, 0);
 
-		Ae2InputPuller.retryPendingItems(level(), holder, null, List.of(slot), 20);
+		Ae2LeftoverReturner.retryPendingItems(level(), holder, null, List.of(slot), 20, null, IActionSource.empty());
 
 		assertTrue(slot.getStack().is(Items.RAW_IRON));
 		assertEquals(5, slot.getCount());
@@ -116,7 +116,7 @@ class Ae2PendingItemRetryMinecraftTest {
 		when(storage.insert(eq(key), anyLong(), eq(Actionable.MODULATE), any(IActionSource.class)))
 				.thenAnswer(call -> Math.min(2L, (Long) call.getArgument(1)));
 
-		Ae2InputPuller.retryPendingItems(level(), holder, storage, List.of(slot), 20L);
+		Ae2LeftoverReturner.retryPendingItems(level(), holder, storage, List.of(slot), 20L, null, IActionSource.empty());
 
 		assertEquals(3L, holder.getPendingItemBuffer().getTotalAmount());
 		assertFalse(holder.getPendingItemBuffer().hasRetryableItems(20L));
@@ -139,7 +139,7 @@ class Ae2PendingItemRetryMinecraftTest {
 		when(storage.insert(eq(key), anyLong(), eq(Actionable.MODULATE), any(IActionSource.class)))
 				.thenThrow(new IllegalStateException("unknown insert result"));
 
-		Ae2InputPuller.retryPendingItems(level(), holder, storage, List.of(slot), 20L);
+		Ae2LeftoverReturner.retryPendingItems(level(), holder, storage, List.of(slot), 20L, null, IActionSource.empty());
 
 		assertEquals(5L, holder.getPendingItemBuffer().getTotalAmount());
 		assertFalse(holder.getPendingItemBuffer().hasRetryableItems(20L));
@@ -156,10 +156,10 @@ class Ae2PendingItemRetryMinecraftTest {
 		holder.getPendingItemBuffer().enqueueReturnToNetwork(fingerprint, 5, 20);
 		var storage = mock(MEStorage.class);
 		var level = level();
-		Ae2InputPuller.retryPendingItems(level, holder, storage, List.of(), 20);
-		Ae2InputPuller.retryPendingItems(level, holder, storage, List.of(), 21);
+		Ae2LeftoverReturner.retryPendingItems(level, holder, storage, List.of(), 20, null, IActionSource.empty());
+		Ae2LeftoverReturner.retryPendingItems(level, holder, storage, List.of(), 21, null, IActionSource.empty());
 		assertFalse(holder.getPendingItemBuffer().hasRetryableItems(22));
-		Ae2InputPuller.retryPendingItems(level, holder, storage, List.of(), 23);
+		Ae2LeftoverReturner.retryPendingItems(level, holder, storage, List.of(), 23, null, IActionSource.empty());
 		var saved = new net.minecraft.nbt.CompoundTag();
 		holder.savePendingItems(saved);
 		var restored = new Ae2OutputStateHolder();

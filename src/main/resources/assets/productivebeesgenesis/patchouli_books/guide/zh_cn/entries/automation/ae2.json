@@ -2,6 +2,7 @@
   "name": "AE2 与物流",
   "icon": "ae2:fluix_smart_cable",
   "category": "productivebeesgenesis:automation",
+  "flag": "mod:ae2",
   "pages": [
     {
       "type": "patchouli:spotlight",

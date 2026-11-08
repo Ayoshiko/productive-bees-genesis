@@ -235,7 +235,7 @@ public final class ModPayloads {
 				AeInputOutputSlotPayload.STREAM_CODEC,
 				Ae2PayloadHandlers::handleAeInputOutputSlot
 		);
-		// per-tile AE2 输入配置窗口打开请求包 — 由 AeInputOverlay 按钮点击发送
+		// per-tile AE2 输入配置窗口打开请求包 — 由 AeInputButton 点击发送
 		// 服务端不直接打开 Screen（NeoForge 限制），而是推送最新过滤器状态到客户端，
 		// 客户端按钮点击时已立即打开 GuiAeInputConfig，此包仅用于状态同步
 		registrar.playToServer(

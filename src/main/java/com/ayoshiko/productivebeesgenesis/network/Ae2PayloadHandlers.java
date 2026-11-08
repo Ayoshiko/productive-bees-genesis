@@ -9,18 +9,21 @@ import appeng.me.helpers.BaseActionSource;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputTransfer;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2ItemFingerprint;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2NetworkInventoryView;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-import mekanism.common.inventory.container.tile.MekanismTileContainer;
+import com.ayoshiko.productivebeesgenesis.util.PlayerInventoryTransfer;
 import mekanism.common.tile.base.TileEntityMekanism;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+
+import java.util.List;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
@@ -38,8 +41,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 	 * </ol>
 	 * 所有方法包级可见，由 {@link ModPayloads#register} 通过方法引用挂载到对应数据包。
 	 * <p>
-	 * 安全模型：每个 handler 均校验玩家身份（{@link ServerPlayer}）、
-	 * 方块实体类型与 8 格 GUI 交互距离（8² = 64），防止恶意客户端远距离操作。
+	 * 所有服务端操作先通过 {@link MachineMenuAccess} 复核当前菜单和实时权限，
+	 * 再校验对应宿主类型、过滤器状态和操作预算。
 	 * <p>
 	 * 依赖倒置：通过 {@link IAe2InputHost} / {@link IAe2OutputHostBase} 接口多态判定，
 	 * 避免直接引用 ME/EME 可选依赖的具体子类（其中 IAe2InputHost 由 Mixin 运行时注入）。
@@ -50,40 +53,10 @@ final class Ae2PayloadHandlers {
 	private Ae2PayloadHandlers() {
 	}
 
-	/**
-	 * 容器位置一致性校验 — 防止 IDOR 类权限提升
-	 * <br/>
-	 * 玩家当前打开的 containerMenu 必须是 MekanismTileContainer 且其绑定的方块坐标
-	 * 与 payload.pos() 一致。防止玩家打开任意容器（如工作台、背包）后，
-	 * 在 8 格交互距离内远程操作他人方块的 AE2 开关与过滤器（IDOR 攻击）。
-	 * <p>
-	 * 与 {@link ApiaryPayloadHandlers} 保持一致的强制校验策略。
-	 *
-	 * @param serverPlayer 服务端玩家
-	 * @param targetPos    payload 中的目标方块坐标
-	 * @param logKey       日志节流键
-	 * @return true 表示校验通过，false 表示校验失败（调用方应直接 return）
-	 */
-	static boolean validateContainerMatch(ServerPlayer serverPlayer,
-			net.minecraft.core.BlockPos targetPos, String logKey) {
-		if (serverPlayer.containerMenu == null) return false;
-		if (!(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)) {
+	static boolean validateInputFilterAvailable(ServerPlayer player, BlockPos pos) {
+		if (!MachineMenuAccess.canAccess(player, pos)) {
 			return false;
 		}
-		if (!tileContainer.getTileEntity().getBlockPos().equals(targetPos)) {
-			LogThrottle.warn(logKey,
-					"玩家 {} 当前打开容器位置 {} 与目标 AE2 操作方块位置 {} 不一致",
-					serverPlayer.getName().getString(),
-					tileContainer.getTileEntity().getBlockPos(),
-					targetPos);
-			return false;
-		}
-		return true;
-	}
-
-	static boolean validateInputFilterAvailable(ServerPlayer player,
-			BlockPos pos, String logKey) {
-		if (!validateContainerMatch(player, pos, logKey)) return false;
 		if (player.level().getBlockEntity(pos) instanceof IAe2InputHost host
 				&& host.productivebeesgenesis$getAe2StateHolder().hasDeferredInputFilter()) {
 			player.displayClientMessage(Component.translatable("command.productivebeesgenesis.output.input_filter"), true);
@@ -108,7 +81,7 @@ final class Ae2PayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击（打开自己方块后远程操作 8 格内他人方块）
-		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_output_pos_mismatch")) {
+		if (!MachineMenuAccess.canAccess(serverPlayer, payload.pos())) {
 			return;
 		}
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
@@ -161,7 +134,7 @@ final class Ae2PayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击
-		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_input_pull_pos_mismatch")) {
+		if (!MachineMenuAccess.canAccess(serverPlayer, payload.pos())) {
 			return;
 		}
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
@@ -193,7 +166,7 @@ final class Ae2PayloadHandlers {
 		if (serverPlayer.level() == null) {
 			return;
 		}
-		if (!validateContainerMatch(serverPlayer, payload.pos(), "smelting_compat_pos_mismatch")) {
+		if (!MachineMenuAccess.canAccess(serverPlayer, payload.pos())) {
 			return;
 		}
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
@@ -236,7 +209,7 @@ final class Ae2PayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击
-		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_input_nbt_pos_mismatch")) {
+		if (!MachineMenuAccess.canAccess(serverPlayer, payload.pos())) {
 			return;
 		}
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
@@ -269,7 +242,7 @@ final class Ae2PayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击
-		if (!validateInputFilterAvailable(serverPlayer, payload.pos(), "ae2_input_filter_mode_pos_mismatch")) {
+		if (!validateInputFilterAvailable(serverPlayer, payload.pos())) {
 			return;
 		}
 		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）
@@ -315,7 +288,7 @@ final class Ae2PayloadHandlers {
 	static void handleAeInputOutputSlot(AeInputOutputSlotPayload payload, IPayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) return;
 		if (serverPlayer.level() == null) return;
-		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_output_slot_pos_mismatch")) return;
+		if (!MachineMenuAccess.canAccess(serverPlayer, payload.pos())) return;
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
 		if (be == null) return;
 		double distance = serverPlayer.distanceToSqr(payload.pos().getCenter());
@@ -351,76 +324,82 @@ final class Ae2PayloadHandlers {
 		if (storageService == null) return;
 		MEStorage meStorage = Ae2GridNodeManager.getCachedMeStorage(holder, host);
 		if (meStorage == null) return;
-		net.minecraft.server.level.ServerLevel sl = (net.minecraft.server.level.ServerLevel) serverPlayer.level();
-		long now = sl.getGameTime();
-		boolean ignoreNbt = holder.isAeInputNbtIgnore();
-		long visible = Ae2NetworkInventoryView.visibleAmount(holder, now,
-				storageService.getCachedInventory(), meStorage, key, Long.MAX_VALUE, ACTION_SOURCE);
-		long cap = filter.getDirectPullLimit(key, visible, ignoreNbt,
-				serverPlayer.level().registryAccess());
-		if (cap >= 0L) visible = Math.min(visible, cap);
-		boolean changed = false;
-		if (payload.shift()) {
-			// Quick move: extract up to a full stack into the player inventory.
-			long maxExtract = Math.min(visible, key.getMaxStackSize());
-			if (maxExtract > 0L) {
-				// 先计算背包实际可容纳数量，只提取能全部放入的量：
-				// Inventory.add 只返回"是否放入至少 1 件"（且 1.21.1 无 addAndReturnRemainder），
-				// 若先扣减 ME 库存再处理剩余会造成物品凭空消失（ME extract 不可回滚）
-				int capacity = freeInventoryCapacity(serverPlayer, key.toStack(1));
-				maxExtract = Math.min(maxExtract, capacity);
-				if (maxExtract > 0L) {
-					long extracted = SaturatingMath.clampToRequest(
-						meStorage.extract(key, maxExtract, Actionable.MODULATE, ACTION_SOURCE), maxExtract);
-					if (extracted > 0L) {
-						changed = true;
-						// 库存已扣减：失效同 tick 可见库存缓存，避免客户端显示提取前旧值
-						holder.invalidateInputInventoryViewCache();
-						net.minecraft.world.item.ItemStack stack = key.toStack(
-								(int) Math.min(extracted, Integer.MAX_VALUE));
-						if (!serverPlayer.getInventory().add(stack)) {
-							// 防御：容量预计算与实际放入不一致（极端并发）时掉落兜底，保证零丢失
-							serverPlayer.drop(stack, false);
-						}
-					}
-				}
-			}
-		} else {
-			net.minecraft.world.item.ItemStack carried = serverPlayer.containerMenu.getCarried();
-			if (carried.isEmpty()) {
-				// Extract into the cursor (right click = half).
-				long maxExtract = Math.min(visible, key.getMaxStackSize());
-				if (payload.rightClick()) maxExtract = Math.max(1L, (maxExtract + 1L) / 2L);
-				if (maxExtract > 0L) {
-				long extracted = SaturatingMath.clampToRequest(
-						meStorage.extract(key, maxExtract, Actionable.MODULATE, ACTION_SOURCE), maxExtract);
-				if (extracted > 0L) {
-					changed = true;
-						// 库存已扣减：失效同 tick 可见库存缓存
-						holder.invalidateInputInventoryViewCache();
-						serverPlayer.containerMenu.setCarried(key.toStack(
-								(int) Math.min(extracted, Integer.MAX_VALUE)));
-					}
-				}
-			} else {
-				// Insert the carried stack into the network (right click = one).
+		var pending = holder.getPendingItemBuffer();
+		if (pending.isBlocked()) return;
+		long now = serverPlayer.level().getGameTime();
+		ItemStack carried = serverPlayer.containerMenu.getCarried();
+		var transfer = pending.transfer();
+		AEItemKey selectedKey = key;
+		String fingerprint = Ae2ItemFingerprint.encode(selectedKey, serverPlayer.registryAccess());
+		if (!pending.canAcceptReturn(fingerprint, selectedKey.getMaxStackSize())) return;
+		try {
+			if (!payload.shift() && !carried.isEmpty()) {
 				AEItemKey carriedKey = AEItemKey.of(carried);
 				if (carriedKey == null) return;
-				int toInsert = payload.rightClick() ? 1 : carried.getCount();
-				long inserted = SaturatingMath.clampToRequest(
-						meStorage.insert(carriedKey, toInsert, Actionable.MODULATE, ACTION_SOURCE), toInsert);
-				if (inserted > 0L) {
-					changed = true;
-					carried.shrink((int) inserted);
-					if (carried.isEmpty()) {
-						serverPlayer.containerMenu.setCarried(net.minecraft.world.item.ItemStack.EMPTY);
-					}
+				int requested = payload.rightClick() ? 1 : carried.getCount();
+				String carriedFingerprint = Ae2ItemFingerprint.encode(carriedKey, serverPlayer.registryAccess());
+				if (!pending.canAcceptReturn(carriedFingerprint, requested)) return;
+				transfer.beginKnown(() -> carriedFingerprint, requested);
+				transfer.playerContext(serverPlayer.getUUID(), true);
+				carried.shrink(requested);
+				if (carried.isEmpty()) serverPlayer.containerMenu.setCarried(ItemStack.EMPTY);
+				transfer.offer(requested, -1);
+				host.productivebeesgenesis$markAe2StateChanged();
+				long inserted = meStorage.insert(carriedKey, requested, Actionable.MODULATE, ACTION_SOURCE);
+				transfer.accepted(inserted);
+				if (transfer.knownAmount() > 0) {
+					deliverKnownToPlayer(serverPlayer, transfer, carriedKey, false);
 				}
+			} else {
+				// 紧邻真实提取重新查询库存；显示缓存不能授权取走保留线以内的物品。
+				long visible = meStorage.extract(selectedKey, Long.MAX_VALUE, Actionable.SIMULATE, ACTION_SOURCE);
+				long cap = filter.getDirectPullLimit(selectedKey, visible, holder.isAeInputNbtIgnore(),
+						serverPlayer.registryAccess());
+				if (cap >= 0) visible = Math.min(visible, cap);
+				long requested = Math.min(Math.max(0, visible), selectedKey.getMaxStackSize());
+				if (!payload.shift() && payload.rightClick() && requested > 0) {
+					requested = (requested + 1) / 2;
+				}
+				if (payload.shift()) requested = Math.min(requested, freeInventoryCapacity(serverPlayer, selectedKey.toStack(1)));
+				if (requested <= 0) return;
+				transfer.beginExtract(() -> fingerprint, requested);
+				transfer.playerContext(serverPlayer.getUUID(), !payload.shift());
+				host.productivebeesgenesis$markAe2StateChanged();
+				long extracted = meStorage.extract(selectedKey, requested, Actionable.MODULATE, ACTION_SOURCE);
+				transfer.extracted(extracted);
+				if (extracted > 0) deliverKnownToPlayer(serverPlayer, transfer, selectedKey, payload.shift());
 			}
+			transfer.finish(pending, now, true);
+		} catch (RuntimeException | LinkageError error) {
+			LogThrottle.error("ae2_player_transfer",
+					"AE2 玩家交接待核验 pos={} player={} request={} phase={}: {}",
+					payload.pos(), serverPlayer.getUUID(), transfer.request(), transfer.destination(), error.toString());
+			serverPlayer.displayClientMessage(Component.translatable(
+					"command.productivebeesgenesis.output.failed", "AE2 transfer requires reconciliation"), true);
+		} finally {
+			host.productivebeesgenesis$markAe2StateChanged();
+			holder.invalidateInputInventoryViewCache();
 		}
-		// 只有 ME 状态实际改变时才同步，避免被拒绝/空操作放大广播。
-		if (changed) {
-			Ae2FilterPayloadHandlers.syncFilterToClient(be, serverPlayer);
+		Ae2FilterPayloadHandlers.syncFilterToClient(be, serverPlayer);
+	}
+
+	private static void deliverKnownToPlayer(ServerPlayer player,
+			Ae2InputTransfer transfer, AEItemKey key, boolean inventory) {
+		int amount = (int) transfer.knownAmount();
+		if (amount <= 0) return;
+		ItemStack delivered = key.toStack(amount);
+		if (inventory) {
+			PlayerInventoryTransfer.Plan plan = PlayerInventoryTransfer.prepare(player, List.of(delivered));
+			if (plan == null) return;
+			transfer.offerToPlayer(amount);
+			transfer.accepted(plan.commit() ? amount : 0);
+		} else {
+			ItemStack current = player.containerMenu.getCarried();
+			if (!current.isEmpty() && (!ItemStack.isSameItemSameComponents(current, delivered)
+					|| current.getCount() > current.getMaxStackSize() - amount)) return;
+			transfer.offerToPlayer(amount);
+			player.containerMenu.setCarried(delivered.copyWithCount(current.getCount() + amount));
+			transfer.accepted(amount);
 		}
 	}
 

@@ -303,7 +303,7 @@ public final class ResourceCentrifugeProcessor {
 			int advanced = tickPlan.executedTicks();
 			int consumed = tickPlan.completedOperations();
 			int remaining = tickPlan.remainingProgress();
-			if (advanced == 0) return Result.BLOCKED;
+			if (advanced == 0 && consumed == 0) return Result.BLOCKED;
 			LocalBatch localBatch = local == null || consumed == 0 ? null : local.prepare(consumed, work.seed);
 			long energyCost = tickPlan.energyUsed();
 			if (access.consumeEnergy(energyCost, true) != energyCost) return Result.BLOCKED;

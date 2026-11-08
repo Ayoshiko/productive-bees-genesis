@@ -54,13 +54,13 @@ class Ae2CombProcessableWiringTest {
 	@Test
 	@DisplayName("三条候选收集路径都接可处理性门，缓存与其他 per-host 缓存同生命周期")
 	void pullerWiresCombGateOnEveryCandidatePath() throws Exception {
-		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputCandidatePolicy.java");
 		String normalized = puller.replaceAll("\\s+", " ");
 		assertTrue(normalized.contains("buffers.combProcessableCache.canProcess(host, key, smeltingEnabled)"),
 				"可处理性判定必须走 per-host 缓存，不得每次现算");
 		// directOnly 精确白名单快路径、直连 network-stock 探测路径、10 tick 候选刷新扫描路径。
 		// 少一条就会出现「一条路径挡住了、另一条又把它拉回来」的不一致。
-		int gated = normalized.split("smeltingInputCache, tagGate, combGate\\)", -1).length - 1;
+		int gated = normalized.split("smeltingInputCache, tagGate, (combGate|processGate)\\)", -1).length - 1;
 		assertTrue(gated >= 3,
 				"可处理性门必须覆盖全部候选收集路径，当前带 combGate 的 classify 调用点数=" + gated);
 
@@ -93,7 +93,7 @@ class Ae2CombProcessableWiringTest {
 		assertTrue(cache.contains("if (remainingProbes <= 0) return true;"),
 				"未缓存判定必须限速，防止配方重载后首轮刷新把全量遍历堆在同一 tick");
 
-		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputCandidatePolicy.java");
 		assertTrue(puller.contains("buffers.combProcessableCache.beginProbeWindow()"),
 				"每次拉取必须重置限速窗口，否则额度用尽后永不恢复");
 	}

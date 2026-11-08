@@ -174,7 +174,7 @@ public class GuiMekApiary<TILE extends TileEntityMekApiary, CONTAINER extends Me
 
 		addBeeSlotBackgrounds();
 		addOutputPageControls();
-		// AE2 输出按钮已移至 MEK 侧面配置 Tab，由 AeOutputOverlay 动态注入
+		// AE2 输出按钮由原生侧面配置窗口在构造时创建。
 	}
 
 	/** 装配输出区翻页控件（单页容器不装配，控件布局对象也保持 null 以跳过页码绘制） */

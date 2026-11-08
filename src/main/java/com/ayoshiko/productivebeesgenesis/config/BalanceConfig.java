@@ -29,37 +29,39 @@ public final class BalanceConfig {
 	static final int LEGACY_STACK_UPGRADE_LIMIT = 16;
 
 	private static volatile Rules activeRules = Rules.basic();
-	private static volatile boolean initialized;
 
 	private BalanceConfig() {
 	}
 
-	/**
-	 * Refresh the immutable runtime snapshot after a server config load or reload.
-	 *
-	 * @param inheritNamedPreset when true, a transition from BASIC or
-	 *                           PARADOX_INFINITY to CUSTOM copies all currently
-	 *                           effective balance values into the custom fields
-	 * @return true when custom backing values were updated and should be saved
-	 */
-	public static synchronized boolean refresh(boolean inheritNamedPreset) {
+	/** 在配置事件内准备封闭规则；上一份准备结果由当前连接／世界持有。 */
+	static Update prepare(Update previous, boolean inheritNamedPreset, boolean persist) {
 		BalancePreset preset = readPreset();
 		CustomSettings configured = readCustomSettings();
 		CustomSettings persisted = settingsToPersist(
-				initialized,
+				previous != null,
 				inheritNamedPreset,
 				preset,
-				activeRules.preset(),
+				previous == null ? DEFAULT_PRESET : previous.rules().preset(),
 				configured);
-		boolean changed = writeCustomSettings(persisted);
-		activeRules = resolve(
+		boolean changed = persist && writeCustomSettings(persisted);
+		Rules rules = resolve(
 				preset,
 				persisted.productivityTiersExclusive(),
 				persisted.speedTiersExclusive(),
 				persisted.centrifugeProductivityAffectsOutput(),
 				persisted.apiaryBeeGenesAffectWork(), persisted.apiaryProduceAllFlowers());
-		initialized = true;
-		return changed;
+		return new Update(rules, changed);
+	}
+
+	static void publish(Update update) {
+		activeRules = update.rules();
+	}
+
+	static void reset() {
+		activeRules = Rules.basic();
+	}
+
+	record Update(Rules rules, boolean changed) {
 	}
 
 	public static BalancePreset preset() {

@@ -37,7 +37,7 @@ public class ProductiveBeesGenesisKubeJSPlugin implements KubeJSPlugin {
 	 * 注册脚本可访问的类
 	 * <br/>
 	 * 允许 KubeJS 脚本直接引用本模组 compat.kubejs 包下的类，
-	 * 例如通过 MyriadBeeEvents.REGISTER 注册事件监听器。
+	 * 例如通过 MyriadBeeEvents.register(...) 注册事件监听器。
 	 */
 	@Override
 	public void registerClasses(ClassFilter filter) {
@@ -68,7 +68,7 @@ public class ProductiveBeesGenesisKubeJSPlugin implements KubeJSPlugin {
 	 * 注册自定义事件组
 	 * <br/>
 	 * 将 {@link MyriadBeeEvents#GROUP} 注册到 KubeJS 事件系统，
-	 * 使脚本能够通过 MyriadBeeEvents.REGISTER.register(...) 监听蜜蜂配方注册事件。
+	 * 使脚本能够通过 MyriadBeeEvents.register(...) 监听蜜蜂配方注册事件。
 	 */
 	@Override
 	public void registerEvents(EventGroupRegistry registry) {

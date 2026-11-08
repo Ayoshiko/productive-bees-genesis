@@ -8,10 +8,12 @@ import mekanism.common.tile.interfaces.IRedstoneControl.RedstoneControl;
 import mekanism.common.upgrade.MachineUpgradeData;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
 	 * 蜂箱工厂升级数据
@@ -38,6 +40,13 @@ import java.util.List;
 	 * </ul>
 	 */
 public class ApiaryUpgradeData extends MachineUpgradeData {
+	final UUID request = UUID.randomUUID();
+	@Nullable
+	CompoundTag sourceSnapshot;
+	@Nullable
+	TileEntityMekApiary source;
+	boolean attempted;
+	long capturedEnergy;
 	/** 配置独立于可选依赖保存，资产仍走原有一次性交接。 */
 	@Nullable
 	public CompoundTag aePerTileState;
@@ -66,6 +75,8 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 
 	/** 蜂蜜流体罐内容 NBT（由 FluidStack.save 序列化，可能为空标签表示空罐） */
 	public final CompoundTag fluidNbt;
+	@Nullable
+	public Tag invalidFluidData;
 
 	/** 蜂笼输出槽 NBT（由 OutputInventorySlot.serializeNBT 序列化，独立于产物输出槽） */
 	public final CompoundTag cageOutSlotNbt;
@@ -227,6 +238,7 @@ public class ApiaryUpgradeData extends MachineUpgradeData {
 			@Nullable CompoundTag geneTreatSlotNbt, @Nullable CompoundTag geneTreatRestockNbt) {
 		super(provider, redstone, controlType, energyContainer, progress, energySlot,
 				inputSlots, outputSlots, sorting, components);
+		this.capturedEnergy = energyContainer.getEnergy();
 		this.beeSlotsNbt = beeSlotsNbt;
 		this.feederSlotsNbt = feederSlotsNbt;
 		this.pbUpgradeCountsNbt = pbUpgradeCountsNbt;

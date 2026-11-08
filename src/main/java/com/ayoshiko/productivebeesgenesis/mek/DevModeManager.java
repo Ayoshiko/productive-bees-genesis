@@ -73,6 +73,12 @@ public final class DevModeManager {
 		return featureFlags.getOrDefault(feature, false);
 	}
 
+	/** 世界或连接终止时撤销内存开关，禁止带入下一会话。 */
+	public static void reset() {
+		masterEnabled = false;
+		featureFlags.clear();
+	}
+
 	/** 设置主开关 */
 	public static void setEnabled(boolean enabled) {
 		masterEnabled = enabled;

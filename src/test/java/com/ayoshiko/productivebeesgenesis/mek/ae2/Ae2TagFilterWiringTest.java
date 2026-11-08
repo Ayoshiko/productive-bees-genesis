@@ -42,7 +42,7 @@ class Ae2TagFilterWiringTest {
 	@Test
 	@DisplayName("拉取器未配置标签过滤时使用零开销 ALLOW_ALL，并把代号纳入候选缓存失效条件")
 	void pullerWiresTagGateAndGeneration() throws Exception {
-		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputCandidatePolicy.java");
 		assertTrue(source.contains("Ae2TagFilter tagFilter = holder.getAeTagFilter()"));
 		assertTrue(source.contains("Ae2InputCandidatePolicy.SmeltingTagGate.ALLOW_ALL"));
 		assertTrue(source.contains("buffers.tagFilterCache.allows(tagFilter, key)"));
@@ -67,7 +67,7 @@ class Ae2TagFilterWiringTest {
 		assertTrue(query.contains("boolean matched = hitSlots != null && hitSlots.length > 0;"));
 		assertTrue(query.contains("mode, matched, tagFilterActive, hasConfiguredEntries"));
 
-		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java")
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputCandidatePolicy.java")
 				.replaceAll("\\s+", " ");
 		assertTrue(puller.contains("&& !ignoreNbt && !tagFilterActive && !directEntries.isEmpty()"));
 		assertTrue(puller.contains("getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive, decision)"));
@@ -78,7 +78,7 @@ class Ae2TagFilterWiringTest {
 	void perTileCodecPersistsTagFilter() throws Exception {
 		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
 				+ "Ae2PerTileStateNbtCodec.java");
-		assertTrue(source.contains("holder.getAeTagFilter().save(tagFilterTag)"));
+		assertTrue(source.contains("holder.getAeTagFilter().saveRaw()"));
 		assertTrue(source.contains("tag.contains(Ae2NbtKeys.NBT_KEY_AE_INPUT_TAG_FILTER)"));
 		assertTrue(source.contains("holder.getAeTagFilter().reset()"));
 	}
@@ -102,7 +102,7 @@ class Ae2TagFilterWiringTest {
 		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/network/"
 				+ "Ae2TagFilterPayloadHandlers.java");
 		assertTrue(source.contains("NetworkSecurityConstants.MAX_TAG_EXPRESSION_LENGTH"));
-		assertTrue(source.contains("Ae2PayloadHandlers.validateContainerMatch"));
+		assertTrue(source.contains("MachineMenuAccess.canAccess"));
 		assertTrue(source.contains("PayloadRateLimiter.tryAccept"));
 		assertTrue(source.contains("NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ"));
 	}
@@ -199,14 +199,15 @@ class Ae2TagFilterWiringTest {
 	@Test
 	@DisplayName("保留库存对经过标签过滤的 smelt 候选同样生效：三条候选路径 + 唯一抽取点")
 	void reserveAppliesToTagFilteredSmeltingCandidates() throws Exception {
-		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputCandidatePolicy.java")
+				+ read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputExecution.java");
 
 		// 1) 三条候选收集路径都带 tagGate 分类：directOnly 精确白名单快路径、
 		//    直连 network-stock 探测路径、缓存库存优先级扫描路径。
 		//    少一条就会出现「标签过滤放行了但另一条路径绕过」的不一致。
 		String normalized = puller.replaceAll("\\s+", " ");
 		int gateUses = normalized.split(
-				"Ae2InputCandidatePolicy\\.classify\\( level, ", -1).length - 1;
+				"classify\\( ?level, ", -1).length - 1;
 		assertTrue(gateUses >= 3,
 				"标签门必须覆盖全部候选路径，当前 classify(level, ...) 调用点数=" + gateUses);
 		assertTrue(normalized.contains("buffers.markScanCandidateRefresh(availableStacks, "

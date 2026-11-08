@@ -143,13 +143,33 @@ class OptionalGuideCompatibilityTest {
 		}
 		for (String iconPath : List.of(
 				"assets/productivebeesgenesis/textures/gui/feeder_tab.png",
-				"assets/productivebeesgenesis/textures/gui/pb_upgrade_tab.png",
-				"assets/productivebeesgenesis/textures/gui/slot/cage_slot_input.png",
-				"assets/productivebeesgenesis/textures/gui/slot/cage_slot_output.png")) {
+				"assets/productivebeesgenesis/textures/gui/pb_upgrade_tab.png")) {
 			Path path = RESOURCE_ROOT.resolve(iconPath);
 			BufferedImage image = ImageIO.read(path.toFile());
 			assertTrue(image != null && image.getWidth() == 16 && image.getHeight() == 16,
 					() -> iconPath + " 必须保留为 16x16 GUI 图标");
+		}
+		String cageOverlay = Files.readString(Path.of(
+				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/client/GuiCageSlotOverlay.java"));
+		String slotHint = Files.readString(Path.of(
+				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/client/PbSlotHintTexture.java"));
+		assertTrue(cageOverlay.contains("\"runtime/slot/bee_cage\""),
+				"蜂笼空槽图标必须注册在客户端运行时纹理目录");
+		assertTrue(cageOverlay.contains("\"productivebees\", \"textures/item/bee_cage/bee_cage.png\""),
+				"蜂笼提示必须使用已安装 PB 的真实物品纹理");
+		assertTrue(cageOverlay.contains("PbSlotHintTexture.register(TEXTURE, SOURCE)"),
+				"蜂笼提示必须通过可重载的灰度纹理注册入口");
+		assertTrue(cageOverlay.contains("super(TEXTURE, gui, slotX, slotY, 16, 16)"),
+				"运行时蜂笼提示必须仍按 16x16 GUI 图标绘制");
+		assertTrue(slotHint.contains("extends SimpleTexture") && slotHint.contains("super(source)"),
+				"运行时提示必须沿 SimpleTexture 生命周期加载 PB 源纹理");
+		assertTrue(slotHint.contains("super.getTextureImage(resources)")
+				&& slotHint.contains("color & 0xFF000000 | gray << 16 | gray << 8 | gray"),
+				"资源包重载后必须重新读取原图并保留透明度生成灰度提示");
+		for (String retiredIcon : List.of("cage_slot_input.png", "cage_slot_output.png")) {
+			assertFalse(Files.exists(RESOURCE_ROOT.resolve(
+					"assets/productivebeesgenesis/textures/gui/slot").resolve(retiredIcon)),
+					() -> "蜂笼运行时图标不应重新发布旧静态副本: " + retiredIcon);
 		}
 		String structure = Files.readString(GUIDE_ROOT.resolve("assets/assemblies/first_line.snbt"));
 		assertTrue(structure.contains("size: [6, 1, 1]"), "入门场景应使用连续单排布局");

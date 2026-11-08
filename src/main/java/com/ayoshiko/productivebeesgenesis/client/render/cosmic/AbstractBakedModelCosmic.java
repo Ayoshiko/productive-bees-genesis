@@ -124,15 +124,19 @@ public abstract class AbstractBakedModelCosmic extends WrappedItemModel implemen
 	) {
 		// 先渲染被包装的基础物品模型
 		renderWrapped(stack, poseStack, buffers, packedLight, packedOverlay, true);
-		// 立即刷新基础层，避免 cosmic 层深度测试异常
+		IrisCompat.Pass pass = IrisCompat.currentPass();
+		if (pass == IrisCompat.Pass.SHADOW || pass == IrisCompat.Pass.UNAVAILABLE) {
+			return;
+		}
+		// 立即刷新基础层，避免 cosmic 层深度测试异常。
 		if (buffers instanceof MultiBufferSource.BufferSource bufferSource) {
 			bufferSource.endBatch();
 		}
-		// Iris 光影启用时延迟到世界渲染后执行，避免光影破坏 cosmic 着色器状态
-		if (IrisCompat.shouldDefer(context)) {
-			CosmicRenderQueue.enqueue(CosmicRenderCall.obtain(this, stack, context, poseStack, packedLight, packedOverlay,
-				RenderSystem.getProjectionMatrix(),
-				RenderSystem.getModelViewMatrix()));
+		if (IrisCompat.shouldDefer(context, pass)) {
+			if (CosmicRenderQueue.isAccepting()) {
+				CosmicRenderQueue.enqueue(CosmicRenderCall.obtain(this, stack, context, poseStack, packedLight, packedOverlay,
+						RenderSystem.getProjectionMatrix(), RenderSystem.getModelViewMatrix()), pass);
+			}
 			return;
 		}
 		renderCosmicLayer(stack, context, poseStack, buffers, packedLight, packedOverlay);

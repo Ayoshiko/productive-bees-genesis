@@ -54,7 +54,7 @@ class PbCombinedOutputMinecraftTest {
         };
     }
 
-    private static Map<String, Integer> counts(PbRecipeCompleter batch) {
+    private static Map<String, Long> counts(PbRecipeCompleter batch) {
         return batch.getPendingOutputs().entrySet().stream().collect(Collectors.toMap(
                 e -> e.getKey().getItem().toString() + e.getKey().getComponentsPatch(), Map.Entry::getValue));
     }
@@ -113,22 +113,22 @@ class PbCombinedOutputMinecraftTest {
         var batch = new PbRecipeCompleter(context);
         batch.accumulatePbRecipeOutputsBatch(recipe(1), 0, 2, 8);
         try (var conversions = mockStatic(com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.class)) {
-            conversions.when(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.convertPendingOutputs(
+            conversions.when(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.convertPendingLongOutputs(
                     context.level(), batch.getPendingOutputs())).thenReturn(false);
             batch.prepareOutputUpgrades(false);
             var first = counts(batch);
             for (int i = 0; i < 256; i++) batch.prepareOutputUpgrades(false);
             assertEquals(first, counts(batch));
             assertEquals(8, batch.pendingInputShrink());
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.convertPendingOutputs(
+            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.convertPendingLongOutputs(
                     context.level(), batch.getPendingOutputs()), times(1));
             batch.accumulatePbRecipeOutputsBatch(recipe(1), 0, 2, 1);
             batch.prepareOutputUpgrades(false);
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.convertPendingOutputs(
+            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.convertPendingLongOutputs(
                     context.level(), batch.getPendingOutputs()), times(2));
             when(context.suppressesUselessByproducts()).thenReturn(true);
             batch.prepareOutputUpgrades(false);
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.convertPendingOutputs(
+            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.convertPendingLongOutputs(
                     context.level(), batch.getPendingOutputs()), times(3));
         }
     }
@@ -268,6 +268,72 @@ class PbCombinedOutputMinecraftTest {
                 () -> PbCentrifugeRecipeSnapshot.restore(snapshot, new ItemStack(Items.HONEYCOMB), REGISTRIES));
     }
 
+    @Test void legacyPlacedItemBindsOnlyItsRestoredInputComponent() {
+        var block = (MekCentrifugeBlock<?, ?>) BuiltInRegistries.BLOCK.get(
+                ResourceLocation.parse("productivebeesgenesis:mek_centrifuge"));
+        var position = net.minecraft.core.BlockPos.ZERO;
+        var restored = new TileEntityMekCentrifuge(net.minecraft.core.Holder.direct(block), position, block.defaultBlockState()) {
+            @Override public void onAdded() {
+                // 本测试只覆盖物品库存与旧进度的恢复；节点和世界注册不参与身份绑定。
+            }
+        };
+        var originalInput = new ItemStack(Items.HONEYCOMB, 3);
+        originalInput.set(DataComponents.CUSTOM_NAME, Component.literal("saved input"));
+        var source = new ItemStack(block.asItem());
+        var custom = new CompoundTag();
+        custom.putString("id", BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(restored.getType()).toString());
+        custom.putIntArray("productivebeesgenesis_pb_progress", new int[]{7});
+        custom.putIntArray("productivebeesgenesis_pb_processing_time", new int[]{20});
+        source.set(DataComponents.BLOCK_ENTITY_DATA, net.minecraft.world.item.component.CustomData.of(custom));
+        var sourceInventory = mekanism.common.attachments.containers.ContainerType.ITEM.createHandler(source);
+        assertNotNull(sourceInventory);
+        int inputIndex = restored.getInventorySlots(null).indexOf(restored.inputSlot(0));
+        assertTrue(inputIndex >= 0);
+        sourceInventory.setStackInSlot(inputIndex, originalInput.copy());
+
+        restored.loadCustomOnly(custom, REGISTRIES);
+        var processor = restored.productivebeesgenesis$getPbProcessor();
+        processor.bindLegacyInputsFromPlacedItem(source);
+        var beforeComponents = new CompoundTag();
+        processor.saveAdditional(beforeComponents, REGISTRIES);
+        assertFalse(beforeComponents.getCompound("productivebeesgenesis_pb_paid_work")
+                .getList("entries", 10).getCompound(0).contains("input"));
+
+        mekanism.common.attachments.containers.ContainerType.ITEM.copyFromStack(
+                REGISTRIES, source, restored.getInventorySlots(null));
+        var level = mock(net.minecraft.world.level.Level.class);
+        when(level.getBlockEntity(position)).thenReturn(restored);
+        block.setPlacedBy(level, position, block.defaultBlockState(), null, source);
+        var bound = new CompoundTag();
+        processor.saveAdditional(bound, REGISTRIES);
+        assertArrayEquals(new int[]{7}, bound.getIntArray("productivebeesgenesis_pb_progress"));
+        var held = bound.getCompound("productivebeesgenesis_pb_paid_work").getList("entries", 10).getCompound(0);
+        var boundInput = ItemStack.parse(REGISTRIES, held.getCompound("input")).orElseThrow();
+        assertTrue(ItemStack.matches(originalInput.copyWithCount(1), boundInput));
+
+        var replacement = source.copy();
+        var replacementInput = originalInput.copy();
+        replacementInput.set(DataComponents.CUSTOM_NAME, Component.literal("later input"));
+        mekanism.common.attachments.containers.ContainerType.ITEM.createHandler(replacement)
+                .setStackInSlot(inputIndex, replacementInput);
+        mekanism.common.attachments.containers.ContainerType.ITEM.copyFromStack(
+                REGISTRIES, replacement, restored.getInventorySlots(null));
+        assertTrue(ItemStack.matches(replacementInput, restored.inputSlot(0).getStack()));
+        processor.bindLegacyInputsFromPlacedItem(replacement);
+        var unchanged = new CompoundTag();
+        processor.saveAdditional(unchanged, REGISTRIES);
+        assertEquals(held, unchanged.getCompound("productivebeesgenesis_pb_paid_work")
+                .getList("entries", 10).getCompound(0));
+
+        replacement.set(DataComponents.BLOCK_ENTITY_DATA, net.minecraft.world.item.component.CustomData.of(beforeComponents));
+        processor.loadAdditional(beforeComponents, REGISTRIES);
+        processor.bindLegacyInputsFromPlacedItem(replacement);
+        var unproven = new CompoundTag();
+        processor.saveAdditional(unproven, REGISTRIES);
+        assertFalse(unproven.getCompound("productivebeesgenesis_pb_paid_work")
+                .getList("entries", 10).getCompound(0).contains("input"));
+    }
+
     @Test void malformedPendingEnvelopeSurvivesProcessorSaveAndBlocksConsumption() {
         var context = context();
         when(context.processes()).thenReturn(2);
@@ -384,21 +450,21 @@ class PbCombinedOutputMinecraftTest {
         try (var conversions = mockStatic(com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.class)) {
             assertTrue(owner.fitsMaximum(recipe, 0, 16));
             assertTrue(owner.fitsMaximum(recipe, 0, 16));
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingOutputs(
+            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingLongOutputs(
                     eq(level), any()), times(1));
             when(context.stabilityBonus()).thenReturn(.5f);
             assertTrue(owner.fitsMaximum(recipe, 0, 16));
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingOutputs(
+            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingLongOutputs(
                     eq(level), any()), times(2));
             com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis.RECIPE_VERSION.incrementAndGet();
             assertTrue(owner.fitsMaximum(recipe, 0, 16));
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingOutputs(
+            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingLongOutputs(
                     eq(level), any()), times(3));
             var replacement = mock(net.minecraft.world.level.Level.class);
             when(replacement.registryAccess()).thenReturn(REGISTRIES);
             when(context.level()).thenReturn(replacement);
             assertTrue(owner.fitsMaximum(recipe, 0, 16));
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingOutputs(
+            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingLongOutputs(
                     eq(replacement), any()), times(1));
         }
     }
@@ -414,8 +480,8 @@ class PbCombinedOutputMinecraftTest {
         overflow.getPendingOutputs().clear();
         var first = new ItemStack(Items.DIAMOND);
         var sameIdentity = first.copy();
-        overflow.getPendingOutputs().put(first, 4);
-        overflow.getPendingOutputs().put(sameIdentity, 5);
+        overflow.getPendingOutputs().put(first, 4L);
+        overflow.getPendingOutputs().put(sameIdentity, 5L);
         assertEquals(2, overflow.getPendingOutputs().size());
         assertEquals(List.of(first, sameIdentity), List.copyOf(overflow.getPendingOutputs().keySet()));
     }
@@ -468,4 +534,168 @@ class PbCombinedOutputMinecraftTest {
         assertEquals(1, context.inputSlot(0).getCount());
         assertEquals(0, owner.pendingInputShrink());
     }
+
+    @Test void paymentFailureSurvivesReloadAndCannotReleaseOutputBeforeSettlement() {
+        var context = context();
+        var energy = mock(mekanism.common.capabilities.energy.MachineEnergyContainer.class);
+        when(context.energyContainer()).thenReturn(energy);
+        when(energy.extract(10, Action.EXECUTE, AutomationType.INTERNAL)).thenThrow(new IllegalStateException("paid callback failed"));
+        context.inputSlot(0).setStack(new ItemStack(Items.HONEYCOMB, 2));
+        var owner = new PbRecipeCompleter(context);
+        owner.accumulatePbRecipeOutputsBatch(recipe(1), 0, 2, 1);
+        owner.freezeCompletedBatch(context.inputSlot(0).getStack());
+        assertThrows(IllegalStateException.class, () -> owner.payForPlan(new PbVirtualTickPlan(1, 3, 1, 10),
+                () -> fail("Unconfirmed payment must not advance progress")));
+        assertFalse(owner.commitCompletedInput(0));
+        assertFalse(owner.flushPendingPbOutputs(0));
+        var saved = owner.saveCommittedPending(REGISTRIES);
+        var request = owner.paymentRequest();
+        var restored = new PbRecipeCompleter(context);
+        restored.loadCommittedPending(saved, REGISTRIES);
+        assertFalse(restored.commitCompletedInput(0));
+        assertEquals(2, context.inputSlot(0).getCount());
+        assertEquals(3, restored.confirmPayment(request));
+        assertTrue(restored.commitCompletedInput(0));
+        assertEquals(1, context.inputSlot(0).getCount());
+        assertThrows(IllegalStateException.class, () -> restored.confirmPayment(request));
+        verify(energy).extract(10, Action.EXECUTE, AutomationType.INTERNAL);
+    }
+
+    @Test void frozenUncommittedBatchSurvivesReloadAndConsumesMatchingInputOnce() {
+        var context = context();
+        context.inputSlot(0).setStack(new ItemStack(Items.HONEYCOMB, 2));
+        var owner = new PbRecipeCompleter(context);
+        owner.accumulatePbRecipeOutputsBatch(recipe(1), 0, 2, 1);
+        owner.freezeCompletedBatch(context.inputSlot(0).getStack());
+        var frozen = owner.saveCommittedPending(REGISTRIES);
+        assertEquals(1, frozen.getInt("input_count"));
+        var restored = new PbRecipeCompleter(context);
+        restored.loadCommittedPending(frozen, REGISTRIES);
+        assertEquals(counts(owner), counts(restored));
+        context.inputSlot(0).setStack(new ItemStack(Items.STONE, 2));
+        assertFalse(restored.commitCompletedInput(0));
+        assertEquals(frozen, restored.saveCommittedPending(REGISTRIES));
+        context.inputSlot(0).setStack(new ItemStack(Items.HONEYCOMB, 2));
+        assertTrue(restored.commitCompletedInput(0));
+        assertTrue(restored.commitCompletedInput(0));
+        assertEquals(1, context.inputSlot(0).getCount());
+        assertTrue(restored.hasCommittedPendingOutputs());
+    }
+
+    @Test void largePaidOutputKeepsExactLongAmountAcrossSaveAndPartialDrain() {
+        var context = context();
+        when(context.productivebeesgenesis$isDirectAeOutputEnabled()).thenReturn(true);
+        when(context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyInt()))
+                .thenAnswer(call -> call.getArgument(1));
+        for (var slot : List.of(context.primaryOutputSlot(0), context.secondaryOutputSlot(0), context.tertiaryOutputSlot(0))) {
+            slot.setStack(new ItemStack(Items.STONE, 64));
+        }
+        context.inputSlot(0).setStack(new ItemStack(Items.HONEYCOMB, 2));
+        var output = new ChancedOutput(Ingredient.of(Items.DIAMOND), 1_500_000_000, 1_500_000_000, 1);
+        var selected = new CentrifugeRecipe(Ingredient.of(Items.HONEYCOMB), List.of(output), null, 20) {
+            @Override public FluidStack getFluidOutputs() { return FluidStack.EMPTY; }
+        };
+        var owner = new PbRecipeCompleter(context);
+        owner.accumulatePbRecipeOutputsBatch(selected, 0, 1, 2);
+        owner.freezeCompletedBatch(context.inputSlot(0).getStack());
+        assertTrue(owner.commitCompletedInput(0));
+        assertEquals(3_000_000_000L, owner.pendingItemCount());
+        var restored = new PbRecipeCompleter(context);
+        restored.loadCommittedPending(owner.saveCommittedPending(REGISTRIES), REGISTRIES);
+        assertFalse(restored.flushPendingPbOutputs(0));
+        assertEquals(3_000_000_000L - Integer.MAX_VALUE, restored.pendingItemCount());
+        assertTrue(restored.flushPendingPbOutputs(0));
+        assertEquals(0, restored.pendingItemCount());
+        assertTrue(context.inputSlot(0).isEmpty());
+    }
+
+    @Test void fragmentedFluidRestorePreservesRemainderAndRebuildsBothIndexes() {
+        var holder = new com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder(5, 100, null, 2, () -> 0L);
+        var saved = new CompoundTag();
+        var root = new CompoundTag();
+        var tanks = new net.minecraft.nbt.ListTag();
+        for (int amount : new int[]{99, 2}) {
+            var entry = new CompoundTag();
+            entry.put("fluidStack", new FluidStack(net.minecraft.world.level.material.Fluids.WATER, amount).save(REGISTRIES));
+            tanks.add(entry);
+        }
+        root.putInt("count", 5);
+        root.put("tanks", tanks);
+        saved.put(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, root);
+        holder.readFromNBT(saved, REGISTRIES);
+        assertEquals(101, holder.getTanks().stream().mapToInt(mekanism.api.fluid.IExtendedFluidTank::getFluidAmount).sum());
+        assertEquals(3, holder.getEmptyTankCount());
+        holder.readFromNBT(saved, REGISTRIES);
+        assertEquals(101, holder.getTanks().stream().mapToInt(mekanism.api.fluid.IExtendedFluidTank::getFluidAmount).sum());
+        var damaged = new CompoundTag();
+        damaged.put(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, net.minecraft.nbt.StringTag.valueOf("unreadable"));
+        holder.readFromNBT(damaged, REGISTRIES);
+        assertTrue(holder.hasUnresolvedSavedData());
+        var written = new CompoundTag();
+        holder.writeToNBT(written, REGISTRIES);
+        assertEquals(damaged, written);
+    }
+
+
+    @Test void tierPreflightRejectsChangedModeCapacityBeforeTouchingSourceFluid() {
+        var config = com.ayoshiko.productivebeesgenesis.config.ModConfig.SERVER;
+        boolean previous = config.mekCentrifugeMultiFluidTank.get();
+        try {
+            config.mekCentrifugeMultiFluidTank.set(true);
+            var sourceBlock = com.ayoshiko.productivebeesgenesis.init.ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY.get();
+            var targetBlock = com.ayoshiko.productivebeesgenesis.init.ModBlocks.ADVANCED_MEK_CENTRIFUGE_FACTORY.get();
+            var source = (AbstractMekCentrifugeFactory) sourceBlock.newBlockEntity(
+                    net.minecraft.core.BlockPos.ZERO, sourceBlock.defaultBlockState());
+            var fluid = new FluidStack(net.minecraft.world.level.material.Fluids.WATER, Integer.MAX_VALUE);
+            source.getFluidTank(0).setStack(fluid);
+            assertTrue(com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeDataHelper.canInstallTier(
+                    source, targetBlock.defaultBlockState()));
+            config.mekCentrifugeMultiFluidTank.set(false);
+            assertFalse(com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeDataHelper.canInstallTier(
+                    source, targetBlock.defaultBlockState()));
+            assertEquals(Integer.MAX_VALUE, source.getFluidTank(0).getFluidAmount());
+            assertNull(source.getLevel());
+        } finally {
+            config.mekCentrifugeMultiFluidTank.set(previous);
+        }
+    }
+
+    @Test void realTierInstallerRejectsUnknownUpgradeBeforeExtractingDataOrReplacingBlock() {
+        var block = com.ayoshiko.productivebeesgenesis.init.ModBlocks.MEK_CENTRIFUGE.get();
+        var source = spy((TileEntityMekCentrifuge) block.newBlockEntity(
+                net.minecraft.core.BlockPos.ZERO, block.defaultBlockState()));
+        var raw = new CompoundTag();
+        raw.putInt("future_upgrade", 7);
+        var saved = new CompoundTag();
+        saved.put(MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS, raw);
+        source.pbUpgradeHandler().loadCounts(saved);
+        var restored = new CompoundTag();
+        source.pbUpgradeHandler().saveCounts(restored);
+        assertEquals(saved, restored);
+        assertFalse(source.productivebeesgenesis$canUpgradeProduction());
+        var level = mock(net.minecraft.server.level.ServerLevel.class);
+        when(level.getBlockState(net.minecraft.core.BlockPos.ZERO)).thenReturn(block.defaultBlockState());
+        when(level.registryAccess()).thenReturn(REGISTRIES);
+        when(level.dimension()).thenReturn(net.minecraft.world.level.Level.OVERWORLD);
+        var player = mock(net.minecraft.world.entity.player.Player.class);
+        when(player.level()).thenReturn(level);
+        when(player.getUUID()).thenReturn(new java.util.UUID(0, 1));
+        var use = mock(net.minecraft.world.item.context.UseOnContext.class);
+        when(use.getPlayer()).thenReturn(player);
+        when(use.getLevel()).thenReturn(level);
+        when(use.getClickedPos()).thenReturn(net.minecraft.core.BlockPos.ZERO);
+        var installer = mekanism.common.registries.MekanismItems.BASIC_TIER_INSTALLER.get();
+        when(use.getItemInHand()).thenReturn(new ItemStack(installer));
+        clearInvocations(source);
+        try (var world = mockStatic(mekanism.common.util.WorldUtils.class)) {
+            world.when(() -> mekanism.common.util.WorldUtils.getTileEntity(
+                    level, net.minecraft.core.BlockPos.ZERO)).thenReturn(source);
+            assertFalse(installer.useOn(use).consumesAction());
+        }
+        verify(source).productivebeesgenesis$canUpgradeProduction();
+        verify(source, never()).getUpgradeData(any());
+        verify(level, never()).setBlockAndUpdate(any(), any());
+        assertEquals(1, use.getItemInHand().getCount());
+    }
+
 }

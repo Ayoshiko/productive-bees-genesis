@@ -6,7 +6,9 @@ import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import mekanism.api.AutomationType;
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
@@ -182,7 +184,11 @@ class MekCentrifugeSlotManager {
 			IContentsListener recipeCacheListener,
 			IContentsListener recipeCacheUnpauseListener) {
 		FluidTankHelper helper = FluidTankHelper.forSideWithConfig(tile);
-		fluidOutputTank = BasicFluidTank.output(ModConfig.SERVER.mekCentrifugeFluidTankCapacity.get(), listener);
+		fluidOutputTank = BasicFluidTank.create(ModConfig.SERVER.mekCentrifugeFluidTankCapacity.get(),
+				(stack, automation) -> !tile.hasUnresolvedFluidState()
+						&& (automation == AutomationType.INTERNAL || !OutputCustody.of(tile).blocked()),
+				(stack, automation) -> !tile.hasUnresolvedFluidState() && automation == AutomationType.INTERNAL,
+				stack -> true, listener);
 		helper.addTank(fluidOutputTank);
 		return helper.build();
 	}

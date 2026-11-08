@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import mekanism.api.fluid.IExtendedFluidTank;
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -91,7 +91,7 @@ public interface IMultiFluidTankHost {
 	 *
 	 * @param nbt 多流体槽 NBT 数据(可为 null 表示清除)
 	 */
-	default void setOrphanedMultiFluidTanksNbt(@Nullable CompoundTag nbt) {
+	default void setOrphanedMultiFluidTanksNbt(@Nullable Tag nbt) {
 		// 默认空实现 — 非 AbstractMekCentrifugeFactory 的实现无需关注 orphaned NBT
 	}
 
@@ -103,7 +103,7 @@ public interface IMultiFluidTankHost {
 	 *
 	 * @return 孤儿 NBT;无孤儿数据时返回 null
 	 */
-	default @Nullable CompoundTag getOrphanedMultiFluidTanksNbt() {
+	default @Nullable Tag getOrphanedMultiFluidTanksNbt() {
 		return null;
 	}
 }

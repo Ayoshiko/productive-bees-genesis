@@ -1,17 +1,17 @@
 # Productive Bees Genesis
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-Download-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.2.3-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.2.4--dev-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
-![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
+![Code license](https://img.shields.io/badge/project_code-MIT-blue?style=flat-square)
 ![Java](https://img.shields.io/badge/Java-21+-red?style=flat-square)
 
 > An addon for **Productive Bees** and **Mekanism** that adds the **Myriad Creations Bee** (rainbow-gradient, honeycombs randomly transform into other resource bees' honeycombs), the **MEK Centrifuge**, and the **MEK Apiary** — machines that preserve Mekanism's native processing logic, GUI style, side configuration, and upgrade system, while deeply integrating **Applied Energistics 2** for output pushback, honeycomb pulling, and network-powered energy. The machines also implement Resource Bees' upgrade components via Mekanism's upgrade installation system, offering an efficient new way to raise bees and process honeycombs.
 
 **Languages**: [English](README.md) · [中文](README_zh.md)
 
-**Version 1.2.3: faster editor search, reliable drafts and clearer Myriad JEI outputs.** Released on 2026-11-04 with batch draft application, PB native bee recipe editing and further production optimizations. Update both clients and servers. See the [CHANGELOG](CHANGELOG.md#123---2026-11-04).
+**Version 1.2.4 is in development.** This maintenance update covers machine access, asset recovery, editor behavior and build reliability. The changes are not released yet; see [Unreleased changes](CHANGELOG.md#unreleased). The latest published version remains [1.2.3](CHANGELOG.md#123---2026-11-04).
 
 **Download**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
@@ -366,7 +366,7 @@ The most recent export has its own folder shortcut. In singleplayer, File Locati
 
 The mod ships **KubeJS** script hooks for dynamic bee recipe registration at runtime, eliminating the need for static datapack authoring during pack development.
 
-- Listen to the `MyriadBeeEvents.REGISTER` event from server scripts (`server_scripts`).
+- Listen to the `MyriadBeeEvents.register` event from server scripts (`server_scripts`).
 - Exposed helpers on the event object:
   - `addBreeding(...)` — register a breeding combination (parent1 + parent2 → offspring).
   - `addFishing(...)` — register a fishing acquisition (biome list or tag + chance).
@@ -376,6 +376,10 @@ The mod ships **KubeJS** script hooks for dynamic bee recipe registration at run
   - `addBeeProduce(...)` — register an advanced beehive production output.
   - `addMekData(...)` — register a Mekanism `mek_data` shaped crafting recipe.
 - Recipes registered through KubeJS are injected into the vanilla `RecipeManager` JSON map during the `beforeRecipeLoading` phase and coexist with datapack recipes; they are picked up by the in-game recipe caches and the JEI viewer.
+
+Listeners use `MyriadBeeEvents.register(event => { ... })`. The plugin also exposes `MYRIAD_CREATIONS` (`productivebees:myriadcreations`) and `PB_MOD_ID` (`productivebees`). KubeJS discovers the plugin through the mod's `kubejs.plugins.txt`; install KubeJS and its Rhino dependency to use these hooks.
+
+**Myriad rule priority:** for recipe IDs outside Bee Designer's managed custom entries, `productivebeesgenesis-gameplay-server.toml` takes precedence over Myriad acquisition and beehive production rules from native data, datapacks and these helpers. It replaces fishing chance and biomes, breeding parents, nest and biome restrictions, conversion settings and beehive outputs. Fishing and nest spawning are disabled by default. Managed custom rules retain their own parameters, while the Myriad master switch still blocks Myriad acquisition and production. Other bee types and centrifuge or crafting helpers keep their existing behavior. Registering the same recipe ID replaces that ID in the current reload.
 
 #### Extended resource bees
 
@@ -625,7 +629,7 @@ These mods are **optional**. When present, the corresponding features activate a
 | [Jade](https://www.curseforge.com/minecraft/mc-mods/jade) | AE2 network status tooltip + MEK apiary bee count / production progress |
 | [Iris Shaders](https://www.curseforge.com/minecraft/mc-mods/irisshaders) | Shader compatibility for cosmic rendering |
 | [Just Enough Items](https://www.curseforge.com/minecraft/mc-mods/jei) | Recipe viewing + recipe hiding when bee disabled |
-| [KubeJS](https://www.curseforge.com/minecraft/mc-mods/kubejs) | Runtime bee recipe registration via `MyriadBeeEvents.REGISTER` |
+| [KubeJS](https://www.curseforge.com/minecraft/mc-mods/kubejs) | Runtime bee recipe registration via `MyriadBeeEvents.register` |
 | [Super Factory Manager](https://www.curseforge.com/minecraft/mc-mods/super-factory-manager) | Item, fluid, and energy automation through NeoForge capabilities |
 | Just Dire Things Extras | Coalesced 256x/1024x machine acceleration without repeating the full pipeline per virtual tick |
 | Building Gadgets 2 | Client-side block-entity render load-order compatibility |
@@ -770,30 +774,30 @@ Changes take effect after restarting the game or running `/reload`.
 5. Place bees in the **MEK Apiary** or any of its factory variants, put bee foraging materials in the feeder slots, and bees will produce honeycombs.
 6. Connect the centrifuge/apiary to an AE2 network via smart cables to enable direct ME output and FE energy input.
 7. Tune the **balance profile** (Basic / Paradox Infinity / Custom) in the server config to control upgrade tier mixing, centrifuge productivity behavior, and upgrade caps.
-8. (Optional) Use a **KubeJS** server script listening on `MyriadBeeEvents.REGISTER` to dynamically register custom bee recipes at runtime.
+8. (Optional) Use a **KubeJS** server script listening on `MyriadBeeEvents.register` to dynamically register custom bee recipes at runtime.
 
 Progress advancements guide the early route: obtaining the MEK centrifuge, processing your first items, the byproduct-destruction upgrade recipe, and the ultimate centrifuge.
 
 ## Building
 
+Requires **Java 21**, **Python 3.11+**, and internet access for the pinned development dependencies and Gradle repositories.
+
 ```bash
 git clone https://github.com/Ayoshiko/productive-bees-genesis.git
 cd productive-bees-genesis
-./gradlew build
+python3 .github/scripts/build_dependencies.py
+./gradlew build --no-daemon
 ```
 
-The local build is `build/libs/productivebeesgenesis-1.2.3.jar`.
+On Windows, use `python` (or `py -3`) and `.\gradlew`. The output name follows `mod_version` in [gradle.properties](gradle.properties); the current baseline produces `build/libs/productivebeesgenesis-1.2.4.jar`.
 
-`./gradlew runClient --no-daemon` automatically loads the resource-bee examples through the development-only `devExamples` source set. Bees such as `example:energy`, `example:hydrogen` and `example:mixed` are available for testing; optional resource types still require their owning mods. The examples are not bundled in release jars, and `verifyReleaseArtifact` checks that boundary.
+The local setup and CI share [gradle/development-dependencies.json](gradle/development-dependencies.json), which records exact source URLs and SHA-256 values for the standard build. The preparation script downloads missing files, extracts the pinned ProductiveLib entry from Productive Bees, and verifies existing files without overwriting mismatched local JARs. Use `python3 .github/scripts/build_dependencies.py --check` for an offline check. Third-party JARs stay outside Git and the release JAR; source and license details are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
-> Requires **Java 21** and internet access to download Mekanism, Productive Bees, and AE2 dependencies from Cursemaven / Modrinth Maven.
->
-> **Development-only local jars (`libs/`)**: the repository does not ship the binary jars under `libs/`. Before compiling from a fresh clone, manually place:
-> `productivebees-1.21.1-13.14.0.jar`, `productivelib-1.21.1-0.2.0.jar`, `Mekanism-1.21.1-10.7.19.85.jar`,
-> `mekanism_extras-1.21.1-1.4.0.jar`, `Evolved Mekanism-1.21.1-1.2.1-fix3.jar`, `EvolvedMekanismExtras-1.21.1-1.2.1.jar`,
-> `jdte-0.5.9-alpha1.jar`, `sponge-mixin.jar`, `jei-1.21.1-neoforge-19.36.0.360.jar`,
-> `appliedenergistics2-1.21.1-19.2.17.jar`, `AppliedFlux-1.21-2.1.5-neoforge.jar`, `Jade-1.21.1-NeoForge-15.10.5.jar`,
-> `kubejs-neoforge-2101.7.2-build.368.jar`, `rhino-2101.2.7-build.85.jar`.
+Mekanism Extras deliberately compiles against 1.4.1 and runs against 1.4.0; JEI compiles against 19.36.0.360 and runs against 19.39.0.368. GuideME 21.1.16 is a compile input under `libs/`. The official Rhino build uses `libs/upstream/`, preserving any existing local build in `libs/`. The dependency list also includes the JDTE / JustDireThings and optional resource APIs used by the current source. These development inputs do not raise player dependency requirements.
+
+`./gradlew runClient --no-daemon` loads resource-bee examples through the development-only `devExamples` source set. Optional resource types require their owning mods. Native `-PminecraftTests` scenarios use the additional explicit `run/mods` inputs in [build.gradle](build.gradle), including their transitive dependencies; the standard preparation list is not a complete test-mod pack. Examples stay outside release JARs. Generated reference and bundle files are synchronized from the current manifest, so removed or renamed examples do not remain in later ZIPs.
+
+Formal distribution also requires `verifyDistributionPermissions` and the checks in [PLATFORM_RELEASE.md](PLATFORM_RELEASE.md). Ordinary development builds remain available while recorded permission questions are unresolved.
 
 ## Architecture
 
@@ -814,7 +818,7 @@ com.ayoshiko.productivebeesgenesis/
 │   └── screen/          Configuration and MEK centrifuge GUIs + state
 ├── command/            OP-only runtime developer diagnostics command
 ├── compat/             Optional mod integrations
-│   ├── kubejs/          KubeJS plugin — MyriadBeeEvents.REGISTER + recipe serializers
+│   ├── kubejs/          KubeJS plugin — MyriadBeeEvents.register + recipe serializers
 │   ├── mekanism_extras/ Mekanism Extras blocks, factories, menus and delegates
 │   ├── emextras/        Evolved Mekanism Extras block / block-entity registration
 │   └── mekenergistics/  Mek Energistics installer/target guards
@@ -838,7 +842,7 @@ com.ayoshiko.productivebeesgenesis/
 │   ├── mekenergistics/ Mek Energistics compatibility guards
 │   └── recipe/         Recipe serializer fallback mixins
 ├── network/            Validated/rate-limited GUI actions and filter/state synchronization
-└── util/               BeeInfoHelper, RecipeCacheManager, CentrifugeRecipeIndex, etc.
+└── util/               BeeInfoHelper, SharedPbRecipeCache, CentrifugeRecipeIndex, etc.
 ```
 
 ### Key Abstractions
@@ -875,9 +879,7 @@ If you encounter issues or have feature suggestions, please file them at [GitHub
 
 ## License
 
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
-
-Third-party assets and code references are listed in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+Project-owned code, documentation, technical resources and existing artwork validly licensed under MIT remain under the **MIT License**, within their owners' authority to grant it. Third-party code, fonts and artwork retain their own terms; existing valid grants are preserved. See [LICENSE](LICENSE), [NOTICE](NOTICE) and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). The [file manifest](gradle/license-manifest.json) records attribution and unresolved provenance or permissions. Those unresolved distribution conditions must be resolved before a new public release.
 
 ## Privacy & Community
 

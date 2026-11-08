@@ -2,6 +2,9 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.stacks.AEItemKey;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.mek.IFactoryPbDelegateAccess;
+import com.ayoshiko.productivebeesgenesis.mek.PbRecipeProcessor;
+import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.util.BoundedBooleanMemo;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.resources.ResourceLocation;
@@ -92,9 +95,13 @@ final class Ae2CombProcessableCache {
 		refreshInvalidation(smeltingEnabled);
 		CombIdentity identity = new CombIdentity(key.getItem(), CombFuzzyMatcher.getBeeType(key));
 		int state = entries.state(identity);
-		if (state != BoundedBooleanMemo.STATE_UNKNOWN) {
-			return state == BoundedBooleanMemo.STATE_TRUE;
-		}
+		if (state == BoundedBooleanMemo.STATE_TRUE) return true;
+		PbRecipeProcessor processor = null;
+		if (host instanceof IFactoryPbDelegateAccess factory) processor = factory.productivebeesgenesis$getPbProcessor();
+		else if (host instanceof TileEntityMekCentrifuge centrifuge) processor = centrifuge.productivebeesgenesis$getPbProcessor();
+		// 已付旧配方的临时恢复资格不写回配方缓存。
+		if (processor != null && processor.hasRetainedInput(key.getReadOnlyStack())) return true;
+		if (state == BoundedBooleanMemo.STATE_FALSE) return false;
 		// 限速用尽：本轮放行且不缓存，等下个窗口再判定（见 MAX_PROBES_PER_WINDOW）
 		if (remainingProbes <= 0) return true;
 		remainingProbes--;

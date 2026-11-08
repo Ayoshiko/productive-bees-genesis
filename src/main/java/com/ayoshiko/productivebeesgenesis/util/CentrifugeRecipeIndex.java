@@ -16,6 +16,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeManager;
 import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
 
 import javax.annotation.Nullable;
@@ -48,9 +49,10 @@ public final class CentrifugeRecipeIndex {
 	private record RecipeIndexSnapshot(
 			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> index,
 			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> combBlockIndex,
-			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> specialCombBlockIndex) {
+			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> specialCombBlockIndex,
+			RecipeManager manager) {
 		static final RecipeIndexSnapshot EMPTY =
-				new RecipeIndexSnapshot(Map.of(), Map.of(), Map.of());
+				new RecipeIndexSnapshot(Map.of(), Map.of(), Map.of(), null);
 	}
 
 	/**
@@ -92,6 +94,10 @@ public final class CentrifugeRecipeIndex {
 		snapshot = RecipeIndexSnapshot.EMPTY;
 	}
 
+	public static boolean isCurrent(RecipeManager manager) {
+		return manager == snapshot.manager;
+	}
+
 	/**
 	 * 重建索引 — 遍历所有 CentrifugeRecipe，提取 bee_type 建立蜜脾索引，
 	 * 同时为每个 bee_type 静态生成蜜脾块配方。
@@ -108,7 +114,7 @@ public final class CentrifugeRecipeIndex {
 	 *
 	 * @param recipeManager 配方管理器（服务端或客户端均可）
 	 */
-	public static void rebuild(net.minecraft.world.item.crafting.RecipeManager recipeManager) {
+	public static boolean rebuild(RecipeManager recipeManager) {
 		try {
 			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> newIndex = new HashMap<>();
 			Map<ResourceLocation, RecipeHolder<CentrifugeRecipe>> newCombBlockIndex = new HashMap<>();
@@ -200,9 +206,11 @@ public final class CentrifugeRecipeIndex {
 		}
 			// 原子替换：使用不可变快照，保证读线程看到一致状态
 			snapshot = new RecipeIndexSnapshot(
-					Map.copyOf(newIndex), Map.copyOf(newCombBlockIndex), Map.copyOf(newSpecialCombBlockIndex));
+					Map.copyOf(newIndex), Map.copyOf(newCombBlockIndex), Map.copyOf(newSpecialCombBlockIndex), recipeManager);
+			return true;
 		} catch (Exception e) {
-			ProductiveBeesGenesis.LOGGER.warn("重建离心配方索引失败", e);
+			ProductiveBeesGenesis.LOGGER.warn("重建离心配方索引失败，保留已发布快照", e);
+			return false;
 		}
 	}
 

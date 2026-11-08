@@ -62,6 +62,10 @@ These options change only rendering and window placement. Disabling particles, g
 
 World-specific server settings are split into gameplay, machine, and capacity files under the world's `serverconfig` directory. Migration handles the legacy single server file; modpack maintainers should distribute the current generated files rather than copying the old file over them.
 
+**Capacity settings stay fixed for the current world or server session; reloading files while it runs does not change machine capacities.** After changing capacity, leave and reopen the world or restart the server normally. Multiplayer capacities come from the current server's synchronized settings.
+
+Legacy migration creates backups and preserves edits to the new settings. A migration failure stops that world or server startup. Keep the original configuration, backups and recovery files, correct the reported error, then start again; deleting these files can lose your settings.
+
 ## Raw key names
 
 Raw keys are needed only for pack distribution, scripted replacement, or migration. Regular players should use the translated labels and tooltips. If direct editing is unavoidable, follow the comments in the generated files and never save a partially edited file while the server is running.

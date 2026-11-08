@@ -5,6 +5,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import net.neoforged.neoforge.registries.RegisterEvent;
 
 /**
@@ -27,6 +28,11 @@ public final class ApiaryRecipeSerializerRegistrar {
 
 	@SubscribeEvent
 	public static void register(RegisterEvent event) {
+		if (event.getRegistryKey().equals(NeoForgeRegistries.INGREDIENT_TYPES.key())) {
+			event.register(NeoForgeRegistries.INGREDIENT_TYPES.key(),
+					ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "empty_bee_cage"),
+					() -> EmptyBeeCageIngredient.TYPE);
+		}
 		if (event.getRegistryKey().equals(Registries.RECIPE_SERIALIZER)) {
 			event.register(Registries.RECIPE_SERIALIZER,
 					ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "apiary_shaped"),

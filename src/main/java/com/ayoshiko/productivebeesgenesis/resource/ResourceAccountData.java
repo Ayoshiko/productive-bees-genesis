@@ -11,6 +11,95 @@ import java.util.Set;
 final class ResourceAccountData {
 	private ResourceAccountData() {}
 
+	private static final int LONG_BYTES = net.minecraft.nbt.LongTag.valueOf(0).sizeInBytes();
+	private static final int REASON_BYTES = net.minecraft.nbt.StringTag.valueOf("x".repeat(512)).sizeInBytes();
+	private static final long STORAGE_BASE = storageBase();
+
+	/** 按同版 NBT 内存计量预约恢复上界，不编码或复制整份账户。 */
+	static long storageBudget(ResourceAccount account) {
+		return storageBudget(account, account.available, account.production, account.transfer);
+	}
+
+	static long storageBudget(ResourceAccount account, Map<ResourceKey, java.math.BigInteger> available,
+			ResourceAccount.Production production, ResourceAccount.Transfer transfer) {
+		long bytes = STORAGE_BASE;
+		var recoverable = available;
+		for (var work : account.centrifugeWork.entrySet()) {
+			bytes += fieldBytes(Integer.toString(work.getKey()), work.getValue().sizeInBytes());
+		}
+		for (var pending : account.suspendedLanes.values()) {
+			recoverable = ResourceExactAmounts.plus(recoverable, pending.production().maximum);
+			bytes += productionBudget(pending.production());
+		}
+		if (production != null) {
+			recoverable = ResourceExactAmounts.plus(recoverable, production.maximum);
+			bytes += productionBudget(production);
+		}
+		for (var pending : account.suspendedTransfers.values()) {
+			var request = pending.transfer();
+			recoverable = ResourceExactAmounts.plus(recoverable, Map.of(request.key(), request.amount()));
+			bytes += transferBudget(request);
+		}
+		if (transfer != null) {
+			recoverable = ResourceExactAmounts.plus(recoverable, Map.of(transfer.key(), transfer.amount()));
+			bytes += transferBudget(transfer);
+		}
+		return bytes + amountsBytes(recoverable) - new net.minecraft.nbt.ListTag().sizeInBytes();
+	}
+
+	private static long productionBudget(ResourceAccount.Production pending) {
+		long amounts = amountsBytes(pending.maximum);
+		long production = 48L + fieldBytes("sequence", LONG_BYTES) + fieldBytes("recipe_revision", LONG_BYTES)
+				+ fieldBytes("phase", net.minecraft.nbt.StringTag.valueOf("RESERVED").sizeInBytes())
+				+ fieldBytes("context", pending.context.sizeInBytes())
+				+ fieldBytes("maximum", amounts) + fieldBytes("result", amounts);
+		long isolated = 48L + fieldBytes("production", production) + fieldBytes("reason", REASON_BYTES);
+		long nextWork = "resource_centrifuging".equals(pending.context.getString("host"))
+				? fieldBytes("255", ResourceAccount.MAX_LANE_BYTES) : 0;
+		return fieldBytes("255", isolated) + nextWork;
+	}
+
+	private static long transferBudget(ResourceAccount.Transfer transfer) {
+		return 4L + 48L + fieldBytes("sequence", LONG_BYTES) + fieldBytes("key", transfer.key().savedSize())
+				+ fieldBytes("amount", amountBytes(transfer.amount())) + fieldBytes("reason", REASON_BYTES);
+	}
+
+	private static long amountsBytes(Map<ResourceKey, java.math.BigInteger> amounts) {
+		long bytes = 37L + 4L * amounts.size();
+		for (var entry : amounts.entrySet()) {
+			bytes += 48L + fieldBytes("key", entry.getKey().savedSize())
+					+ fieldBytes("amount", amountBytes(entry.getValue()));
+		}
+		return bytes;
+	}
+
+	private static long amountBytes(java.math.BigInteger amount) {
+		return amount.bitLength() < 64 ? LONG_BYTES : 36L + 2L * amount.toString().length();
+	}
+
+	private static long fieldBytes(String key, long valueBytes) {
+		return 64L + 2L * key.length() + valueBytes;
+	}
+
+	private static long storageBase() {
+		var tag = new CompoundTag();
+		tag.putUUID("id", new java.util.UUID(0, 0));
+		tag.putUUID("owner", new java.util.UUID(0, 0));
+		tag.putLong("generation", 1);
+		tag.putLong("next_sequence", 1);
+		var binding = new CompoundTag();
+		binding.putString("dimension", "x".repeat(256));
+		binding.putLong("position", 0);
+		binding.putString("host_kind", "x".repeat(256));
+		tag.put("binding", binding);
+		tag.put("available", new net.minecraft.nbt.ListTag());
+		tag.putString("suspension", "x".repeat(512));
+		tag.put("centrifuge_work", new CompoundTag());
+		tag.put("suspended_lanes", new CompoundTag());
+		tag.put("suspended_transfers", new net.minecraft.nbt.ListTag());
+		return tag.sizeInBytes();
+	}
+
 	static CompoundTag save(ResourceAccount account) {
 		var tag = new CompoundTag();
 		tag.putUUID("id", account.id);
@@ -164,7 +253,7 @@ final class ResourceAccountData {
 		return account;
 	}
 
-	private static CompoundTag saveProduction(ResourceAccount.Production pending) {
+	static CompoundTag saveProduction(ResourceAccount.Production pending) {
 		var production = new CompoundTag();
 		production.putLong("sequence", pending.sequence);
 		production.putLong("recipe_revision", pending.recipeRevision);
@@ -175,7 +264,7 @@ final class ResourceAccountData {
 		return production;
 	}
 
-	private static CompoundTag saveTransfer(ResourceAccount.Transfer pending) {
+	static CompoundTag saveTransfer(ResourceAccount.Transfer pending) {
 		var tag = new CompoundTag();
 		tag.putLong("sequence", pending.sequence());
 		tag.put("key", pending.key().save());

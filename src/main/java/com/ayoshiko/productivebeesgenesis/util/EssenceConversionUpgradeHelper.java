@@ -91,43 +91,44 @@ public final class EssenceConversionUpgradeHelper {
 		}
 		List<ItemStack> converted = new ArrayList<>(merged.size());
 		for (var source : merged.values()) {
-			convertStack(snapshot, converted, source.template(), source.amount(), bound);
+			convertAmount(snapshot, (template, amount) -> addAmount(converted, template, amount),
+					source.template(), source.amount(), bound);
 		}
 		return converted;
 	}
 
 	private record ItemAmount(ItemStack template, long amount) {}
 
-	private static void convertStack(ConversionSnapshot snapshot, List<ItemStack> converted,
+	private static void convertAmount(ConversionSnapshot snapshot, java.util.function.BiConsumer<ItemStack, Long> sink,
 			ItemStack source, long amount, boolean bound) {
 		Conversion conversion = snapshot.find(source);
 		if (conversion == null) {
-			addAmount(converted, source, amount);
+			sink.accept(source, amount);
 			return;
 		}
 
 		AmountConversion first = calculateAmounts(
 				amount, conversion.inputCount(), conversion.result().getCount());
 		if (first.resultAmount() == 0) {
-			addAmount(converted, source, amount);
+			sink.accept(source, amount);
 			return;
 		}
-		addAmount(converted, source, bound ? Math.min(amount, conversion.inputCount() - 1L) : first.remainder());
+		sink.accept(source, bound ? Math.min(amount, conversion.inputCount() - 1L) : first.remainder());
 
 		if (!conversion.continueChain()) {
-			addAmount(converted, conversion.result(), first.resultAmount());
+			sink.accept(conversion.result(), first.resultAmount());
 			return;
 		}
 		Conversion next = snapshot.find(conversion.resultKey());
 		if (next == null) {
-			addAmount(converted, conversion.result(), first.resultAmount());
+			sink.accept(conversion.result(), first.resultAmount());
 			return;
 		}
 		AmountConversion second = calculateAmounts(
 				first.resultAmount(), next.inputCount(), next.result().getCount());
-		addAmount(converted, conversion.result(), bound
+		sink.accept(conversion.result(), bound
 				? Math.min(first.resultAmount(), next.inputCount() - 1L) : second.remainder());
-		addAmount(converted, next.result(), second.resultAmount());
+		sink.accept(next.result(), second.resultAmount());
 	}
 
 	static AmountConversion calculateAmounts(long sourceAmount, int inputCount, int resultCount) {
@@ -165,6 +166,52 @@ public final class EssenceConversionUpgradeHelper {
 			if (!stack.isEmpty()) outputs.put(stack.copyWithCount(stack.getCount()), stack.getCount());
 		}
 		return true;
+	}
+
+
+	/** 精确数量入口；映射完成前不改变原 pending，结果不经 ItemStack 的 int 数量中转。 */
+	public static boolean convertPendingLongOutputs(Level level, Map<ItemStack, Long> outputs) {
+		return convertPendingLongOutputs(level, outputs, false);
+	}
+
+	public static boolean maximumPendingLongOutputs(Level level, Map<ItemStack, Long> outputs) {
+		return convertPendingLongOutputs(level, outputs, true);
+	}
+
+	private static boolean convertPendingLongOutputs(Level level, Map<ItemStack, Long> outputs, boolean maximum) {
+		if (level == null || outputs.isEmpty()) return false;
+		ConversionSnapshot snapshot = EssenceConversionRecipeIndex.snapshotFor(level);
+		boolean candidate = outputs.entrySet().stream()
+				.anyMatch(entry -> entry.getValue() > 0 && snapshot.find(entry.getKey()) != null);
+		if (!candidate) return false;
+		var merged = new java.util.LinkedHashMap<EssenceConversionRecipeIndex.StackKey, ItemAmount>();
+		for (var entry : outputs.entrySet()) {
+			ItemStack template = entry.getKey();
+			long amount = entry.getValue();
+			if (template.isEmpty() || amount <= 0) continue;
+			var key = new EssenceConversionRecipeIndex.StackKey(template.getItem(), template.getComponentsPatch());
+			ItemAmount previous = merged.get(key);
+			merged.put(key, new ItemAmount(template, Math.addExact(previous == null ? 0 : previous.amount(), amount)));
+		}
+		Map<ItemStack, Long> converted = new java.util.LinkedHashMap<>();
+		for (ItemAmount source : merged.values()) {
+			convertAmount(snapshot, (template, amount) -> addAmount(converted, template, amount),
+					source.template(), source.amount(), maximum);
+		}
+		outputs.clear();
+		outputs.putAll(converted);
+		return true;
+	}
+
+	private static void addAmount(Map<ItemStack, Long> outputs, ItemStack template, long amount) {
+		if (template.isEmpty() || amount <= 0) return;
+		for (var entry : outputs.entrySet()) {
+			if (ItemStack.isSameItemSameComponents(template, entry.getKey())) {
+				entry.setValue(Math.addExact(entry.getValue(), amount));
+				return;
+			}
+		}
+		outputs.put(template.copyWithCount(1), amount);
 	}
 
 	/**

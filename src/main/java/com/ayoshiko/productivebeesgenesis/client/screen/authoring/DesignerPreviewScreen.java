@@ -31,6 +31,12 @@ final class DesignerPreviewScreen extends DesignerFormScreen {
 	}
 
 	@Override
+	public void tick() {
+		super.tick();
+		preview.update(document);
+	}
+
+	@Override
 	protected void renderContent(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		super.renderContent(graphics, mouseX, mouseY, partialTick);
 		if (previewHeight >= 8) {

@@ -47,7 +47,7 @@ final class Ae2InputLaneSnapshot {
 	/**
 	 * 非空槽的组件补丁数量；空槽恒为 0。
 	 * <p>
-	 * <b>为什么预采</b>：{@link Ae2InputPuller.PullEntry#matchesComponents} 原先在
+	 * <b>为什么预采</b>：{@link Ae2InputExecution.PullEntry#matchesComponents} 原先在
 	 * 「类型 × 车道」内层循环里对每条车道都重新读一次 {@code getComponentsPatch().size()}
 	 * （两次），而补丁数在一轮内不会变化 —— 只有我方插入才改内容，且插入后必然
 	 * {@link #refresh(int)}。预采把每次比较的组件表查找降为一次数组读。
@@ -175,7 +175,7 @@ final class Ae2InputLaneSnapshot {
 	 * （例如玩家重命名过的蜜脾带两个补丁，仍走 {@code isSameItemSameComponents}）。
 	 * <p>
 	 * 包级共享：车道侧（本类 {@link #refresh(int)}）与条目侧
-	 * （{@code Ae2InputPuller.PullEntry#prepareKeyComponents}）必须使用同一套判定，
+	 * （{@code Ae2InputExecution.PullEntry#prepareKeyComponents}）必须使用同一套判定，
 	 * 否则两侧签名不同源会让快径给出错误结论。
 	 */
 	static ResourceLocation singleBeeType(ItemStack stack, Item item, int patchSize) {

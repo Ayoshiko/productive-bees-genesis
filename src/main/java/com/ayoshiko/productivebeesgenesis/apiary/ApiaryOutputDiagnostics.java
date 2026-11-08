@@ -8,6 +8,7 @@ import java.util.List;
 /** 管理员命令在服务器线程读取的有界生产快照，不改变资产或暴露蜜蜂原始 NBT。 */
 public record ApiaryOutputDiagnostics(int pendingCycles, int frozenItemKinds, long frozenFluidAmount,
         long pendingFluidAmount, int bufferGroups, int bufferLimit, boolean invalidBuffer,
+        boolean invalidBees, boolean invalidFluid,
         int occupiedOutputSlots, int outputSlots, int tankAmount, int tankCapacity, List<Slot> slots,
         List<Retained> retained) {
     public record Slot(int index, BeeState state, ResourceLocation bee, int paidCycles, ResourceLocation paidBee) {}
@@ -49,6 +50,7 @@ public record ApiaryOutputDiagnostics(int pendingCycles, int frozenItemKinds, lo
         }
         return new ApiaryOutputDiagnostics(production.total(), production.items().size(), production.fluidAmount(),
                 tile.getPendingHoneyFluidAmount(), buffer.getBufferedGroupCount(), ApiaryOutputBuffer.MAX_BUFFER_GROUPS,
-                buffer.hasInvalidData(), occupied, outputs.size(), tank.getFluidAmount(), tank.getCapacity(), slots, retained);
+                buffer.hasInvalidData(), tile.getSlotManager().hasInvalidBeeData(), tile.hasInvalidFluidData(),
+                occupied, outputs.size(), tank.getFluidAmount(), tank.getCapacity(), slots, retained);
     }
 }

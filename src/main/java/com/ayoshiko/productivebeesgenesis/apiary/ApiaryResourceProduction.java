@@ -14,6 +14,7 @@ import mekanism.api.AutomationType;
 import mekanism.api.energy.IEnergyContainer;
 import net.minecraft.nbt.CompoundTag;
 import java.math.BigInteger;
+import java.util.UUID;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 
@@ -90,6 +91,7 @@ final class ApiaryResourceProduction {
 				ResourceProductionSnapshot.State.WAITING_OUTPUT, level.getGameTime());
 		ResourceAccount account = null;
 		ResourceAccount.Ticket ticket = null;
+		UUID localRequest = null;
 		try {
 			account = host.account(tile);
 			if (!account.canExtract(host.reference()) || account.laneSuspended(index)) return BeeState.WAITING_RESOURCE;
@@ -100,7 +102,7 @@ final class ApiaryResourceProduction {
 			if (prepared == null || !prepared.valid(snapshot, tile.getFeederSlotManager().getFlowerCacheVersion(), slot))
 				return BeeState.WAITING_RESOURCE;
             var plan = prepared.plan();
-            long seed = level.random.nextLong();
+            long seed = level.getRandom().nextLong();
 			var perCycle = plan.maximumExact(stack);
 			long capacityCycles = Long.MAX_VALUE;
 			var capacityUsed = account.reservedCapacity();
@@ -139,10 +141,10 @@ final class ApiaryResourceProduction {
 			var maximum = count == 0 ? perCycle : plan.maximumExact(count);
 			var sampled = plan.sampleWithRolls(count, seed);
 			var result = sampled.exactAmounts();
-			var local = mixed == null ? null : mixed.sample(count, sampled.rolls(), level.random.nextLong(),
+			var local = mixed == null ? null : mixed.sample(count, sampled.rolls(), level.getRandom().nextLong(),
 					flower == null ? java.util.List.of() : flower.output());
 			var beeSnapshot = slot.getBeeData();
-			if (!maximum.isEmpty() || local != null) {
+			if (!maximum.isEmpty() || local != null || cost > 0 || flower != null) {
 				var context = new CompoundTag();
 				context.putString("host", "mek_apiary");
 				context.putString("bee", type.toString());
@@ -154,9 +156,15 @@ final class ApiaryResourceProduction {
 				context.putLong("energy_cost", cost);
 				if (local != null) context.put("mixed_local", local.context(level.registryAccess()));
 				if (flower != null) context.put("flower", flower.context(level.registryAccess()));
-				ticket = account.reserve(host.reference(), catalog.revision(), context, maximum);
-				account.start(ticket);
-				account.freeze(ticket, result);
+				if (!maximum.isEmpty()) {
+					ticket = account.reserve(host.reference(), catalog.revision(), context, maximum);
+					account.start(ticket);
+					account.freeze(ticket, result);
+				} else {
+					context.put("bee_data", beeSnapshot.copy());
+					localRequest = tile.productionState().beginLocal(index, context,
+							local == null ? BeeProduceProcessor.Generated.EMPTY : local.generated());
+				}
 			}
 			if (cost > 0 && energy.extract(cost, Action.EXECUTE, AutomationType.INTERNAL) != cost) {
 				throw new IllegalStateException("Mechanical resource energy debit was incomplete");
@@ -165,7 +173,7 @@ final class ApiaryResourceProduction {
 				throw new IllegalStateException("Mechanical resource source changed during commit");
 			}
 			if (flower != null) flower.commit();
-			if (local != null) local.commit();
+			if (local != null && localRequest == null) local.commit();
 			if (host.account(tile) != account || slot.getBeeData() != beeSnapshot || slot.getTicksInHive() != previousTicks) {
 				throw new IllegalStateException("Mechanical resource source changed during local output");
 			}
@@ -175,18 +183,28 @@ final class ApiaryResourceProduction {
 			tile.setChanged();
 			host.account(tile);
 			if (ticket != null) account.commit(ticket);
+			if (localRequest != null) {
+				tile.productionState().commitLocal(localRequest);
+				localRequest = null;
+				tile.getProduceProcessor().flushFrozen(snapshot);
+			}
 			host.productionMonitor().record(result);
 			host.productionMonitor().observe(index, spec.outputs(), ResourceProductionSnapshot.State.PRODUCING, level.getGameTime());
 			host.status("ready");
 			return BeeState.WORKING;
 		} catch (RuntimeException | Error failure) {
+			if (localRequest != null) {
+				tile.productionState().fail(failure);
+				ProductiveBeesGenesis.LOGGER.error("机械蜂箱本地混合产出已保管，请求 {}，位置 {}",
+						localRequest, tile.getBlockPos(), failure);
+			}
 			if (ticket != null) {
 				try { account.suspendProduction(ticket, "Mechanical resource outcome uncertain: " + failure.getClass().getSimpleName()); }
 				catch (RuntimeException isolationFailure) { failure.addSuppressed(isolationFailure); }
 				ProductiveBeesGenesis.LOGGER.error("机械蜂箱资源结算结果未知，账户 {} 请求 {}，位置 {}",
 						ticket.source().sourceId(), ticket.sequence(), tile.getBlockPos(), failure);
 			}
-			host.status(ticket == null ? "invalid_production_plan" : "production_uncertain");
+			host.status(ticket == null && localRequest == null ? "invalid_production_plan" : "production_uncertain");
 			return BeeState.WAITING_RESOURCE;
 		}
 	}

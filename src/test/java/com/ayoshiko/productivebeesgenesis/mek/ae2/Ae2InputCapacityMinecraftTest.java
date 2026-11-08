@@ -104,15 +104,15 @@ class Ae2InputCapacityMinecraftTest {
 
 	private static void assertCapacityMatchesInsertion(BasicInventorySlot slot, ItemStack template) throws Exception {
 		var key = AEItemKey.of(template);
-		var entry = new Ae2InputPuller.PullEntry(key, Integer.MAX_VALUE);
+		var entry = new Ae2InputExecution.PullEntry(key, Integer.MAX_VALUE);
 		entry.beginComponentMatchCache(1);
 		var snapshot = new Ae2InputLaneSnapshot();
 		snapshot.capture(List.of(slot), 1);
-		var lane = Ae2InputPuller.class.getDeclaredMethod("laneCapacity", Ae2InputLaneSnapshot.class,
-				int.class, Item.class, Ae2InputPuller.PullEntry.class, ItemStack.class);
+		var lane = Ae2InputExecution.class.getDeclaredMethod("laneCapacity", Ae2InputLaneSnapshot.class,
+				int.class, Item.class, Ae2InputExecution.PullEntry.class, ItemStack.class);
 		lane.setAccessible(true);
-		var fallback = Ae2InputPuller.class.getDeclaredMethod("getSlotRemainingCapacity", IInventorySlot.class,
-				int.class, Ae2InputPuller.PullEntry.class, ItemStack.class);
+		var fallback = Ae2InputExecution.class.getDeclaredMethod("getSlotRemainingCapacity", IInventorySlot.class,
+				int.class, Ae2InputExecution.PullEntry.class, ItemStack.class);
 		fallback.setAccessible(true);
 		int requested = 1_000_000;
 		int actual = requested - slot.insertItem(template.copyWithCount(requested),

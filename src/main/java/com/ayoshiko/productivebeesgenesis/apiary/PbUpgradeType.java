@@ -39,10 +39,10 @@ public enum PbUpgradeType {
 	/** 生产力升级 Ω — 产出数量倍率（PB 配置 productivityMultiplier4，默认 2.6），自带蜜脾块效果 */
 	PRODUCTIVITY_4("productivity_4", 0xFFEF5350, 2.6f, 8),
 
-	/** 时间升级 — 生产速度倍率（每级减少 15% 时间，与 PB 原版 timeBonus 一致） */
+	/** 时间升级 — 增加时间除数，默认每个加入 0.15 的速度系数。 */
 	TIME("time", 0xFFFF9800, 0f, 8),
 
-	/** Bug 3：时间升级 II — 双倍效果（每级减少 30% 时间，与 PB 原版 time_2 一致） */
+	/** 时间升级 II — 对时间除数提供双倍系数，默认每个加入 0.30。 */
 	TIME_2("time_2", 0xFFFF6D00, 0f, 8),
 
 	/** 基因采样升级 — 采样蜜蜂基因（上限由配置驱动，枚举值4为配置未加载时的回退默认值） */

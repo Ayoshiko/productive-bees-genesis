@@ -15,6 +15,9 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
     private JsonObject custom = DesignerPreferences.palette().json();
     private String importPath = "";
     private boolean saving;
+    private long themeImportSequence;
+    private long pageGeneration;
+    private long saveSequence;
     private boolean layoutChanged;
 	private boolean customExpanded = DesignerPreferences.text("theme").startsWith("custom_");
 
@@ -48,7 +51,7 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
         }
         finishRows();
         int cell = (contentWidth - 12) / 3;
-        primaryButton(left, footerY(), cell, tr("settings_save"), () -> DesignerPreferences.save(message -> status = message));
+        primaryButton(left, footerY(), cell, tr("settings_save"), () -> savePreferences(false));
         button(left + cell + 6, footerY(), cell, tr("settings_reset"), () -> {
             DesignerPreferences.apply(DesignerPreferences.defaults());
             custom = DesignerPreferences.palette().json();
@@ -249,8 +252,16 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
             status = "designer.error.settings_file";
             return;
         }
+        long operation = ++themeImportSequence;
+        long generation = pageGeneration;
+        long revision = DesignerPreferences.revision();
+        String editingTheme = custom.toString();
         try {
             DesignerProjectFiles.importTheme(Path.of(value), loaded -> {
+                if (operation != themeImportSequence || generation != pageGeneration || minecraft.screen != this
+                        || revision != DesignerPreferences.revision() || !editingTheme.equals(custom.toString())) {
+                    return;
+                }
                 try {
                     DesignerPreferences.theme(loaded);
                     custom = DesignerPreferences.palette().json();
@@ -259,7 +270,12 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
                 } catch (RuntimeException exception) {
                     status = exception.getMessage();
                 }
-            }, message -> status = message);
+            }, message -> {
+                if (operation == themeImportSequence && generation == pageGeneration && minecraft.screen == this
+                        && revision == DesignerPreferences.revision() && editingTheme.equals(custom.toString())) {
+                    status = message;
+                }
+            });
         } catch (RuntimeException exception) {
             status = "designer.error.settings_file";
         }
@@ -290,21 +306,41 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
         if (saving || isLeaving()) {
             return;
         }
+        themeImportSequence++;
         if (!DesignerPreferences.dirty()) {
             minecraft.setScreen(parent);
             return;
         }
+        savePreferences(true);
+    }
+
+    private void savePreferences(boolean close) {
+        if (saving) {
+            return;
+        }
         saving = true;
+        long operation = ++saveSequence;
+        long generation = pageGeneration;
         DesignerPreferences.save(message -> {
-            saving = false;
-            if (minecraft.screen != this) {
+            if (operation != saveSequence) {
                 return;
             }
-            if (message.equals("designer.status.preferences_saved")) {
-			minecraft.setScreen(parent);
+            saving = false;
+            if (generation != pageGeneration || minecraft.screen != this) {
+                return;
+            }
+            if (close && message.equals("designer.status.preferences_saved") && !DesignerPreferences.dirty()) {
+                minecraft.setScreen(parent);
             } else {
                 status = message;
             }
         });
+    }
+
+    @Override
+    public void removed() {
+        pageGeneration++;
+        themeImportSequence++;
+        super.removed();
     }
 }

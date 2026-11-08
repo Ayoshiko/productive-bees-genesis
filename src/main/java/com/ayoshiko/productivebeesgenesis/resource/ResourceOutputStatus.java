@@ -71,8 +71,9 @@ public record ResourceOutputStatus(State state, boolean meEnabled, int totalKind
 	static ResourceOutputStatus summarize(ResourceAccount account, boolean enabled, int page) {
 		var available = account.availableExact();
 		// 菜单只取权限／状态头，目录独立增量同步；Jade 的有界摘要才需要排序。
-		var rows = page < 0 ? java.util.List.<ResourceStack>of() : available.entrySet().stream().sorted(java.util.Comparator.comparing(entry -> entry.getKey().toString()))
-				.skip((long) Math.max(0, page) * MAX_ROWS).limit(MAX_ROWS).map(entry -> new ResourceStack(entry.getKey(), entry.getValue())).toList();
+		var rows = page < 0 ? java.util.List.<ResourceStack>of() : account.sortedAvailableKeys().stream()
+				.skip((long) Math.max(0, page) * MAX_ROWS).limit(MAX_ROWS)
+				.map(key -> new ResourceStack(key, available.get(key))).toList();
 		State state = State.PAUSED;
 		if (account.canExtract(account.reference())) state = account.hasIsolatedRequests() ? State.PARTIAL : State.READY;
 		return new ResourceOutputStatus(state, enabled, available.size(), rows);

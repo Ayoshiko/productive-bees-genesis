@@ -20,7 +20,17 @@ public abstract class ResourceServerLifecycleMixin {
 		MinecraftServer server = (MinecraftServer) (Object) this;
 		ResourceRuntime.beginReload(server);
 		try {
-			return original.call(selected).whenComplete((unused, failure) -> ResourceRuntime.finishReload(server, failure == null));
+			return original.call(selected).whenCompleteAsync((unused, failure) -> {
+				boolean accepted = false;
+				try {
+					if (failure == null) {
+						com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis.acceptRecipeManager(server.getRecipeManager(), false);
+						accepted = true;
+					}
+				} finally {
+					ResourceRuntime.finishReload(server, accepted);
+				}
+			}, server);
 		} catch (RuntimeException | Error failure) {
 			ResourceRuntime.finishReload(server, false);
 			throw failure;

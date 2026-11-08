@@ -15,7 +15,7 @@
 	 *   <li>{@code apiary/} - MEK 蜂箱方块实体、GUI、槽位管理、序列化</li>
 	 *   <li>{@code capability/} - 自定义 Capability 接口（如物品栏脏标记去抖）</li>
 	 *   <li>{@code client/} - 客户端渲染、JEI、Jade、Screen</li>
-	 *   <li>{@code command/} - 命令注册（当前为空，性能监控命令已移除）</li>
+	 *   <li>{@code command/} - 开发者模式命令注册</li>
 	 *   <li>{@code compat/} - 第三方模组兼容（KubeJS、ME、EME）</li>
 	 *   <li>{@code config/} - 客户端/服务端/通用配置</li>
 	 *   <li>{@code datagen/} - 数据生成（语言、配方、战利品表）</li>

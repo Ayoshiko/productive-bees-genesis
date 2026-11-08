@@ -2,18 +2,19 @@ package com.ayoshiko.productivebeesgenesis.client;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
+import cy.jdkdigital.productivebees.common.entity.bee.ProductiveBee;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.EntityModel;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.client.event.RenderLivingEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import org.joml.Vector3f;
@@ -26,7 +27,7 @@ import java.util.concurrent.ThreadLocalRandom;
 	 * 使用模板方法模式封装 万象创世 与 无尽·创世 两个客户端处理器的公共流程：
 	 * <ol>
 	 *   <li>{@link #handleClientTick} — 跳帧粒子生成框架</li>
-	 *   <li>{@link #handleRenderLivingPost} — 发光轮廓渲染框架（含 RenderSystem 状态重置）</li>
+	 *   <li>{@link #renderGlow} — 身体层内的发光轮廓</li>
 	 *   <li>{@link #handleEntityJoinLevel} — 实体加入世界粒子爆发框架</li>
 	 *   <li>{@link #hsvToRgb} — HSV→RGB 公共转换</li>
 	 * </ol>
@@ -157,65 +158,29 @@ public abstract class AbstractClientCombEventHandler {
 		}
 	}
 
-	/**
-	 * 实体渲染后模板 — 发光轮廓
-	 * <p>
-	 * 在蜜蜂主体渲染完成后，渲染一层放大半透明轮廓。使用 entityTranslucent 渲染类型，
-	 * 通过 RenderSystem.setShaderColor 控制颜色与透明度；渲染后必须重置为 (1,1,1,1)，
-	 * 避免影响后续实体渲染。
-	 *
-	 * @param event RenderLivingEvent.Post 事件
-	 */
-	protected void handleRenderLivingPost(RenderLivingEvent.Post<LivingEntity, ?> event) {
-		// 服务端配置禁用万象创世时，客户端不渲染特效
-		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return;
-
-		LivingEntity entity = event.getEntity();
-
-		if (!(entity instanceof ConfigurableBee bee)) return;
-		if (!getBeeType().equals(bee.getBeeType())) return;
-		if (!ModConfig.CLIENT.glowEnabled.get()) return;
-
+	/** PB 身体层已经准备好实际模型和姿态；光晕只增加比例与每个顶点的颜色。 */
+	protected void renderGlow(ProductiveBee bee, EntityModel<ProductiveBee> model, PoseStack poseStack,
+			MultiBufferSource buffers, int packedLight, ResourceLocation texture) {
+		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled() || !ModConfig.CLIENT.glowEnabled.get()
+				|| !(bee instanceof ConfigurableBee configurable) || !getBeeType().equals(configurable.getBeeType())) {
+			return;
+		}
 		float[] color = getColor(System.currentTimeMillis());
-
-		var poseStack = event.getPoseStack();
-		var multiBufferSource = event.getMultiBufferSource();
-		var renderer = event.getRenderer();
-		var model = renderer.getModel();
-
-		// 准备模型动画（walkAnimation 等）
-		float partialTick = event.getPartialTick();
-		float limbSwing = entity.walkAnimation.position();
-		float limbSwingAmount = entity.walkAnimation.speed();
-		float ageInTicks = entity.tickCount + partialTick;
-		float netHeadYaw = entity.getYRot();
-		float headPitch = entity.getXRot();
-		model.prepareMobModel(entity, limbSwing, limbSwingAmount, partialTick);
-		model.setupAnim(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
-
+		int argb = Math.round(getGlowAlpha() * 255) << 24
+				| Math.round(color[0] * 255) << 16
+				| Math.round(color[1] * 255) << 8
+				| Math.round(color[2] * 255);
 		poseStack.pushPose();
 		try {
 			float scale = getScaleMultiplier();
 			poseStack.scale(scale, scale, scale);
-
-			// 半透明渲染类型，避免触发完整渲染管线导致无限递归
-			var renderType = RenderType.entityTranslucent(renderer.getTextureLocation(entity));
-			var vertexConsumer = multiBufferSource.getBuffer(renderType);
-			int overlay = OverlayTexture.pack(OverlayTexture.u(0.0F), OverlayTexture.v(false));
-
-			float alpha = getGlowAlpha();
-			RenderSystem.setShaderColor(color[0], color[1], color[2], alpha);
-			try {
-				model.renderToBuffer(poseStack, vertexConsumer, event.getPackedLight(), overlay);
-			} finally {
-				// 无论 renderToBuffer 是否抛异常都重置 RenderSystem 状态，避免污染后续渲染
-				RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-			}
+			model.renderToBuffer(poseStack, buffers.getBuffer(RenderType.entityTranslucent(texture)),
+					packedLight, OverlayTexture.NO_OVERLAY, argb);
 		} finally {
-			// 无论 pushPose 后任何步骤是否抛异常都恢复 GL 栈，避免 poseStack 状态泄漏
 			poseStack.popPose();
 		}
 	}
+
 
 	/**
 	 * 实体加入世界模板 — 粒子爆发

@@ -23,7 +23,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 	 * 所有颜色由本 Mixin 统一控制。
 	 * <p>
 	 * 注意：getParticleColor 控制采蜜后花粉层的颜色（renderNectarLayer），
-	 * 也用于粒子颜色。发光效果由 onRenderLivingPost 事件处理。
+	 * 也用于粒子颜色。发光轮廓在 PB 的实际身体层内绘制。
 	 */
 @Mixin(ConfigurableBee.class)
 public abstract class ConfigurableBeeColorMixin implements DesignerPreviewData {

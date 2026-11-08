@@ -142,10 +142,13 @@ class DirectContainerOutputWiringTest {
 				"直通开关与 AE2 无关，注册必须在 AE2 守卫之前");
 
 		String handler = read("network/DirectContainerOutputPayloadHandler.java");
-		assertTrue(handler.contains("serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer")
-						&& handler.contains("getBlockPos().equals(payload.pos())"),
+		assertTrue(handler.contains("!MachineMenuAccess.canAccess(serverPlayer, payload.pos())"),
+				"必须先经统一菜单权限校验拒绝无权请求");
+		String access = read("network/MachineMenuAccess.java");
+		assertTrue(access.contains("serverPlayer.containerMenu instanceof MekanismTileContainer<?> container")
+						&& access.contains("tile.getBlockPos().equals(pos)"),
 				"必须校验玩家当前打开的机器与坐标一致");
-		assertTrue(handler.contains("NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ"),
+		assertTrue(access.contains("NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ"),
 				"必须校验交互距离");
 		assertTrue(handler.contains("ExternalLogisticsSettings.directContainerOutput("
 						+ "serverPlayer.level().getGameTime())"),
@@ -159,9 +162,7 @@ class DirectContainerOutputWiringTest {
 		assertTrue(overlay.contains("BUTTON_X_OFFSET = 120") && overlay.contains("BUTTON_Y_OFFSET = 78"),
 				"新按钮固定在 (120,78)");
 
-		// 同列既有按钮：AE 输出(6)、AE 输入 / 蜂箱直输 AE(24)、熔炼兼容(42)、离心机直输 AE(60)
-		assertTrue(read("client/screen/AeOutputOverlay.java").contains("BUTTON_Y_OFFSET = 6"));
-		assertTrue(read("client/screen/AeInputOverlay.java").contains("BUTTON_Y_OFFSET = 24"));
+		// 同列既有按钮：AE 输出(6)、AE 输入或蜂箱直输 AE(24)、熔炼兼容(42)、离心机直输 AE(60)。
 		assertTrue(read("client/screen/SmeltingCompatOverlay.java").contains("BUTTON_Y_OFFSET = 42"));
 		assertTrue(read("client/screen/CentrifugeDirectAeOutputOverlay.java").contains("BUTTON_Y_OFFSET = 60"));
 		// 与最近的上方按钮(60)保持 14+4 间距；Mekanism 自身的清除侧面按钮在 (136,95)，不同列

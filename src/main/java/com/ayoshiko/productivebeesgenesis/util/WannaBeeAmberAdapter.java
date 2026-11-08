@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.util;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeProductivityGene;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeProduceBatchSampler;
 import com.ayoshiko.productivebeesgenesis.apiary.FeederSlotManager;
+import com.ayoshiko.productivebeesgenesis.apiary.ItemStackMergeHelper;
 import com.mojang.authlib.GameProfile;
 import cy.jdkdigital.productivebees.common.block.entity.AmberBlockEntity;
 import cy.jdkdigital.productivebees.init.ModEntities;
@@ -84,19 +85,15 @@ public final class WannaBeeAmberAdapter {
 		List<CustomData> candidates = feeder.getAmberEntityDataSnapshot();
 		if (candidates.isEmpty()) return List.of();
 
-		int[] eventCounts = new int[productionCounts.length];
-		for (int levelIndex = 0; levelIndex < productionCounts.length; levelIndex++) {
-			eventCounts[levelIndex] = SaturatingMath.saturatingToInt(productionCounts[levelIndex]);
-		}
-		int[] sampleCounts = WannaBeeBatchPlan.allocateSampleCounts(eventCounts);
+		int[] sampleCounts = WannaBeeBatchPlan.allocateSampleCounts(productionCounts);
 		List<AggregatedDrop> aggregated = new ArrayList<>();
 		ThreadLocalRandom random = ThreadLocalRandom.current();
 		for (int productivityLevel = 0; productivityLevel < sampleCounts.length; productivityLevel++) {
 			int samplesForLevel = sampleCounts[productivityLevel];
-			int eventCount = eventCounts[productivityLevel];
+			long eventCount = productionCounts[productivityLevel];
 			for (int sampleIndex = 0; sampleIndex < samplesForLevel; sampleIndex++) {
-				int representedEvents = WannaBeeBatchPlan.weightAt(eventCount, samplesForLevel, sampleIndex);
-				int rollCount = BeeProduceBatchSampler.sampleRollCount(random, representedEvents, multiplier);
+				long representedEvents = WannaBeeBatchPlan.weightAt(eventCount, samplesForLevel, sampleIndex);
+				long rollCount = BeeProduceBatchSampler.sampleRollCount(random, representedEvents, multiplier);
 				if (rollCount <= 0) continue;
 				try {
 					LootPool pool = createLootPool(level, origin, candidates, random);
@@ -111,12 +108,7 @@ public final class WannaBeeAmberAdapter {
 
 		List<ItemStack> result = new ArrayList<>(aggregated.size());
 		for (AggregatedDrop drop : aggregated) {
-			long remaining = drop.count;
-			while (remaining > 0) {
-				int count = (int) Math.min(Integer.MAX_VALUE, remaining);
-				result.add(drop.template.copyWithCount(count));
-				remaining -= count;
-			}
+			ItemStackMergeHelper.appendBulkCount(result, drop.template, drop.count);
 		}
 		return result;
 	}
@@ -145,7 +137,7 @@ public final class WannaBeeAmberAdapter {
 	}
 
 	private static void sampleRolls(ServerLevel level, List<AggregatedDrop> aggregated, LootPool pool,
-			int rollCount, int productivityLevel) {
+			long rollCount, int productivityLevel) {
 		if (pool.eligibleDrops.isEmpty()) return;
 		if (pool.eligibleDrops.size() == 1) {
 			ItemStack sampled = pool.eligibleDrops.getFirst();
@@ -154,7 +146,7 @@ public final class WannaBeeAmberAdapter {
 			merge(aggregated, sampled, amount);
 			return;
 		}
-		int[] selectedCounts = WannaBeeLootSelection.sampleCounts(
+		long[] selectedCounts = WannaBeeLootSelection.sampleCounts(
 				level.random, rollCount, pool.eligibleDrops.size());
 		for (int i = 0; i < selectedCounts.length; i++) {
 			if (selectedCounts[i] <= 0) continue;

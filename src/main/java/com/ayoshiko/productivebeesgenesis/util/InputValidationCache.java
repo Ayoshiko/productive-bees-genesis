@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
+import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -22,11 +23,9 @@ import java.util.function.Supplier;
 	 * 默认保留最近 {@value #DEFAULT_MAX_ENTRIES} 个输入，覆盖最高等级工厂的双倍候选窗口，
 	 * 避免多进程工厂交替输入时缓存槽位互相驱逐。
 	 * <p>
-	 * <b>缓存键优化</b>：使用 {@link InputFingerprint}（Item + beeType）替代完整
-	 * {@link ItemStack#isSameItemAndComponents} 比对，避免 owo {@code DerivedComponentMap.hashCode()}
-	 * 和 {@code PatchedDataComponentMap.hashCode()} 的高昂开销。
-	 * 对于 configurable_honeycomb / configurable_comb_block，只需比较 Item + bee_type 即可唯一确定身份；
-	 * 其他物品使用官方组件哈希，保证带数据组件的物品不会错误共享结果。
+	 * {@link InputFingerprint} 保留完整组件身份；PB 蜜脾按 Item + bee_type 计算轻量哈希，
+	 * 同一哈希桶内仍比较全部组件补丁，正、负结果都不会跨组件输入复用。
+	 * 普通物品没有组件补丁时跳过完整组件哈希，带补丁时使用官方哈希分桶。
 	 * <p>
 	 * 支持两种缓存粒度：
 	 * <ul>
@@ -58,15 +57,12 @@ public class InputValidationCache {
 	private static final int DEFAULT_MAX_ENTRIES = 64;
 
 	/**
-	 * 输入指纹 — Item + beeType + 通用组件哈希，不含 count
-	 * <br/>
-	 * 与 {@link ItemStack#isSameItemSameComponents} 语义近似（不比较 count），
-	 * 但对 configurable_honeycomb / configurable_comb_block 只比较 bee_type，
-	 * 跳过其他数据组件的哈希计算（这些物品除 bee_type 外组件固定）。
-	 * 其他物品保留组件哈希，避免同一 Item 的不同数据组件错误共享配方结果。
+	 * 不含数量的输入身份；哈希只负责分桶，完整组件补丁决定是否复用结果。
+	 * 同 Item 的默认组件固定，无补丁输入仍可跳过完整组件哈希。
 	 */
-	private record InputFingerprint(Item item, @Nullable ResourceLocation beeType, int componentHash) {
-		static final InputFingerprint EMPTY = new InputFingerprint(Items.AIR, null, 0);
+	private record InputFingerprint(Item item, @Nullable ResourceLocation beeType,
+			DataComponentPatch components, int componentHash) {
+		static final InputFingerprint EMPTY = new InputFingerprint(Items.AIR, null, DataComponentPatch.EMPTY, 0);
 
 		/** 从 ItemStack 提取指纹（空栈返回 EMPTY 常量） */
 		static InputFingerprint of(ItemStack stack) {
@@ -74,15 +70,20 @@ public class InputValidationCache {
 				return EMPTY;
 			}
 			Item item = stack.getItem();
-			// configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分（缓存物品引用，避免每次 DeferredHolder.value）
+			// bee_type 用于轻量分桶，其它合法组件仍参与 equals。
 			if (item == PbCombItemRefs.honeycomb() || item == PbCombItemRefs.combBlock()) {
-				return new InputFingerprint(item, stack.get(PbDataComponents.beeType()), 0);
+				return new InputFingerprint(item, stack.get(PbDataComponents.beeType()), stack.getComponentsPatch(), 0);
 			}
-			// 普通熔炼原料通常没有组件补丁；同 Item 的默认组件固定，无需每次计算完整组件哈希。
 			if (stack.getComponentsPatch().isEmpty()) {
-				return new InputFingerprint(item, null, 0);
+				return new InputFingerprint(item, null, DataComponentPatch.EMPTY, 0);
 			}
-			return new InputFingerprint(item, null, ItemStack.hashItemAndComponents(stack));
+			return new InputFingerprint(item, null, stack.getComponentsPatch(), ItemStack.hashItemAndComponents(stack));
+		}
+
+		@Override
+		public int hashCode() {
+			int hash = 31 * item.hashCode() + (beeType == null ? 0 : beeType.hashCode());
+			return 31 * hash + componentHash;
 		}
 	}
 
@@ -152,9 +153,8 @@ public class InputValidationCache {
 	 * 命中时直接返回 {@link ValidationResult}，调用方可读取 {@code recipe()} / {@code beeType()} 等，
 	 * 避免 {@code findPbRecipe} 重复调用。
 	 * <p>
-	 * 仅使用指纹比对（Item + bee_type）作为缓存命中条件，不再使用引用相等短路。
-	 * 修复产物锁定 bug：Mekanism 槽位 ItemStack 引用可能不变但内容变化（自动化模组修改 bee_type），
-	 * 引用相等短路会错误返回缓存结果。指纹提取开销极低（仅读取 Item 和 bee_type 组件），可接受。
+	 * 指纹保存组件补丁快照；槽位复用同一 ItemStack 并修改 bee_type 或其它组件时，
+	 * 原缓存键不会随栈变化，必须按新的完整身份重新校验。
 	 *
 	 * @param level     世界（用于获取当前游戏刻），为 null 时直接走校验
 	 * @param input     输入物品
@@ -167,7 +167,7 @@ public class InputValidationCache {
 			return validator.get();
 		}
 		long now = level.getGameTime();
-		// 指纹比对（轻量 key，避免 isSameItemSameComponents 的全组件哈希）
+		// 哈希分桶后以完整组件补丁判断身份。
 		InputFingerprint fp = InputFingerprint.of(input);
 		CacheEntry hit = findFreshEntry(fp, now);
 		if (hit != null) return hit.result;

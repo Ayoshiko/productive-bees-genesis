@@ -21,9 +21,9 @@ import java.util.Set;
 	 * <br/>
 	 * 受控的 Mixin（@Mixin 目标或类体 import 引用了可选 mod 的类）：
 	 * <ul>
-	 *   <li>ExtraFactoryMixin / FactoryForMEMixin / TileEntityExtraFactoryAccessor — 引用
+	 *   <li>TileEntityExtraFactoryAccessor — 引用
 	 * ME(mekanism_extras)的类，仅当 ME 加载时应用</li>
-	 *   <li>ExtraFactoryForEMEMixin / EMExtraFactoryMixin / TileEntityEMExtraFactoryAccessor — 引用
+	 *   <li>TileEntityEMExtraFactoryAccessor — 引用
 	 * EME(emextras)的类，仅当 EME 加载时应用</li>
 	 *   <li>Ae2ApiaryMixin / Ae2CentrifugeMixin / Ae2CentrifugeFactoryMixin — 引用 AE2 的 IAe2OutputHost 接口，仅当 AE2 加载时应用</li>
 	 *   <li>Ae2ExtraCentrifugeFactoryMixin / Ae2ExtraCentrifugeFactoryInputMixin — 引用 AE2 接口且目标类继承 ME
@@ -78,8 +78,6 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	 * 拦截 ME 工厂输出槽的 getLimit 覆盖，用我们的输出槽配置倍率替代 ME 的 8&lt;&lt;tier.ordinal()。
 	 */
 	private static final Set<String> ME_MIXINS = Set.of(
-			"ExtraFactoryMixin",
-			"FactoryForMEMixin",
 			"TileEntityExtraFactoryAccessor",
 			"ExtraUpgradeStackMixin",
 			"GuiUpgradeWindowMixin",
@@ -124,15 +122,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	 * EMExtraFactoryOutputInventorySlotMixin 引用 EMExtraFactoryOutputInventorySlot（EME 类），
 	 * 拦截 EME 工厂输出槽的 getLimit 覆盖，用我们的输出槽配置倍率替代 EME 的 8/16/32/64。 */
 	private static final Set<String> EME_MIXINS = Set.of(
-			"EMExtraFactoryMixin",
 			"TileEntityEMExtraFactoryAccessor",
 			"EMExtraFactoryInputInventorySlotMixin",
 			"EMExtraFactoryOutputInventorySlotMixin"
-	);
-
-	/** 同时引用 Mekanism Extras 与 Evolved Mekanism Extras 的 Mixin。 */
-	private static final Set<String> ME_EME_MIXINS = Set.of(
-			"ExtraFactoryForEMEMixin"
 	);
 
 	/** AE2 接口注入 Mixin（目标类始终可加载，仅要求 AE2 已安装） */
@@ -340,9 +332,6 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		}
 		if (EME_MIXINS.contains(simpleName)) {
 			return Holder.EME_LOADED;
-		}
-		if (ME_EME_MIXINS.contains(simpleName)) {
-			return Holder.ME_LOADED && Holder.EME_LOADED;
 		}
 		// AE2 接口注入 Mixin — 仅在 AE2 已安装时应用
 		if (AE2_MIXINS.contains(simpleName)) {

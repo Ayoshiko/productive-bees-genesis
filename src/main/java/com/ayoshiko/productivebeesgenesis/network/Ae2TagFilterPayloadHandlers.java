@@ -15,8 +15,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * 独立于 {@link Ae2FilterPayloadHandlers}（SRP + 该类已 497 行接近上限）：
  * 本类只处理标签表达式的保存与回传。
  * <p>
- * 安全模型与其他 AE2 过滤包一致：校验玩家身份 → 容器一致性（防 IDOR）→
- * 频次限制 → 方块实体类型 → 8 格交互距离，最后才写状态。
+ * 服务端操作通过共同菜单权限边界后再检查频次、宿主类型和表达式，
+ * 最后才写入状态。
  * 表达式长度在 StreamCodec 已限，这里再复校验一次，
  * 防止未来 codec 上限调整后服务端失去保护。
  */
@@ -35,8 +35,9 @@ final class Ae2TagFilterPayloadHandlers {
 			return;
 		}
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
-		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
-				"ae2_input_tag_filter_pos_mismatch")) return;
+		if (!MachineMenuAccess.canAccess(serverPlayer, payload.pos())) {
+			return;
+		}
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_tag_filter",
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 

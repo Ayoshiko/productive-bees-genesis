@@ -76,9 +76,10 @@ final class DesignerImportReviewScreen extends DesignerFormScreen {
 			status = "designer.status.loading";
 			rebuild();
 			var connection = minecraft.getConnection();
+			var identity = editor.editIdentity();
 			DesignerProjectFiles.preserveImportedDraft(document, () -> {
 				importing = false;
-				if (minecraft.screen == this && minecraft.getConnection() == connection && minecraft.player != null) {
+				if (editor.currentEdit(identity) && minecraft.getConnection() == connection && minecraft.player != null) {
 					editor.importDocument(document);
 				}
 			}, message -> {

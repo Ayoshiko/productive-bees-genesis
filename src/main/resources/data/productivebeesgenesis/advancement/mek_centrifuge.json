@@ -1,7 +1,7 @@
 {
   "parent": "productivebeesgenesis:root",
   "display": {
-    "icon": { "item": "productivebeesgenesis:mek_centrifuge" },
+    "icon": { "id": "productivebeesgenesis:mek_centrifuge" },
     "title": { "translate": "advancement.productivebeesgenesis.mek_centrifuge" },
     "description": { "translate": "advancement.productivebeesgenesis.mek_centrifuge.desc" },
     "frame": "task",

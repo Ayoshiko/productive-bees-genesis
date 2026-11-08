@@ -50,6 +50,11 @@ public class CentrifugeUpgradeData extends MachineUpgradeData {
 	/** 升级专用的输入暂存及输出交接快照，不进入配置卡。 */
 	@Nullable
 	public CompoundTag aePendingState;
+	/** 普通、万象进度和冻结产物的独立快照，先于源槽清空生成。 */
+	@Nullable
+	public CompoundTag pbWorkState;
+	@Nullable
+	public net.minecraft.nbt.Tag unresolvedFluidState;
 
 	/** 服务器内存中的一次性交接；资源余额与已付费进度仍只保存在世界账户。 */
 	public com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.Upgrade resourceUpgrade;

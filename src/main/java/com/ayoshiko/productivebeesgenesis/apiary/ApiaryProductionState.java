@@ -27,6 +27,7 @@ public final class ApiaryProductionState {
     private int[] activeSlots = new int[0];
     private String phase = "";
     private String failure = "";
+    private CompoundTag localContext;
     private CompoundTag invalid;
     private ApiaryRetainedCycles retained;
     private boolean activeRetained;
@@ -142,6 +143,36 @@ public final class ApiaryProductionState {
         changed.run();
     }
 
+    UUID beginLocal(int slot, CompoundTag context, BeeProduceProcessor.Generated generated) {
+        if (suspended() || hasFrozen()) throw new IllegalStateException("Production already held");
+        localContext = context.copy();
+        request = UUID.randomUUID();
+        activeSlots = new int[]{slot};
+        activeRetained = false;
+        phase = "local";
+        failure = "";
+        for (ItemStack stack : generated.items()) {
+            if (!stack.isEmpty()) items.add(stack.copy());
+        }
+        fluid = generated.fluid().copy();
+        fluidAmount = generated.fluidAmount();
+        frozenVersion++;
+        changed.run();
+        return request;
+    }
+
+    void commitLocal(UUID expected) {
+        if (!"local".equals(phase) || !expected.equals(request) || invalid != null) {
+            throw new IllegalStateException("Stale local production");
+        }
+        request = null;
+        activeSlots = new int[0];
+        localContext = null;
+        phase = "";
+        failure = "";
+        changed.run();
+    }
+
     void converted() { phase = "generation"; changed.run(); }
 
     void freeze(BeeProduceProcessor.Generated generated) {
@@ -184,12 +215,20 @@ public final class ApiaryProductionState {
     public void acknowledgeSettled(UUID expected) {
         if (invalid != null || request == null || !request.equals(expected))
             throw new IllegalStateException("Stale production request");
-        for (int slot : activeSlots) {
-            if (activeRetained) {
-                retained.clear(slot);
-            } else {
-                counts[slot] = 0;
-                bees[slot].setBeeData(null);
+        if ("local".equals(phase)) {
+            items.clear();
+            fluid = FluidStack.EMPTY;
+            fluidAmount = 0;
+            localContext = null;
+            frozenVersion++;
+        } else {
+            for (int slot : activeSlots) {
+                if (activeRetained) {
+                    retained.clear(slot);
+                } else {
+                    counts[slot] = 0;
+                    bees[slot].setBeeData(null);
+                }
             }
         }
         request = null;
@@ -231,6 +270,7 @@ public final class ApiaryProductionState {
             tag.putString("phase", phase);
             tag.putString("failure", failure);
             tag.putBoolean("retained_request", activeRetained);
+            if (localContext != null) tag.put("local_context", localContext.copy());
         }
         return tag;
     }
@@ -244,11 +284,12 @@ public final class ApiaryProductionState {
         request = null; invalid = null; phase = ""; failure = ""; activeSlots = new int[0];
         retained = null;
         activeRetained = false;
+        localContext = null;
         if (tag.isEmpty()) return;
         try {
             // NBT 宽松 getter 会把错误类型当空值或截断数字；资产快照必须先核对原始类型。
             if (!Set.of("version", "pending", "items", "fluid_amount", "fluid", "request", "active", "phase", "failure",
-                    "live_slots", "retained", "retained_request")
+                    "live_slots", "retained", "retained_request", "local_context")
                     .containsAll(tag.getAllKeys()) || !tag.contains("version", Tag.TAG_INT)
                     || tag.getInt("version") < 1 || tag.getInt("version") > 2 || !tag.contains("fluid_amount", Tag.TAG_LONG)) {
                 throw new IllegalArgumentException("Invalid production header");
@@ -330,8 +371,16 @@ public final class ApiaryProductionState {
                     seen[i] = true;
                 }
                 phase = tag.getString("phase"); failure = tag.getString("failure");
-                if (!phase.equals("conversion") && !phase.equals("generation")) throw new IllegalArgumentException("Unknown production phase");
-            } else if (tag.contains("active") || tag.contains("phase") || tag.contains("failure") || tag.contains("retained_request")) {
+                if (phase.equals("local")) {
+                    if (activeRetained || activeSlots.length != 1 || !tag.contains("local_context", Tag.TAG_COMPOUND)) {
+                        throw new IllegalArgumentException("Invalid local production owner");
+                    }
+                    localContext = tag.getCompound("local_context").copy();
+                } else if (!phase.equals("conversion") && !phase.equals("generation") || tag.contains("local_context")) {
+                    throw new IllegalArgumentException("Unknown production phase");
+                }
+            } else if (tag.contains("active") || tag.contains("phase") || tag.contains("failure")
+                    || tag.contains("retained_request") || tag.contains("local_context")) {
                 throw new IllegalArgumentException("Production group without request");
             }
             if (retained != null) {

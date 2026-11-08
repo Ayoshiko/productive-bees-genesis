@@ -76,11 +76,17 @@ class SharedPbRecipeCacheWiringTest {
 				"onServerStopped 必须经 safeClear 清理静态共享缓存，否则跨存档残留旧 RecipeHolder 引用");
 
 		String reloader = read("src/main/java/com/ayoshiko/productivebeesgenesis/util/BeeRecipeReloader.java");
-		int rebuild = reloader.indexOf("CentrifugeRecipeIndex.rebuild(recipeManager)");
-		int invalidate = reloader.indexOf("SharedPbRecipeCache.invalidate()", rebuild);
-		int version = reloader.indexOf("ProductiveBeesGenesis.RECIPE_VERSION.incrementAndGet()", invalidate);
-		assertTrue(rebuild >= 0 && invalidate > rebuild && version > invalidate,
-				"延迟配方重试可能晚于 TagsUpdatedEvent，重建后必须清共享缓存并通知实例短缓存");
+		assertFalse(reloader.contains("CentrifugeRecipeIndex.rebuild("),
+				"候选配方不得提前发布全局索引");
+		assertFalse(reloader.contains("SharedPbRecipeCache.invalidate()"));
+		assertTrue(reloader.contains("ProductiveBeesGenesis.acceptRecipeManager(context.recipeManager(), true)"),
+				"当前代际延迟处理成功后走统一接收入口");
+		int accept = main.indexOf("public static void acceptRecipeManager");
+		int rebuild = main.indexOf("CentrifugeRecipeIndex.rebuild(manager)", accept);
+		int invalidate = main.indexOf("SharedPbRecipeCache.invalidate()", rebuild);
+		int version = main.indexOf("RECIPE_VERSION.incrementAndGet()", invalidate);
+		assertTrue(accept >= 0 && rebuild > accept && invalidate > rebuild && version > invalidate,
+				"已接收管理器完成索引构建后才清缓存并通知实例短缓存");
 	}
 
 	@Test

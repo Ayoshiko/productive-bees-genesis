@@ -68,6 +68,7 @@ class ApiaryCageHandler {
 	 * 异常捕获：单只蜂笼处理失败不影响整体运行，记录错误日志。
 	 */
 	void processCageInput() {
+		if (manager.hasInvalidBeeData()) return;
 		var cageInSlot = manager.getCageInSlot();
 		if (cageInSlot.isEmpty()) return;
 
@@ -315,6 +316,7 @@ class ApiaryCageHandler {
 	 * @return true 如果成功放入
 	 */
 	boolean tryReleaseBeeAtSlot(int slotIndex, ItemStack cursorCage) {
+		if (manager.hasInvalidBeeData()) return false;
 		if (slotIndex < 0 || slotIndex >= manager.getBeeSlotCount()) return false;
 		if (!isCageItem(cursorCage) || !isFilledCage(cursorCage)) return false;
 
@@ -367,6 +369,7 @@ class ApiaryCageHandler {
 	 * @return true 如果成功放入
 	 */
 	boolean tryInsertBeeFromSpawnEgg(int slotIndex, ItemStack cursorEgg, Player player) {
+		if (manager.hasInvalidBeeData()) return false;
 		if (slotIndex < 0 || slotIndex >= manager.getBeeSlotCount()) return false;
 		if (player == null) return false;
 		BeeSlot targetSlot = manager.getBeeSlot(slotIndex);

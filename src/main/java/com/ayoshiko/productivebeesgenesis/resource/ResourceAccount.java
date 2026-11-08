@@ -4,6 +4,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
+import java.util.Comparator;
+import java.util.List;
 import java.math.BigInteger;
 import java.util.Map;
 import java.util.Objects;
@@ -97,6 +99,33 @@ public final class ResourceAccount {
 	record SuspendedTransfer(Transfer transfer, String reason) {}
 	final Map<ResourceKey, SuspendedTransfer> suspendedTransfers = new LinkedHashMap<>();
 	String suspension = "";
+	long storageBudget;
+	private Map<ResourceKey, BigInteger> reservedCapacitySnapshot;
+	private Map<ResourceKey, BigInteger> sortedAvailable;
+	private List<ResourceKey> sortedKeys = List.of();
+
+	void invalidateSnapshots() {
+		reservedCapacitySnapshot = null;
+	}
+
+	void releaseSnapshots() {
+		invalidateSnapshots();
+		sortedAvailable = null;
+		sortedKeys = List.of();
+		observedAvailable = null;
+		boundedAvailable = Map.of();
+	}
+
+	List<ResourceKey> sortedAvailableKeys() {
+		accounts.checkThread();
+		if (sortedAvailable != available) {
+			if (sortedAvailable == null || !sortedAvailable.keySet().equals(available.keySet())) {
+				sortedKeys = available.keySet().stream().sorted(Comparator.comparing(ResourceKey::toString)).toList();
+			}
+			sortedAvailable = available;
+		}
+		return sortedKeys;
+	}
 
 	ResourceAccount(ResourceAccounts accounts, UUID id, UUID owner, Binding binding) {
 		this.accounts = accounts;
@@ -206,10 +235,42 @@ public final class ResourceAccount {
 		validateWork(lane, nextWork, centrifugeWork);
 		var copied = nextWork == null ? null : nextWork.copy();
 		var next = ResourceExactAmounts.plus(available, production.result);
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		if (copied == null) centrifugeWork.remove(lane); else centrifugeWork.put(lane, copied);
 		available = next;
 		production = null;
+		accounts.releaseStorage(this);
+	}
+
+	java.util.List<Long> requestSequences() {
+		accounts.checkThread();
+		var sequences = new java.util.ArrayList<Long>();
+		if (production != null) sequences.add(production.sequence);
+		if (transfer != null) sequences.add(transfer.sequence);
+		for (var pending : suspendedLanes.values()) sequences.add(pending.production.sequence);
+		for (var pending : suspendedTransfers.values()) sequences.add(pending.transfer.sequence);
+		return java.util.List.copyOf(sequences);
+	}
+
+	CompoundTag requestData(Ticket ticket) {
+		checkReference(ticket.source());
+		if (production != null && production.sequence == ticket.sequence()) return ResourceAccountData.saveProduction(production);
+		for (var pending : suspendedLanes.values()) {
+			if (pending.production.sequence == ticket.sequence()) {
+				var data = ResourceAccountData.saveProduction(pending.production);
+				data.putString("reason", pending.reason);
+				return data;
+			}
+		}
+		if (transfer != null && transfer.sequence == ticket.sequence()) return ResourceAccountData.saveTransfer(transfer);
+		for (var pending : suspendedTransfers.values()) {
+			if (pending.transfer.sequence == ticket.sequence()) {
+				var data = ResourceAccountData.saveTransfer(pending.transfer);
+				data.putString("reason", pending.reason);
+				return data;
+			}
+		}
+		throw new IllegalStateException("Stale resource request");
 	}
 
 	/** 返回未决输出数量，供恢复界面核验；不作为可用库存暴露。 */
@@ -227,6 +288,14 @@ public final class ResourceAccount {
 	public boolean canExtract(Reference source) {
 		checkReference(source);
 		return binding != null && production == null && transfer == null && suspension.isEmpty()
+				&& accounts.persistenceFailure().isEmpty() && !accounts.hasInvalidData();
+	}
+
+	/** 拆卸、升级与重新认领共享的未决边界；正常键输出仍可绕过其它车道的隔离。 */
+	public boolean canRelocate(Reference source) {
+		checkReference(source);
+		return production == null && transfer == null && suspension.isEmpty()
+				&& suspendedLanes.isEmpty() && suspendedTransfers.isEmpty()
 				&& accounts.persistenceFailure().isEmpty() && !accounts.hasInvalidData();
 	}
 
@@ -249,8 +318,9 @@ public final class ResourceAccount {
         BigInteger left = next.get(key).subtract(amount);
         if (left.signum() == 0) next.remove(key); else next.put(key, left);
 		var frozen = Map.copyOf(next);
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		available = frozen;
+		accounts.releaseStorage(this);
 	}
 
 	/** 只读检查整份容量；暂停、在途请求或容量不足不改变计时、余额或随机结果。 */
@@ -284,7 +354,7 @@ public final class ResourceAccount {
 		long sequence = nextSequence;
 		long next = Math.incrementExact(sequence);
 		var planned = new Production(sequence, recipeRevision, context, checked, Map.of(), Phase.RESERVED);
-		accounts.beforeChange();
+		accounts.admitStorage(this, ResourceAccountData.storageBudget(this, available, planned, null) + 4L);
 		nextSequence = next;
 		production = planned;
 		return new Ticket(source, sequence);
@@ -294,7 +364,7 @@ public final class ResourceAccount {
 	public void start(Ticket ticket) {
 		checkProduction(ticket, Phase.RESERVED);
 		var next = production.with(Phase.STARTED, Map.of());
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		production = next;
 	}
 
@@ -304,7 +374,7 @@ public final class ResourceAccount {
 		var checked = ResourceExactAmounts.copy(result);
 		ResourceExactAmounts.within(checked, production.maximum);
 		var next = production.with(Phase.FROZEN, checked);
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		production = next;
 	}
 
@@ -312,23 +382,25 @@ public final class ResourceAccount {
 	public void commit(Ticket ticket) {
 		checkProduction(ticket, Phase.FROZEN);
 		var next = ResourceExactAmounts.plus(available, production.result);
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		available = next;
 		production = null;
+		accounts.releaseStorage(this);
 	}
 
 	/** 仅撤销尚未进入宿主的预约。 */
 	public void cancel(Ticket ticket) {
 		checkProduction(ticket, Phase.RESERVED);
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		production = null;
+		accounts.releaseStorage(this);
 	}
 
 	/** 记录生产结果未知；冻结记录与数量继续保存，禁止自动重跑。 */
 	public void suspendProduction(Ticket ticket, String reason) {
 		checkTicket(ticket, production == null ? 0 : production.sequence);
 		String checkedReason = reason(reason);
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		int lane = productionLane(production.context);
 		if (lane >= 0) {
 			suspendedLanes.put(lane, new SuspendedProduction(production, checkedReason));
@@ -352,10 +424,17 @@ public final class ResourceAccount {
 	/** 隔离产出仍拥有确认空间，不能被其它车道占满后导致恢复越界。 */
 	public Map<ResourceKey, BigInteger> reservedCapacity() {
 		accounts.checkThread();
-		var result = available;
-		for (var pending : suspendedLanes.values()) result = ResourceExactAmounts.plus(result, pending.production.maximum);
-		for (var pending : suspendedTransfers.values()) result = ResourceExactAmounts.plus(result, Map.of(pending.transfer.key, pending.transfer.amount));
-		return result;
+		if (reservedCapacitySnapshot == null) {
+			var result = available;
+			for (var pending : suspendedLanes.values()) {
+				result = ResourceExactAmounts.plus(result, pending.production.maximum);
+			}
+			for (var pending : suspendedTransfers.values()) {
+				result = ResourceExactAmounts.plus(result, Map.of(pending.transfer.key, pending.transfer.amount));
+			}
+			reservedCapacitySnapshot = result;
+		}
+		return reservedCapacitySnapshot;
 	}
 
 	/**
@@ -409,7 +488,7 @@ public final class ResourceAccount {
         if (left.signum() == 0) balances.remove(key); else balances.put(key, left);
 		var frozen = Map.copyOf(balances);
 		var request = new Transfer(sequence, key, amount);
-		accounts.beforeChange();
+		accounts.admitStorage(this, ResourceAccountData.storageBudget(this, frozen, null, request) + 4L);
 		nextSequence = next;
 		available = frozen;
 		transfer = request;
@@ -435,7 +514,7 @@ public final class ResourceAccount {
 	public void suspendTransfer(Ticket ticket, String reason) {
 		checkTicket(ticket, transfer == null ? 0 : transfer.sequence);
 		String checkedReason = reason(reason);
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		suspendedTransfers.put(transfer.key, new SuspendedTransfer(transfer, checkedReason));
 		transfer = null;
 		suspension = "";
@@ -458,23 +537,33 @@ public final class ResourceAccount {
 		}
 		var left = request.amount.subtract(confirmedAccepted);
 		var next = left.signum() == 0 ? available : ResourceExactAmounts.plus(available, Map.of(request.key, left));
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		available = next;
 		suspendedTransfers.remove(request.key);
+		accounts.releaseStorage(this);
+	}
+
+	/** 先核当前阶段，宿主恢复不能在这个检查前修改本地产物。 */
+	void validateProductionResolution(Ticket ticket, boolean confirmCompleted) {
+		var pending = pendingProduction(ticket);
+		int lane = productionLane(pending.context);
+		boolean isolated = lane >= 0 && suspendedLanes.containsKey(lane)
+				&& suspendedLanes.get(lane).production.sequence == ticket.sequence();
+		if ((!isolated && suspension.isEmpty()) || confirmCompleted && pending.phase != Phase.FROZEN) {
+			throw new IllegalStateException("Production outcome has not been established");
+		}
 	}
 
 	/** 所有者明确处理未决生产；只有已冻结的结果才允许确认入账。 */
 	public void resolveProduction(UUID actor, Ticket ticket, boolean confirmCompleted) {
 		checkOwner(actor);
+		validateProductionResolution(ticket, confirmCompleted);
 		var pending = pendingProduction(ticket);
 		int lane = productionLane(pending.context);
 		boolean isolatedLane = lane >= 0 && suspendedLanes.containsKey(lane)
 				&& suspendedLanes.get(lane).production.sequence == ticket.sequence();
-		if ((!isolatedLane && suspension.isEmpty()) || (confirmCompleted && pending.phase != Phase.FROZEN)) {
-			throw new IllegalStateException("Production outcome has not been established");
-		}
 		var next = confirmCompleted ? ResourceExactAmounts.plus(available, pending.result) : available;
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		available = next;
 		// 管理员已核验并清空旧加工输入；旧付费进度不能再驱动第二次同周期生产。
 		if (lane >= 0 && "resource_centrifuging".equals(pending.context.getString("host"))) centrifugeWork.remove(lane);
@@ -484,6 +573,7 @@ public final class ResourceAccount {
 			production = null;
 			suspension = "";
 		}
+		accounts.releaseStorage(this);
 	}
 
 	/** 确认宿主已移除时撤销活绑定；未决资产原样保留，旧能力和物品引用立即失效。 */
@@ -493,7 +583,7 @@ public final class ResourceAccount {
 			throw new IllegalStateException("Resource host binding changed");
 		}
 		long next = Math.incrementExact(generation);
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		generation = next;
 		binding = null;
 		if (transfer != null) {
@@ -510,9 +600,9 @@ public final class ResourceAccount {
 	public Reference detach(UUID actor, Reference source) {
 		checkOwner(actor);
 		checkReady(source);
-		if (!suspendedLanes.isEmpty() || !suspendedTransfers.isEmpty()) throw new IllegalStateException("Unresolved resource requests");
+		if (!canRelocate(source)) throw new IllegalStateException("Unresolved resource requests");
 		long next = Math.incrementExact(generation);
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		generation = next;
 		binding = null;
 		return reference();
@@ -524,11 +614,11 @@ public final class ResourceAccount {
 		checkReference(source);
 		if (binding != null) throw new IllegalStateException("Source is already bound");
 		checkNotSuspended();
-		if (!suspendedLanes.isEmpty() || !suspendedTransfers.isEmpty()) throw new IllegalStateException("Unresolved resource requests");
+		if (!canRelocate(source)) throw new IllegalStateException("Unresolved resource requests");
 		Objects.requireNonNull(target);
 		accounts.checkBindingFree(target, id);
 		long next = Math.incrementExact(generation);
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		generation = next;
 		binding = target;
 		return reference();
@@ -538,10 +628,11 @@ public final class ResourceAccount {
         BigInteger left = transfer.amount.subtract(accepted);
         var next = left.signum() == 0 ? available
 				: ResourceExactAmounts.plus(available, Map.of(transfer.key, left));
-		accounts.beforeChange();
+		accounts.beforeChange(this);
 		available = next;
 		transfer = null;
 		suspension = "";
+		accounts.releaseStorage(this);
 	}
 
 	private void checkReady(Reference source) {

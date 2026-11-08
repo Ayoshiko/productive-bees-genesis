@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.recipe;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -56,53 +57,63 @@ class ApiaryCraftingDataTransferTest {
 	}
 
 	@Test
-	@DisplayName("PB 升级数量忽略非正数与缺失字段，且始终写回字段")
-	void pbUpgradeCountsIgnoreNonPositiveAndMissingField() {
+	@DisplayName("PB 升级缺失兼容，负数拒绝合并")
+	void pbUpgradeCountsRejectNegativeCount() {
 		List<CompoundTag> inputs = new ArrayList<>();
 		inputs.add(machineTag(countsTag("productivebees:test_b", 0)));
 		inputs.add(new CompoundTag()); // 无 PB 升级字段（老存档）
 		inputs.add(machineTag(countsTag("productivebees:test_b", -5)));
 
 		CompoundTag merged = new CompoundTag();
-		ApiaryCraftingDataTransfer.mergePbUpgradeCounts(merged, inputs, PB_UPGRADE_KEY);
-
-		assertTrue(merged.contains(PB_UPGRADE_KEY, Tag.TAG_COMPOUND),
-				"空结果也必须写回字段，避免下游按存在性判断时走不同分支");
-		assertEquals(0, merged.getCompound(PB_UPGRADE_KEY).getInt("productivebees:test_b"),
-				"非正数不得计入");
+		assertThrows(IllegalArgumentException.class,
+				() -> ApiaryCraftingDataTransfer.mergePbUpgradeCounts(merged, inputs, PB_UPGRADE_KEY));
+		assertFalse(merged.contains(PB_UPGRADE_KEY));
 	}
 
 	@Test
-	@DisplayName("PB 升级数量在极端输入下饱和而不溢出为负")
-	void pbUpgradeCountsSaturateOnOverflow() {
+	@DisplayName("PB 升级数量超出保存范围时拒绝合并")
+	void pbUpgradeCountsRejectOverflow() {
 		List<CompoundTag> inputs = new ArrayList<>();
 		inputs.add(machineTag(countsTag("productivebees:test_c", Integer.MAX_VALUE)));
 		inputs.add(machineTag(countsTag("productivebees:test_c", Integer.MAX_VALUE)));
 
 		CompoundTag merged = new CompoundTag();
-		ApiaryCraftingDataTransfer.mergePbUpgradeCounts(merged, inputs, PB_UPGRADE_KEY);
+		assertThrows(ArithmeticException.class,
+				() -> ApiaryCraftingDataTransfer.mergePbUpgradeCounts(merged, inputs, PB_UPGRADE_KEY));
+		assertFalse(merged.contains(PB_UPGRADE_KEY));
+	}
 
-		assertTrue(merged.getCompound(PB_UPGRADE_KEY).getInt("productivebees:test_c") > 0,
-				"饱和运算必须保持为正数，溢出成负数会让后续按上限截断逻辑失效");
+	@Test
+	void installedGeneSamplersKeepCountsAboveEnumFallback() {
+		CompoundTag merged = new CompoundTag();
+		ApiaryCraftingDataTransfer.mergePbUpgradeCounts(merged, List.of(
+				machineTag(countsTag("gene_sampler", 6)),
+				machineTag(countsTag("gene_sampler", 6))), PB_UPGRADE_KEY);
+		assertEquals(12, merged.getCompound(PB_UPGRADE_KEY).getInt("gene_sampler"));
 	}
 
 	// ===== 蜜蜂槽合并 =====
 
 	@Test
-	@DisplayName("蜜蜂槽从全部输入按顺序取并集并在目标容量处截断")
-	void beeSlotsUnionAllInputsInOrderWithCapacityTruncation() {
+	@DisplayName("蜜蜂槽不足时拒绝，足够时所有蜜蜂获得唯一新索引")
+	void beeSlotsRejectOverflowAndReindexEveryInput() {
 		List<CompoundTag> inputs = new ArrayList<>();
 		inputs.add(beeSlotsTag("bee_0", "bee_1"));
 		inputs.add(beeSlotsTag("bee_2", "bee_3"));
 		inputs.add(beeSlotsTag("bee_4", "bee_5"));
 
 		CompoundTag merged = new CompoundTag();
-		ApiaryCraftingDataTransfer.mergeBeeSlots(merged, inputs, 4);
-
+		assertThrows(IllegalArgumentException.class,
+				() -> ApiaryCraftingDataTransfer.mergeBeeSlots(merged, inputs, 4));
+		assertFalse(merged.contains(BEE_SLOTS_KEY));
+		ApiaryCraftingDataTransfer.mergeBeeSlots(merged, inputs, 6);
 		ListTag result = merged.getList(BEE_SLOTS_KEY, Tag.TAG_COMPOUND);
-		assertEquals(4, result.size(), "目标容量为 4 时必须恰好保留 4 只蜜蜂");
-		assertEquals("bee_0", result.getCompound(0).getString("type"), "首输入的蜜蜂必须排在最前");
-		assertEquals("bee_3", result.getCompound(3).getString("type"), "顺序必须按输入顺序填充");
+		assertEquals(6, result.size());
+		for (int i = 0; i < result.size(); i++) {
+			assertEquals(i, result.getCompound(i).getInt("slot_index"));
+			assertEquals("bee_" + i, result.getCompound(i).getString("type"));
+		}
+		assertEquals(0, inputs.get(1).getList(BEE_SLOTS_KEY, Tag.TAG_COMPOUND).getCompound(0).getInt("slot_index"));
 	}
 
 	@Test
@@ -125,15 +136,15 @@ class ApiaryCraftingDataTransferTest {
 	}
 
 	@Test
-	@DisplayName("蜜蜂槽目标容量为 0 时全部丢弃且不抛异常")
-	void beeSlotsZeroCapacityDropsEverything() {
+	@DisplayName("蜜蜂槽容量为零时拒绝合成")
+	void beeSlotsZeroCapacityRejects() {
 		List<CompoundTag> inputs = new ArrayList<>();
 		inputs.add(beeSlotsTag("bee_0", "bee_1"));
 
 		CompoundTag merged = new CompoundTag();
-		ApiaryCraftingDataTransfer.mergeBeeSlots(merged, inputs, 0);
-
-		assertEquals(0, merged.getList(BEE_SLOTS_KEY, Tag.TAG_COMPOUND).size());
+		assertThrows(IllegalArgumentException.class,
+				() -> ApiaryCraftingDataTransfer.mergeBeeSlots(merged, inputs, 0));
+		assertFalse(merged.contains(BEE_SLOTS_KEY));
 	}
 
 	// ===== 源码级不变量 =====
@@ -182,6 +193,11 @@ class ApiaryCraftingDataTransferTest {
 		for (String type : types) {
 			CompoundTag slot = new CompoundTag();
 			slot.putString("type", type);
+			slot.putInt("slot_index", slots.size());
+			CompoundTag entity = new CompoundTag();
+			entity.putString("id", "productivebees:configurable_bee");
+			entity.putString("type", type);
+			slot.put("entity_data", entity);
 			slots.add(slot);
 		}
 		return slots;

@@ -7,12 +7,14 @@ import appeng.api.networking.storage.IStorageService;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.storage.MEStorage;
 import appeng.me.helpers.BaseActionSource;
+import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import it.unimi.dsi.fastutil.objects.Object2LongMap;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
+import mekanism.api.Action;
 import mekanism.api.fluid.IExtendedFluidTank;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -262,6 +264,8 @@ public final class Ae2FluidPusher {
 		// getAe2StateHolder() 接口分发（每次2层接口分发：getLifecycleHandler→getStateHolder）
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return;
+		OutputCustody custody = OutputCustody.of(host);
+		if (custody.blocked()) return;
 		Ae2PushStateHolder pushState = holder.getPushState();
 		Level level = host.productivebeesgenesis$getAe2Level();
 		if (level == null) return;
@@ -373,6 +377,7 @@ public final class Ae2FluidPusher {
 		Ae2InsertCostTracker costTracker = Ae2OutputPusher.getReusableBuffers(holder, host).insertCostTracker;
 
 		for (Object2LongMap.Entry<AEFluidKey> entry : pendingMap.object2LongEntrySet()) {
+			if (custody.blocked()) break;
 			costTracker.useNetwork(meStorage);
 			AEFluidKey fluidKey = entry.getKey();
 			long amount = entry.getLongValue();
@@ -402,7 +407,8 @@ public final class Ae2FluidPusher {
 					continue;
 				}
 
-				long inserted = batchPush(host, holder, meStorage, fluidKey, pushed, gameTick, costTracker);
+				long inserted = batchPush(host, holder, meStorage, fluidKey, pushed, gameTick,
+						costTracker, tankSnapshot, tankCount, custody);
 				if (inserted <= 0) {
 					// 完全失败：不触碰 tank，触发按 key 退避，并登记余量等窗口重试
 					if (firstFailedKey == null) firstFailedKey = fluidKey;
@@ -414,10 +420,7 @@ public final class Ae2FluidPusher {
 				keyBackoff.recordSuccess(fluidKey, System.nanoTime(), costTracker.successDelayNanos());
 				anySuccess = true;
 				allFailed = false;
-				// 按实际接收量从 tank 精确扣除。inserted ≤ pushed ≤ tankTotal，
-				// 正常情况下 shrink 必然足额；不足仅可能出现在极端并发/异常，
-				// 记录 error 防止静默复制（防御性）。
-				long shrunk = shrinkStackSafely(host, tankSnapshot, fluidKey, inserted, tankCount);
+				long shrunk = inserted - custody.sourceDebitPending();
 				totalActualShrunk = SaturatingMath.saturatingAdd(totalActualShrunk, shrunk);
 				// 部分成功：余量仍留在槽内。记为「已尝试过的存量」，让新增产出才能触发下一轮直推，
 				// 否则同一个被拒余量会每刻重复进入推送路径（AE2LT 的「EXTRACTED/BLOCKED 保持活跃、
@@ -477,8 +480,8 @@ public final class Ae2FluidPusher {
 	 * <br/>
 	 * Task 24：{@code AEFluidKey.of(FluidStack)} 每次分配 AEFluidKey + FluidStack，
 	 * 多槽高并行工厂在大量机器下每 tick 累积都会产生分配压力。
-	 * 无组件补丁时按 Fluid 引用失效并跳过 hash；带组件时额外校验内容 hash，
-	 * 防止可变组件映射原地更新后错误复用缓存对象。
+	 * 无组件补丁时跳过 hash；带组件时先筛选内容 hash，命中仍核对完整 matches，
+	 * 同哈希的不同流体组件不会复用旧键。
 	 *
 	 * @param holder AE2 状态持有者（承载 per-tile 缓存）
 	 * @param index  流体槽索引
@@ -493,7 +496,8 @@ public final class Ae2FluidPusher {
 				&& holder.isCachedFluidPushKeyComponentsEmpty(index) == componentsEmpty
 				&& (componentsEmpty
 						|| holder.getCachedFluidPushKeyComponentsHash(index) == componentsHash)
-				&& holder.getCachedFluidPushKey(index) instanceof AEFluidKey existing) {
+				&& holder.getCachedFluidPushKey(index) instanceof AEFluidKey existing
+				&& existing.matches(stack)) {
 			return existing;
 		}
 		AEFluidKey created = AEFluidKey.of(stack);
@@ -510,7 +514,8 @@ public final class Ae2FluidPusher {
 				&& holder.isGeneratedFluidKeyComponentsEmpty() == componentsEmpty
 				&& (componentsEmpty
 						|| holder.getGeneratedFluidKeyComponentsHash() == componentsHash)
-				&& holder.getGeneratedFluidKeyCache() instanceof AEFluidKey existing) {
+				&& holder.getGeneratedFluidKeyCache() instanceof AEFluidKey existing
+				&& existing.matches(stack)) {
 			return existing;
 		}
 		AEFluidKey created = AEFluidKey.of(stack);
@@ -536,136 +541,50 @@ public final class Ae2FluidPusher {
 		return buffer;
 	}
 
-	/**
-	 * 自适应分批推送核心循环
-	 * <br/>
-	 * <b>批量大小</b>:单次请求 {@link #MAX_FLUID_BATCH_REQUEST_MB}（int 上限，约 21.47 亿 mB），
-	 * 匹配 JDTE 加速 + 高 STACK 升级下的高吞吐需求：一轮刷新把槽内流体推空，
-	 * 而不是拆成多次全量网络遍历。
-	 * <p>
-	 * <b>循环策略</b>:
-	 * <ol>
-	 *   <li>每次推送 min(单次上限, remaining) mB</li>
-	 *   <li>若 inserted == 0,说明 AE2 网络完全无法接收,停止循环(完全失败)</li>
-	 *   <li>若 inserted &lt; request,说明网络已满,停止循环(部分成功)</li>
-	 *   <li>若 inserted == request,继续下一批,直到 remaining == 0 或轮数达上限</li>
-	 * </ol>
-	 * 正常网络一次调用即可推空；轮数上限只为「槽容量 &gt; int 上限」的极端配置兜底。
-	 *
-	 * @param meStorage     AE2 存储目标
-	 * @param fluidKey      流体键
-	 * @param amount        总推送量(mB)
-	 * @param gameTick      当前游戏刻 — 供全服慢 insert 预算判定与记账
-	 * @param costTracker   自适应成本记账器（与物品路径共享同一 ME 网络的 EWMA）
-	 * @return 实际推送总量(mB);0 表示完全失败
-	 */
-	private static long batchPush(IAe2OutputHostBase host, Ae2OutputStateHolder holder, MEStorage meStorage, AEFluidKey fluidKey,
-			long amount, long gameTick, Ae2InsertCostTracker costTracker) {
-		// 单次请求尽量大（int 上限），一轮推空槽内流体；只有网络连续足额接收才会继续下一轮。
+	/** 每次外部接收都先完成对应本地扣源；未结算或未知时停止整机后续交付。 */
+	private static long batchPush(IAe2OutputHostBase host, Ae2OutputStateHolder holder,
+			MEStorage meStorage, AEFluidKey fluidKey, long amount, long gameTick,
+			Ae2InsertCostTracker costTracker, List<IExtendedFluidTank> tankSnapshot,
+			int tankCount, OutputCustody custody) {
 		long remaining = Math.max(0L, amount);
 		long insertedTotal = 0L;
 		for (int call = 0; call < MAX_FLUID_BATCH_CALLS_PER_KEY && remaining > 0L; call++) {
-			// The first call is admitted by the caller; later calls remain bounded by cost.
-			if (costTracker.isExhausted(gameTick)) break;
+			if (custody.blocked() || costTracker.isExhausted(gameTick)) break;
 			long request = Math.min(remaining, MAX_FLUID_BATCH_REQUEST_MB);
 			var measured = Ae2OutputPusher.getReusableBuffers(holder, host).measuredStorage
 					.prepare(meStorage, gameTick, costTracker);
-			long inserted = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(host)
-                        .handoffFluid(fluidKey.toStack(1), request, "ae2-tank",
-                            () -> measured.insert(fluidKey, request, Actionable.MODULATE, ActionSourceHolder.INSTANCE));
+			long inserted = custody.handoffFluidFromTank(fluidKey.toStack(1), request, "ae2-tank",
+					() -> measured.insert(fluidKey, request, Actionable.MODULATE, ActionSourceHolder.INSTANCE));
 			if (inserted <= 0L) break;
 			insertedTotal = SaturatingMath.saturatingAdd(insertedTotal, inserted);
 			remaining -= inserted;
-			if (inserted < request) break;
+			settleFluidSource(host, tankSnapshot, fluidKey, inserted, tankCount, custody);
+			if (custody.blocked() || inserted < request) break;
 		}
 		return SaturatingMath.clampToRequest(insertedTotal, amount);
 	}
 
-	/**
-	 * Task 21: 按比例从匹配 fluidKey 的 tank 分块 shrinkStack(防 long→int 截断丢失)
-	 * <br/>
-	 * <b>分块原理</b>:256× 加速 + 16 STACK 下,单次推送量可能超过 Integer.MAX_VALUE(21 亿 mB)。
-	 * 直接 {@code tank.shrinkStack((int) totalToShrink, EXECUTE)} 会截断丢失流体。
-	 * 分块策略:每次 shrink 最多 Integer.MAX_VALUE,循环直到全部 shrink 完成。
-	 * <p>
-	 * <b>多 tank 分配</b>:遍历所有匹配 fluidKey 的非空 tank,按顺序 shrink(先 shrink 第一个 tank
-	 * 直到空,再 shrink 下一个)。总和等于 totalToShrink,不丢失流体。
-	 * <p>
-	 * <b>M4-1 修复</b>:返回实际 shrink 总量,调用方对比 inserted 判断是否有复制风险。
-	 * 内部对每个 tank 的 shrink 用 try-catch 包住,异常时记录 ERROR 并跳出,避免部分失败时静默继续。
-	 * <p>
-	 * <b>Spark 优化</b>:用 Fluid 引用比较替代 AEFluidKey.of(stack) 重建。
-	 * AEFluidKey 基于 Fluid（无 NBT），equals 等价于 fluid 引用比较，
-	 * 缓存 fluidKey.getFluid() 后用 == 直接比较，避免每次循环重建 AEFluidKey。
-	 *
-	 * @param host           输出宿主
-	 * @param fluidKey       流体键(用于匹配 tank)
-	 * @param totalToShrink  总 shrink 量(mB,等于实际推送量)
-	 * @param tankCount      流体罐总数
-	 * @return 实际 shrink 总量(mB),小于 totalToShrink 表示有复制风险
-	 */
-	private static long shrinkStackSafely(IAe2OutputHostBase host,
-			List<IExtendedFluidTank> tankSnapshot, AEFluidKey fluidKey,
-			long totalToShrink, int tankCount) {
-		if (totalToShrink <= 0) return 0;
-		long remaining = totalToShrink;
-		long totalShrunk = 0;
-
-		// 遍历所有匹配 fluidKey 的非空 tank,顺序 shrink
-		for (int i = 0; i < tankCount && remaining > 0; i++) {
-			IExtendedFluidTank tank = outputTank(host, tankSnapshot, i);
-			if (tank == null || tank.isEmpty()) continue;
-			FluidStack stack = tank.getFluid();
-			if (stack.isEmpty()) continue;
-			if (!fluidKey.matches(stack)) continue;
-
-			long tankAmount = stack.getAmount();
-			long shrinkThisTank = Math.min(remaining, tankAmount);
-			long actualShrunk = shrinkSingleTankChunked(tank, shrinkThisTank);
-			totalShrunk = SaturatingMath.saturatingAdd(totalShrunk, actualShrunk);
-			remaining -= actualShrunk;
-			// 实际 shrink 量小于请求量,说明 tank 状态异常,跳出避免无效循环
-			if (actualShrunk < shrinkThisTank) break;
-		}
-		return totalShrunk;
-	}
-
-	/**
-	 * Task 21: 对单个 tank 分块调用 shrinkStack(防 long→int 截断)
-	 * <br/>
-	 * 每块最多 Integer.MAX_VALUE,循环直到全部 shrink 完成。
-	 * <p>
-	 * <b>M4-1 契约</b>:{@code IExtendedFluidTank#shrinkStack} 按 Mekanism API 契约返回
-	 * <b>实际扣减量</b>（BasicFluidTank 覆写 {@code setStackSize} 后为就地 {@code stored.setAmount}）。
-	 * 因此直接采信返回值，省掉原先每块两次 {@code getFluid()} 读回；若第三方 tank 少报，
-	 * 调用方的 {@code shrunk < inserted} 校验仍会报警，不会静默复制。
-	 * <p>
-	 * <b>M4-1 修复</b>:用 try-catch 包住每次 shrink,异常时记录 ERROR 并返回已 shrink 量。
-	 *
-	 * @param tank   流体罐
-	 * @param amount 总 shrink 量(mB,必须 > 0)
-	 * @return 实际 shrink 量(mB),小于 amount 表示 tank 异常
-	 */
-	private static long shrinkSingleTankChunked(IExtendedFluidTank tank, long amount) {
-		long totalShrunk = 0;
-		while (amount > 0) {
-			long chunk = Math.min(amount, Integer.MAX_VALUE);
-			try {
-				long actualChunk = tank.shrinkStack((int) chunk, mekanism.api.Action.EXECUTE);
-				// 防御第三方实现超报：单块扣减不得超过请求量
-				if (actualChunk > chunk) actualChunk = chunk;
-				if (actualChunk <= 0) break;
-				totalShrunk = SaturatingMath.saturatingAdd(totalShrunk, actualChunk);
-				amount -= actualChunk;
-			} catch (Exception e) {
-				// shrink 异常时记录 ERROR 并返回已 shrink 量,调用方判断是否有复制风险
-				// M9 修复：用 LogThrottle.error 节流，5 秒内同 key 仅首条输出，避免高频刷屏
-				LogThrottle.error("ae2_fluid_shrink_exception",
-						"AE2 流体 tank shrinkStack 异常,可能存在复制风险 (5秒内仅首条输出): {}", e.toString());
-				break;
+	/** 每一笔明确的罐扣减立即确认，后续罐异常不能抹去已经确认的前缀。 */
+	static void settleFluidSource(IAe2OutputHostBase host, List<IExtendedFluidTank> tankSnapshot,
+			AEFluidKey fluidKey, long amount, int tankCount, OutputCustody custody) {
+		long remaining = amount;
+		try {
+			for (int i = 0; i < tankCount && remaining > 0; i++) {
+				IExtendedFluidTank tank = outputTank(host, tankSnapshot, i);
+				if (tank == null || tank.isEmpty() || !fluidKey.matches(tank.getFluid())) continue;
+				int requested = (int) Math.min(remaining, tank.getFluidAmount());
+				if (requested <= 0) continue;
+				int actual = tank.shrinkStack(requested, Action.EXECUTE);
+				if (actual < 0 || actual > requested) {
+					throw new IllegalStateException("Invalid fluid source debit: " + actual + "/" + requested);
+				}
+				custody.confirmSourceDebit(actual);
+				remaining -= actual;
+				if (actual < requested) return;
 			}
+		} catch (RuntimeException | LinkageError exception) {
+			custody.markSourceDebitUnknown(exception);
 		}
-		return totalShrunk;
 	}
 
 	/**

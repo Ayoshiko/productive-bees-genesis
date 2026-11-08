@@ -51,7 +51,7 @@
     {
       "type": "patchouli:text",
       "title": "Raw files are advanced",
-      "text": "Raw option names are useful only for pack distribution, scripting, or migration. World gameplay, machine, and capacity settings live in the world's server configuration directory; client visuals and custom window positions affect only the local player. Prefer the current screen labels and generated comments over old file examples."
+      "text": "World gameplay, machine and capacity settings use three files under serverconfig. Use the current screen and generated files. Legacy migration creates backups and preserves edits to the new settings.$(br2)Capacity stays fixed for the current world or server session; file reloads do not change it. Reopen the world or restart the server after a capacity change. Multiplayer capacities come from the current server."
     },
     {
       "type": "patchouli:link",
