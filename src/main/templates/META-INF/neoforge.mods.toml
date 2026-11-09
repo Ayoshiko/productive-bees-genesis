@@ -98,14 +98,14 @@ config="${mod_id}.iris.mixins.json"
     ordering="AFTER"
     side="BOTH"
 
-# Iris 光影可选依赖（提供着色器兼容层，仅客户端）
-# IrisConfigPlugin 会检测 Iris 是否安装，仅安装时才应用 Iris Mixin
+# Iris 光影可选依赖（包括 Celeritas 提供的 Iris 1.8.0 声明，仅客户端）
+# IrisConfigPlugin 检查实际着色器接口；缺失时停用该注入，渲染阶段仍通过 Iris v0 API 查询。
 [[dependencies.${mod_id}]]
     modId="iris"
     type="optional"
     ordering="AFTER"
     side="CLIENT"
-    versionRange="[1.8.8,)"
+    versionRange="[1.8.0,)"
 
 # Super Factory Manager 可选依赖（仅保证加载顺序）
 # 离心机继承 Mekanism 的 TileEntityElectricMachine，自动暴露 IItemHandler/IEnergyStorage/IFluidHandler，

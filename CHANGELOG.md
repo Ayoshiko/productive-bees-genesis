@@ -43,6 +43,7 @@
 
 ### 修复
 
+- **Celeritas 启动兼容**：接受其内置的 Iris 1.8.0 版本声明，修复同时安装时被最低版本要求阻止启动的问题。着色器跳过注入按实际接口检查，缺少或不兼容时安全停用，光影阶段继续通过 Iris v0 API 查询。
 - **手册与槽位提示**：指南书合成只接受空蜂笼或空坚固蜂笼，保留命名等无关组件，避免消耗蜜蜂。未安装 AE2 时，Patchouli 保留通用过滤说明，不再因专属展示页而整本为空。小食与蜂笼空槽提示读取当前安装的 Productive Bees 纹理，资源包重载后更新，保留灰度、透明度及放入／取出方向。
 - **机器窗口**：AE 输入／输出继续使用原窗口内 14×14 的 A／I 按钮与 Mekanism 灰色样式，随窗口移动和关闭，切页及时更新；旧菜单不再发送请求，重复点击不会重复开窗。高槽数工厂的多流体窗口按屏宽换行，窄界面也能查看全部罐位。
 - **离心机已付工作**：修复普通蜜脾与万象离心的进度、冻结批次在读档和升级中丢失或重复结算。等待输出时保管原采样与完整数量，重试只排空原结果；速度变化可结清旧周期，零／单刻尾批按实际工作收费，未决付款先暂停核实。普通蜜脾中途换料后，新蜜脾正常生产，原蜜脾按完整组件身份保留本机已付进度，放回同一机器后继续原周期，不把费用转给新蜜脾或重复付款；旧工作数据与旧进度仍可读取。
@@ -79,6 +80,7 @@
 
 #### Fixed
 
+- **Celeritas startup compatibility**: accepts its bundled Iris 1.8.0 version declaration, fixing startup being blocked by the minimum-version requirement when both mods are installed. Shader-skip injection checks the actual interface and safely stays disabled when it is absent or incompatible, while render-pass queries continue through the Iris v0 API.
 - **Guides and slot hints**: guide-book recipes accept only empty bee cages or empty sturdy bee cages, retaining unrelated components such as names and protecting contained bees. Without AE2, Patchouli keeps general filtering guidance instead of becoming empty because of AE2-specific display pages. Empty gene-treat and cage slots read textures from the installed Productive Bees version and update on resource-pack reloads, preserving grayscale, transparency and input/output directions.
 - **Machine windows**: AE input/output retain the established 14×14 A/I controls inside the window and Mekanism grey styling. They move and close with their window, update on tab changes, reject stale-menu requests and avoid duplicate windows on repeated clicks. Multi-fluid windows in high-tier factories wrap to the screen width so all tanks remain accessible on narrow screens.
 - **Paid centrifuge work**: fixed ordinary and Myriad centrifuge progress and frozen batches being lost or settled twice during loading or upgrades. Output waits retain the original sample and complete quantities, and retries only drain those results. Speed changes can settle retained cycles, zero/single-tick tails charge for actual work, and unresolved payments pause for reconciliation. Switching ordinary comb input mid-cycle lets the replacement produce normally while the original comb's paid progress stays in the same machine under its complete component identity. Returning it resumes that cycle without transferring costs to the replacement or paying again; legacy work data and progress remain readable.
