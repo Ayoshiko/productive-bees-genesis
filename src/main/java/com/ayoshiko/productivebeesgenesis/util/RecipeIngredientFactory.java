@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredientFactory;
@@ -45,11 +46,15 @@ public final class RecipeIngredientFactory {
 	}
 
 	/**
-	 * 根据群系 ID 列表构建 HolderSet（每个元素为单个群系 ID）
+	 * 根据群系 ID 列表构建 HolderSet（每个元素为单个群系 ID）。
+	 * 空列表表示不限群系；非空列表没有有效群系时返回解析失败，不能用空集合放开限制。
 	 */
-	public HolderSet<Biome> createBiomeHolderSet(List<? extends String> biomeIds) {
-		if (biomeIds == null || biomeIds.isEmpty()) {
-			return HolderSet.empty();
+	public Optional<HolderSet<Biome>> createBiomeHolderSet(List<? extends String> biomeIds) {
+		if (biomeIds == null) {
+			return Optional.empty();
+		}
+		if (biomeIds.isEmpty()) {
+			return Optional.of(HolderSet.empty());
 		}
 		List<Holder<Biome>> holders = new ArrayList<>();
 		for (String id : biomeIds) {
@@ -57,43 +62,44 @@ public final class RecipeIngredientFactory {
 			if (holder != null) {
 				holders.add(holder);
 			} else {
-				// DevLog 节流日志便于排查（数据重载路径，统一门面）
-				DevLog.warn("recipe_reload", "钓鱼群系 '{}' 未找到，已跳过", id);
+				ProductiveBeesGenesis.LOGGER.warn("钓鱼群系 '{}' 未找到，已跳过", id);
 			}
 		}
-		return holders.isEmpty() ? HolderSet.empty() : HolderSet.direct(holders);
+		if (holders.isEmpty()) {
+			return Optional.empty();
+		}
+		return Optional.of(HolderSet.direct(holders));
 	}
 
 	/**
-	 * 根据单个群系规格构建 HolderSet（支持标签 "#xxx" 或群系 ID "xxx"）
+	 * 根据单个群系规格构建 HolderSet（支持标签 "#xxx" 或群系 ID "xxx"）。
+	 * 空白规格、缺失或空标签均为解析失败。
 	 */
-	public HolderSet<Biome> createBiomeHolderSetFromString(String biomeSpec) {
+	public Optional<HolderSet<Biome>> createBiomeHolderSetFromString(String biomeSpec) {
 		if (biomeSpec == null || biomeSpec.isBlank()) {
-			return HolderSet.empty();
+			return Optional.empty();
 		}
 		if (biomeSpec.startsWith("#")) {
-			// 标签规格：解析为 TagKey 并从注册表获取对应的 Named HolderSet
-			try {
-				ResourceLocation tagLoc = ResourceLocation.parse(biomeSpec.substring(1));
-				TagKey<Biome> tagKey = TagKey.create(Registries.BIOME, tagLoc);
-				Optional<HolderSet.Named<Biome>> tag = registryAccess.lookup(Registries.BIOME)
-						.flatMap(reg -> reg.get(tagKey));
-				// 显式宽化 Named<Biome> → HolderSet<Biome>，使 orElse 类型匹配
-				return tag.<HolderSet<Biome>>map(n -> n).orElse(HolderSet.empty());
-			} catch (Exception e) {
-				// DevLog 节流日志便于排查（数据重载路径，统一门面）
-				DevLog.warn("recipe_reload", "解析群系标签 '{}' 失败: {}", biomeSpec, e.toString());
-				return HolderSet.empty();
+			ResourceLocation tagLoc = ResourceLocation.tryParse(biomeSpec.substring(1));
+			if (tagLoc == null) {
+				ProductiveBeesGenesis.LOGGER.warn("群系标签 '{}' 格式无效", biomeSpec);
+				return Optional.empty();
 			}
+			TagKey<Biome> tagKey = TagKey.create(Registries.BIOME, tagLoc);
+			Optional<HolderSet.Named<Biome>> tag = registryAccess.lookup(Registries.BIOME)
+					.flatMap(reg -> reg.get(tagKey));
+			if (tag.isEmpty() || tag.get().size() == 0) {
+				ProductiveBeesGenesis.LOGGER.warn("生成群系标签 '{}' 不存在或为空", biomeSpec);
+				return Optional.empty();
+			}
+			return tag.<HolderSet<Biome>>map(n -> n);
 		}
-		// 单个群系 ID
 		Holder<Biome> holder = resolveBiome(biomeSpec);
 		if (holder == null) {
-			// DevLog 节流日志便于排查（数据重载路径，统一门面）
-			DevLog.warn("recipe_reload", "生成群系 '{}' 未找到", biomeSpec);
-			return HolderSet.empty();
+			ProductiveBeesGenesis.LOGGER.warn("生成群系 '{}' 未找到", biomeSpec);
+			return Optional.empty();
 		}
-		return HolderSet.direct(List.of(holder));
+		return Optional.of(HolderSet.direct(List.of(holder)));
 	}
 
 	/**
@@ -108,8 +114,7 @@ public final class RecipeIngredientFactory {
 					.map(h -> (Holder<Biome>) h)
 					.orElse(null);
 		} catch (Exception e) {
-			// DevLog 节流日志便于排查（数据重载路径，统一门面）
-			DevLog.warn("recipe_reload", "解析群系 '{}' 失败: {}", biomeId, e.toString());
+			ProductiveBeesGenesis.LOGGER.warn("解析群系 '{}' 失败: {}", biomeId, e.toString());
 			return null;
 		}
 	}

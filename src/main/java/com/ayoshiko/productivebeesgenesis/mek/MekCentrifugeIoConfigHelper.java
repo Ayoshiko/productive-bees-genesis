@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import com.ayoshiko.productivebeesgenesis.logistics.GenesisTileComponentEjector;
+import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceMekEnergyConfig;
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
+import mekanism.api.AutomationType;
 import mekanism.api.IContentsListener;
 import mekanism.api.RelativeSide;
 import mekanism.api.fluid.IExtendedFluidTank;
@@ -99,7 +101,7 @@ final class MekCentrifugeIoConfigHelper {
 			// 外部轮转视图需要游戏刻：ISideConfiguration 的实现类均为 BlockEntity，取其 level 即可；
 			// 保持本方法签名不变，避免四个调用点连锁修改（OCP）。
 			MultiFluidTankHolder multiHolder = new MultiFluidTankHolder(maxTanks, tankCapacity, listener,
-				maxTanksPerFluidConfig, gameTimeSupplier(factory));
+				maxTanksPerFluidConfig, gameTimeSupplier(factory), () -> !OutputCustody.of(factory).blocked());
 			// Task 2: 调用 tankSetter 设置主槽引用,修复 fluidOutputTank 字段为 null 的核心 bug
 			// Task 5: 构造时已预分配全部槽位,getTanks().get(0) 返回预分配的第 0 个槽
 			tankSetter.accept(multiHolder.getTanks().get(0));
@@ -113,7 +115,10 @@ final class MekCentrifugeIoConfigHelper {
 		long multiplier = fluidTankMultiplier.getAsInt();
 		int capacity = SaturatingMath.saturatingToInt(
 				SaturatingMath.saturatingMultiply(baseCapacity, processes, multiplier));
-		IExtendedFluidTank tank = BasicFluidTank.output(capacity, listener);
+		IExtendedFluidTank tank = BasicFluidTank.create(capacity,
+				(stack, automation) -> automation == AutomationType.INTERNAL || !OutputCustody.of(factory).blocked(),
+				(stack, automation) -> automation == AutomationType.INTERNAL,
+				stack -> true, listener);
 		tankSetter.accept(tank);
 		helper.addTank(tank);
 		// Task 1: SINGLE 模式槽位数固定为 1,构造时即写入实例字段

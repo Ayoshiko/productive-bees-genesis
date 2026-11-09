@@ -237,6 +237,10 @@ final class DesignerPreferences {
         return problem;
     }
 
+    static long revision() {
+        return revision;
+    }
+
     static boolean dirty() {
         return revision != savedRevision;
     }
@@ -252,8 +256,10 @@ final class DesignerPreferences {
             if (requested == revision && target.equals(directory)) {
                 problem = "";
                 savedRevision = requested;
+                complete.accept("designer.status.preferences_saved");
+            } else {
+                complete.accept("designer.status.preferences_changed");
             }
-            complete.accept("designer.status.preferences_saved");
         }, message -> {
             if (requested == revision && target.equals(directory)) {
                 problem = message;

@@ -9,7 +9,6 @@ import net.minecraft.world.level.block.Block;
 import net.neoforged.fml.ModList;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -294,9 +293,8 @@ public final class MekCompatHooks {
 	/**
 	 * 配置卡兼容性检查 — Attribute 属性匹配
 	 * <br/>
-	 * MekanismUtils.isSameTypeFactory() 无法识别 ME/EME 工厂方块（无 AttributeFactoryType 或有 EMExtraAttributeFactoryType），
-	 * 导致配置卡粘贴失败。此方法补充检查 AttributeFactoryType 和 EMExtraAttributeFactoryType，
-	 * 允许同类型（如SMELTING）的工厂跨等级粘贴配置。
+	 * 通过现行 builder 保留的 AttributeFactoryType，允许同类型工厂跨等级粘贴配置。
+	 * EME 离心机同样携带该原生属性，无需额外反射匹配。
 	 * <p>
 	 * 调用方需先调用 super.isConfigurationDataCompatible(blockType)，本方法只处理额外的 Attribute 检查，
 	 * 两者通过短路或合并：
@@ -307,7 +305,7 @@ public final class MekCompatHooks {
 	 *
 	 * @param selfHolder 当前工厂方块的 Holder
 	 * @param blockType  待比较的目标方块
-	 * @return true 如果两个方块有相同类型的 AttributeFactoryType 或 EMExtraAttributeFactoryType
+	 * @return true 如果两个方块的 AttributeFactoryType 相同
 	 */
 	public static boolean isConfigurationDataCompatible(net.minecraft.core.Holder<Block> selfHolder, Block blockType) {
 		// 原版/EM工厂同类型检查（有AttributeFactoryType属性）
@@ -316,34 +314,6 @@ public final class MekCompatHooks {
 			AttributeFactoryType otherType = Attribute.get(blockType, AttributeFactoryType.class);
 			if (otherType != null && meType.getFactoryType() == otherType.getFactoryType()) {
 				return true;
-			}
-		}
-		// EME工厂同类型检查 — 仅在 EME 已加载时通过反射执行，避免编译期硬依赖 EMExtraAttributeFactoryType
-		// 反射调用 Attribute.get(selfHolder, emeAttrClass) 和 getFactoryType()，异常时安全降级返回 false
-		if (isEvolvedMekanismExtrasLoaded()) {
-			try {
-				Class<?> emeAttrClass = MekReflectionCache.getCachedEMEAttributeFactoryTypeClass();
-				Method attributeGet = MekReflectionCache.getCachedAttributeGetMethod();
-				if (emeAttrClass != null && attributeGet != null) {
-					Object emeType = attributeGet.invoke(null, selfHolder, emeAttrClass);
-					if (emeType != null) {
-						Object otherType = attributeGet.invoke(null, blockType, emeAttrClass);
-						if (otherType != null) {
-							Method getFactoryType = MekReflectionCache.getCachedEMEGetFactoryTypeMethod(emeType.getClass());
-							if (getFactoryType != null) {
-								Object emeFactoryType = getFactoryType.invoke(emeType);
-								Object otherFactoryType = getFactoryType.invoke(otherType);
-								// 反射返回 Object，用 equals 比较枚举值（而非 ==）
-								if (emeFactoryType != null && emeFactoryType.equals(otherFactoryType)) {
-									return true;
-								}
-							}
-						}
-					}
-				}
-			} catch (Exception e) {
-				// EME 类路径变更或反射失败，安全降级返回 false
-				ProductiveBeesGenesis.LOGGER.error("EME Attribute 反射检查失败，配置卡兼容性检查降级", e);
 			}
 		}
 		return false;

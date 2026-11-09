@@ -62,8 +62,8 @@ final class Ae2PushBuffers {
 	final Object2LongLinkedOpenHashMap<AEItemKey> keyToTotalCount = new Object2LongLinkedOpenHashMap<>();
 
 	/** 拉取列表缓冲区 — 复用避免每 tick 分配（供 Ae2InputPuller 使用） */
-	final List<Ae2InputPuller.PullEntry> pullList = new ArrayList<>();
-	final List<Ae2InputPuller.PullEntry> pullEntryPool = new ArrayList<>();
+	final List<Ae2InputExecution.PullEntry> pullList = new ArrayList<>();
+	final List<Ae2InputExecution.PullEntry> pullEntryPool = new ArrayList<>();
 	int pullEntryPoolCursor;
 	final Set<AEItemKey> pullKeys = new HashSet<>();
 
@@ -157,7 +157,7 @@ final class Ae2PushBuffers {
 	}
 
 	/** 借用拉取列表（调用方使用后应 clear，跨 tick 复用避免每 tick 分配） */
-	List<Ae2InputPuller.PullEntry> borrowPullList() {
+	List<Ae2InputExecution.PullEntry> borrowPullList() {
 		return pullList;
 	}
 
@@ -165,16 +165,16 @@ final class Ae2PushBuffers {
 		pullEntryPoolCursor = 0;
 	}
 
-	Ae2InputPuller.PullEntry borrowPullEntry(AEItemKey key, int amount) {
+	Ae2InputExecution.PullEntry borrowPullEntry(AEItemKey key, int amount) {
 		return borrowPullEntry(key, amount, false);
 	}
 
-	Ae2InputPuller.PullEntry borrowPullEntry(AEItemKey key, int amount, boolean unlimited) {
-		Ae2InputPuller.PullEntry entry;
+	Ae2InputExecution.PullEntry borrowPullEntry(AEItemKey key, int amount, boolean unlimited) {
+		Ae2InputExecution.PullEntry entry;
 		if (pullEntryPoolCursor < pullEntryPool.size()) {
 			entry = pullEntryPool.get(pullEntryPoolCursor++);
 		} else {
-			entry = new Ae2InputPuller.PullEntry(key, amount);
+			entry = new Ae2InputExecution.PullEntry(key, amount);
 			pullEntryPool.add(entry);
 			pullEntryPoolCursor++;
 		}

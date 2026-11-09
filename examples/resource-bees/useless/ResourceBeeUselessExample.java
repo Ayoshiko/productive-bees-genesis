@@ -56,7 +56,7 @@ public final class ResourceBeeUselessExample {
 		@Override public List<AdvancedAlloyFurnaceRecipe> convertAll(
 				RecipeHolder<ResourceCentrifugeRecipe> holder, Level level) {
 			var recipe = holder.value();
-			if (recipe.outputs().stream().anyMatch(out -> (out.chance() != 0 && out.chance() != 1)
+			if (recipe.includePbOutputs() || recipe.outputs().stream().anyMatch(out -> (out.chance() != 0 && out.chance() != 1)
 					|| com.ayoshiko.productivebeesgenesis.resource.ResourceTypes.chemicalId(out.key()) == null)) return List.of();
 			var plan = ResourceProductionApi.planCentrifuging(recipe, 1, 0, 0);
 			var results = new ArrayList<AdvancedAlloyFurnaceRecipe>();

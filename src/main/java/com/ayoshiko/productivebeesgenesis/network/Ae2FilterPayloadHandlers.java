@@ -31,8 +31,7 @@ import java.util.List;
  * 从 {@link Ae2PayloadHandlers} 拆分而来，职责（SRP）：仅处理过滤器条目的
  * 增删改查、精确模式切换、拉取数量编辑、配置窗口状态同步与客户端快照应用。
  * <p>
- * 安全模型与 {@link Ae2PayloadHandlers} 一致：每个 handler 均校验玩家身份、
- * 当前打开容器与目标方块一致（防 IDOR）、方块实体类型与 8 格交互距离，
+ * 服务端操作通过共同菜单权限边界后再检查过滤器保管状态，
  * 并对触发广播的请求施加频次限制。
  */
 final class Ae2FilterPayloadHandlers {
@@ -50,8 +49,7 @@ final class Ae2FilterPayloadHandlers {
 				|| payload.amount() > (payload.reserve()
 						? Ae2InputFilter.MAX_DIRECT_RESERVE_AMOUNT : Ae2InputFilter.getMaxDirectAmount())) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
-				"ae2_input_filter_amount_pos_mismatch")) return;
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos())) return;
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_filter_amount",
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 
@@ -80,8 +78,7 @@ final class Ae2FilterPayloadHandlers {
 		if (payload.amount() < 0L || payload.amount() > (payload.reserve()
 				? Ae2InputFilter.MAX_DIRECT_RESERVE_AMOUNT : Ae2InputFilter.getMaxDirectAmount())) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
-				"ae2_input_all_amount_pos_mismatch")) return;
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos())) return;
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_all_amount",
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
@@ -108,8 +105,7 @@ final class Ae2FilterPayloadHandlers {
 	static void handleToggleAllAeInputFilterUnlimited(ToggleAllAeInputFilterUnlimitedPayload payload,
 			IPayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
-				"ae2_input_all_unlimited_pos_mismatch")) return;
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos())) return;
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_all_unlimited",
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
@@ -129,8 +125,7 @@ final class Ae2FilterPayloadHandlers {
 	static void handleToggleAllAeInputFilterNetworkStock(
 			ToggleAllAeInputFilterNetworkStockPayload payload, IPayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
-				"ae2_input_all_network_stock_pos_mismatch")) return;
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos())) return;
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_all_network_stock",
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
@@ -164,8 +159,7 @@ final class Ae2FilterPayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击（特别重要：CLEAR 操作可清空他人过滤器）
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
-				"ae2_input_filter_entry_pos_mismatch")) {
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos())) {
 			return;
 		}
 		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）
@@ -277,8 +271,7 @@ final class Ae2FilterPayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
-				"ae2_input_precise_mode_pos_mismatch")) {
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos())) {
 			return;
 		}
 		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）
@@ -329,8 +322,7 @@ final class Ae2FilterPayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击
-		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
-				"ae2_input_config_pos_mismatch")) {
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos())) {
 			return;
 		}
 		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）

@@ -43,15 +43,18 @@ class MyriadSpecialCombOutputWiringTest {
 	}
 
 	@Test
-	void mekanismPlannerUsesTheSameRealTemplates() throws Exception {
+	void mekanismPathsPreserveRealTemplatesAndComponents() throws Exception {
 		String handler = Files.readString(HANDLER);
 		String planner = Files.readString(PLANNER);
 		String prepared = Files.readString(PLANNER.resolveSibling("MyriadPlanningAllocation.java"));
-		assertTrue(handler.contains(".selectTemplates(selectedTypes, isCombBlock, level.getRandom())"));
-		assertTrue(handler.contains("MyriadBeeTypeCache.cachedBeeTypes(isCombBlock)"));
-		assertTrue(handler.contains("selectedTypes, effectiveBatchSize, templateByType"));
-		assertTrue(handler.contains("allocation, currentTick, templateByType"));
-		assertTrue(handler.contains("allocation, templateByType"));
+		String completer = Files.readString(PLANNER.resolveSibling("PbRecipeCompleter.java"));
+		assertTrue(handler.contains(".selectTemplates(selected, block, level.getRandom())"));
+		assertTrue(handler.contains("MyriadBeeTypeCache.cachedBeeTypes(block)"));
+		assertTrue(handler.contains("Map<ResourceLocation, Long> allocation = WeightedAllocation.allocateByWeight("));
+		assertTrue(handler.contains("ItemStack template = templates.get(entry.getKey())"));
+		assertTrue(handler.contains("outputs.put(template.copyWithCount(1), entry.getValue())"));
+		assertTrue(handler.contains("freezeMyriadBatch(outputs, fluid, fluidAmount, input, inputs)"));
+		assertTrue(completer.contains("addPendingOutput(entry.getKey().copyWithCount(1), entry.getValue())"));
 		assertTrue(prepared.contains("ItemStack.isSameItemSameComponents(templates[right], templates[left])"));
 		assertTrue(prepared.contains("snapshot.limitsFor(templates[index])"));
 		assertTrue(planner.contains("return plan(snapshot, baseItem, allocation, templateByType, new PlanningScratch(snapshot.slotCount))"));

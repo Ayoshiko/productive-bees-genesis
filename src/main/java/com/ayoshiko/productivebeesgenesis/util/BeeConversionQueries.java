@@ -8,15 +8,16 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
@@ -33,125 +34,122 @@ import java.util.function.Supplier;
  * 匹配逻辑逐行对齐 PB 的 {@link ItemConversionRecipe#matches} / {@link BlockConversionRecipe#matches}，
  * 但不构造真实蜜蜂实体（避免每 tick 实体创建开销），仅比较蜜蜂类型键与物品/方块状态。
  * <p>
- * 线程安全：缓存由服务端 tick 线程与配方重载事件（主线程）访问，使用 synchronized 保护写入；
- * 读路径（findXxx）在 tick 线程串行调用，配合 volatile loaded 标志保证发布可见性。
+ * 索引在游戏线程读取当前 RecipeManager，局部构建成功后一次发布不可变快照。
+ * 整体读取失败不发布本轮结果；单条坏配方隔离并保留重试，失效与停服释放管理器引用。
  * <p>
- * 失效时机：{@link #invalidate()} 在 {@code ProductiveBeesGenesis.onTagsReload}（标签/配方重载完成）调用，
+ * 失效时机：{@link #invalidate()} 在 {@code ProductiveBeesGenesis.acceptRecipeManager} 接收成功代际后调用，
  * 与 {@link BeeProduceQueries#invalidate()} 生命周期一致。
  */
 public final class BeeConversionQueries {
 
-	/** 物品转化配方索引：蜜蜂类型键 → 配方列表 */
-	private static final Map<String, List<RecipeHolder<ItemConversionRecipe>>> ITEM_RECIPES_BY_BEE =
-			new ConcurrentHashMap<>();
+	private record ConversionIndex(
+			RecipeManager manager,
+			Map<String, List<RecipeHolder<ItemConversionRecipe>>> items,
+			Map<String, List<RecipeHolder<BlockConversionRecipe>>> blocks,
+			boolean complete) {
+		private static final ConversionIndex EMPTY = new ConversionIndex(null, Map.of(), Map.of(), false);
+	}
 
-	/** 方块转化配方索引：蜜蜂类型键 → 配方列表 */
-	private static final Map<String, List<RecipeHolder<BlockConversionRecipe>>> BLOCK_RECIPES_BY_BEE =
-			new ConcurrentHashMap<>();
-
-	/** 索引是否已构建（防重复全量遍历） */
-	private static volatile boolean loaded = false;
-
-	/** 配方版本号 — 每次 {@link #invalidate()} 递增，供花朵有效性缓存失效判断 */
-	private static volatile int version = 0;
-
-	/** 上次构建失败的 gameTick — 失败后每 100 tick（5 秒）重试一次，避免每 tick 全量遍历+日志刷屏 */
-	private static volatile long lastFailedTick = Long.MIN_VALUE;
-
-	/** 构建失败重试间隔（tick） */
+	private static volatile ConversionIndex index = ConversionIndex.EMPTY;
+	private static volatile int version;
+	private static long lastFailedTick = Long.MIN_VALUE;
 	private static final long RETRY_INTERVAL_TICKS = 100L;
 
 	private BeeConversionQueries() {
 	}
 
-	/**
-	 * 确保配方索引已构建（幂等，线程安全）
-	 * <br/>
-	 * 从 RecipeManager 全量加载 item_conversion / block_conversion 配方并按蜜蜂类型分组。
-	 *
-	 * @param level 世界实例（配方管理器来源）
-	 */
+	/** 游戏线程按当前管理器构建；同一失败代际最多每 100 tick 重试一次。 */
 	public static void ensureLoaded(@Nullable Level level) {
-		if (loaded) {
+		if (level == null) {
+			return;
+		}
+		RecipeManager manager = level.getRecipeManager();
+		if (manager == null) {
+			return;
+		}
+		ConversionIndex current = index;
+		if (current.manager == manager && current.complete) {
 			return;
 		}
 		synchronized (BeeConversionQueries.class) {
-			if (loaded) {
+			if (index.manager != manager) {
+				index = new ConversionIndex(manager, Map.of(), Map.of(), false);
+				lastFailedTick = Long.MIN_VALUE;
+				version++;
+			}
+			if (index.complete) {
+				return;
+			}
+			long tick = level.getGameTime();
+			if (lastFailedTick != Long.MIN_VALUE && tick >= lastFailedTick
+					&& tick - lastFailedTick < RETRY_INTERVAL_TICKS) {
 				return;
 			}
 			try {
-				if (level == null || level.getRecipeManager() == null) {
-					return;
-				}
-				// 上次构建失败后的节流：每 RETRY_INTERVAL_TICKS 才重试一次全量遍历
-				if (lastFailedTick != Long.MIN_VALUE
-						&& level.getGameTime() - lastFailedTick < RETRY_INTERVAL_TICKS) {
-					return;
-				}
+				Map<String, List<RecipeHolder<ItemConversionRecipe>>> items = new HashMap<>();
+				Map<String, List<RecipeHolder<BlockConversionRecipe>>> blocks = new HashMap<>();
+				boolean complete = true;
 				for (RecipeHolder<ItemConversionRecipe> holder :
-						level.getRecipeManager().getAllRecipesFor(ModRecipeTypes.ITEM_CONVERSION_TYPE.get())) {
+						manager.getAllRecipesFor(ModRecipeTypes.ITEM_CONVERSION_TYPE.get())) {
 					ItemConversionRecipe recipe = holder.value();
 					if (recipe == null || recipe.bees == null) {
 						continue;
 					}
-					for (Supplier<BeeIngredient> bee : recipe.bees) {
-						try {
-							BeeIngredient ingredient = bee.get();
-							if (ingredient != null) {
-								ITEM_RECIPES_BY_BEE
-										.computeIfAbsent(ingredient.getBeeType().toString(), k -> new ArrayList<>(1))
-										.add(holder);
-							}
-						} catch (Exception ignored) {
-							// 单个蜜蜂类型解析失败不影响其他配方
+					try {
+						for (String beeType : beeTypes(recipe.bees)) {
+							items.computeIfAbsent(beeType, key -> new ArrayList<>(1)).add(holder);
 						}
+					} catch (RuntimeException failure) {
+						complete = false;
+						LogThrottle.warn("bee_conversion_item_index",
+								"物品转化配方 {} 的蜜蜂解析失败，保留其它配方并等待重试", holder.id(), failure);
 					}
 				}
 				for (RecipeHolder<BlockConversionRecipe> holder :
-						level.getRecipeManager().getAllRecipesFor(ModRecipeTypes.BLOCK_CONVERSION_TYPE.get())) {
+						manager.getAllRecipesFor(ModRecipeTypes.BLOCK_CONVERSION_TYPE.get())) {
 					BlockConversionRecipe recipe = holder.value();
 					if (recipe == null || recipe.bees == null) {
 						continue;
 					}
-					for (Supplier<BeeIngredient> bee : recipe.bees) {
-						try {
-							BeeIngredient ingredient = bee.get();
-							if (ingredient != null) {
-								BLOCK_RECIPES_BY_BEE
-										.computeIfAbsent(ingredient.getBeeType().toString(), k -> new ArrayList<>(1))
-										.add(holder);
-							}
-						} catch (Exception ignored) {
-							// 同上
+					try {
+						for (String beeType : beeTypes(recipe.bees)) {
+							blocks.computeIfAbsent(beeType, key -> new ArrayList<>(1)).add(holder);
 						}
+					} catch (RuntimeException failure) {
+						complete = false;
+						LogThrottle.warn("bee_conversion_block_index",
+								"方块转化配方 {} 的蜜蜂解析失败，保留其它配方并等待重试", holder.id(), failure);
 					}
 				}
-				// 冻结为不可变列表，防止后续误修改并提升并发读安全
-				ITEM_RECIPES_BY_BEE.replaceAll((k, v) -> List.copyOf(v));
-				BLOCK_RECIPES_BY_BEE.replaceAll((k, v) -> List.copyOf(v));
-				loaded = true;
-			} catch (Exception e) {
-				// 节流日志（静态 key 全局 5 秒一次），并记录失败 tick 供下次重试判定
-				lastFailedTick = level.getGameTime();
+				items.replaceAll((key, value) -> List.copyOf(value));
+				blocks.replaceAll((key, value) -> List.copyOf(value));
+				index = new ConversionIndex(manager, Map.copyOf(items), Map.copyOf(blocks), complete);
+				lastFailedTick = complete ? Long.MIN_VALUE : tick;
+				version++;
+			} catch (RuntimeException failure) {
+				lastFailedTick = tick;
 				LogThrottle.error("bee_conversion_index_build",
-						"BeeConversionQueries 转化配方索引构建失败，将在 5 秒后重试", e);
+						"BeeConversionQueries 转化配方索引构建失败，将在 5 秒后重试", failure);
 			}
 		}
 	}
 
-	/**
-	 * 失效全部配方索引并递增版本号（配方重载时调用）
-	 * <br/>
-	 * 由 {@code ProductiveBeesGenesis.onTagsReload} 在标签/配方重载完成后调用，
-	 * 与产出配方缓存（{@link BeeProduceQueries#invalidate()}）保持同一生命周期。
-	 */
-	public static void invalidate() {
-		synchronized (BeeConversionQueries.class) {
-			ITEM_RECIPES_BY_BEE.clear();
-			BLOCK_RECIPES_BY_BEE.clear();
-			loaded = false;
-			version++;
+	private static List<String> beeTypes(List<Supplier<BeeIngredient>> bees) {
+		List<String> types = new ArrayList<>(bees.size());
+		for (Supplier<BeeIngredient> bee : bees) {
+			BeeIngredient ingredient = bee.get();
+			if (ingredient != null) {
+				types.add(ingredient.getBeeType().toString());
+			}
 		}
+		return types;
+	}
+
+	/** 接收新配方代际或停服时释放快照，旧世界失败时间不得阻止下一代重建。 */
+	public static synchronized void invalidate() {
+		index = ConversionIndex.EMPTY;
+		lastFailedTick = Long.MIN_VALUE;
+		version++;
 	}
 
 	/**
@@ -160,7 +158,7 @@ public final class BeeConversionQueries {
 	 * {@link FeederSlotManager} 的花朵有效性缓存据此在配方重载后失效，
 	 * 避免转化原料类花朵判定使用过期结果。
 	 *
-	 * @return 配方版本号（每次 invalidate 递增）
+	 * @return 展示版本号（失效、管理器切换及成功构建后递增）
 	 */
 	public static int getVersion() {
 		return version;
@@ -174,8 +172,9 @@ public final class BeeConversionQueries {
 	 */
 	public static boolean hasAnyConversionRecipe(@Nonnull ResourceLocation beeType) {
 		String key = beeType.toString();
-		return !ITEM_RECIPES_BY_BEE.getOrDefault(key, List.of()).isEmpty()
-				|| !BLOCK_RECIPES_BY_BEE.getOrDefault(key, List.of()).isEmpty();
+		ConversionIndex current = index;
+		return !current.items.getOrDefault(key, List.of()).isEmpty()
+				|| !current.blocks.getOrDefault(key, List.of()).isEmpty();
 	}
 
 	/**
@@ -185,7 +184,7 @@ public final class BeeConversionQueries {
 	 * @return true 表示存在至少一个物品转化配方
 	 */
 	public static boolean hasItemConversionRecipes(@Nonnull ResourceLocation beeType) {
-		return !ITEM_RECIPES_BY_BEE.getOrDefault(beeType.toString(), List.of()).isEmpty();
+		return !index.items.getOrDefault(beeType.toString(), List.of()).isEmpty();
 	}
 
 	/**
@@ -195,7 +194,7 @@ public final class BeeConversionQueries {
 	 * @return true 表示存在至少一个方块转化配方
 	 */
 	public static boolean hasBlockConversionRecipes(@Nonnull ResourceLocation beeType) {
-		return !BLOCK_RECIPES_BY_BEE.getOrDefault(beeType.toString(), List.of()).isEmpty();
+		return !index.blocks.getOrDefault(beeType.toString(), List.of()).isEmpty();
 	}
 
 	/**
@@ -228,7 +227,7 @@ public final class BeeConversionQueries {
 			return null;
 		}
 		String key = beeType.toString();
-		List<RecipeHolder<ItemConversionRecipe>> recipes = ITEM_RECIPES_BY_BEE.get(key);
+		List<RecipeHolder<ItemConversionRecipe>> recipes = index.items.get(key);
 		if (recipes == null || recipes.isEmpty()) {
 			return null;
 		}
@@ -269,7 +268,7 @@ public final class BeeConversionQueries {
 			return null;
 		}
 		String key = beeType.toString();
-		List<RecipeHolder<BlockConversionRecipe>> recipes = BLOCK_RECIPES_BY_BEE.get(key);
+		List<RecipeHolder<BlockConversionRecipe>> recipes = index.blocks.get(key);
 		if (recipes == null || recipes.isEmpty()) {
 			return null;
 		}
@@ -332,13 +331,9 @@ public final class BeeConversionQueries {
 	 */
 	private static boolean matchesBee(List<Supplier<BeeIngredient>> bees, String beeTypeKey) {
 		for (Supplier<BeeIngredient> bee : bees) {
-			try {
-				BeeIngredient ingredient = bee.get();
-				if (ingredient != null && ingredient.getBeeType().toString().equals(beeTypeKey)) {
-					return true;
-				}
-			} catch (Exception ignored) {
-				// 单个蜜蜂类型解析失败不影响其他条目
+			BeeIngredient ingredient = bee.get();
+			if (ingredient != null && ingredient.getBeeType().toString().equals(beeTypeKey)) {
+				return true;
 			}
 		}
 		return false;

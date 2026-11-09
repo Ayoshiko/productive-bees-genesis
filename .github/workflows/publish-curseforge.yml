@@ -6,9 +6,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Existing GitHub Release tag whose JAR should be mirrored
+        description: Existing verified NeoForge GitHub Release tag to mirror
         required: true
-        default: v1.0.1
         type: string
       version_type:
         description: CurseForge release type
@@ -27,6 +26,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   publish:
@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout repository
+      - name: Checkout maintenance verification tools
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: main-neo/1.21.1
@@ -47,84 +47,27 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Verify owner release tag belongs to NeoForge maintenance
+      - name: Verify tag, successful Build, permissions and exact release bytes
+        id: release
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+[.][0-9]+[.][0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
-          release_commit="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
-          git merge-base --is-ancestor "$release_commit" HEAD
-          git show "${release_commit}:gradle.properties" | grep -Fx 'minecraft_version=1.21.1'
-          git show "${release_commit}:build.gradle" | grep -F 'net.neoforged.moddev'
-
-      - name: Normalize release metadata
-        id: release_meta
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version }}
-          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
           INPUT_VERSION_TYPE: ${{ github.event.inputs.version_type }}
-        shell: bash
-        run: |
-          version="${RELEASE_TAG#v}"
-          version_type="${INPUT_VERSION_TYPE:-}"
-          if [ -z "$version_type" ]; then
-            if [ "$RELEASE_PRERELEASE" = "true" ]; then
-              version_type="beta"
-            else
-              version_type="release"
-            fi
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "version_type=$version_type" >> "$GITHUB_OUTPUT"
-
-      - name: Download verified release artifact
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version }}
-          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          artifact="productivebeesgenesis-${RELEASE_VERSION}.jar"
-          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${artifact}"
-          mkdir -p build/libs
-          curl --fail --location --retry 3 \
-            --header 'Accept: application/octet-stream' \
-            "$url" --output "build/libs/${artifact}"
-          test -s "build/libs/${artifact}"
-
-      - name: Extract English changelog for CurseForge
-        id: curseforge_changelog
-        env:
-          RELEASE_BODY: ${{ github.event.release.body || github.event.inputs.changelog }}
-        shell: bash
-        run: |
-          english="$(printf '%s\n' "$RELEASE_BODY" | awk 'BEGIN {found=0} /^## English[[:space:]]*$/ {found=1; next} found {print}')"
-          if [ -z "$(printf '%s' "$english" | tr -d '[:space:]')" ]; then
-            echo "Release body must contain a non-empty ## English section." >&2
-            exit 1
-          fi
-          {
-            echo 'changelog<<EOF'
-            printf '%s\n' "$english"
-            echo EOF
-          } >> "$GITHUB_OUTPUT"
+          INPUT_CHANGELOG: ${{ github.event.inputs.changelog }}
+        run: timeout --signal=TERM --kill-after=5s 250s python3 .github/scripts/release_artifact.py mirror
 
       - name: Publish to CurseForge
         uses: Kira-NT/mc-publish@c23376546a97f5ba7984e94445da359459b14419 # v3.3
         with:
           curseforge-id: ${{ vars.CURSEFORGE_PROJECT_ID }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-
-          files: |
-            build/libs/!(*-@(dev|sources|javadoc)).jar
+          files: ${{ steps.release.outputs.artifact }}
 
           # Match historical CurseForge entries: derive the version name from the JAR filename.
           curseforge-name: ""
-          version: ${{ steps.release_meta.outputs.version }}
-          version-type: ${{ steps.release_meta.outputs.version_type }}
-          changelog: ${{ steps.curseforge_changelog.outputs.changelog }}
+          version: ${{ steps.release.outputs.version }}
+          version-type: ${{ steps.release.outputs.version_type }}
+          changelog: ${{ steps.release.outputs.changelog }}
 
           dependencies: |
             curseforge:377897(required)

@@ -1,10 +1,11 @@
 package com.ayoshiko.productivebeesgenesis.config;
 
 import com.electronwill.nightconfig.core.CommentedConfig;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
+import net.neoforged.fml.loading.FMLConfig;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.common.ModConfigSpec;
-import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,7 +13,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -24,84 +24,95 @@ public final class ServerConfigMigrationService {
 			"ProductiveBeesGenesis/ConfigMigration");
 	private static final LevelResource SERVER_CONFIG_DIRECTORY = new LevelResource("serverconfig");
 
-	private static final IdentityHashMap<ModConfigSpec, net.neoforged.fml.config.ModConfig> LOADED_CONFIGS =
-			new IdentityHashMap<>();
-	private static boolean attempted;
-	private static boolean reloadRequired;
-
 	private ServerConfigMigrationService() {
 	}
 
-	/**
-	 * 记录一个已加载的服务端配置；三个规格均就绪后最多执行一次迁移。
-	 * 客户端同步配置没有文件路径，会自动跳过磁盘迁移。
-	 */
-	public static synchronized void onConfigLoading(net.neoforged.fml.config.ModConfig config) {
-		if (config == null || !(config.getSpec() instanceof ModConfigSpec spec)
-				|| !ModConfig.isServerSpec(spec)) {
-			return;
-		}
-		LOADED_CONFIGS.put(spec, config);
-		if (attempted || !ModConfig.areServerSpecsLoaded() || LOADED_CONFIGS.size() < 3) return;
-		attempted = true;
-
+	/** 在 NeoForge 选择并加载 SERVER 文件前迁移；失败由启动调用方中止本次世界。 */
+	public static void prepareForServer(MinecraftServer server) {
+		Path worldDirectory = server.getWorldPath(SERVER_CONFIG_DIRECTORY);
 		try {
-			List<MigrationTarget> loadedTargets = loadedMigrationTargets();
-			if (loadedTargets == null) return;
-			MigrationScope scope = findMigrationScope(
-					serverConfigDirectory(), FMLPaths.CONFIGDIR.get(), loadedTargets);
-			if (scope != null) migrate(scope);
+			prepare(worldDirectory, FMLPaths.CONFIGDIR.get(),
+					FMLPaths.GAMEDIR.get().resolve(FMLConfig.defaultConfigPath()));
 		} catch (IOException | RuntimeException exception) {
-			LOGGER.error("无法迁移旧服务端配置，未移动旧文件", exception);
+			throw new IllegalStateException("服务端配置迁移失败，已停止本次启动；请保留原配置及迁移恢复文件："
+					+ worldDirectory, exception);
 		}
 	}
 
-	/** 执行一次迁移：判定资格 → 生成计划 → 事务落盘 → 内存生效或请求重载。 */
+	static void prepare(Path worldDirectory, Path baseDirectory, Path defaultsDirectory) throws IOException {
+		// 恢复必须先于读取 current；部分替换后的文件不能充当玩家修改判据。
+		recoverDirectory(worldDirectory);
+		recoverDirectory(baseDirectory);
+		if (!Files.isRegularFile(worldDirectory.resolve(ModConfig.LEGACY_SERVER_FILE_NAME))
+				&& !Files.isRegularFile(baseDirectory.resolve(ModConfig.LEGACY_SERVER_FILE_NAME))) {
+			return;
+		}
+		List<MigrationTarget> targets = List.of(
+				configuredTarget(ModConfig.GAMEPLAY_SERVER_FILE_NAME, ModConfig.GAMEPLAY_SERVER_SPEC,
+						worldDirectory, baseDirectory, defaultsDirectory),
+				configuredTarget(ModConfig.MACHINES_SERVER_FILE_NAME, ModConfig.MACHINES_SERVER_SPEC,
+						worldDirectory, baseDirectory, defaultsDirectory),
+				configuredTarget(ModConfig.CAPACITIES_SERVER_FILE_NAME, ModConfig.CAPACITIES_SERVER_SPEC,
+						worldDirectory, baseDirectory, defaultsDirectory));
+		MigrationScope scope = findMigrationScope(worldDirectory, baseDirectory, targets);
+		if (scope != null) {
+			migrate(scope);
+		}
+	}
+
+	private static void recoverDirectory(Path directory) throws IOException {
+		List<Path> destinations = List.of(
+				directory.resolve(ModConfig.GAMEPLAY_SERVER_FILE_NAME),
+				directory.resolve(ModConfig.MACHINES_SERVER_FILE_NAME),
+				directory.resolve(ModConfig.CAPACITIES_SERVER_FILE_NAME));
+		ServerConfigMigrationFiles.recoverInterruptedMigration(directory, destinations,
+				directory.resolve(ModConfig.LEGACY_SERVER_FILE_NAME),
+				ServerConfigMigrationBackups.primaryBackup(directory));
+	}
+
+	private static MigrationTarget configuredTarget(
+			String fileName, ModConfigSpec spec, Path worldDirectory,
+			Path baseDirectory, Path defaultsDirectory) throws IOException {
+		Path path = worldDirectory.resolve(fileName);
+		if (!Files.exists(path)) {
+			path = baseDirectory.resolve(fileName);
+		}
+		CommentedConfig current;
+		if (Files.exists(path)) {
+			current = ServerConfigMigrationFiles.parse(path);
+		} else if (Files.isRegularFile(defaultsDirectory.resolve(fileName))) {
+			current = ServerConfigMigrationFiles.parse(defaultsDirectory.resolve(fileName));
+		} else {
+			current = CommentedConfig.inMemory();
+			spec.correct(current);
+		}
+		return new MigrationTarget(fileName, spec, path, current);
+	}
+
+	/** 判定资格、生成计划并事务落盘，内存绑定完全交给随后正常执行的 NeoForge 加载。 */
 	private static void migrate(MigrationScope scope) throws IOException {
 		Path directory = scope.directory();
 		Path legacyPath = scope.legacyPath();
-		List<Path> destinations = scope.targets().stream().map(MigrationTarget::path).toList();
-		ServerConfigMigrationFiles.recoverInterruptedMigration(
-				directory, destinations, legacyPath,
-				ServerConfigMigrationBackups.primaryBackup(directory));
-		if (!Files.isRegularFile(legacyPath)) return;
-
 		Path previousBackup = ServerConfigMigrationBackups.newestBackup(directory);
 		if (ServerConfigMigrationBackups.sameContent(legacyPath, previousBackup)) {
 			LOGGER.info("旧配置与既有迁移备份内容一致（整合包重复分发同一份文件），保持现有拆分配置：{}",
 					legacyPath);
 			return;
 		}
-
 		Eligibility eligibility = eligibility(scope, previousBackup);
 		if (eligibility.targets().isEmpty()) {
 			LOGGER.warn("没有可迁移的拆分配置目标，保留现有配置并跳过旧文件迁移：{}", legacyPath);
 			return;
 		}
-
 		Path backupPath = ServerConfigMigrationBackups.nextFreeBackup(directory);
 		MigrationPlan plan = ServerConfigMigrationPlanner.createPlan(
-				ServerConfigMigrationFiles.parse(legacyPath),
-				eligibility.targets(),
-				eligibility.guard());
-		try {
-			ServerConfigMigrationFiles.commitFiles(
-					directory, legacyPath, backupPath, plan,
-					ServerConfigMigrationFiles.ReplacementObserver.NONE);
-			// 存档目录里此前没有拆分文件时，NeoForge 已把配置绑定到全局 config 目录，
-			// 只有这种情况才需要按存档覆盖规则重新加载；其余情况直接替换内存对象即可。
-			boolean needsReload = scope.isWorldScope() && loadedPathsDiverge(scope);
-			if (needsReload) reloadRequired = true;
-			else applyInMemory(plan, false);
-			LOGGER.info("服务端配置迁移完成（{}）：复制 {} 个旧值，保留 {} 个玩家改动，"
-							+ "{} 个无效值使用默认值，备份位于 {}",
-					eligibility.repeated() ? "整合包更新叠加" : "首次迁移",
-					plan.copiedValues(), plan.preservedValues(), plan.invalidValues(), backupPath);
-		} catch (IOException exception) {
-			applyInMemory(plan, scope.isWorldScope());
-			LOGGER.error("服务端配置磁盘迁移失败；本次会话仍使用旧配置值，旧文件保留供下次重试",
-					exception);
-		}
+				ServerConfigMigrationFiles.parse(legacyPath), eligibility.targets(), eligibility.guard());
+		ServerConfigMigrationFiles.commitFiles(directory, legacyPath, backupPath, plan,
+				ServerConfigMigrationFiles.ReplacementObserver.NONE);
+		LOGGER.info("服务端配置迁移完成（{}）：复制 {} 个旧值，保留 {} 个玩家改动，"
+					+ "{} 个无效值使用默认值，备份位于 {}",
+				eligibility.repeated() ? "整合包更新叠加" : "首次迁移",
+				plan.copiedValues(), plan.preservedValues(), plan.invalidValues(), backupPath);
 	}
 
 	/**
@@ -133,57 +144,6 @@ public final class ServerConfigMigrationService {
 		}
 		return new Eligibility(pristine, ServerConfigMigrationPlanner.OverwriteGuard.ALLOW_ALL,
 				false);
-	}
-
-	/** 服务端停止时清除世界级迁移状态，防止跨存档持有配置对象。 */
-	public static synchronized void reset() {
-		LOADED_CONFIGS.clear();
-		attempted = false;
-		reloadRequired = false;
-	}
-
-	/** 成功写入拆分文件后仅消费一次重载请求。 */
-	public static synchronized boolean consumeReloadRequired() {
-		boolean result = reloadRequired;
-		reloadRequired = false;
-		return result;
-	}
-
-	private static List<RuntimeTarget> runtimeTargets() {
-		return List.of(
-				new RuntimeTarget(
-						ModConfig.GAMEPLAY_SERVER_FILE_NAME,
-						ModConfig.GAMEPLAY_SERVER_SPEC,
-						LOADED_CONFIGS.get(ModConfig.GAMEPLAY_SERVER_SPEC)),
-				new RuntimeTarget(
-						ModConfig.MACHINES_SERVER_FILE_NAME,
-						ModConfig.MACHINES_SERVER_SPEC,
-						LOADED_CONFIGS.get(ModConfig.MACHINES_SERVER_SPEC)),
-				new RuntimeTarget(
-						ModConfig.CAPACITIES_SERVER_FILE_NAME,
-						ModConfig.CAPACITIES_SERVER_SPEC,
-						LOADED_CONFIGS.get(ModConfig.CAPACITIES_SERVER_SPEC)));
-	}
-
-	private static List<MigrationTarget> loadedMigrationTargets() {
-		try {
-			List<MigrationTarget> result = new ArrayList<>();
-			for (RuntimeTarget target : runtimeTargets()) {
-				if (target.config() == null) return null;
-				result.add(new MigrationTarget(
-						target.fileName(), target.spec(), target.config().getFullPath(),
-						target.config().getLoadedConfig().config()));
-			}
-			return List.copyOf(result);
-		} catch (IllegalStateException exception) {
-			LOGGER.debug("客户端同步配置没有本地路径，跳过旧文件迁移");
-			return null;
-		}
-	}
-
-	private static Path serverConfigDirectory() {
-		var server = ServerLifecycleHooks.getCurrentServer();
-		return server == null ? null : server.getWorldPath(SERVER_CONFIG_DIRECTORY);
 	}
 
 	static MigrationScope findMigrationScope(
@@ -259,47 +219,8 @@ public final class ServerConfigMigrationService {
 				legacy, targets, ServerConfigMigrationPlanner.OverwriteGuard.ALLOW_ALL);
 	}
 
-	/** 已加载配置的实际路径与本次迁移目标是否不一致（NeoForge 绑定在全局 config 目录）。 */
-	private static boolean loadedPathsDiverge(MigrationScope scope) {
-		for (MigrationTarget target : scope.targets()) {
-			net.neoforged.fml.config.ModConfig config = LOADED_CONFIGS.get(target.spec());
-			if (config == null) return true;
-			try {
-				if (!samePath(config.getFullPath(), target.path())) return true;
-			} catch (IllegalStateException exception) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static void applyInMemory(MigrationPlan plan, boolean force) {
-		for (PlannedTarget target : plan.targets()) {
-			net.neoforged.fml.config.ModConfig config = LOADED_CONFIGS.get(target.target().spec());
-			if (config == null) continue;
-			if (!force && !samePath(config.getFullPath(), target.target().path())) continue;
-			CommentedConfig loaded = config.getLoadedConfig().config();
-			loaded.clear();
-			loaded.clearComments();
-			loaded.putAll(target.content());
-			loaded.putAllComments(target.content());
-			target.target().spec().afterReload();
-		}
-	}
-
 	private static boolean samePath(Path first, Path second) {
 		return first.toAbsolutePath().normalize().equals(second.toAbsolutePath().normalize());
-	}
-
-	record RuntimeTarget(
-			String fileName,
-			ModConfigSpec spec,
-			net.neoforged.fml.config.ModConfig config) {
-		RuntimeTarget {
-			Objects.requireNonNull(fileName, "fileName");
-			Objects.requireNonNull(spec, "spec");
-			Objects.requireNonNull(config, "config");
-		}
 	}
 
 	record MigrationTarget(

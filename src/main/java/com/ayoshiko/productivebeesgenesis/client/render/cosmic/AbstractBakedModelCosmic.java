@@ -124,15 +124,19 @@ public abstract class AbstractBakedModelCosmic extends WrappedItemModel implemen
 	) {
 		// 先渲染被包装的基础物品模型
 		renderWrapped(stack, poseStack, buffers, packedLight, packedOverlay, true);
-		// 立即刷新基础层，避免 cosmic 层深度测试异常
+		IrisCompat.Pass pass = IrisCompat.currentPass();
+		if (pass == IrisCompat.Pass.SHADOW || pass == IrisCompat.Pass.UNAVAILABLE) {
+			return;
+		}
+		// 立即刷新基础层，避免 cosmic 层深度测试异常。
 		if (buffers instanceof MultiBufferSource.BufferSource bufferSource) {
 			bufferSource.endBatch();
 		}
-		// Iris 光影启用时延迟到世界渲染后执行，避免光影破坏 cosmic 着色器状态
-		if (IrisCompat.shouldDefer(context)) {
-			CosmicRenderQueue.enqueue(CosmicRenderCall.obtain(this, stack, context, poseStack, packedLight, packedOverlay,
-				RenderSystem.getProjectionMatrix(),
-				RenderSystem.getModelViewMatrix()));
+		if (IrisCompat.shouldDefer(context, pass)) {
+			if (CosmicRenderQueue.isAccepting()) {
+				CosmicRenderQueue.enqueue(CosmicRenderCall.obtain(this, stack, context, poseStack, packedLight, packedOverlay,
+						RenderSystem.getProjectionMatrix(), RenderSystem.getModelViewMatrix()), pass);
+			}
 			return;
 		}
 		renderCosmicLayer(stack, context, poseStack, buffers, packedLight, packedOverlay);
@@ -153,8 +157,8 @@ public abstract class AbstractBakedModelCosmic extends WrappedItemModel implemen
 		if (mc.level == null || mc.player == null) {
 			return;
 		}
-		// 着色器注册失败时跳过 cosmic 层渲染，避免 RenderType 供应器返回 null 导致渲染管线 NPE
-		if (getShader() == null) {
+		// 着色器或星纹理不可用时保留基础模型，避免占位图与旧 UV 被提交给效果层。
+		if (getShader() == null || !CosmicShaders.isCosmicAtlasReady()) {
 			return;
 		}
 		float yaw = 0.0F;

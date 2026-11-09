@@ -54,10 +54,12 @@ public record ResourceInventoryDelta(long revision, boolean reset, List<Entry> e
         private Map<ResourceKey, BigInteger> previous = Map.of();
         private long revision;
         public ResourceInventoryDelta update(Map<ResourceKey, ? extends Number> values, long acknowledged) {
+            boolean reset = acknowledged != revision || revision == 0;
+            if (!reset && values.equals(previous)) {
+                return new ResourceInventoryDelta(revision, false, List.of());
+            }
             Map<ResourceKey, BigInteger> current = ResourceExactAmounts.copy(values);
             if (current.size() > MAX_ENTRIES) throw new IllegalArgumentException("Resource directory exceeds budget");
-            boolean reset = acknowledged != revision || revision == 0;
-            if (!reset && current == previous) return new ResourceInventoryDelta(revision, false, List.of());
             var changes = new ArrayList<Entry>();
             var removed = new BitSet(MAX_ENTRIES);
             var pending = new LinkedHashMap<>(current);

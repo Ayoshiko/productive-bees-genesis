@@ -1,26 +1,29 @@
 package com.ayoshiko.productivebeesgenesis.apiculture.production;
 
-import com.ayoshiko.productivebeesgenesis.mek.BatchProbabilitySampler;
 import com.ayoshiko.productivebeesgenesis.mek.SampleUniformSum;
-import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import com.ayoshiko.productivebeesgenesis.util.ExactBinomialSampler;
 import java.util.Objects;
 import java.util.random.RandomGenerator;
 
-/** 一个有界采样段的数量计算；无物品栈、世界、库存或全局随机状态。 */
+/** 单个采样段的 long 数量计算；任意精度总轮数与分段预算由调用方持有。 */
 public final class BeeProductionSampling {
 
-	/** 保留独立蜂箱的概率模式：小二项精确，大二项和数量和沿用现有近似。 */
-	public static long sampleOutput(RandomGenerator random, int rolls, int minimum, int maximum,
+	/** 与正式维护蜂箱共用二项概率及逐栈基因公式；固定数量不消耗随机状态。 */
+	public static long sampleOutput(RandomGenerator random, long rolls, int minimum, int maximum,
 			float chance, float stabilityBonus, int productivityLevel) {
 		Objects.requireNonNull(random);
 		if (rolls < 0) throw new IllegalArgumentException("Negative bee rolls");
 		if (rolls == 0 || Float.isNaN(chance) || chance <= 0) return 0;
-		float stability = Float.isFinite(stabilityBonus) ? Math.max(0, stabilityBonus) : stabilityBonus > 0 ? 1 : 0;
+		float stability = 0.0F;
+		if (Float.isFinite(stabilityBonus)) {
+			stability = Math.max(0.0F, stabilityBonus);
+		} else if (stabilityBonus > 0.0F) {
+			stability = 1.0F;
+		}
 		float adjustedChance = chance >= 1 ? 1 : Math.min(1, chance + stability);
-		long successes;
-		if (rolls == 1) successes = adjustedChance < 1 && random.nextFloat() >= adjustedChance ? 0 : 1;
-		else successes = adjustedChance >= 1 ? rolls : BatchProbabilitySampler.sampleBinomial(random, rolls, adjustedChance);
-		int min = Math.max(0, minimum), max = Math.max(maximum, min);
+		long successes = ExactBinomialSampler.sample(random, rolls, adjustedChance);
+		int min = Math.max(0, minimum);
+		int max = Math.max(maximum, min);
 		return sampleGeneAdjustedSum(random, min, max, successes, productivityLevel);
 	}
 
@@ -34,37 +37,36 @@ public final class BeeProductionSampling {
 		return (int) Math.min(Integer.MAX_VALUE, adjusted);
 	}
 
+	/** 二项分配递归拆分均匀区间，非线性基因结果只由合法逐栈数量组成。 */
 	public static long sampleGeneAdjustedSum(RandomGenerator random, int min, int max,
 			long samples, int productivityLevel) {
 		Objects.requireNonNull(random);
-		if (samples > Integer.MAX_VALUE) throw new IllegalArgumentException("Split bee sampling into bounded work segments");
 		if (samples <= 0 || min < 0 || max < min) return 0;
 		int level = Math.max(0, Math.min(3, productivityLevel));
-		if (level == 0) return SampleUniformSum.sample(random, min, max, samples, 1);
+		if (min == max) {
+			return Math.multiplyExact(adjustStackCount(min, level), samples);
+		}
+		if (level == 0) {
+			Math.multiplyExact((long) max, samples);
+			return SampleUniformSum.sample(random, min, max, samples, 1);
+		}
+		int lower = adjustStackCount(min, level);
+		int upper = adjustStackCount(max, level);
+		if (lower == upper) return Math.multiplyExact((long) lower, samples);
 		if (samples <= 32) {
 			long sum = 0;
-			for (long i = 0; i < samples; i++) sum += adjustStackCount(SampleUniformSum.sampleSingle(random, min, max), level);
+			for (long i = 0; i < samples; i++) {
+				int sampled = SampleUniformSum.sampleSingle(random, min, max);
+				sum = Math.addExact(sum, adjustStackCount(sampled, level));
+			}
 			return sum;
 		}
-		if (min == max) return (long) adjustStackCount(min, level) * samples;
-		long range = (long) max - min + 1;
-		if (range > 4096) {
-			long baseSum = SampleUniformSum.sample(random, min, max, samples, 1);
-			double baseMean = ((double) min + max) / 2;
-			double ratio = baseMean <= 0 ? 1 : adjustStackCount((int) Math.round(baseMean), level) / baseMean;
-			return SaturatingMath.saturatingRoundToLong(baseSum * ratio);
-		}
-		double mean = 0, squares = 0;
-		for (long raw = min; raw <= max; raw++) {
-			int adjusted = adjustStackCount((int) raw, level);
-			mean += adjusted; squares += (double) adjusted * adjusted;
-		}
-		mean /= range;
-		double variance = Math.max(0, squares / range - mean * mean);
-		double value = mean * samples + random.nextGaussian() * Math.sqrt(variance * samples);
-		long lower = (long) adjustStackCount(min, level) * samples;
-		long upper = (long) adjustStackCount(max, level) * samples;
-		return Math.max(lower, Math.min(upper, SaturatingMath.saturatingRoundToLong(value)));
+		int middle = min + (int) (((long) max - min) / 2);
+		double leftProbability = ((long) middle - min + 1.0) / ((long) max - min + 1.0);
+		long leftCount = ExactBinomialSampler.sample(random, samples, leftProbability);
+		return Math.addExact(
+				sampleGeneAdjustedSum(random, min, middle, leftCount, level),
+				sampleGeneAdjustedSum(random, middle + 1, max, samples - leftCount, level));
 	}
 
 	private BeeProductionSampling() { }

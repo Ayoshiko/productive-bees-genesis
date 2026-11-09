@@ -1,9 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek.fluid;
 
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeNbtKeys;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
-import mekanism.api.Action;
-import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -11,100 +8,90 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.neoforged.neoforge.fluids.FluidStack;
 
-/**
-	 * 多流体槽 NBT 序列化/反序列化 Codec
-	 * <br/>
-	 * <b>设计原则(SRP)：</b>将 NBT 持久化逻辑从 {@link MultiFluidTankHolder} 抽离,
-	 * 使 Holder 专注于槽位路由与生命周期管理,Codec 专注于序列化格式。
-	 * 控制 Holder 行数 ≤500,符合项目规范。
-	 * <p>
-	 * <b>访问权限：</b>通过 {@link MultiFluidTankHolder} 的 package-private getter
-	 * 访问内部字段(tanksInOrder / tanksByFluidKey / emptyTankCount),保持封装性。
-	 *
-	 * @since 1.0.0
-	 */
-public final class MultiFluidTankNbtCodec {
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
-	/** 工具类禁止实例化 */
+/** 多流体恢复先完成解码和容量布局，再一次替换内容与索引。 */
+public final class MultiFluidTankNbtCodec {
 	private MultiFluidTankNbtCodec() {
 	}
 
-	/**
-	 * 将所有非空槽位的 FluidStack 序列化到 NBT
-	 * <br/>
-	 * <b>设计原理：</b>
-	 * <ul>
-	 *   <li>空槽(getFluid().isEmpty())跳过不保存,减少 NBT 大小</li>
-	 *   <li>重建时通过 getTankForInsert 自动路由到未映射空槽,建立 FluidKey 映射</li>
-	 *   <li>不保存 componentsHash:getTankForInsert 基于完整 FluidStack 找槽,
-	 *       重建时通过 FluidKey.of(stack) 重新计算</li>
-	 * </ul>
-	 *
-	 * @param holder   多流体槽管理器
-	 * @param nbt      目标 NBT(写入到 {@link MekCentrifugeNbtKeys#NBT_KEY_MULTI_FLUID_TANKS} 键下)
-	 * @param provider 注册表访问器(FluidStack.save 需要)
-	 */
 	public static void writeToNBT(MultiFluidTankHolder holder, CompoundTag nbt, HolderLookup.Provider provider) {
+		Tag unresolved = holder.getUnresolvedSavedData();
+		if (unresolved != null) {
+			nbt.put(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, unresolved.copy());
+			return;
+		}
 		CompoundTag root = new CompoundTag();
 		root.putInt("count", holder.getTanksInOrderForCodec().size());
 		ListTag list = new ListTag();
 		for (IExtendedFluidTank tank : holder.getTanksInOrderForCodec()) {
 			FluidStack fluid = tank.getFluid();
-			if (!fluid.isEmpty()) {
-				CompoundTag entry = new CompoundTag();
-				entry.put("fluidStack", fluid.save(provider));
-				list.add(entry);
-			}
+			if (fluid.isEmpty()) continue;
+			CompoundTag entry = new CompoundTag();
+			entry.put("fluidStack", fluid.save(provider));
+			list.add(entry);
 		}
 		root.put("tanks", list);
 		nbt.put(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, root);
 	}
 
-	/**
-	 * 从 NBT 反序列化并恢复槽位内容
-	 * <br/>
-	 * <b>重建原理(预分配后)：</b>
-	 * <ol>
-	 *   <li>清空 tanksByFluidKey 映射 + 重置 emptyTankCount = maxTanks</li>
-	 *   <li>遍历 tanksInOrder 对每个预分配槽调用 setStack(FluidStack.EMPTY) 清空内容
-	 *       (保留槽位结构,不 clear tanksInOrder)</li>
-	 *   <li>遍历 NBT 中的 ListTag "tanks",对每个 entry 解析 FluidStack</li>
-	 *   <li>调用 getTankForInsert 路由到未映射空槽(预分配),建立映射并 emptyTankCount 递减</li>
-	 *   <li>调用 tank.insert 填充内容,容量不足时记录警告并继续(不中断循环)</li>
-	 * </ol>
-	 * <p>
-	 * <b>不 clear tanksInOrder 的原因：</b>预分配的槽位结构固定,
-	 * clear 会导致槽位数量减少,引发 MEK DataSlot 索引偏移。
-	 *
-	 * @param holder   多流体槽管理器
-	 * @param nbt      源 NBT(从 {@link MekCentrifugeNbtKeys#NBT_KEY_MULTI_FLUID_TANKS} 键读取)
-	 * @param provider 注册表访问器(FluidStack.parseOptional 需要)
-	 */
 	public static void readFromNBT(MultiFluidTankHolder holder, CompoundTag nbt, HolderLookup.Provider provider) {
-		if (!nbt.contains(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, Tag.TAG_COMPOUND)) {
-			return;
+		Tag raw = nbt.get(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS);
+		if (raw == null) return;
+		try {
+			List<FluidStack> saved = decode(raw, provider);
+			FluidStack[] layout = plan(saved, holder.getTanksInOrderForCodec());
+			holder.restoreLayout(layout);
+		} catch (RuntimeException invalid) {
+			holder.preserveUnresolvedSavedData(raw);
 		}
-		// 清空映射 + 重置空槽计数 + 清空所有预分配槽位内容(保留槽位结构)
-		holder.clearForRestore();
-		CompoundTag root = nbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS);
-		ListTag list = root.getList("tanks", Tag.TAG_COMPOUND);
-		for (int i = 0; i < list.size(); i++) {
-			CompoundTag entry = list.getCompound(i);
-			FluidStack stack = FluidStack.parseOptional(provider, entry.getCompound("fluidStack"));
-			if (stack.isEmpty()) {
-				continue; // 解析失败跳过,不影响其他槽位
-			}
-			// getTankForInsert 路由到未映射空槽(预分配),建立 FluidKey → 槽 映射
-			IExtendedFluidTank tank = holder.getTankForInsert(stack);
-			if (tank == null) {
-				continue; // 无可用空槽,跳过
-			}
-			// 检查 insert 返回值 — 容量不足时记录警告,继续处理其他槽位(不中断循环)
-			// 触发场景：等级升级降级时容量减小,超出新容量的流体被丢弃
-			FluidStack remaining = tank.insert(stack, Action.EXECUTE, AutomationType.INTERNAL);
-			if (!remaining.isEmpty()) {
-				DevLog.warn("fluid_tank", "流体槽容量不足,丢弃 {} mB 流体 {}", remaining.getAmount(), remaining.getFluid());
-			}
+	}
+
+	/** 安装器也使用相同的完整解码；缺失注册或未知字段不能当空库存。 */
+	public static List<FluidStack> decode(Tag raw, HolderLookup.Provider provider) {
+		if (!(raw instanceof CompoundTag root) || !Set.of("count", "tanks").containsAll(root.getAllKeys())
+				|| !(root.get("tanks") instanceof ListTag entries)
+				|| !entries.isEmpty() && entries.getElementType() != Tag.TAG_COMPOUND)
+			throw new IllegalArgumentException("Invalid stored fluid inventory");
+		if (root.contains("count")) {
+			if (!root.contains("count", Tag.TAG_INT) || root.getInt("count") < 0)
+				throw new IllegalArgumentException("Invalid stored fluid count");
+		} else if (entries.size() != 1) {
+			// 已发布的基础机升级快照仅省略单个非空罐的 count。
+			throw new IllegalArgumentException("Invalid legacy single-tank inventory");
 		}
+		List<FluidStack> saved = new ArrayList<>(entries.size());
+		for (Tag value : entries) {
+			CompoundTag entry = (CompoundTag) value;
+			if (!Set.of("fluidStack").containsAll(entry.getAllKeys()) || !entry.contains("fluidStack", Tag.TAG_COMPOUND))
+				throw new IllegalArgumentException("Invalid stored fluid entry");
+			saved.add(FluidStack.parse(provider, entry.getCompound("fluidStack")).orElseThrow());
+		}
+		return saved;
+	}
+
+	/** 单个保存条目可跨多个罐；完整组件相同才合并，不经 int 总量累加。 */
+	public static FluidStack[] plan(List<FluidStack> saved, List<IExtendedFluidTank> tanks) {
+		FluidStack[] layout = new FluidStack[tanks.size()];
+		java.util.Arrays.fill(layout, FluidStack.EMPTY);
+		for (FluidStack stack : saved) {
+			long remaining = stack.getAmount();
+			for (int pass = 0; pass < 2 && remaining > 0; pass++) {
+				for (int index = 0; index < layout.length && remaining > 0; index++) {
+					FluidStack current = layout[index];
+					if (pass == 0 && (current.isEmpty() || !FluidStack.isSameFluidSameComponents(current, stack))) continue;
+					if (pass == 1 && !current.isEmpty()) continue;
+					int held = current.isEmpty() ? 0 : current.getAmount();
+					int amount = (int) Math.min(remaining, Math.max(0L, (long) tanks.get(index).getCapacity() - held));
+					if (amount <= 0) continue;
+					layout[index] = stack.copyWithAmount(held + amount);
+					remaining -= amount;
+				}
+			}
+			if (remaining > 0) throw new IllegalArgumentException("Stored fluid exceeds target capacity");
+		}
+		return layout;
 	}
 }

@@ -121,7 +121,7 @@ final class DesignerLibraryPage {
 								if (id.equals(PBConstants.MYRIADCREATIONS_TYPE_STRING)) {
 									screen.loadBee(id);
 								} else if (DesignerDraftIndex.pending(id)) {
-									DesignerProjectFiles.draft(id, screen::importDocument, message -> screen.status = message);
+									screen.loadLocalDraft(id, screen, false);
 								} else {
 									screen.loadBee(id);
 								}

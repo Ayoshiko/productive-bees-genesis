@@ -2,6 +2,11 @@ package com.ayoshiko.productivebeesgenesis.mixin.client;
 
 import com.ayoshiko.productivebeesgenesis.client.resource.GuiResourceSideConfigPage;
 import com.ayoshiko.productivebeesgenesis.client.resource.GuiResourceSideConfigTab;
+import com.ayoshiko.productivebeesgenesis.client.screen.AeInputButton;
+import com.ayoshiko.productivebeesgenesis.client.screen.AeOutputButton;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceNativeType;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceSidePersistence;
 import mekanism.client.gui.GuiMekanism;
@@ -34,6 +39,8 @@ public abstract class ResourceSideConfigurationMixin extends GuiWindow {
     @Shadow private TransmissionType currentType;
     @Unique private GuiResourceSideConfigPage productivebeesgenesis$chemicalPage;
     @Unique private List<GuiElement> productivebeesgenesis$nativeContent;
+    @Unique private AeOutputButton productivebeesgenesis$aeOutput;
+    @Unique private AeInputButton productivebeesgenesis$aeInput;
 
     protected ResourceSideConfigurationMixin(IGuiWrapper gui, int x, int y, int width, int height, SelectedWindowData data) {
         super(gui, x, y, width, height, data);
@@ -65,10 +72,27 @@ public abstract class ResourceSideConfigurationMixin extends GuiWindow {
         var tab = new GuiResourceSideConfigTab[1];
         tab[0] = new GuiResourceSideConfigTab(gui, menu, screen, relativeX + width, extensionY, false, () -> tab[0]);
         addChild(tab[0]);
+        if (Ae2IntegrationLoader.isAe2Loaded() && menu.getTileEntity() == tile) {
+            // 沿用窗口内的控制列，给右侧原生弹出按钮和窗口外页签留出空间。
+            if (tile instanceof IAe2OutputHostBase) {
+                productivebeesgenesis$aeOutput = addChild(new AeOutputButton(screen, relativeX + 120,
+                        relativeY + 6, menu, () -> currentType));
+            }
+            if (tile instanceof IAe2InputHost) {
+                productivebeesgenesis$aeInput = addChild(new AeInputButton(screen, relativeX + 120,
+                        relativeY + 24, menu, () -> currentType));
+            }
+        }
     }
 
     @Inject(method = "updateTabs", at = @At("TAIL"))
     private void productivebeesgenesis$showChemicalPage(CallbackInfo callback) {
+        if (productivebeesgenesis$aeOutput != null) {
+            productivebeesgenesis$aeOutput.refreshState();
+        }
+        if (productivebeesgenesis$aeInput != null) {
+            productivebeesgenesis$aeInput.refreshState();
+        }
         if (productivebeesgenesis$chemicalPage == null) return;
         boolean chemical = currentType == TransmissionType.CHEMICAL;
         for (var element : productivebeesgenesis$nativeContent) element.visible = !chemical;

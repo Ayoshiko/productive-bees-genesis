@@ -84,6 +84,28 @@ class PbResourceBridgeMinecraftTest {
 		assertTrue(produced > 90 * 300 && produced < 170 * 300);
 	}
 
+	@Test void malformedAttachmentRootsRoundTripThroughNeoForge() {
+		var provider = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+		var list = new net.minecraft.nbt.ListTag();
+		list.add(net.minecraft.nbt.StringTag.valueOf("retained"));
+		for (var raw : List.<net.minecraft.nbt.Tag>of(net.minecraft.nbt.StringTag.valueOf("future"), list)) {
+			var attachments = new CompoundTag();
+			attachments.put("productivebeesgenesis:resource_host", raw);
+			var holder = new HostAttachments();
+			holder.read(provider, attachments);
+			var host = holder.getData(ResourceHiveHost.TYPE);
+			assertEquals("invalid_host_data", host.status());
+			assertNull(host.reference());
+			assertEquals(attachments, holder.serializeAttachments(provider));
+		}
+	}
+
+	private static final class HostAttachments extends net.neoforged.neoforge.attachment.AttachmentHolder {
+		void read(net.minecraft.core.HolderLookup.Provider provider, CompoundTag tag) {
+			deserializeAttachments(provider, tag);
+		}
+	}
+
 	@Test void invalidHostReferenceRetainsRawDataInsteadOfBecomingNewEmptyHost() {
 		var raw = new CompoundTag();
 		raw.putInt("version", 7);

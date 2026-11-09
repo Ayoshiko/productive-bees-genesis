@@ -60,6 +60,40 @@ class ResourceAccountsMinecraftTest {
         }
     }
 
+	@Test void storageReservationRejectsBeforeMutationAndCoversRecovery() {
+		var measured = new ResourceAccounts(() -> {});
+		var account = account(measured);
+		var context = new CompoundTag();
+		context.putString("host", "resource_centrifuging");
+		context.putInt("lane", 0);
+		context.putString("evidence", "x".repeat(2048));
+		long baseline = measured.reservedStorage();
+		var ticket = account.reserve(account.reference(), 1, context, Map.of(HYDROGEN, 12L));
+		long reserved = measured.reservedStorage();
+		assertTrue(reserved > baseline);
+		account.start(ticket);
+		account.freeze(ticket, Map.of(HYDROGEN, 12L));
+		account.suspendProduction(ticket, "x".repeat(512));
+		assertFalse(account.canRelocate(account.reference()));
+		var snapshot = new CompoundTag();
+		snapshot.put("data", measured.save());
+		net.minecraft.nbt.NbtUtils.addCurrentDataVersion(snapshot);
+		assertTrue(snapshot.sizeInBytes() <= reserved);
+		var restored = ResourceAccounts.load(measured.save(), () -> {});
+		assertFalse(restored.hasInvalidData());
+		assertTrue(restored.reservedStorage() <= reserved);
+		account.resolveProduction(OWNER, ticket, true);
+		assertEquals(12L, account.available().get(HYDROGEN));
+		assertTrue(measured.reservedStorage() < reserved);
+
+		var limited = new ResourceAccounts(() -> {}, reserved - 1);
+		var rejected = account(limited);
+		var before = limited.save();
+		assertThrows(IllegalStateException.class, () -> rejected.reserve(rejected.reference(), 1, context, Map.of(HYDROGEN, 12L)));
+		assertEquals(before, limited.save());
+		assertNull(rejected.productionTicket());
+	}
+
 	@Test void rawIdentityIsImmutableAndPreservesMissingModIdentity() {
 		var payload = new CompoundTag();
 		payload.putString("variant", "high_voltage");

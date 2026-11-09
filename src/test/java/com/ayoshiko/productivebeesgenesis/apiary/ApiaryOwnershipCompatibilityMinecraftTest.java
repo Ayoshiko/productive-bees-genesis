@@ -185,6 +185,55 @@ class ApiaryOwnershipCompatibilityMinecraftTest {
     }
 
     @Test
+    void malformedBeeFluidAndUpgradeCustodyStayWithIndependentOwner() {
+        var beeData = new CompoundTag();
+        beeData.put(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS, StringTag.valueOf("原始坏蜂位"));
+        var fluidData = new CompoundTag();
+        fluidData.put("productivebeesgenesis_apiary_fluid", StringTag.valueOf("原始坏流体"));
+        var upgradeHost = hive();
+        var source = new CompoundTag();
+        source.putString("custody", "完整升级来源");
+        upgradeHost.upgradeRecovery().begin(new UUID(31, 32), source, "fluid");
+        upgradeHost.upgradeRecovery().fail(new IllegalStateException("保管升级失败"));
+        var upgradeData = new CompoundTag();
+        upgradeHost.nbtSerializer().saveApiaryState(upgradeData, registries());
+
+        for (var original : List.of(beeData, fluidData, upgradeData)) {
+            var host = hive();
+            host.nbtSerializer().loadApiaryState(original, registries());
+            var before = new CompoundTag();
+            host.nbtSerializer().saveApiaryState(before, registries());
+            var assets = new ApiaryOwnershipAssets(host);
+            assertFalse(assets.prepared());
+            assertFalse(assets.empty());
+            assertFalse(new MachineAssetStore(host).prepared());
+            assertThrows(IllegalStateException.class, () -> assets.capture(registries()));
+            var after = new CompoundTag();
+            host.nbtSerializer().saveApiaryState(after, registries());
+            assertEquals(before, after);
+            for (var key : original.getAllKeys()) {
+                assertEquals(original.get(key), after.get(key), key);
+            }
+        }
+    }
+
+    @Test
+    void localMixedRequestCannotBeRecapturedOrReplayed() {
+        var host = hive();
+        paidBee(host, 2);
+        var context = new CompoundTag();
+        context.putString("recipe", "paid_mixed_output");
+        host.productionState().beginLocal(0, context, new BeeProduceProcessor.Generated(
+                List.of(new ItemStack(Items.IRON_INGOT, 3)), FluidStack.EMPTY, 0));
+        var before = host.productionState().save(registries());
+        var assets = new ApiaryOwnershipAssets(host);
+        assertFalse(assets.prepared());
+        assertFalse(assets.empty());
+        assertThrows(IllegalStateException.class, () -> assets.capture(registries()));
+        assertEquals(before, host.productionState().save(registries()));
+    }
+
+    @Test
     void unreadableCommittedCentrifugeOutputCannotBeClearedByTakeover() {
         var host = centrifuge();
         var assets = host.ownershipAssets();

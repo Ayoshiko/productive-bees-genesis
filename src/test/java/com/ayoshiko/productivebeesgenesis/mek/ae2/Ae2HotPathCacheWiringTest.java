@@ -51,7 +51,7 @@ class Ae2HotPathCacheWiringTest {
 		assertFalse(committer.contains("Ae2ItemFingerprint.encode(key, registries)"),
 				"collectSlot 不得再直接编码（每个非空输出槽每刻一次）");
 
-		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputExecution.java");
 		assertTrue(puller.contains("fingerprintCache.get(key, level.registryAccess())"),
 				"抽取前的 pending 条目位检查必须复用缓存指纹");
 		assertTrue(puller.contains("buffers.fingerprintCache"),
@@ -118,7 +118,7 @@ class Ae2HotPathCacheWiringTest {
 	@Test
 	@DisplayName("输入槽容量查询复现 BasicInventorySlot 语义并保留自定义槽回退")
 	void inputCapacityProbeOwnsItemMatching() throws Exception {
-		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputExecution.java");
 		int methodStart = source.indexOf("private static long getSlotRemainingCapacity(");
 		int methodEnd = source.indexOf("\n\t/**", methodStart);
 		String method = source.substring(methodStart, methodEnd);
@@ -154,7 +154,7 @@ class Ae2HotPathCacheWiringTest {
 	@Test
 	@DisplayName("公平轮容量规划复用有界组件匹配缓存并及时释放栈引用")
 	void componentMatchCacheIsBoundedToPullEntriesAndOnePass() throws Exception {
-		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputExecution.java");
 		assertTrue(source.contains("entry.beginComponentMatchCache(processCount)"),
 				"每次容量规划必须为条目开启当前轮次缓存");
 		assertTrue(source.contains("entry.clearComponentMatchCache()"),
@@ -168,7 +168,7 @@ class Ae2HotPathCacheWiringTest {
 	@Test
 	@DisplayName("候选缓存命中后不重复分类，默认非无限模式不重复遍历过滤槽")
 	void candidateSelectionReusesClassificationAndFilterAdmission() throws Exception {
-		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputCandidatePolicy.java");
 		int methodStart = source.indexOf("Predicate<AEItemKey> acceptableCandidate = key -> {");
 		int methodEnd = source.indexOf("\n\t\t\t};", methodStart);
 		String method = source.substring(methodStart, methodEnd);
@@ -185,7 +185,7 @@ class Ae2HotPathCacheWiringTest {
 	@Test
 	@DisplayName("组件快速路径保留异常物品的完整堆叠语义")
 	void componentFastPathsRequireCanonicalIdentityComponents() throws Exception {
-		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputExecution.java");
 		// 组件类型已提到局部变量并进一步下沉到共享签名提取入口（spark：DeferredHolder.get 曾占 1.47%），
 		// 但"双方都必须显式携带 bee_type 才能绕过完整组件比较"这一堆叠语义约束不变：
 		// 车道侧与条目侧都只在「补丁数 1 + 可配置蜜脾 + 显式 has(bee_type)」时才产出非空签名。
@@ -238,7 +238,7 @@ class Ae2HotPathCacheWiringTest {
 				"多槽宿主必须只在推送轮开始获取槽位列表");
 		assertTrue(source.contains("outputTank(host, tankSnapshot, i)"),
 				"统计、匹配和扣减阶段必须复用同一槽位列表");
-		assertTrue(source.contains("shrinkStackSafely(host, tankSnapshot, fluidKey, inserted, tankCount)"),
+		assertTrue(source.contains("settleFluidSource(host, tankSnapshot, fluidKey, inserted, tankCount, custody)"),
 				"实际扣减不得退回到重复构建槽位列表的查询路径");
 	}
 
@@ -347,10 +347,6 @@ class Ae2HotPathCacheWiringTest {
 	void liveProbeIsSkippedWhenTheReportedStockAlreadyCoversTheCap() throws Exception {
 		String view = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
 				+ "Ae2NetworkInventoryView.java");
-		// 保留校验探针：上报量 ≥ cap 时结论恒为 cap，探测只是白花一次 NetworkStorage.extract
-		assertTrue(view.contains(
-				"if (cachedInventory != null && Math.max(0L, cachedInventory.get(key)) >= cap) return cap;"),
-				"保留下限探针必须在报量足够时短路");
 		// 可见量探针：min(max(上报, 实时), cap) 在上报 ≥ cap 时同样是 cap
 		assertTrue(view.contains("if (reported >= cap) return cap;"),
 				"可见量探针必须在上报量覆盖上限时短路");
@@ -360,12 +356,6 @@ class Ae2HotPathCacheWiringTest {
 		assertTrue(fastPath > 0 && probeCall > fastPath,
 				"上报量短路必须位于 liveExtractableAmount 之前");
 
-		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
-		assertTrue(puller.contains("Ae2NetworkInventoryView.reserveProbeAmount(holder, gameTick,\n"
-				+ "\t\t\t\t\t\tcachedInventory, meStorage, key, queryCap, actionSource)"),
-				"拉取路径必须把 AE2 库存快照传给探针，否则报量短路永远不生效");
-		assertTrue(puller.contains("entry.reserveFloor, availableStacks, meStorage,"),
-				"批处理必须携带同一份库存快照，同刻不得重新获取");
 	}
 
 	@Test
@@ -397,7 +387,9 @@ class Ae2HotPathCacheWiringTest {
 				"带方向的外部访问必须在返回列表前刷新失效快照");
 		assertTrue(view.contains("private final AtomicLong invalidationVersion"),
 				"活跃槽失效必须使用代数计数，避免并发刷新丢失通知");
-		assertTrue(holder.contains("BasicFluidTank.output(tankCapacity, this::onTankContentsChanged)"),
+		assertTrue(holder.contains("BasicFluidTank.create(tankCapacity,")
+				&& holder.contains("stack -> true, this::onTankContentsChanged)")
+				&& holder.contains("externalTankView.invalidate();"),
 				"槽内容变化必须使活跃槽快照失效");
 		assertTrue(view.contains("refreshed.add(source.get(0));"),
 				"空仓必须保留一个哨兵槽，避免 capability 缓存为空");
@@ -461,35 +453,17 @@ class Ae2HotPathCacheWiringTest {
 	}
 
 	@Test
-	@DisplayName("保留下限的实时探测按 (key, game tick) 记忆，且提交抽取后同步扣减")
-	void reserveProbeIsMemoizedPerGameTick() throws Exception {
-		String view = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/"
-				+ "Ae2NetworkInventoryView.java");
-		assertTrue(view.contains("static long reserveProbeAmount("),
-				"必须提供按刻记忆化的保留探测入口");
-		assertTrue(view.contains("reserveAmounts") && view.contains("reserveCaps"),
-				"必须同时记录探测结果与当时使用的上限，才能判断结果是否被截断");
-		assertTrue(view.contains("if (cachedCap >= cap || cached < cachedCap)"),
-				"只有「上限不小于本次」或「未被截断」时才可复用，否则必须重新探测");
-		assertTrue(view.contains("long reserved = cache.reserveAmounts.getLong(key);"),
-				"recordExtract 必须扣减保留视图，漏扣会让同刻后续抽取越过保留线");
-
-		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
-		assertTrue(puller.contains("Ae2NetworkInventoryView.reserveProbeAmount(holder, gameTick,"),
-				"保留校验必须走记忆化入口；直接 liveExtractableAmount 会在时间加速下每刻重复穿透全部存储元件");
-	}
-
-	@Test
 	@DisplayName("候选分类结果随条目传递，排序阶段不再重跑分类")
 	void classificationIsCarriedByPullEntry() throws Exception {
-		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputCandidatePolicy.java");
 		assertTrue(puller.contains("Ae2CursorScan.collectPrioritizedRotating(selectedKeys, seenKeys,"),
 				"扫描候选必须保留熔炼优先，并在窗口剩余时才加入蜜脾");
 		assertTrue(puller.contains("entry.smelting = index < smeltingSelected;"),
 				"分类结果应随候选传递，执行排序必须保持熔炼优先");
 		assertTrue(puller.contains("if (keyBackoff.shouldSkip(key, nanoNow)) return false;"),
 				"正在退避的熔炼键不得占满有界候选窗口并挡住蜜脾回退");
-		assertTrue(puller.contains("if (a.smelting != b.smelting)"));
+		assertTrue(read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputExecution.java")
+				.contains("if (a.smelting != b.smelting)"));
 		assertTrue(puller.contains("holder.setInputCombCandidateCursor(key)"));
 		assertTrue(puller.contains("holder.setInputSmeltingCandidateCursor(key)"));
 	}
@@ -507,7 +481,7 @@ class Ae2HotPathCacheWiringTest {
 		assertTrue(buffers.contains("final Set<AEItemKey> scanSeenKeys = new HashSet<>()"),
 				"去重集合必须跨 tick 复用，避免每次拉取分配");
 
-		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
+		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputCandidatePolicy.java");
 		assertTrue(puller.contains("Set<AEItemKey> seenKeys = buffers.borrowScanSeenKeys();"),
 				"拉取必须借用复用集合");
 		assertTrue(puller.contains("seenKeys.clear();"),

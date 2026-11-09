@@ -6,6 +6,8 @@ import net.minecraft.nbt.Tag;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
 	 * AE2 输出的确认式结算账本。
@@ -23,10 +25,11 @@ public final class Ae2OutputLedger {
 	private static final String KEY_REMAINING = "remaining";
 
 	private final List<Settlement> entries = new ArrayList<>();
+	private Tag invalid;
 
 	/** 预留一个源槽结算记录，防止账本容量不足时先向 ME 提交。 */
 	public boolean reserve(int process, int slot, String fingerprint, int originalCount) {
-		if (process < 0 || slot < 0 || fingerprint == null || fingerprint.isBlank()
+		if (invalid != null || process < 0 || slot < 0 || slot > 2 || fingerprint == null || fingerprint.isBlank()
 				|| originalCount <= 0 || entries.size() >= MAX_ENTRIES || hasSlot(process, slot)) {
 			return false;
 		}
@@ -62,7 +65,7 @@ public final class Ae2OutputLedger {
 	}
 
 	public boolean hasSlot(int process, int slot) {
-		return find(process, slot) != null;
+		return invalid != null || find(process, slot) != null;
 	}
 
 	public List<Settlement> snapshot() {
@@ -74,6 +77,10 @@ public final class Ae2OutputLedger {
 	public int size() { return entries.size(); }
 
 	public void save(CompoundTag parent) {
+		if (invalid != null) {
+			parent.put(Ae2NbtKeys.NBT_KEY_AE_OUTPUT_LEDGER, invalid.copy());
+			return;
+		}
 		if (entries.isEmpty()) {
 			parent.remove(Ae2NbtKeys.NBT_KEY_AE_OUTPUT_LEDGER);
 			return;
@@ -93,23 +100,59 @@ public final class Ae2OutputLedger {
 	}
 
 	public void load(CompoundTag parent) {
+		Tag raw = parent.get(Ae2NbtKeys.NBT_KEY_AE_OUTPUT_LEDGER);
 		clear();
-		if (!parent.contains(Ae2NbtKeys.NBT_KEY_AE_OUTPUT_LEDGER, Tag.TAG_LIST)) return;
-		ListTag list = parent.getList(Ae2NbtKeys.NBT_KEY_AE_OUTPUT_LEDGER, Tag.TAG_COMPOUND);
-		for (int i = 0; i < list.size() && entries.size() < MAX_ENTRIES; i++) {
-			CompoundTag tag = list.getCompound(i);
+		if (raw == null) return;
+		if (!(raw instanceof ListTag list) || list.size() > MAX_ENTRIES
+				|| !list.isEmpty() && list.getElementType() != Tag.TAG_COMPOUND) {
+			invalid = raw.copy();
+			return;
+		}
+		List<Settlement> loaded = new ArrayList<>(list.size());
+		Set<Long> slots = new HashSet<>();
+		for (Tag element : list) {
+			CompoundTag tag = (CompoundTag) element;
+			if (!Set.of(KEY_PROCESS, KEY_SLOT, KEY_FINGERPRINT, KEY_ORIGINAL_COUNT, KEY_REMAINING)
+					.equals(tag.getAllKeys())
+					|| !tag.contains(KEY_PROCESS, Tag.TAG_INT) || !tag.contains(KEY_SLOT, Tag.TAG_INT)
+					|| !tag.contains(KEY_FINGERPRINT, Tag.TAG_STRING)
+					|| !tag.contains(KEY_ORIGINAL_COUNT, Tag.TAG_INT)
+					|| !tag.contains(KEY_REMAINING, Tag.TAG_INT)) {
+				invalid = raw.copy();
+				return;
+			}
 			int process = tag.getInt(KEY_PROCESS);
 			int slot = tag.getInt(KEY_SLOT);
 			String fingerprint = tag.getString(KEY_FINGERPRINT);
-			int original = Math.max(0, tag.getInt(KEY_ORIGINAL_COUNT));
-			int remaining = Math.min(original, Math.max(0, tag.getInt(KEY_REMAINING)));
-			if (process < 0 || slot < 0 || fingerprint.isBlank() || original <= 0
-					|| remaining <= 0 || hasSlot(process, slot)) continue;
-			entries.add(new Settlement(process, slot, fingerprint, original, remaining));
+			int original = tag.getInt(KEY_ORIGINAL_COUNT);
+			int remaining = tag.getInt(KEY_REMAINING);
+			long slotKey = ((long) process << 32) | (slot & 0xFFFFFFFFL);
+			if (process < 0 || slot < 0 || slot > 2 || fingerprint.isBlank() || original <= 0
+					|| remaining <= 0 || remaining > original || !slots.add(slotKey)) {
+				invalid = raw.copy();
+				return;
+			}
+			loaded.add(new Settlement(process, slot, fingerprint, original, remaining));
 		}
+		entries.addAll(loaded);
 	}
 
-	public void clear() { entries.clear(); }
+	public boolean hasInvalidData() {
+		return invalid != null;
+	}
+
+	public boolean retryDecode() {
+		if (invalid == null) return true;
+		CompoundTag parent = new CompoundTag();
+		parent.put(Ae2NbtKeys.NBT_KEY_AE_OUTPUT_LEDGER, invalid.copy());
+		load(parent);
+		return invalid == null;
+	}
+
+	public void clear() {
+		entries.clear();
+		invalid = null;
+	}
 
 	private Settlement find(int process, int slot) {
 		for (Settlement entry : entries) {

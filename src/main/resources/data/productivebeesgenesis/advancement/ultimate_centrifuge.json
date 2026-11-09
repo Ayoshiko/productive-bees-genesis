@@ -1,7 +1,7 @@
 {
   "parent": "productivebeesgenesis:process_item",
   "display": {
-    "icon": { "item": "productivebeesgenesis:ultimate_mek_centrifuge_factory" },
+    "icon": { "id": "productivebeesgenesis:ultimate_mek_centrifuge_factory" },
     "title": { "translate": "advancement.productivebeesgenesis.ultimate_centrifuge" },
     "description": { "translate": "advancement.productivebeesgenesis.ultimate_centrifuge.desc" },
     "frame": "challenge",

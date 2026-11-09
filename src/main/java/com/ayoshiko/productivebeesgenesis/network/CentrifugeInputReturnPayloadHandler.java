@@ -4,7 +4,6 @@ import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import mekanism.api.inventory.IInventorySlot;
-import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -20,14 +19,8 @@ final class CentrifugeInputReturnPayloadHandler {
 	}
 
 	static void handle(ReturnCentrifugeInputPayload payload, IPayloadContext context) {
-		if (!(context.player() instanceof ServerPlayer player) || player.level() == null) return;
-		if (!(player.containerMenu instanceof MekanismTileContainer<?> tileContainer)
-				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) return;
-		if (player.distanceToSqr(payload.pos().getCenter())
-				> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) {
-			LogThrottle.warn("centrifuge_input_return_distance",
-					"玩家 {} 尝试远距离返还离心机输入物品：距离 {} 格",
-					player.getName().getString(), Math.sqrt(player.distanceToSqr(payload.pos().getCenter())));
+		if (!(context.player() instanceof ServerPlayer player)
+				|| !MachineMenuAccess.canAccess(player, payload.pos())) {
 			return;
 		}
 		if (!PayloadRateLimiter.tryAccept(player,
@@ -63,8 +56,8 @@ final class CentrifugeInputReturnPayloadHandler {
 			return Ae2Access.transfer(blockEntity, inputSlots);
 		} catch (LinkageError | RuntimeException e) {
 			LogThrottle.warn("centrifuge_input_return_ae2_linkage",
-					"离心机输入返还无法使用 AE2，降级到 Mekanism 输出面: {}", e.toString());
-			return CentrifugeAeReturnResult.offline();
+					"离心机 AE2 输入返还异常，保留请求且停止本次返还: {}", e.toString());
+			return CentrifugeAeReturnResult.online(0, 0);
 		}
 	}
 

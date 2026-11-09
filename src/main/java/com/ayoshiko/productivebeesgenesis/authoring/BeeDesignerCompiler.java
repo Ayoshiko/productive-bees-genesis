@@ -23,6 +23,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.conditions.ICondition;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -47,7 +48,7 @@ public final class BeeDesignerCompiler {
 
 	static void validate(JsonObject document, MinecraftServer server, Set<ResourceLocation> batchBees) {
 		HolderLookup.Provider registries = server.registryAccess();
-		validateStructure(document);
+		validateImportedStructure(document);
 		ResourceLocation bee = ResourceLocation.parse(string(document, "id"));
 		boolean nativeBee = BeeDesignerNativeBees.contains(bee);
 		if (nativeBee || BeeDesignerNativeBees.recipesOnly(document)) {
@@ -207,6 +208,11 @@ public final class BeeDesignerCompiler {
 				throw new IllegalArgumentException("Invalid display name");
 			}
 		}
+	}
+
+	static void validateImportedStructure(JsonObject document) {
+		validateStructure(document);
+		BeeDesignerFieldTypes.validateDefinition(document.getAsJsonObject("definition"));
 	}
 
 	static void validateStructure(JsonObject document) {
@@ -394,6 +400,7 @@ public final class BeeDesignerCompiler {
 		languages.add("en_us", new JsonObject());
 		JsonObject index = new JsonObject();
 		Map<String, String> names = new LinkedHashMap<>();
+		Map<String, Set<String>> disabledRecipes = new LinkedHashMap<>();
         Map<String, JsonObject> sharedRecipes = new LinkedHashMap<>();
         Set<String> retired = BeeDesignerLifecycle.retiredIds(documents);
 		for (var entry : documents.entrySet()) {
@@ -424,8 +431,7 @@ public final class BeeDesignerCompiler {
                 JsonObject source = recipe.getValue().getAsJsonObject();
                 JsonObject previous = sharedRecipes.putIfAbsent(recipe.getKey(), source);
                 if (previous != null) {
-                    if (!previous.equals(source) || !(BeeDesignerDocument.text(source, "type", "").equals("productivebees:bee_spawning")
-                            || BeeDesignerWorldConversions.supports(BeeDesignerDocument.text(source, "type", "")))
+                    if (!previous.equals(source) || !BeeDesignerLifecycle.recipeOwners(source).contains(bee.toString())
                             || !BeeDesignerReader.belongs(source, bee.toString())) {
                         throw new IllegalArgumentException("designer.error.shared_recipe_conflict|" + recipe.getKey());
                     }
@@ -442,9 +448,7 @@ public final class BeeDesignerCompiler {
 			if (document.has("disabled_recipes")) {
 				for (JsonElement value : document.getAsJsonArray("disabled_recipes")) {
 					if (!document.getAsJsonObject("recipes").has(value.getAsString())) {
-						ResourceLocation id = ResourceLocation.parse(value.getAsString());
-						putFile(files, "data/" + id.getNamespace() + "/recipe/" + id.getPath() + ".json",
-								"{\"type\":\"minecraft:crafting_shapeless\",\"neoforge:conditions\":[{\"type\":\"neoforge:false\"}]}");
+						disabledRecipes.computeIfAbsent(value.getAsString(), unused -> new HashSet<>()).add(bee.toString());
 					}
 				}
 			}
@@ -453,6 +457,19 @@ public final class BeeDesignerCompiler {
 						name.getValue().getAsString());
 			}
 			index.add(entry.getKey(), document);
+		}
+		for (var disabled : disabledRecipes.entrySet()) {
+			String recipe = disabled.getKey();
+			JsonObject retained = sharedRecipes.get(recipe);
+			if (retained != null) {
+				if (disabled.getValue().stream().anyMatch(owner -> BeeDesignerReader.belongs(retained, owner))) {
+					throw new IllegalArgumentException("designer.error.shared_recipe_conflict|" + recipe);
+				}
+				continue;
+			}
+			ResourceLocation id = ResourceLocation.parse(recipe);
+			putFile(files, "data/" + id.getNamespace() + "/recipe/" + id.getPath() + ".json",
+					"{\"type\":\"minecraft:crafting_shapeless\",\"neoforge:conditions\":[{\"type\":\"neoforge:false\"}]}");
 		}
 		for (var language : languages.entrySet()) {
 			files.put("assets/productivebees/lang/" + language.getKey() + ".json", language.getValue().toString());

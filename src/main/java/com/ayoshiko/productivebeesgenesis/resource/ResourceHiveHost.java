@@ -19,6 +19,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.attachment.AttachmentType;
+import net.neoforged.neoforge.attachment.IAttachmentHolder;
+import net.neoforged.neoforge.attachment.IAttachmentSerializer;
 import net.neoforged.neoforge.common.util.INBTSerializable;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -32,7 +34,20 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 	/** 每资源身份的基础额度；具体单位由资源种类决定，机械等级使用输出槽倍率。 */
 	public static final long DEFAULT_CAPACITY = 1_000_000;
 	/** 常驻附件类型，不依赖 AE2 或任何化学品桥接。 */
-	public static final AttachmentType<ResourceHiveHost> TYPE = AttachmentType.serializable(ResourceHiveHost::new).build();
+	public static final AttachmentType<ResourceHiveHost> TYPE = AttachmentType.builder(ResourceHiveHost::new)
+			.serialize(new IAttachmentSerializer<Tag, ResourceHiveHost>() {
+				@Override
+				public ResourceHiveHost read(IAttachmentHolder holder, Tag tag, HolderLookup.Provider provider) {
+					var state = new ResourceHiveHost();
+					state.readAttachment(provider, tag);
+					return state;
+				}
+
+				@Override
+				public Tag write(ResourceHiveHost state, HolderLookup.Provider provider) {
+					return state.preservedInvalid == null ? state.serializeNBT(provider) : state.preservedInvalid.copy();
+				}
+			}).build();
 	private ResourceAccount.Reference reference;
 	private ResourceAccount.Binding accountBinding;
 	private BlockEntityType<?> bindingType;
@@ -40,7 +55,7 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 	private long outputPosition;
 	private long capacity = DEFAULT_CAPACITY;
 	private boolean mechanicalCapacityResolved;
-	private CompoundTag preservedInvalid;
+	private Tag preservedInvalid;
 	private String status = "";
 	private boolean meOutputEnabled = true;
 	private UUID emcRecipient;
@@ -449,7 +464,7 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 				|| level.getBlockEntity(host.getBlockPos()) != host) return false;
 		var account = ResourceRuntime.accounts(level.getServer()).accounts().find(state.reference.sourceId());
 		return account != null && account.reference().equals(state.reference)
-				&& java.util.Objects.equals(account.binding(), binding(host)) && account.canExtract(state.reference);
+				&& java.util.Objects.equals(account.binding(), binding(host)) && account.canRelocate(state.reference);
 	}
 
 	/** 只准备引用；升级失败、尚未替换方块时不解绑原账户。 */
@@ -458,7 +473,7 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 		if (state == null) return null;
 		if (state.preservedInvalid != null) throw new IllegalStateException("Invalid resource host data");
 		if (state.reference == null) return new Upgrade(host, state);
-		if (!state.account(host).canExtract(state.reference)) {
+		if (!state.account(host).canRelocate(state.reference)) {
 			throw new IllegalStateException("Resolve unfinished resource requests before upgrading");
 		}
 		state.upgradePrepared = true;
@@ -592,7 +607,8 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 
 	@Override
 	public CompoundTag serializeNBT(HolderLookup.Provider provider) {
-		if (preservedInvalid != null) return preservedInvalid.copy();
+		if (preservedInvalid instanceof CompoundTag invalid) return invalid.copy();
+		if (preservedInvalid != null) throw new IllegalStateException("Invalid resource host root requires attachment serialization");
 		if (outputAccess != null) meNodeData = outputAccess.savedMeNode();
 		var tag = new CompoundTag();
 		tag.putInt("version", 1);
@@ -615,6 +631,16 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 			tag.put("unresolved_references", list);
 		}
 		return tag;
+	}
+
+	public void readAttachment(HolderLookup.Provider provider, Tag raw) {
+		if (raw instanceof CompoundTag tag) {
+			deserializeNBT(provider, tag);
+			return;
+		}
+		deserializeNBT(provider, new CompoundTag());
+		preservedInvalid = raw.copy();
+		status = "invalid_host_data";
 	}
 
 	@Override

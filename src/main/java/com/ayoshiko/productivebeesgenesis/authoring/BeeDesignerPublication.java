@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.authoring;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
@@ -16,6 +17,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -38,6 +40,8 @@ final class BeeDesignerPublication {
 	private String phase = "recovering";
 	private String operation = "";
 	private String message = "";
+	private BeeDesignerOperation current;
+	private int queryReads;
 
 	BeeDesignerPublication(MinecraftServer server) {
 		this.server = server;
@@ -58,7 +62,7 @@ final class BeeDesignerPublication {
 				return;
 			}
 			phase = BeeDesignerDocument.text(journal, "phase", "uncertain");
-			operation = BeeDesignerDocument.text(journal, "revision", "");
+			operation = BeeDesignerDocument.text(journal, "token", BeeDesignerDocument.text(journal, "revision", ""));
 			message = BeeDesignerDocument.text(journal, "message", "");
 			uncertain = !List.of("idle", "committed", "rejected").contains(phase);
 		}));
@@ -82,31 +86,103 @@ final class BeeDesignerPublication {
 		return data;
 	}
 
-	void start(JsonObject document, Map<String, String> files, boolean export, BooleanSupplier authorized,
+	void query(UUID token, UUID owner, String requestDigest, BooleanSupplier authorized,
+			Consumer<JsonObject> found, Consumer<String> failed) {
+		if (stopped || queryReads >= 4) {
+			throw new IllegalStateException("designer.error.busy");
+		}
+		if (current != null && current.token().equals(token)) {
+			if (!current.owner().equals(owner) || !requestDigest.isEmpty() && !requestDigest.equals(current.requestDigest())) {
+				throw new IllegalArgumentException("designer.error.collection_changed");
+			}
+			JsonObject data = current.json();
+			data.addProperty("revision", BeeDesignerStore.PREFIX + token + ".zip");
+			data.addProperty("phase", phase);
+			data.addProperty("message", message);
+			if (authorized.getAsBoolean()) {
+				found.accept(data);
+			}
+			return;
+		}
+		queryReads++;
+		CompletableFuture.supplyAsync(() -> {
+			try {
+				return BeeDesignerStore.operation(world, token, owner, requestDigest);
+			} catch (IOException exception) {
+				throw new UncheckedIOException(exception);
+			}
+		}, io).whenComplete((record, failure) -> onServer(() -> {
+			queryReads--;
+			if (!authorized.getAsBoolean()) {
+				return;
+			}
+			if (current != null && current.token().equals(token)) {
+				query(token, owner, requestDigest, authorized, found, failed);
+			} else if (failure != null) {
+				failed.accept(BeeDesignerServer.safeMessage(failure));
+			} else {
+				found.accept(record);
+			}
+		}));
+	}
+
+	void document(UUID token, UUID owner, String requestDigest, String id, int offset, BooleanSupplier authorized,
+			Consumer<JsonObject> found, Consumer<String> failed) {
+		if (stopped || queryReads >= 4) {
+			throw new IllegalStateException("designer.error.busy");
+		}
+		queryReads++;
+		CompletableFuture.supplyAsync(() -> {
+			try {
+				JsonObject record = BeeDesignerStore.operation(world, token, owner, requestDigest);
+				if (record == null) {
+					return null;
+				}
+				return BeeDesignerStore.operationDocument(world, record, id, offset);
+			} catch (IOException exception) {
+				throw new UncheckedIOException(exception);
+			}
+		}, io).whenComplete((document, failure) -> onServer(() -> {
+			queryReads--;
+			if (!authorized.getAsBoolean()) {
+				return;
+			}
+			if (failure != null) {
+				failed.accept(BeeDesignerServer.safeMessage(failure));
+			} else {
+				found.accept(document);
+			}
+		}));
+	}
+
+	void start(JsonObject document, Map<String, String> files, boolean export, BeeDesignerOperation identity, BooleanSupplier authorized,
 			BooleanSupplier unchanged, Consumer<Path> exported, Consumer<JsonObject> applied, Consumer<String> failed) {
 		if (blocked()) {
 			throw new IllegalStateException("designer.error.busy");
 		}
 		busy = true;
 		phase = "writing";
-		operation = UUID.randomUUID().toString();
+		current = identity;
+		operation = identity == null ? UUID.randomUUID().toString() : identity.token().toString();
 		message = "";
-		JsonObject snapshot = document.deepCopy();
 		Map<String, String> closedFiles = Map.copyOf(files);
 		Map<String, String> projects = JsonParser.parseString(files.get("data/productivebeesgenesis/bee_designer/index.json"))
 				.getAsJsonObject().entrySet().stream().collect(java.util.stream.Collectors.toUnmodifiableMap(Map.Entry::getKey, entry -> entry.getValue().toString()));
+		JsonObject snapshot = JsonParser.parseString(projects.get(document.get("id").getAsString())).getAsJsonObject();
 		CompletableFuture.supplyAsync(() -> {
 			try {
-				return BeeDesignerStore.write(world, closedFiles, export);
+				return BeeDesignerStore.write(world, closedFiles, export, identity);
 			} catch (IOException exception) {
 				throw new UncheckedIOException(exception);
 			}
 		}, io).whenComplete((revision, failure) -> onServer(() -> {
 			if (failure != null) {
-				finishFailure(failure, false, failed);
+				finishFailure(failure, identity != null, failed);
 				return;
 			}
-			operation = revision.source().getFileName().toString();
+			if (identity == null) {
+				operation = revision.source().getFileName().toString();
+			}
 			if (!authorized.getAsBoolean() || !unchanged.getAsBoolean()) {
 				reject(revision, false, new IllegalStateException("designer.error.conflict_or_permission"), failed);
 				return;
@@ -130,13 +206,13 @@ final class BeeDesignerPublication {
 				} else if (!authorized.getAsBoolean() || !unchanged.getAsBoolean()) {
 					reject(revision, false, new IllegalStateException("designer.error.conflict_or_permission"), failed);
 				} else {
-					reload(revision, snapshot, projects, applied, failed);
+					reload(revision, snapshot, projects, authorized, applied, failed);
 				}
 			}));
 		}));
 	}
 
-	private void reload(BeeDesignerStore.Revision revision, JsonObject document, Map<String, String> projects, Consumer<JsonObject> applied,
+	private void reload(BeeDesignerStore.Revision revision, JsonObject document, Map<String, String> projects, BooleanSupplier authorized, Consumer<JsonObject> applied,
 			Consumer<String> failed) {
 		List<String> previous = server.getPackRepository().getSelectedIds().stream().toList();
 		List<String> selected = new ArrayList<>(previous.stream().filter(id -> !BeeDesignerStore.managedPack(id)).toList());
@@ -159,6 +235,9 @@ final class BeeDesignerPublication {
 						return;
 					}
 					try {
+						if (!authorized.getAsBoolean()) {
+							throw new IllegalStateException("designer.error.conflict_or_permission");
+						}
 						verifyAll(projects, revision.packId());
 					} catch (RuntimeException exception) {
 						reject(revision, true, exception, failed);
@@ -212,21 +291,23 @@ final class BeeDesignerPublication {
 				finishFailure(exception, true, failed);
 				return;
 			}
-			CompletableFuture.runAsync(() -> {
+			CompletableFuture.supplyAsync(() -> {
 				try {
 					BeeDesignerStore.reconcile(world, audit);
+					return BeeDesignerStore.inspect(world);
 				} catch (IOException exception) {
 					throw new UncheckedIOException(exception);
 				}
-			}, io).whenComplete((unused, writeFailure) -> onServer(() -> {
+			}, io).whenComplete((journal, writeFailure) -> onServer(() -> {
 				if (writeFailure != null) {
 					finishFailure(writeFailure, true, failed);
 					return;
 				}
 				busy = false;
 				uncertain = false;
-				phase = audit.active() == null ? "rejected" : "committed";
-				operation = audit.active() == null ? operation : audit.active().source().getFileName().toString();
+				phase = BeeDesignerDocument.text(journal, "phase", "unknown");
+				operation = BeeDesignerDocument.text(journal, "token", BeeDesignerDocument.text(journal, "revision", ""));
+				current = null;
 				message = "designer.status.reconciled";
 				finished.accept(status());
 			}));
@@ -234,6 +315,9 @@ final class BeeDesignerPublication {
 	}
 
 	private void verifyAll(Map<String, String> projects, String packId) {
+		if (!CentrifugeRecipeIndex.isCurrent(server.getRecipeManager())) {
+			throw new IllegalStateException("Recipe manager has not been accepted by the production indexes");
+		}
 		if (!projects.keySet().equals(BeeDesignerSources.managed.keySet())) {
 			throw new IllegalStateException("Managed source index differs from the selected revision");
 		}
@@ -251,16 +335,17 @@ final class BeeDesignerPublication {
 		if (index.isEmpty() || !index.get().sourcePackId().equals(packId)) {
 			throw new IllegalStateException("Managed source index is overridden by another pack");
 		}
+		Set<String> retired = BeeDesignerLifecycle.retiredIds(projects);
 		for (var entry : projects.entrySet()) {
 			JsonObject document = JsonParser.parseString(entry.getValue()).getAsJsonObject();
 			if (!document.equals(JsonParser.parseString(BeeDesignerSources.managed.get(entry.getKey())))) {
 				throw new IllegalStateException("Managed project source differs from the selected revision: " + entry.getKey());
 			}
-			verify(document, packId);
+			verify(document, packId, retired);
 		}
 	}
 
-	private void verify(JsonObject document, String packId) {
+	private void verify(JsonObject document, String packId, Set<String> retired) {
 		String id = document.get("id").getAsString();
 		ResourceLocation path = ResourceLocation.parse(document.get("definition_path").getAsString());
 		String raw = BeeDesignerSources.definitions.get(path);
@@ -278,8 +363,7 @@ final class BeeDesignerPublication {
 		for (String recipe : document.getAsJsonObject("recipes").keySet()) {
 			ResourceLocation key = ResourceLocation.parse(recipe);
 			var resource = server.getResourceManager().getResource(key.withPath("recipe/" + key.getPath() + ".json"));
-            JsonObject source = BeeDesignerLifecycle.activeRecipe(document, document.getAsJsonObject("recipes").getAsJsonObject(recipe),
-                    BeeDesignerLifecycle.retiredIds(BeeDesignerSources.managed));
+			JsonObject source = BeeDesignerLifecycle.activeRecipe(document, document.getAsJsonObject("recipes").getAsJsonObject(recipe), retired);
 			if (source == null) {
 				if (server.getRecipeManager().byKey(key).isPresent() || resource.isEmpty() || !resource.get().sourcePackId().equals(packId)) {
 					throw new IllegalStateException("Deleted bee acquisition recipe is still active: " + recipe);

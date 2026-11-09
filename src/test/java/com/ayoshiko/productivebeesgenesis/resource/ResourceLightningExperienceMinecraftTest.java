@@ -34,6 +34,7 @@ class ResourceLightningExperienceMinecraftTest {
 	}
 	private static ResourceScalarOutput view(ResourceAccount account, ResourceKey key) {
 		var port = mock(ResourceOutputAccess.class);
+		when(port.outputAllowed(any())).thenReturn(true);
 		when(port.account()).thenReturn(account);
 		when(port.reference()).thenReturn(account.reference());
 		when(port.capacity()).thenReturn(Long.MAX_VALUE);

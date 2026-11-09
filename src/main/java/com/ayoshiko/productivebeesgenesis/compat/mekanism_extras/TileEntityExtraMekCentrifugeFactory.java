@@ -65,6 +65,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
@@ -347,8 +348,9 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	@Override
 	public void setConfigurationData(@NotNull HolderLookup.Provider provider,
 			@Nullable net.minecraft.world.entity.player.Player player, @NotNull CompoundTag data) {
-		super.setConfigurationData(provider, player, data);
-		CentrifugeFactoryCommonLogic.setConfigurationData(data, player, pbUpgradeDelegate);
+		if (pbUpgradeDelegate.applyConfiguration(data, player)) {
+			super.setConfigurationData(provider, player, data);
+		}
 	}
 @NotNull @Override public IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
 		SingleItem<ItemStackToItemStackRecipe>> getRecipeType() { return TileEntityExtraFactoryDelegates.getRecipeType(); }
@@ -436,6 +438,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 		}
 		productivebeesgenesis$injectAe2Energy(batchMultiplier);
 		TileEntityExtraFactoryAccessor accessor = (TileEntityExtraFactoryAccessor) this;
+		pbProcessor.reconcileInputWork();
 		long energyBeforeSuper = energyContainer.getEnergy();
 		boolean sendUpdatePacket = batchMultiplier > 1
 				? productivebeesgenesis$runSmeltingBatch(batchMultiplier)
@@ -546,13 +549,17 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	@org.jetbrains.annotations.Nullable
 	@Override
 	public CentrifugeUpgradeData getUpgradeData(HolderLookup.Provider provider) {
-		if (!com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.canUpgrade(this)) return null;
+		if (!productivebeesgenesis$canUpgradeProduction()
+				|| !com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.canUpgrade(this)) return null;
 		var resourceUpgrade = com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.prepareUpgrade(this);
 		EnergyInventorySlot energySlot = ((TileEntityExtraFactoryAccessor) this).productivebeesgenesis$getEnergySlot();
 		var data = CentrifugeFactoryCommonLogic.getUpgradeData(provider, redstone, getControlType(),
 				getEnergyContainer(), progress, energySlot, inputSlots, outputSlots, isSorting(),
 				getComponents(), pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder(),
 				getOrCreateDelegate().getFluidOutputHolder());
+		data.pbWorkState = new CompoundTag();
+		pbProcessor.saveAdditional(data.pbWorkState, provider);
+		data.unresolvedFluidState = getOrphanedMultiFluidTanksNbt();
 		data.resourceUpgrade = resourceUpgrade;
 		return data;
 	}
@@ -565,7 +572,27 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 				productivebeesgenesis$getAe2StateHolder(), getOrCreateDelegate().getFluidOutputHolder(),
 				inputSlots, outputSlots, energySlot,
 				data -> super.parseUpgradeData(provider, data));
-		if (upgradeData instanceof CentrifugeUpgradeData data && data.resourceUpgrade != null) data.resourceUpgrade.apply(this);
+		if (upgradeData instanceof CentrifugeUpgradeData data) {
+			if (data.pbWorkState != null) pbProcessor.loadAdditional(data.pbWorkState, provider);
+			setOrphanedMultiFluidTanksNbt(data.unresolvedFluidState);
+			if (data.resourceUpgrade != null) data.resourceUpgrade.apply(this);
+		}
+	}
+
+	@Override
+	public boolean productivebeesgenesis$canUpgradeProduction() {
+		return !pbProcessor.hasUnresolvedWork() && !pbUpgradeDelegate.hasUnresolvedData()
+				&& getOrphanedMultiFluidTanksNbt() == null
+				&& !(getOrCreateDelegate().getFluidOutputHolder() instanceof com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder multi
+				&& multi.hasUnresolvedSavedData());
+	}
+
+	@Override
+	public boolean hasUnresolvedInput() {
+		return productivebeesgenesis$getAe2StateHolder().getPendingItemBuffer().isBlocked()
+				|| pbUpgradeDelegate.hasUnresolvedData() || getOrphanedMultiFluidTanksNbt() != null
+				|| getOrCreateDelegate().getFluidOutputHolder() instanceof com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder multi
+				&& multi.hasUnresolvedSavedData();
 	}
 
 	// ===== PbRecipeContext 接口实现 =====
@@ -605,11 +632,11 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	}
 	@Override public boolean areAllFluidTanksFull() { return getOrCreateDelegate().areAllFluidTanksFull(); }
 	@Override public boolean canAllocateNewFluidTank() { return getOrCreateDelegate().canAllocateNewFluidTank(); }
-	@Override public void setOrphanedMultiFluidTanksNbt(@Nullable CompoundTag nbt) {
+	@Override public void setOrphanedMultiFluidTanksNbt(@Nullable Tag nbt) {
 		getOrCreateDelegate().setOrphanedMultiFluidTanksNbt(nbt);
 	}
 	@Override
-	public @Nullable CompoundTag getOrphanedMultiFluidTanksNbt() {
+	public @Nullable Tag getOrphanedMultiFluidTanksNbt() {
 		return getOrCreateDelegate().getOrphanedMultiFluidTanksNbt();
 	}
 	@Override public int processes() { return tier.processes; }

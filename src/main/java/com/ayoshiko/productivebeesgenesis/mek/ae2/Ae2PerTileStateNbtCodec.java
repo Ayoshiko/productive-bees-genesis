@@ -44,10 +44,11 @@ final class Ae2PerTileStateNbtCodec {
 			tag.remove(Ae2NbtKeys.NBT_KEY_AE_INPUT_FILTER);
 		}
 		// 标签过滤表达式独立子标签；无配置时 save 不写任何键，子标签为空则不落盘
-		CompoundTag tagFilterTag = new CompoundTag();
-		holder.getAeTagFilter().save(tagFilterTag);
-		if (!tagFilterTag.isEmpty()) {
-			tag.put(Ae2NbtKeys.NBT_KEY_AE_INPUT_TAG_FILTER, tagFilterTag);
+		Tag tagFilter = holder.getAeTagFilter().saveRaw();
+		if (tagFilter != null) {
+			tag.put(Ae2NbtKeys.NBT_KEY_AE_INPUT_TAG_FILTER, tagFilter);
+		} else {
+			tag.remove(Ae2NbtKeys.NBT_KEY_AE_INPUT_TAG_FILTER);
 		}
 	}
 
@@ -84,7 +85,7 @@ final class Ae2PerTileStateNbtCodec {
 		// 标签过滤：无子标签的旧存档重置为空表达式，保持与 clear() 一致的默认值。
 		// 本类不依赖 AE2，故不受 Issue #8 类加载守卫约束，可无条件加载。
 		if (tag.contains(Ae2NbtKeys.NBT_KEY_AE_INPUT_TAG_FILTER)) {
-			holder.getAeTagFilter().load(tag.getCompound(Ae2NbtKeys.NBT_KEY_AE_INPUT_TAG_FILTER));
+			holder.getAeTagFilter().loadRaw(tag.get(Ae2NbtKeys.NBT_KEY_AE_INPUT_TAG_FILTER));
 		} else {
 			holder.getAeTagFilter().reset();
 		}
@@ -115,11 +116,13 @@ final class Ae2PerTileStateNbtCodec {
 	static void savePendingItems(Ae2OutputStateHolder holder, CompoundTag tag) {
 		holder.getPendingItemBuffer().save(tag);
 		holder.getOutputLedger().save(tag);
+		holder.getEnergyTransfer().save(tag);
 	}
 
 	/** 加载方块实体的 AE2 输入剩余物所有权记录。 */
 	static void loadPendingItems(Ae2OutputStateHolder holder, CompoundTag tag) {
 		holder.getPendingItemBuffer().load(tag);
 		holder.getOutputLedger().load(tag);
+		holder.getEnergyTransfer().load(tag);
 	}
 }

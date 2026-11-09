@@ -28,6 +28,10 @@ final class ApiaryRoutedOutput {
         return tag;
     }
 
+    BeeProduceProcessor.Generated generated() {
+        return generated;
+    }
+
     void commit() {
         var processor = tile.getProduceProcessor();
         if (committed || processor.production.suspended() || processor.production.hasFrozen())

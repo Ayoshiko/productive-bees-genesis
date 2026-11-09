@@ -99,10 +99,10 @@ public class GuiMultiFluidTanksTab<TILE extends IMultiFluidTankHost>
 	 */
 	@Override
 	protected GuiWindow createWindow(SelectedWindowData windowData) {
-		int tankCount = dataSource.getFluidTankCount();
-		int windowWidth = GuiMultiFluidTanksLayoutHelper.calculateWindowWidth(tankCount);
-		// 水平居中:窗口左上角 X = max(0, (guiWidth - windowWidth) / 2)
-		int x = Math.max(0, (getGuiWidth() - windowWidth) / 2);
+		int tankCount = Math.max(0, dataSource.getFluidTankCount() - 1);
+		int availableWidth = GuiMultiFluidTanksLayoutHelper.calculateAvailableWidth(minecraft.getWindow().getGuiScaledWidth());
+		int windowWidth = GuiMultiFluidTanksLayoutHelper.calculateWindowWidth(tankCount, availableWidth);
+		int x = (getGuiWidth() - windowWidth) / 2;
 		return new GuiMultiFluidTanksWindow(gui(), x, 15, dataSource, windowData);
 	}
 

@@ -81,9 +81,15 @@ final class ServerConfigMigrationFiles {
 				moveReplace(entry.getValue(), entry.getKey());
 			}
 			moveWithoutReplace(legacyPath, backupPath);
-		} catch (IOException exception) {
-			if (!Files.exists(backupPath) || Files.exists(legacyPath)) {
-				restoreRollbacks(rollbacks);
+		} catch (IOException | RuntimeException exception) {
+			try {
+				if (!Files.exists(backupPath) || Files.exists(legacyPath)) {
+					restoreRollbacks(rollbacks);
+				}
+			} catch (IOException | RuntimeException recoveryFailure) {
+				exception.addSuppressed(recoveryFailure);
+				// 回滚不完整时保留 marker 与原文件副本，下一次启动必须先完成恢复。
+				throw exception;
 			}
 			cleanup(marker, stages.values(), rollbackPaths(rollbacks));
 			throw exception;

@@ -67,7 +67,7 @@ class ApiaryCustodyMinecraftTest {
         assertEquals(first, copy.getOutputBuffer().save(registries()));
         var upgrade = tile.getUpgradeData(registries());
         var upgraded = tile();
-        assertTrue(upgraded.nbtSerializer().applyUpgradeData(registries(), upgrade));
+        assertEquals(ApiaryNbtSerializer.UpgradeResult.APPLIED, upgraded.nbtSerializer().applyUpgradeData(registries(), upgrade));
         assertEquals(first, upgraded.getOutputBuffer().save(registries()));
     }
 
@@ -437,7 +437,7 @@ class ApiaryCustodyMinecraftTest {
             assertTrue(restored.getOutputBuffer().productionBlocked());
             assertEquals(damaged, restored.getOutputBuffer().save(registries()));
             var upgraded = tile();
-            assertTrue(upgraded.nbtSerializer().applyUpgradeData(registries(), restored.getUpgradeData(registries())));
+            assertEquals(ApiaryNbtSerializer.UpgradeResult.APPLIED, upgraded.nbtSerializer().applyUpgradeData(registries(), restored.getUpgradeData(registries())));
             assertEquals(damaged, upgraded.getOutputBuffer().save(registries()));
             assertEquals(0, upgraded.getOutputBuffer().pushToSink(stack -> fail("isolated data"), null).pushed());
         }
@@ -454,7 +454,7 @@ class ApiaryCustodyMinecraftTest {
         var componentTag = component.serialize(registries()); componentTag.put("output_custody", raw);
         component.deserialize(componentTag, registries());
         var upgraded = tile();
-        assertTrue(upgraded.nbtSerializer().applyUpgradeData(registries(), source.getUpgradeData(registries())));
+        assertEquals(ApiaryNbtSerializer.UpgradeResult.APPLIED, upgraded.nbtSerializer().applyUpgradeData(registries(), source.getUpgradeData(registries())));
         assertTrue(upgraded.getOutputBuffer().productionBlocked());
         assertTrue(OutputCustody.of(upgraded).blocked());
         assertEquals(raw, upgraded.getOutputBuffer().save(registries()).get("invalid_data"));

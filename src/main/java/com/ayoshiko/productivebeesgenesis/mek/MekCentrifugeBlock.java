@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
+import com.ayoshiko.productivebeesgenesis.util.MachineDismantle;
 import com.ayoshiko.productivebeesgenesis.util.WrenchCapabilityHelper;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeState;
@@ -187,11 +188,8 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 		// 服务端：shift+扳手优先拆卸，直接返回 SUCCESS 阻止 omnitools 的 Item.useOn 拦截
 		// 详见 MekApiaryBlock.useItemOn 的根因说明
 		if (player.isShiftKeyDown() && isWrench) {
-			if (tile.getRadiationScale() <= 0) {
-				WorldUtils.dismantleBlock(state, level, pos, tile, player, stack);
-				return ItemInteractionResult.SUCCESS;
-			}
-			return ItemInteractionResult.FAIL;
+			boolean dismantled = MachineDismantle.tryDismantle(state, level, pos, tile, player, stack);
+			return dismantled ? ItemInteractionResult.SUCCESS : ItemInteractionResult.FAIL;
 		}
 		// 非 shift 场景委托 tryWrench 处理旋转
 		return tile.tryWrench(state, player, stack).getInteractionResult();
@@ -236,7 +234,8 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 					}
 				}
 				// 保存数据后清空所有槽位，防止 setRemoved 触发 Ejector 重复 popResource
-				if (updateable instanceof TileEntityMekCentrifuge centrifugeTile) {
+				if (!MachineDismantle.isPreviewing(updateable)
+						&& updateable instanceof TileEntityMekCentrifuge centrifugeTile) {
 					centrifugeTile.markDropsSerialized();
 					centrifugeTile.saveAllItemsForDrop();
 				}
@@ -251,6 +250,13 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 			@Nullable LivingEntity placer, ItemStack stack) {
 		super.setPlacedBy(level, pos, state, placer, stack);
 		if (level.getBlockEntity(pos) instanceof TileEntityUpdateable updateable) {
+			if (!level.isClientSide) {
+				if (updateable instanceof TileEntityMekCentrifuge centrifuge) {
+					centrifuge.productivebeesgenesis$getPbProcessor().bindLegacyInputsFromPlacedItem(stack);
+				} else if (updateable instanceof AbstractMekCentrifugeFactory factory) {
+					factory.productivebeesgenesis$getPbProcessor().bindLegacyInputsFromPlacedItem(stack);
+				}
+			}
 			updateable.onAdded();
 			// 设置安全系统拥有者（参考BlockMekanism.setPlacedBy）
 			if (updateable instanceof ISecurityTile securityTile

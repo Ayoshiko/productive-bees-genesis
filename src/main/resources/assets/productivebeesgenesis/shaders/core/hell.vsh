@@ -2,8 +2,10 @@
 
 // ============================================================================
 // Derived from Re:Avaritia cosmic shader
-// Copyright (c) Nova-Committee (cnlimiter, Asek3, MikhailTapio)
-// Licensed under the MIT License
+// Copyright (c) 2022 cnlimiter
+// Additional credited contributors: Asek3, MikhailTapio (Nova-Committee).
+// Upstream code notice: LICENSES/ReAvaritia-MIT.
+// Shader/assets license scope remains unresolved; see THIRD_PARTY_LICENSES.md.
 // Source: https://github.com/Nova-Committee/Re-Avaritia/tree/neo/1.21.1
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy

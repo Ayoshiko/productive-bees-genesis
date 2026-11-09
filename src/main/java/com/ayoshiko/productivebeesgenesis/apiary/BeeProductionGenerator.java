@@ -104,8 +104,7 @@ final class BeeProductionGenerator {
 		if (aggregatedCount > 0) {
 			for (int productivityLevel = BeeProductivityGene.NORMAL;
 					productivityLevel <= BeeProductivityGene.VERY_HIGH; productivityLevel++) {
-				int sampledProductionCount = SaturatingMath.saturatingToInt(
-						productivityCounts[productivityLevel]);
+				long sampledProductionCount = productivityCounts[productivityLevel];
 				if (sampledProductionCount <= 0) continue;
 				// 机械蜂箱当前无 stability 升级，stabilityBonus = 0.0
 				if (allFlowerOutputs != null) {
@@ -120,7 +119,7 @@ final class BeeProductionGenerator {
 							sampledProductionCount, productivityMultiplier, productivityLevel);
 				} else if (forcedRolls >= 0) {
 					BeeProduceBatchSampler.sampleInto(allItems, produceList,
-							Math.toIntExact(forcedRolls), 1, 0.0f, productivityLevel);
+							forcedRolls, 1, 0.0f, productivityLevel);
 				} else {
 					BeeProduceBatchSampler.sampleInto(allItems, produceList,
 							sampledProductionCount, productivityMultiplier, 0.0f, productivityLevel);

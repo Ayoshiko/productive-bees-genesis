@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.IntStream;
 
 /**
 	 * PB离心配方的JEI分类
@@ -51,6 +50,9 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 	private static final int BACKGROUND_WIDTH = 126;
 	/** 背景高度（与纹理区域一致） */
 	private static final int BACKGROUND_HEIGHT = 70;
+
+	/** 数量变化只用于轮换展示，限制每个输出建立材料索引时的复制数量。 */
+	static final int MAX_DISPLAY_COUNTS = 8;
 
 	private final IDrawable icon;
 
@@ -107,7 +109,7 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 	 * <br/>
 	 * 原理：
 	 * - 输入槽：展示配方ingredient的所有可能物品
-	 * - 输出槽：每个ChancedOutput生成一个槽位，展示min~max所有可能数量
+	 * - 输出槽：每个ChancedOutput生成一个槽位，展示有界数量候选
 	 * - 流体槽：如果有流体输出，占用下一个可用输出槽位
 	 * - 概率tooltip：显示产出概率和数量范围
 	 */
@@ -149,13 +151,7 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 			ItemStack stack = entry.getKey();
 			TagOutputRecipe.ChancedOutput value = entry.getValue();
 
-			// 为每个可能的输出数量生成一个物品堆栈
-			List<ItemStack> innerList = new ArrayList<>();
-			IntStream.range(value.min(), value.max() + 1).forEach(u -> {
-				ItemStack newStack = stack.copy();
-				newStack.setCount(u);
-				innerList.add(newStack);
-			});
+			List<ItemStack> innerList = displayOutputStacks(stack, value.min(), value.max());
 
 			// 使用模运算计算行列位置：col = i % 3, row = i / 3
 			int slotIndex = i + randomSlots;
@@ -193,5 +189,23 @@ public class PbCentrifugeRecipeCategory implements IRecipeCategory<CentrifugeRec
 									fluid.getAmount() + "mB")))
 					.setSlotName("output_fluid");
 		}
+	}
+
+	/** 区间两端始终保留；非正数没有可显示的物品，原始区间仍由 tooltip 说明。 */
+	static List<ItemStack> displayOutputStacks(ItemStack stack, int min, int max) {
+		int first = Math.max(1, min);
+		if (stack.isEmpty() || max < first) {
+			return List.of();
+		}
+		long span = (long) max - first;
+		int variants = (int) Math.min(MAX_DISPLAY_COUNTS, span + 1L);
+		List<ItemStack> stacks = new ArrayList<>(variants);
+		for (int i = 0; i < variants; i++) {
+			long offset = variants == 1 ? 0L : span * i / (variants - 1);
+			ItemStack candidate = stack.copy();
+			candidate.setCount((int) (first + offset));
+			stacks.add(candidate);
+		}
+		return stacks;
 	}
 }

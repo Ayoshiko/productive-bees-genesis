@@ -99,6 +99,74 @@ class ApiaryMixedOutputMinecraftTest {
 		}
 	}
 
+	@Test void zeroChanceResourceCommitsLocalOutputAndRetainsFailedPayment() {
+		var block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse("productivebeesgenesis:mek_apiary"));
+		var tile = new TileEntityMekApiary(net.minecraft.core.Holder.direct(block), net.minecraft.core.BlockPos.ZERO, block.defaultBlockState());
+		var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+		var level = mock(net.minecraft.server.level.ServerLevel.class);
+		when(level.registryAccess()).thenReturn(registries);
+		when(level.getRandom()).thenReturn(net.minecraft.util.RandomSource.create(42L));
+		tile.setLevel(level);
+		var upgrades = mock(ApiaryUpgradeHandler.class);
+		when(upgrades.getProductivityMultiplier()).thenReturn(1.0F);
+		when(upgrades.getStackProductionCount()).thenReturn(1);
+		var snapshot = ApiaryBatchUpgradeSnapshot.capture(tile, upgrades);
+		var bee = tile.getBeeSlots()[0];
+		var beeData = new CompoundTag();
+		beeData.putString("entity", "productivebees:configurable_bee");
+		beeData.putString("type", "example:zero_chance");
+		bee.setBeeData(beeData);
+		var type = ResourceLocation.parse("example:zero_chance");
+		var spec = new PbResourceCatalog.Spec(
+				List.of(new ResourceProductionRecipe.Output(ResourceTypes.FE, 1000, 0)), "mixed_outputs_mechanical_only",
+				List.of(new PbResourceCatalog.ItemOutput(new ItemStack(Items.HONEYCOMB), 1, 1, 1)));
+		var mixed = mock(ApiaryMixedProduction.class);
+		when(mixed.maximumCycles(anyLong(), any())).thenAnswer(call -> call.getArgument(0));
+		when(mixed.sample(anyLong(), anyLong(), anyLong(), anyList())).thenAnswer(call -> new ApiaryRoutedOutput(
+				tile, new BeeProduceProcessor.Generated(List.of(new ItemStack(Items.HONEYCOMB)), FluidStack.EMPTY, 0), snapshot));
+		var prepared = new ApiaryResourceProduction.Prepared(
+				new ResourceRollPlan(spec.outputs(), 1, 0, 0), mixed, bee.getBeeData(), snapshot,
+				tile.getFeederSlotManager().getFlowerCacheVersion(), com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis.RECIPE_VERSION.get());
+		var host = mock(ResourceHiveHost.class);
+		var account = mock(ResourceAccount.class);
+		var reference = new ResourceAccount.Reference(UUID.randomUUID(), 1);
+		when(host.reference()).thenReturn(reference);
+		when(host.account(tile)).thenReturn(account);
+		when(host.productionMonitor()).thenReturn(new ResourceProductionMonitor());
+		when(account.canExtract(reference)).thenReturn(true);
+		when(account.reservedCapacity()).thenReturn(Map.of());
+		var energy = mock(mekanism.api.energy.IEnergyContainer.class);
+		long[] available = {100};
+		when(energy.getEnergy()).thenAnswer(call -> available[0]);
+		when(energy.extract(anyLong(), any(), eq(AutomationType.INTERNAL))).thenAnswer(call -> {
+			long amount = call.getArgument(0);
+			if (call.getArgument(1) == Action.EXECUTE) available[0] -= amount;
+			return amount;
+		});
+		try (var lookup = mockStatic(ResourceHiveHost.class)) {
+			lookup.when(() -> ResourceHiveHost.existing(tile)).thenReturn(host);
+			assertEquals(BeeState.WORKING, ApiaryResourceProduction.advance(tile, level, bee, 0, type,
+					mock(PbResourceCatalog.class), spec, 1, 1, false, 1, upgrades, energy, 1, 0, prepared, null, 0, snapshot));
+			assertEquals(99, available[0]);
+			assertEquals(1, tile.getOutputSlots().stream().mapToInt(slot -> slot.getCount()).sum());
+			assertFalse(tile.productionState().suspended());
+			verify(account, never()).reserve(any(), anyLong(), any(), anyMap());
+
+			when(energy.extract(anyLong(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL)))
+					.thenThrow(new IllegalStateException("Payment outcome unavailable"));
+			ApiaryResourceProduction.advance(tile, level, bee, 0, type, mock(PbResourceCatalog.class),
+					spec, 1, 1, false, 1, upgrades, energy, 1, 0, prepared, null, 0, snapshot);
+			assertTrue(tile.productionState().suspended());
+			assertEquals("local", tile.productionState().phase());
+			var saved = tile.productionState().save(registries);
+			var restored = new ApiaryProductionState(tile.getBeeSlots().length, () -> {});
+			restored.load(registries, saved);
+			assertTrue(restored.suspended());
+			assertEquals(saved, restored.save(registries));
+			assertEquals(1, tile.getOutputSlots().stream().mapToInt(slot -> slot.getCount()).sum());
+		}
+	}
+
 	@Test void loadingTheSameHoneySnapshotTwiceDoesNotAddAnotherInventory() {
 		var state = BuiltInRegistries.BLOCK.get(ResourceLocation.parse("productivebeesgenesis:mek_apiary")).defaultBlockState();
 		var tile = new TileEntityMekApiary(net.minecraft.core.Holder.direct(state.getBlock()), net.minecraft.core.BlockPos.ZERO, state);
@@ -110,8 +178,9 @@ class ApiaryMixedOutputMinecraftTest {
 		tile.nbtSerializer().loadApiaryState(saved, registries);
 		assertEquals(500, tile.getFluidTank().getFluidAmount());
 		var upgrade = tile.getUpgradeData(registries);
-		assertTrue(tile.nbtSerializer().applyUpgradeData(registries, upgrade));
-		assertEquals(500, tile.getFluidTank().getFluidAmount());
+		var upgraded = new TileEntityMekApiary(net.minecraft.core.Holder.direct(state.getBlock()), net.minecraft.core.BlockPos.ZERO, state);
+		assertEquals(ApiaryNbtSerializer.UpgradeResult.APPLIED, upgraded.nbtSerializer().applyUpgradeData(registries, upgrade));
+		assertEquals(500, upgraded.getFluidTank().getFluidAmount());
 	}
 
 	@Test void isolatedResourceAccountDoesNotBlockOrdinaryFrozenOutputs() {

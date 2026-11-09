@@ -2,9 +2,9 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
+import com.ayoshiko.productivebeesgenesis.util.MachineDismantle;
 import com.ayoshiko.productivebeesgenesis.util.WrenchCapabilityHelper;
 import mekanism.common.tile.base.TileEntityMekanism;
-import mekanism.common.util.WorldUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -32,7 +32,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 	 * <ol>
 	 *   <li>shift 键按下 + 手持通用扳手 + 目标是本模组机器（蜂箱/离心机）</li>
 	 *   <li>OmniTools 的 LINK 模式例外放行，由 ME 光束绑定 handler 处理</li>
-	 *   <li>直接调用 {@link WorldUtils#dismantleBlock} 执行拆卸</li>
+	 *   <li>校验实时权限和完整背包容量后，通过 {@link MachineDismantle} 执行拆卸</li>
 	 *   <li>取消事件并返回 SUCCESS，阻止后续 {@code Item.useOn}（omnitools 拦截点）执行</li>
 	 * </ol>
 	 * <p>
@@ -94,9 +94,8 @@ public final class ApiaryWrenchDismantleHandler {
 			event.setCancellationResult(InteractionResult.FAIL);
 			return;
 		}
-		// 执行拆卸并取消事件，阻止 omnitools 的 Item.useOn 拦截（打开配置 UI）
-		WorldUtils.dismantleBlock(state, level, pos, tile, player, stack);
+		boolean dismantled = MachineDismantle.tryDismantle(state, level, pos, tile, player, stack);
 		event.setCanceled(true);
-		event.setCancellationResult(InteractionResult.SUCCESS);
+		event.setCancellationResult(dismantled ? InteractionResult.SUCCESS : InteractionResult.FAIL);
 	}
 }

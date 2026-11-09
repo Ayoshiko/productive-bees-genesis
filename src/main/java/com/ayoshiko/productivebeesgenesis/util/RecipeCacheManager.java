@@ -12,43 +12,28 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
-	 * 泛型配方缓存管理器 — 基于LRU淘汰策略的实例级缓存
-	 * <p>
-	 * 每个方块实体维护独立实例，避免多世界环境下的缓存污染。
-	 * 不使用同步锁（Minecraft方块实体在服务端单线程执行），消除不必要的性能开销。
-	 * <p>
-	 * 缓存策略：使用 {@link Optional} 包装值，支持缓存"无配方"结果（{@link Optional#empty()}），
-	 * 避免对没有配方的输入物品每tick重复全量遍历配方。
-	 * <p>
-	 * <b>缓存键优化</b>：对 configurable_honeycomb / configurable_comb_block 使用
-	 * {@code Item + bee_type} 作为轻量 key，避免 {@link ItemStack#hashItemAndComponents}
-	 * 触发 owo {@code DerivedComponentMap.hashCode()} 和 {@code PatchedDataComponentMap.hashCode()}
-	 * 的高昂开销。其他物品仍使用 {@link ItemStack#hashItemAndComponents} 保证正确性。
-	 *
-	 * @param <T> 缓存的配方类型
-	 */
+ * 已退出内部生产路径的旧实例缓存，仅为既有外部二进制保留。
+ * <p>
+ * 旧键只比较蜂种或组件哈希，不能作为完整物品身份使用。正式离心查询由
+ * {@link com.ayoshiko.productivebeesgenesis.mek.PbRecipeFinder} 与
+ * {@link SharedPbRecipeCache} 保管完整组件和配方代际；新代码不得接入本类。
+ *
+ * @param <T> 缓存的配方类型
+ * @deprecated 使用正式配方查询入口；移除前需确认外部消费者。
+ */
+@Deprecated(forRemoval = true)
 public class RecipeCacheManager<T> {
 
-	/**
-	 * 缓存键 — record 自动生成基于字段的 hashCode/equals，避免 String 拼接的 GC 开销
-	 * <p>
-	 * 对 configurable_honeycomb / configurable_comb_block：使用 {@code (Item, beeType)} 作为键，
-	 * 跳过全组件哈希计算。其他物品：使用 {@code (Item, componentHash)} 作为键，保证组件差异区分。
-	 */
+	/** 旧兼容键不保留完整组件；不同组件可能命中同一项。 */
 	private record CacheKey(Item item, @Nullable ResourceLocation beeType, int componentHash) {
-		/**
-		 * 从 ItemStack 构建缓存键
-		 * <p>
-		 * configurable_honeycomb / configurable_comb_block 物品除 bee_type 外无其他可变组件，
-		 * 用 beeType 替代 componentHash 可避免 owo 组件哈希计算。
-		 */
+		/** 保留旧二进制入口的语义，不作为新调用方的身份合同。 */
 		static CacheKey of(ItemStack stack) {
 			Item item = stack.getItem();
 			if (item == PbCombItemRefs.honeycomb() || item == PbCombItemRefs.combBlock()) {
 				// 轻量路径：只提取 bee_type，跳过 hashItemAndComponents
 				return new CacheKey(item, stack.get(PbDataComponents.beeType()), 0);
 			}
-			// 通用路径：使用官方 hashItemAndComponents 覆盖物品与数据组件
+			// 通用旧键只保留哈希，无法消解完整组件身份的碰撞。
 			return new CacheKey(item, null, ItemStack.hashItemAndComponents(stack));
 		}
 	}

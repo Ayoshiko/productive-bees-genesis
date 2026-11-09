@@ -282,8 +282,8 @@ public final class MekCentrifugeBlockType {
 	 * 复用createFactoryBlockType，确保EM等级也走without+with路径，覆盖EM FactoryMixin
 	 * 注入的错误升级目标。
 	 * <p>
-	 * 调用时机：EM加载且EM工厂方块/TileEntity注册完成后调用（由后续任务在ModBlocks/
-	 * ModBlockEntities初始化后触发）。
+	 * 调用时机：EM加载时由 MekCompatInitializer 在注册EM工厂方块、方块实体与物品前调用，
+	 * 为这些注册项准备所需的BlockType。
 	 */
 	public static void initEMTiers() {
 		if (!MekCompatHooks.isEvolvedMekanismLoaded()) {

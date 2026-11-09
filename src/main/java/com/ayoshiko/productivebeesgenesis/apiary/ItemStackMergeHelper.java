@@ -152,10 +152,14 @@ public final class ItemStackMergeHelper {
 		for (ItemStack stack : group) {
 			totalCount = SaturatingMath.saturatingAdd(totalCount, stack.getCount());
 		}
-		// int 溢出保护：超过上限的部分拆成后续栈，数量零丢失
+		appendBulkCount(result, first, totalCount);
+	}
+
+	/** 仅在 ItemStack 的 int 数量边界拆栈，保留完整聚合数量及组件。 */
+	public static void appendBulkCount(List<ItemStack> result, ItemStack template, long totalCount) {
 		while (totalCount > 0L) {
 			int count = (int) Math.min(totalCount, Integer.MAX_VALUE);
-			result.add(first.copyWithCount(count));
+			result.add(template.copyWithCount(count));
 			totalCount -= count;
 		}
 	}

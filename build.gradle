@@ -236,13 +236,13 @@ dependencies {
     // @WailaPlugin 注解确保仅 Jade 安装时才加载集成类
     compileOnly name: 'Jade-1.21.1-NeoForge-15.10.5'
     // GuideME 的热键索引只按物品 ID；客户端适配补充可配置蜂的组件筛选。
-    compileOnly files('run/mods/guideme-21.1.16.jar')
+    compileOnly files('libs/guideme-21.1.16.jar')
 
     // KubeJS（可选依赖，编译时需要访问 KubeJSPlugin/EventGroup 等 API）
     // 运行时通过 kubejs.plugins.txt 声明插件，未安装 KubeJS 时插件类不会被加载
     compileOnly name: 'kubejs-neoforge-2101.7.2-build.368'
     // Rhino（KubeJS 的 JS 引擎依赖，编译时 KubeJS API 类签名引用 Rhino 类型）
-    compileOnly name: 'rhino-2101.2.7-build.85'
+    compileOnly files('libs/upstream/rhino-2101.2.7-build.85.jar')
 
     // 单元测试依赖（JUnit 5）
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
@@ -381,10 +381,11 @@ def verifyReleaseArtifact = tasks.register('verifyReleaseArtifact') {
     description = 'Verifies the distributable JAR metadata and required release files.'
     def releaseJar = tasks.named('jar', Jar)
     dependsOn releaseJar
-    inputs.file(releaseJar.flatMap { it.archiveFile })
+    def artifactFile = releaseJar.flatMap { it.archiveFile }
+    inputs.file(artifactFile)
 
     doLast { task ->
-        File artifact = task.inputs.files.singleFile
+        File artifact = artifactFile.get().asFile
         if (!artifact.isFile()) {
             throw new GradleException("Release artifact was not created: ${artifact}")
         }
@@ -400,6 +401,37 @@ def verifyReleaseArtifact = tasks.register('verifyReleaseArtifact') {
             requiredEntries.each { entryName ->
                 if (zip.getEntry(entryName) == null) {
                     throw new GradleException("Release artifact is missing ${entryName}")
+                }
+            }
+
+            // 共享图集只追加明确归属本模组的精灵，防止目录扫描覆盖第三方裁切结果。
+            def atlasDefinitions = zip.entries().findAll { entry ->
+                entry.name.startsWith('assets/') && entry.name.contains('/atlases/')
+                        && entry.name.endsWith('.json')
+            }
+            atlasDefinitions.each { entry ->
+                def atlas = new groovy.json.JsonSlurper().parse(zip.getInputStream(entry), 'UTF-8')
+                if (!(atlas.sources instanceof List)) {
+                    throw new GradleException("Atlas sources must be a list: ${entry.name}")
+                }
+                def spriteIds = new HashSet<String>()
+                atlas.sources.each { source ->
+                    if (!(source.type in ['single', 'minecraft:single'])) {
+                        throw new GradleException("Atlas must use explicit single sources: ${entry.name}")
+                    }
+                    String resource = source.resource
+                    String sprite = source.sprite ?: resource
+                    String namespace = releaseModId + ':'
+                    if (!resource?.startsWith(namespace) || !sprite?.startsWith(namespace)) {
+                        throw new GradleException("Atlas resource and sprite must belong to ${releaseModId}: ${entry.name}")
+                    }
+                    if (!spriteIds.add(sprite)) {
+                        throw new GradleException("Duplicate atlas sprite ${sprite}: ${entry.name}")
+                    }
+                    String texture = "assets/${releaseModId}/textures/${resource.substring(namespace.length())}.png"
+                    if (zip.getEntry(texture) == null) {
+                        throw new GradleException("Atlas texture is missing from JAR: ${texture}")
+                    }
                 }
             }
 
@@ -526,6 +558,8 @@ def reportReleaseArtifact = tasks.register('reportReleaseArtifact') {
         logger.lifecycle("Release artifact: ${artifact.length()} bytes; report: ${destination}")
     }
 }
+
+apply from: 'gradle/license-manifest.gradle'
 
 tasks.named('check') {
     dependsOn verifyReleaseArtifact

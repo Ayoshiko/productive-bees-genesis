@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.domainprobe;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.PbApiaryUpgradeCounts;
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.ProductKeyCodec;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.ProductAmount;
@@ -17,6 +18,7 @@ import net.minecraft.nbt.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.fml.config.ModConfigs;
 import static com.ayoshiko.productivebeesgenesis.apiculture.core.MemberUpgradeService.Action.*;
 import static com.ayoshiko.productivebeesgenesis.apiculture.core.MemberUpgradeService.Status.*;
 import static com.ayoshiko.productivebeesgenesis.domainprobe.DomainProbeServer.require;
@@ -106,19 +108,28 @@ final class ApiaryProductivityProbe {
 	private void legacy() {
 		var config = ModConfig.SERVER; var preset = config.balancePreset.get();
 		boolean exclusive = config.productivityUpgradeTiersExclusive.get(); int limit = config.apiaryPbUpgradeProductivityMaxCount.get();
+		var gameplay = ModConfigs.getModConfigs(ProductiveBeesGenesis.MOD_ID).stream()
+				.filter(loaded -> loaded.getSpec() == ModConfig.GAMEPLAY_SERVER_SPEC)
+				.findFirst().orElseThrow();
 		try {
-			config.balancePreset.set(BalancePreset.CUSTOM); config.productivityUpgradeTiersExclusive.set(false);
-			config.apiaryPbUpgradeProductivityMaxCount.set(8); BalanceConfig.refresh(false);
+			config.balancePreset.set(BalancePreset.CUSTOM);
+			config.productivityUpgradeTiersExclusive.set(false);
+			config.apiaryPbUpgradeProductivityMaxCount.set(8);
+			ServerConfigRuntime.onConfig(gameplay, false);
 			source(TYPES.get(0)); exchange(TYPES.get(0), INSTALL, 6); physical(TYPES.get(0), 6);
 			source(TYPES.get(1)); exchange(TYPES.get(1), INSTALL, 1); physical(TYPES.get(1), 1); round();
-			config.apiaryPbUpgradeProductivityMaxCount.set(4); config.productivityUpgradeTiersExclusive.set(true); BalanceConfig.refresh(false);
+			config.apiaryPbUpgradeProductivityMaxCount.set(4);
+			config.productivityUpgradeTiersExclusive.set(true);
+			ServerConfigRuntime.onConfig(gameplay, false);
 			exchange(TYPES.get(1), INSTALL, 1, false, CONFLICT, 0, state().revision(), 20);
 			exchange(TYPES.get(1), REMOVE, 1); physical(TYPES.get(1), 0);
 			source(TYPES.get(0)); exchange(TYPES.get(0), INSTALL, 1, false, LIMIT, 0, state().revision(), 20);
 			player.getInventory().items.set(20, ItemStack.EMPTY); exchange(TYPES.get(0), REMOVE, 6); physical(TYPES.get(0), 0); round();
 		} finally {
-			config.balancePreset.set(preset); config.productivityUpgradeTiersExclusive.set(exclusive);
-			config.apiaryPbUpgradeProductivityMaxCount.set(limit); BalanceConfig.refresh(false);
+			config.balancePreset.set(preset);
+			config.productivityUpgradeTiersExclusive.set(exclusive);
+			config.apiaryPbUpgradeProductivityMaxCount.set(limit);
+			ServerConfigRuntime.onConfig(gameplay, false);
 		}
 	}
 	private void work(int ticks, int budget, boolean simulate) {

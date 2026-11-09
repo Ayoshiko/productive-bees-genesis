@@ -84,6 +84,8 @@ class ApiaryNbtSerializer {
 
 	/** 所属方块实体 */
 	private final TileEntityMekApiary tile;
+	private final ApiaryUpgradeRecovery upgradeRecovery;
+	private Tag invalidFluidData;
 
 	/**
 	 * 构造蜂箱 NBT 序列化器
@@ -92,6 +94,11 @@ class ApiaryNbtSerializer {
 	 */
 	ApiaryNbtSerializer(TileEntityMekApiary tile) {
 		this.tile = tile;
+		this.upgradeRecovery = new ApiaryUpgradeRecovery(tile);
+	}
+
+	ApiaryUpgradeRecovery upgradeRecovery() {
+		return upgradeRecovery;
 	}
 
 	// ===== 存档读写 =====
@@ -116,6 +123,7 @@ class ApiaryNbtSerializer {
 	 * @param provider 注册表访问器
 	 */
 	private void writeApiaryStateTo(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
+		upgradeRecovery.save(nbt);
 		nbt.putInt(NBT_KEY_SCHEMA_VERSION, NBT_SCHEMA_VERSION);
 		tile.getSlotManager().saveBeeSlots(nbt);
 		tile.feederSlotManager.saveFeederSlots(nbt, provider);
@@ -132,7 +140,9 @@ class ApiaryNbtSerializer {
 		FluidStack fluid = tile.getFluidTank().getFluid();
 		FluidStack pendingTemplate = tile.getPendingHoneyFluidTemplate();
 		long pendingAmount = tile.getPendingHoneyFluidAmount();
-		if (!fluid.isEmpty() || pendingAmount > 0 && pendingTemplate != null && !pendingTemplate.isEmpty()) {
+		if (invalidFluidData != null) {
+			nbt.put(NBT_KEY_APIARY_FLUID, invalidFluidData.copy());
+		} else if (!fluid.isEmpty() || pendingAmount > 0 && pendingTemplate != null && !pendingTemplate.isEmpty()) {
 			CompoundTag fluidNbt = new CompoundTag();
 			if (!fluid.isEmpty()) fluidNbt.put("Fluid", fluid.save(provider));
 			if (pendingAmount > 0 && pendingTemplate != null && !pendingTemplate.isEmpty()) {
@@ -157,6 +167,7 @@ class ApiaryNbtSerializer {
 	 * PB 升级槽位与数量均从 NBT 恢复；持久化数量不受当前安装上限裁剪。
 	 */
 	void loadApiaryState(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
+		upgradeRecovery.load(nbt);
 		tile.getGeneTreatRestock().loadRoot(nbt, provider);
 		int schemaVersion = nbt.getInt(NBT_KEY_SCHEMA_VERSION);
 		if (schemaVersion < 1) {
@@ -191,22 +202,7 @@ class ApiaryNbtSerializer {
 		if (nbt.contains(NBT_KEY_FEEDER_CONVERSION, Tag.TAG_BYTE)) {
 			tile.setFeederConversionEnabled(nbt.getBoolean(NBT_KEY_FEEDER_CONVERSION));
 		}
-		// 修复 v14：反序列化流体罐内容（向后兼容：旧存档无此字段时跳过）
-		if (nbt.contains(NBT_KEY_APIARY_FLUID, Tag.TAG_COMPOUND)) {
-			CompoundTag fluidNbt = nbt.getCompound(NBT_KEY_APIARY_FLUID);
-			if (fluidNbt.contains("Fluid", Tag.TAG_COMPOUND)) {
-				FluidStack fluid = FluidStack.parseOptional(provider, fluidNbt.getCompound("Fluid"));
-				// super 已可能恢复同一罐；自定义快照是替换值，不能再次累加。
-				tile.getFluidTank().setStack(FluidStack.EMPTY);
-				if (!fluid.isEmpty()) {
-					// 自存字段是 Mekanism 库存的兼容快照，不是另一份待入库产物。
-					tile.getFluidTank().setStack(fluid);
-				}
-			}
-			loadPendingHoneyFluid(fluidNbt, provider);
-		} else {
-			tile.setPendingHoneyFluid(0L, null);
-		}
+		loadFluidData(nbt.get(NBT_KEY_APIARY_FLUID), provider);
 		// F4: 反序列化产物溢出缓冲区（向后兼容：旧存档无此字段时跳过）
 		if (nbt.contains(ApiaryOutputBuffer.nbtKey())) {
 			tile.getOutputBuffer().loadRaw(provider, nbt.get(ApiaryOutputBuffer.nbtKey()));
@@ -216,14 +212,56 @@ class ApiaryNbtSerializer {
 		loadDropSlotsFromNbt(nbt, provider);
 	}
 
-	private void loadPendingHoneyFluid(CompoundTag fluidNbt, HolderLookup.Provider provider) {
+	private void loadFluidData(Tag raw, HolderLookup.Provider provider) {
+		invalidFluidData = null;
 		tile.setPendingHoneyFluid(0L, null);
-		if (fluidNbt == null || !fluidNbt.contains(NBT_KEY_PENDING_FLUID_AMOUNT, Tag.TAG_LONG)
-				|| !fluidNbt.contains(NBT_KEY_PENDING_FLUID, Tag.TAG_COMPOUND)) return;
-		long amount = fluidNbt.getLong(NBT_KEY_PENDING_FLUID_AMOUNT);
-		if (amount <= 0L) return;
-		FluidStack template = FluidStack.parseOptional(provider, fluidNbt.getCompound(NBT_KEY_PENDING_FLUID));
-		if (!template.isEmpty()) tile.setPendingHoneyFluid(amount, template);
+		if (raw == null) return;
+		try {
+			if (!(raw instanceof CompoundTag data)
+					|| !java.util.Set.of("Fluid", NBT_KEY_PENDING_FLUID_AMOUNT, NBT_KEY_PENDING_FLUID)
+							.containsAll(data.getAllKeys())) {
+				throw new IllegalArgumentException("Invalid apiary fluid data");
+			}
+			FluidStack stored = FluidStack.EMPTY;
+			if (data.contains("Fluid")) {
+				if (!data.contains("Fluid", Tag.TAG_COMPOUND)) throw new IllegalArgumentException("Invalid fluid stack");
+				stored = FluidStack.parseOptional(provider, data.getCompound("Fluid"));
+				if (stored.isEmpty() || stored.getAmount() > tile.getFluidTank().getCapacity()) {
+					throw new IllegalArgumentException("Unreadable or over-capacity fluid");
+				}
+			}
+			long pending = 0;
+			FluidStack template = FluidStack.EMPTY;
+			if (data.contains(NBT_KEY_PENDING_FLUID_AMOUNT) || data.contains(NBT_KEY_PENDING_FLUID)) {
+				if (!data.contains(NBT_KEY_PENDING_FLUID_AMOUNT, Tag.TAG_LONG)
+						|| !data.contains(NBT_KEY_PENDING_FLUID, Tag.TAG_COMPOUND)
+						|| data.getLong(NBT_KEY_PENDING_FLUID_AMOUNT) <= 0) {
+					throw new IllegalArgumentException("Invalid pending fluid");
+				}
+				pending = data.getLong(NBT_KEY_PENDING_FLUID_AMOUNT);
+				template = FluidStack.parseOptional(provider, data.getCompound(NBT_KEY_PENDING_FLUID));
+				if (template.isEmpty()) throw new IllegalArgumentException("Unreadable pending fluid");
+			}
+			// 本字段是已有库存的兼容快照；全部成功后才恢复，不追加第二份。
+			if (!stored.isEmpty()) tile.getFluidTank().setStack(stored);
+			tile.setPendingHoneyFluid(pending, template);
+		} catch (RuntimeException e) {
+			invalidFluidData = raw.copy();
+			DevLog.warn("nbt_serialize", "蜂箱流体原始数据已保管，停止覆盖: {}", e.getMessage());
+		}
+	}
+
+	boolean hasInvalidFluidData() {
+		return invalidFluidData != null;
+	}
+
+	boolean retryInvalidFluidData(HolderLookup.Provider provider) {
+		if (invalidFluidData == null) return false;
+		Tag original = invalidFluidData.copy();
+		loadFluidData(original, provider);
+		if (invalidFluidData != null) return false;
+		tile.setChanged();
+		return true;
 	}
 
 	/**
@@ -343,6 +381,11 @@ class ApiaryNbtSerializer {
 	 */
 	@NotNull
 	ApiaryUpgradeData buildUpgradeData(HolderLookup.Provider provider, boolean redstone, boolean sorting) {
+		if (upgradeRecovery.blocked()) {
+			throw new IllegalStateException("Previous apiary upgrade requires settlement");
+		}
+		CompoundTag sourceSnapshot = tile.saveWithFullMetadata(provider);
+		sourceSnapshot.remove(ApiaryUpgradeRecovery.NBT_KEY);
 		List<mekanism.api.inventory.IInventorySlot> inputSlots =
 				List.of(tile.getCageInSlot(), tile.getGeneTreatSlot());
 		List<mekanism.api.inventory.IInventorySlot> outputSlots = new ArrayList<>(tile.getOutputSlots());
@@ -405,6 +448,9 @@ class ApiaryNbtSerializer {
 				tile.isDirectAeOutputEnabled(), tile.isCentrifugePriorityEnabled(),
 				tile.isFeederConversionEnabled(), tile.isDirectContainerOutputEnabled(),
 				tile.getGeneTreatSlot().serializeNBT(provider), tile.getGeneTreatRestock().save(provider));
+		data.sourceSnapshot = sourceSnapshot.copy();
+		data.source = tile;
+		data.invalidFluidData = invalidFluidData == null ? null : invalidFluidData.copy();
 		data.aePerTileState = new CompoundTag();
 		tile.ae2HostAdapter().savePerTileState(data.aePerTileState);
 		data.aePendingState = new CompoundTag();
@@ -412,30 +458,37 @@ class ApiaryNbtSerializer {
 		return data;
 	}
 
-	/**
-	 * 应用升级数据 — 将旧方块状态恢复到新蜂箱
-	 * <br/>
-	 * 支持 {@link ApiaryUpgradeData}（蜂箱间升级/降级/替换），返回 true 表示已处理。
-	 * 其他类型返回 false，由调用方委托父类处理。
-	 * <p>
-	 * 修复 HIGH-7: 包裹 try-catch 防止单点异常导致整体崩溃。
-	 * 失败时记录 ERROR 日志并保留 upgradeData 对象引用（toString）便于管理员手动恢复。
-	 * 返回 true 以避免调用方 super.parseUpgradeData 覆盖已恢复的部分字段。
-	 * <p>
-	 * 修复 MEDIUM-2: 通过模板方法 {@link TileEntityMekApiary#setSortingFromUpgradeData}
-	 * 显式恢复 SORTING 字段。基础蜂箱为 no-op（无 sorting 字段），工厂版重写实际设置 sorting。
-	 *
-	 * @param provider    注册表访问器
-	 * @param upgradeData 升级数据
-	 * @return true 如果数据已处理（含部分恢复），false 表示未识别（调用方应委托父类）
-	 */
-	boolean applyUpgradeData(HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) {
-		if (!(upgradeData instanceof ApiaryUpgradeData data)) return false;
+	enum UpgradeResult {
+		NOT_HANDLED,
+		APPLIED,
+		RETAINED
+	}
 
+	/** 来源快照不是可重放命令；只有完整恢复并认领资源后才报告成功。 */
+	UpgradeResult applyUpgradeData(HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) {
+		if (!(upgradeData instanceof ApiaryUpgradeData data)) {
+			return UpgradeResult.NOT_HANDLED;
+		}
+		if (data.attempted || upgradeRecovery.blocked()) {
+			return UpgradeResult.RETAINED;
+		}
+		CompoundTag snapshot = data.sourceSnapshot;
+		if (snapshot == null) {
+			snapshot = legacyUpgradeSnapshot(data, provider);
+		}
+		if (data.source != null && data.source != tile && data.source.getLevel() != null
+				&& !data.source.isRemoved()) {
+			throw new IllegalStateException("Apiary upgrade source is still live");
+		}
+		data.attempted = true;
+		upgradeRecovery.begin(data.request, snapshot, "machine");
 		try {
+			if (data.source != null && data.source != tile && data.source.upgradeRecovery().blocked()) {
+				data.source.upgradeRecovery().transferred(data.request);
+			}
 			tile.setRedstoneControl(data.redstone);
 			tile.setControlType(data.controlType);
-			tile.getEnergyContainer().setEnergy(data.energyContainer.getEnergy());
+			tile.getEnergyContainer().setEnergy(data.capturedEnergy);
 			if (data.energySlotNbt != null) {
 				// 快照恢复（修复：父类 energySlot 引用已被 saveAllItemsForDrop 清空）
 				tile.getEnergySlot().deserializeNBT(provider, data.energySlotNbt);
@@ -453,6 +506,7 @@ class ApiaryNbtSerializer {
 				// 旧版本升级数据回退
 				tile.getCageInSlot().deserializeNBT(provider, data.inputSlots.get(0).serializeNBT(provider));
 			}
+			upgradeRecovery.stage("output_slots");
 			List<BasicInventorySlot> currentOutputs = tile.getOutputSlots();
 			// 模块 3 Bug 2：优先从 outputItems 深拷贝列表恢复（防止旧方块 setRemoved 后 outputSlots 引用指向空栈）
 			// 向后兼容：outputItems 为 null 时（旧版本升级数据）回退到 data.outputSlots 路径
@@ -467,31 +521,36 @@ class ApiaryNbtSerializer {
 					currentOutputs.get(i).setStack(data.outputSlots.get(i).getStack().copy());
 				}
 			}
+			int componentIndex = 0;
 			for (ITileComponent component : tile.getComponents()) {
+				upgradeRecovery.stage("component/" + componentIndex);
+				componentIndex++;
 				component.read(data.components, provider);
 			}
+			upgradeRecovery.stage("bee_slots");
 			// 恢复蜂箱特有数据
 			// PB 升级槽位与数量均按快照恢复；当前配置上限仅限制后续安装。
 			tile.getSlotManager().loadBeeSlots(data.beeSlotsNbt);
+			upgradeRecovery.stage("feeder_slots");
 			tile.feederSlotManager.loadFeederSlots(data.feederSlotsNbt, provider);
+			upgradeRecovery.stage("pb_upgrades");
 			tile.getPbUpgradeInputSlot().deserializeNBT(provider, data.pbUpgradeInputNbt);
 			tile.getPbUpgradeOutputSlot().deserializeNBT(provider, data.pbUpgradeOutputNbt);
 			tile.pbUpgradeHandler.loadPbUpgradeCounts(data.pbUpgradeCountsNbt, provider);
 			// 修复（升级物品丢失）：恢复产物溢出缓冲区（saveAllItemsForDrop 已 clear，必须从快照恢复）
+			upgradeRecovery.stage("paid_output");
 			if (data.outputBufferNbt != null) {
 				tile.getOutputBuffer().load(provider, data.outputBufferNbt);
 			}
 			var pendingSource = data.beeSlotsNbt.copy();
-			if (data.outputBufferNbt != null) pendingSource.put(ApiaryOutputBuffer.nbtKey(), data.outputBufferNbt);
-			tile.tickHandler.loadPendingCycles(pendingSource);
-			// 升级同样还原库存快照，不能把已有恢复结果当作另一份流体追加。
-			if (data.fluidNbt.contains("Fluid", Tag.TAG_COMPOUND)) {
-				FluidStack fluid = FluidStack.parseOptional(provider, data.fluidNbt.getCompound("Fluid"));
-				if (!fluid.isEmpty()) {
-					tile.getFluidTank().setStack(fluid);
-				}
+			if (data.outputBufferNbt != null) {
+				pendingSource.put(ApiaryOutputBuffer.nbtKey(), data.outputBufferNbt);
 			}
-			loadPendingHoneyFluid(data.fluidNbt, provider);
+			tile.tickHandler.loadPendingCycles(pendingSource);
+			upgradeRecovery.stage("fluid");
+			loadFluidData(data.fluidNbt, provider);
+			if (data.invalidFluidData != null) loadFluidData(data.invalidFluidData, provider);
+			upgradeRecovery.stage("cage_and_restock");
 			// 恢复蜂笼输出槽
 			tile.getCageOutSlot().deserializeNBT(provider, data.cageOutSlotNbt);
 			if (data.geneTreatSlotNbt != null) {
@@ -507,6 +566,7 @@ class ApiaryNbtSerializer {
 			} else {
 				tile.setSelectedBeeSlot(-1);
 			}
+			upgradeRecovery.stage("ae_state");
 			if (data.aePerTileState != null) {
 				tile.ae2HostAdapter().loadPerTileState(data.aePerTileState.copy());
 			} else if (Ae2IntegrationLoader.isAe2Loaded()) {
@@ -523,11 +583,59 @@ class ApiaryNbtSerializer {
 			tile.setDirectContainerOutputEnabled(data.directContainerOutputEnabled);
 			// 修复 MEDIUM-2: 显式恢复 SORTING 字段（模板方法,基础蜂箱为 no-op,工厂版重写设置 sorting）
 			tile.setSortingFromUpgradeData(data.sorting);
-		} catch (RuntimeException e) {
-			// 修复 HIGH-7: 失败时记录 ERROR 日志并保留 upgradeData 对象引用,便于管理员手动恢复
-			// 返回 true 以避免 super.parseUpgradeData 覆盖已恢复的部分字段（部分恢复比全覆盖更安全）
-			DevLog.error("蜂箱升级数据应用失败,upgradeData=" + upgradeData + ",新方块可能处于部分恢复状态", e);
+			upgradeRecovery.stage("resource_claim");
+			if (data.resourceUpgrade != null) {
+				data.resourceUpgrade.apply(tile);
+			}
+			upgradeRecovery.complete();
+			return UpgradeResult.APPLIED;
+		} catch (RuntimeException | LinkageError failure) {
+			upgradeRecovery.fail(failure);
+			DevLog.error("蜂箱升级已暂停，完整来源快照保管于目标方块，请求=" + data.request
+					+ "，阶段=" + upgradeRecovery.phase(), failure);
+			return UpgradeResult.RETAINED;
 		}
-		return true;
+	}
+
+	private static CompoundTag legacyUpgradeSnapshot(ApiaryUpgradeData data, HolderLookup.Provider provider) {
+		CompoundTag snapshot = new CompoundTag();
+		snapshot.putBoolean("redstone", data.redstone);
+		snapshot.putString("control", data.controlType.name());
+		snapshot.putLong("energy", data.capturedEnergy);
+		snapshot.putIntArray("progress", data.progress.clone());
+		snapshot.putBoolean("sorting", data.sorting);
+		snapshot.put("components", data.components.copy());
+		snapshot.put("bee_slots", data.beeSlotsNbt.copy());
+		snapshot.put("feeder_slots", data.feederSlotsNbt.copy());
+		snapshot.put("pb_counts", data.pbUpgradeCountsNbt.copy());
+		snapshot.put("pb_input", data.pbUpgradeInputNbt.copy());
+		snapshot.put("pb_output", data.pbUpgradeOutputNbt.copy());
+		snapshot.put("fluid", data.invalidFluidData == null ? data.fluidNbt.copy() : data.invalidFluidData.copy());
+		snapshot.put("cage_out", data.cageOutSlotNbt.copy());
+		CompoundTag cage = data.inputSlots.isEmpty() ? new CompoundTag() : data.inputSlots.getFirst().serializeNBT(provider);
+		snapshot.put("cage_in", data.cageInSlotNbt == null ? cage : data.cageInSlotNbt.copy());
+		snapshot.put("energy_item", data.energySlotNbt == null
+				? data.energySlot.serializeNBT(provider) : data.energySlotNbt.copy());
+		ListTag outputs = new ListTag();
+		List<ItemStack> items = data.outputItems == null
+				? data.outputSlots.stream().map(slot -> slot.getStack().copy()).toList() : data.outputItems;
+		for (ItemStack item : items) {
+			outputs.add(item.saveOptional(provider));
+		}
+		snapshot.put("outputs", outputs);
+		if (data.outputBufferNbt != null) snapshot.put("paid_output", data.outputBufferNbt.copy());
+		if (data.geneTreatSlotNbt != null) snapshot.put("gene_treat", data.geneTreatSlotNbt.copy());
+		if (data.geneTreatRestockNbt != null) snapshot.put("restock", data.geneTreatRestockNbt.copy());
+		if (data.aePerTileState != null) snapshot.put("ae_state", data.aePerTileState.copy());
+		if (data.aePendingState != null) snapshot.put("ae_pending", data.aePendingState.copy());
+		snapshot.putInt("selected_bee", data.selectedBeeSlot);
+		snapshot.putBoolean("ae_item_output", data.aeItemOutputEnabled);
+		snapshot.putBoolean("ae_fluid_output", data.aeFluidOutputEnabled);
+		snapshot.putBoolean("direct_eject", data.directEjectEnabled);
+		snapshot.putBoolean("direct_ae_output", data.directAeOutputEnabled);
+		snapshot.putBoolean("centrifuge_priority", data.centrifugePriorityEnabled);
+		snapshot.putBoolean("feeder_conversion", data.feederConversionEnabled);
+		snapshot.putBoolean("container_output", data.directContainerOutputEnabled);
+		return snapshot;
 	}
 }

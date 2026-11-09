@@ -1,6 +1,12 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesisClient;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.client.render.RenderStateSnapshot;
+import com.mojang.blaze3d.platform.Lighting;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerNativeBees;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.animal.Bee;
@@ -11,17 +17,21 @@ import cy.jdkdigital.productivebees.util.BeeCreator;
 import cy.jdkdigital.productivebees.client.render.entity.layers.BeeBodyLayer;
 import net.neoforged.fml.ModList;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.GraphicsStatus;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.joml.Quaternionf;
-import org.joml.Vector3f;
 
 /** 预览覆盖仅属于未加入世界的实体实例；不临时替换 PB 全局蜂种表。 */
 final class DesignerPreview {
 	private Bee bee;
+	private ClientLevel level;
+	private long resources = -1;
 	private JsonObject definition;
 	private String beeId = "";
 	private String problem = "";
@@ -35,11 +45,17 @@ final class DesignerPreview {
 			clear();
 			return;
 		}
-		JsonObject source = document.getAsJsonObject("definition");
-		String id = document.get("id").getAsString();
-		if (bee != null && bee.level() == mc.level && id.equals(beeId) && source.equals(definition)) {
+		if (mc.getOverlay() != null) {
 			return;
 		}
+		JsonObject source = document.getAsJsonObject("definition");
+		String id = document.get("id").getAsString();
+		long generation = ProductiveBeesGenesisClient.resourceGeneration();
+		if (level == mc.level && resources == generation && id.equals(beeId) && source.equals(definition)) {
+			return;
+		}
+		level = mc.level;
+		resources = generation;
 		definition = source.deepCopy();
 		beeId = id;
 		try {
@@ -72,9 +88,9 @@ final class DesignerPreview {
 			if (ModList.get().isLoaded("geckolib")) {
 				ResourceLocation model = parsed.contains("model") ? ResourceLocation.parse(parsed.getString("model"))
 						: ResourceLocation.fromNamespaceAndPath("productivebees", "geo/entity/" + renderer + ".geo.json");
-				if (mc.getResourceManager().getResource(model).isEmpty()) {
-					throw new IllegalArgumentException("designer.error.preview_resource|" + model);
-				}
+				ResourceLocation animation = parsed.contains("animation") ? ResourceLocation.parse(parsed.getString("animation"))
+						: ResourceLocation.fromNamespaceAndPath("productivebees", "animations/entity/bee.animation.json");
+				validateGeckoResources(model, animation);
 			}
 			String texture = configurable.hasBeeTexture() ? configurable.getBeeTexture() : "productivebees:textures/entity/bee/base/" + renderer + "/bee";
 			ResourceLocation location = ResourceLocation.parse(texture + ".png");
@@ -89,7 +105,7 @@ final class DesignerPreview {
 			}
 			problem = "";
 		} catch (RuntimeException exception) {
-			problem = exception.getMessage() == null ? "Invalid preview" : exception.getMessage();
+			failed(exception);
 		}
 	}
 
@@ -126,8 +142,9 @@ final class DesignerPreview {
 				bee.yHeadRotO = rotation;
 				Quaternionf camera = new Quaternionf().rotateX(pitch * (float) Math.PI / 180);
 				Quaternionf orientation = new Quaternionf().rotateZ((float) Math.PI).mul(camera);
-				InventoryScreen.renderEntityInInventory(graphics, x + width / 2F, displayTop + displayHeight / 2F,
-						scale, new Vector3f(0, bee.getBbHeight() / 2, 0), orientation, camera, bee);
+				renderEntity(graphics, x + width / 2F, displayTop + displayHeight / 2F, scale, orientation, camera);
+			} catch (RuntimeException exception) {
+				failed(exception);
 			} finally {
 				bee.yBodyRot = body;
 				bee.setYRot(yaw);
@@ -160,6 +177,55 @@ final class DesignerPreview {
 		}
 	}
 
+	private void renderEntity(GuiGraphics graphics, float x, float y, float scale, Quaternionf orientation, Quaternionf camera) {
+		Minecraft client = Minecraft.getInstance();
+		var dispatcher = client.getEntityRenderDispatcher();
+		Quaternionf previousCamera = new Quaternionf(dispatcher.cameraOrientation());
+		GraphicsStatus previousGraphics = client.options.graphicsMode().get();
+		graphics.flush();
+		try (RenderStateSnapshot state = new RenderStateSnapshot();
+				ByteBufferBuilder buffer = new ByteBufferBuilder(RenderType.SMALL_BUFFER_SIZE)) {
+			PoseStack pose = new PoseStack();
+			pose.last().pose().set(graphics.pose().last().pose());
+			pose.last().normal().set(graphics.pose().last().normal());
+			pose.translate(x, y, 50);
+			pose.scale(scale, scale, -scale);
+			pose.translate(0, bee.getBbHeight() / 2, 0);
+			pose.mulPose(orientation);
+			Lighting.setupForEntityInInventory();
+			dispatcher.overrideCameraOrientation(camera.conjugate(new Quaternionf()).rotateY((float) Math.PI));
+			client.options.graphicsMode().set(GraphicsStatus.FANCY);
+			MultiBufferSource.BufferSource source = MultiBufferSource.immediate(buffer);
+			dispatcher.getRenderer(bee).render(bee, 0, 1, pose, source, 15728880);
+			source.endBatch();
+		} finally {
+			dispatcher.overrideCameraOrientation(previousCamera);
+			client.options.graphicsMode().set(previousGraphics);
+			Lighting.setupFor3DItems();
+		}
+	}
+
+	private static void validateGeckoResources(ResourceLocation model, ResourceLocation animation) {
+		try {
+			Class<?> cache = Class.forName("software.bernie.geckolib.cache.GeckoLibCache");
+			var models = (java.util.Map<?, ?>) cache.getMethod("getBakedModels").invoke(null);
+			var animations = (java.util.Map<?, ?>) cache.getMethod("getBakedAnimations").invoke(null);
+			if (!models.containsKey(model)) {
+				throw new IllegalArgumentException("designer.error.preview_resource|" + model);
+			}
+			if (!animations.containsKey(animation)) {
+				throw new IllegalArgumentException("designer.error.preview_resource|" + animation);
+			}
+		} catch (ReflectiveOperationException | LinkageError failure) {
+			throw new IllegalStateException("Gecko preview resources unavailable", failure);
+		}
+	}
+
+	private void failed(RuntimeException failure) {
+		problem = failure.getMessage() == null ? "Invalid preview" : failure.getMessage();
+		ProductiveBeesGenesis.LOGGER.warn("Bee preview {} failed in resource generation {}", beeId, resources, failure);
+	}
+
 	void rotate(double dx, double dy) {
 		rotation = (rotation - (float) (dx * sensitivity) + 360) % 360;
 		pitch = Math.max(-65, Math.min(65, pitch - (float) (dy * sensitivity)));
@@ -180,6 +246,8 @@ final class DesignerPreview {
 
 	void clear() {
 		bee = null;
+		level = null;
+		resources = -1;
 		definition = null;
 		beeId = "";
 		problem = "";

@@ -29,7 +29,10 @@ import java.util.Map;
 	 * <p>
 	 * 用法示例（server_scripts）：
 	 * <pre>{@code
-	 * MyriadBeeEvents.REGISTER.register(event => {
+	 * // 万象获取与蜂箱产出参数仍由服务器 TOML 覆盖；钓鱼/生成默认关闭。编辑器受管 custom 条目除外。
+	 * // Server TOML overrides Myriad acquisition and beehive outputs; fishing/spawning default to disabled.
+	 * // Bee Designer's managed custom entries retain their own parameters; the Myriad master switch still applies.
+	 * MyriadBeeEvents.register(event => {
 	 *     // 繁殖配方
 	 *     event.addBreeding('mymod:custom_breeding', 'productivebees:iron_bee', 'productivebees:gold_bee',
 	 * 'productivebees:myriadcreations')

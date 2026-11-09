@@ -1,19 +1,44 @@
 {
   "sources": [
     {
-      "type": "directory",
-      "source": "block",
-      "prefix": "block/"
+      "type": "minecraft:single",
+      "resource": "productivebeesgenesis:misc/cosmic/cosmic_0"
     },
     {
-      "type": "directory",
-      "source": "item",
-      "prefix": "item/"
+      "type": "minecraft:single",
+      "resource": "productivebeesgenesis:misc/cosmic/cosmic_1"
     },
     {
-      "type": "directory",
-      "source": "misc",
-      "prefix": "misc/"
+      "type": "minecraft:single",
+      "resource": "productivebeesgenesis:misc/cosmic/cosmic_2"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "productivebeesgenesis:misc/cosmic/cosmic_3"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "productivebeesgenesis:misc/cosmic/cosmic_4"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "productivebeesgenesis:misc/cosmic/cosmic_5"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "productivebeesgenesis:misc/cosmic/cosmic_6"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "productivebeesgenesis:misc/cosmic/cosmic_7"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "productivebeesgenesis:misc/cosmic/cosmic_8"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "productivebeesgenesis:misc/cosmic/cosmic_9"
     }
   ]
 }

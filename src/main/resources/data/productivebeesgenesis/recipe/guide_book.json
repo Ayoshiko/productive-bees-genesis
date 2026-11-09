@@ -3,7 +3,7 @@
   "category": "misc",
   "ingredients": [
     { "item": "minecraft:book" },
-    { "item": "productivebees:bee_cage" },
+    { "type": "productivebeesgenesis:empty_bee_cage", "item": "productivebees:bee_cage" },
     { "item": "minecraft:honeycomb" }
   ],
   "result": {

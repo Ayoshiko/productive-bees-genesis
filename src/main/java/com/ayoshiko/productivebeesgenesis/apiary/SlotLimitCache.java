@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -75,13 +76,17 @@ final class SlotLimitCache {
 	 * @return 堆叠上限
 	 */
 	int getCachedSlotLimit(int index, BasicInventorySlot slot, ItemStack stack) {
-		if (stack == cachedLimitStacks[index] && cachedVersion == CACHE_VERSION.get()) {
+		long currentVersion = CACHE_VERSION.get();
+		if (cachedVersion != currentVersion) {
+			Arrays.fill(cachedLimitStacks, null);
+			cachedVersion = currentVersion;
+		}
+		if (stack == cachedLimitStacks[index]) {
 			return cachedLimits[index];
 		}
 		int limit = slot.getLimit(stack);
 		cachedLimitStacks[index] = stack;
 		cachedLimits[index] = limit;
-		cachedVersion = CACHE_VERSION.get();
 		return limit;
 	}
 

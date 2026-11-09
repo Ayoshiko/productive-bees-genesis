@@ -4,6 +4,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock;
+import com.ayoshiko.productivebeesgenesis.apiary.ApiarySlotSerializer;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.Level;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.apiary.GeneTreatRestockState;
 import cy.jdkdigital.productivebees.common.item.HoneyTreat;
@@ -180,8 +187,13 @@ class ApiaryCraftingInventoryMinecraftTest {
 		ItemStack originalFirst = first.copy();
 		ItemStack originalSecond = second.copy();
 		ItemStack template = new ItemStack(ModItems.BASIC_MEK_APIARY_FACTORY.get());
-		var recipe = new ApiaryShapedRecipe(recipe(first, template));
-		ItemStack result = recipe.assemble(CraftingInput.of(2, 1, List.of(first, second)), provider);
+		var recipe = new ApiaryShapedRecipe(new ShapedRecipe("", CraftingBookCategory.MISC,
+				ShapedRecipePattern.of(Map.of('A', Ingredient.of(first.getItem())), "AA"), template));
+		CraftingInput input = CraftingInput.of(2, 1, List.of(first, second));
+		Level level = mock(Level.class);
+		when(level.registryAccess()).thenReturn(provider);
+		assertEquals(scenario.equals("compatible"), recipe.matches(input, level));
+		ItemStack result = recipe.assemble(input, provider);
 		if (scenario.equals("compatible")) {
 			assertFalse(result.isEmpty());
 			var inventory = ContainerType.ITEM.getOrEmpty(result).containers();
@@ -194,9 +206,161 @@ class ApiaryCraftingInventoryMinecraftTest {
 		assertStack(originalSecond, second);
 	}
 
+	@Test
+	void actualTwoBeeRecipeAssignsDistinctSlotsAndRejectsOverflowBeforeConsumption() {
+		var provider = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+		ItemStack first = savedBees(1);
+		ItemStack second = savedBees(1);
+		ItemStack beforeFirst = first.copy();
+		ItemStack beforeSecond = second.copy();
+		ItemStack template = new ItemStack(ModItems.MEK_APIARY.get());
+		var recipe = new ApiaryShapedRecipe(new ShapedRecipe("", CraftingBookCategory.MISC,
+				ShapedRecipePattern.of(Map.of('A', Ingredient.of(first.getItem())), "AA"), template));
+		Level level = mock(Level.class);
+		when(level.registryAccess()).thenReturn(provider);
+		CraftingInput input = CraftingInput.of(2, 1, List.of(first, second));
+		assertTrue(recipe.matches(input, level));
+		ItemStack result = recipe.assemble(input, provider);
+		var placed = tile(result);
+		placed.loadCustomOnly(result.get(DataComponents.BLOCK_ENTITY_DATA).copyTag(), provider);
+		assertFalse(placed.getBeeSlots()[0].isEmpty());
+		assertFalse(placed.getBeeSlots()[1].isEmpty());
+		assertStack(beforeFirst, first);
+		assertStack(beforeSecond, second);
+
+		ItemStack full = savedBees(3);
+		assertFalse(recipe.matches(CraftingInput.of(2, 1, List.of(full, second)), level));
+		assertEquals(3, full.get(DataComponents.BLOCK_ENTITY_DATA).copyTag()
+				.getList(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS, net.minecraft.nbt.Tag.TAG_COMPOUND).size());
+	}
+
+	private static ItemStack savedBees(int count) {
+		ItemStack item = new ItemStack(ModItems.MEK_APIARY.get());
+		CompoundTag root = new CompoundTag();
+		root.putString("id", ApiaryCraftingDataTransfer.resolveBlockEntityTypeId(((BlockItem) item.getItem()).getBlock()));
+		ListTag bees = new ListTag();
+		for (int i = 0; i < count; i++) {
+			CompoundTag bee = new CompoundTag();
+			bee.putString("id", "minecraft:bee");
+			CompoundTag slot = new CompoundTag();
+			slot.putInt("slot_index", i);
+			slot.put("entity_data", bee);
+			bees.add(slot);
+		}
+		root.put(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS, bees);
+		item.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(root));
+		return item;
+	}
+
 	private static ShapedRecipe recipe(ItemStack source, ItemStack result) {
 		return new ShapedRecipe("", CraftingBookCategory.MISC,
 				ShapedRecipePattern.of(Map.of('A', Ingredient.of(source.getItem())), "A"), result);
+	}
+
+	@Test
+	void centrifugeMergeAllowsEmptyWorkShellsAndPreservesSourceItems() {
+		for (int version : List.of(1, 2)) {
+			ItemStack first = new ItemStack(ModItems.MEK_CENTRIFUGE.get());
+			ItemStack second = first.copy();
+			CompoundTag work = new CompoundTag();
+			work.putInt("version", version);
+			work.put("entries", new ListTag());
+			if (version == 2) work.put("paused", new ListTag());
+			CompoundTag root = new CompoundTag();
+			root.put("productivebeesgenesis_pb_paid_work", work);
+			root.putIntArray("productivebeesgenesis_pb_progress", new int[] {0});
+			root.put("productivebeesgenesis_pb_committed_pending", new ListTag());
+			second.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(root));
+			ItemStack before = second.copy();
+			var block = ((BlockItem) first.getItem()).getBlock();
+			assertDoesNotThrow(() -> ApiaryCraftingDataTransfer.mergeMachineInputs(
+					List.of(first, second), block, false,
+					ApiaryCraftingDataTransfer.resolveBlockEntityTypeId(block), null));
+			assertStack(before, second);
+		}
+	}
+
+	@Test
+	void centrifugeMergeRejectsPaidPausedCommittedAndLegacyWorkWithoutConsumingInputs() {
+		var provider = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+		CompoundTag recipe = new CompoundTag();
+		recipe.putInt("version", 2);
+		recipe.putString("id", "productivebeesgenesis:retained_recipe");
+		recipe.put("items", new ListTag());
+		CompoundTag paidEntry = new CompoundTag();
+		paidEntry.put("input", new ItemStack(Items.HONEYCOMB).save(provider));
+		paidEntry.putInt("base_ticks", 20);
+		paidEntry.putBoolean("myriad", false);
+		paidEntry.put("recipe", recipe);
+		CompoundTag active = paidEntry.copy();
+		active.putInt("process", 0);
+		CompoundTag paused = new CompoundTag();
+		paused.put("work", paidEntry);
+		paused.putInt("progress", 7);
+		paused.putInt("processing_time", 20);
+		for (String asset : List.of("active", "paused", "committed", "legacy")) {
+			ItemStack first = new ItemStack(ModItems.MEK_CENTRIFUGE.get());
+			ItemStack second = first.copy();
+			CompoundTag root = new CompoundTag();
+			if (asset.equals("legacy")) {
+				root.putIntArray("productivebeesgenesis_pb_progress", new int[] {7});
+			} else if (asset.equals("committed")) {
+				CompoundTag pending = new CompoundTag();
+				pending.putInt("version", 2);
+				pending.putInt("process", 0);
+				pending.putBoolean("prepared", true);
+				ListTag items = new ListTag();
+				CompoundTag stack = (CompoundTag) new ItemStack(Items.DIAMOND).save(provider);
+				stack.putLong("productivebeesgenesis_count", 1);
+				items.add(stack);
+				pending.put("items", items);
+				ListTag entries = new ListTag();
+				entries.add(pending);
+				root.put("productivebeesgenesis_pb_committed_pending", entries);
+			} else {
+				CompoundTag work = new CompoundTag();
+				work.putInt("version", 2);
+				ListTag entries = new ListTag();
+				ListTag suspended = new ListTag();
+				if (asset.equals("active")) entries.add(active.copy());
+				else suspended.add(paused.copy());
+				work.put("entries", entries);
+				work.put("paused", suspended);
+				root.put("productivebeesgenesis_pb_paid_work", work);
+			}
+			second.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(root));
+			ItemStack before = second.copy();
+			var block = ((BlockItem) first.getItem()).getBlock();
+			assertThrows(IllegalArgumentException.class, () -> ApiaryCraftingDataTransfer.mergeMachineInputs(
+					List.of(first, second), block, false,
+					ApiaryCraftingDataTransfer.resolveBlockEntityTypeId(block), null), asset);
+			assertStack(before, second);
+			assertEquals(1, first.getCount());
+		}
+	}
+
+	@Test
+	void singleCentrifugeUpgradeKeepsPausedWorkData() {
+		ItemStack source = new ItemStack(ModItems.MEK_CENTRIFUGE.get());
+		CompoundTag work = new CompoundTag();
+		work.putInt("version", 2);
+		work.put("entries", new ListTag());
+		ListTag paused = new ListTag();
+		CompoundTag entry = new CompoundTag();
+		entry.putString("retained_original", "preserve exact record");
+		paused.add(entry);
+		work.put("paused", paused);
+		CompoundTag root = new CompoundTag();
+		root.put("productivebeesgenesis_pb_paid_work", work);
+		source.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(root));
+		ItemStack before = source.copy();
+		var target = BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse(
+				"productivebeesgenesis:basic_mek_centrifuge_factory"));
+		ItemStack result = new ItemStack(target.asItem());
+		ApiaryCraftingDataTransfer.transferAllBlockEntityData(List.of(source), result, target, false);
+		assertEquals(work, result.get(DataComponents.BLOCK_ENTITY_DATA).copyTag()
+				.getCompound("productivebeesgenesis_pb_paid_work"));
+		assertStack(before, source);
 	}
 
 	@Test

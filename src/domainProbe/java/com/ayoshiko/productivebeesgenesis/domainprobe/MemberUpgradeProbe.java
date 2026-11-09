@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.domainprobe;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiculture.centrifuge.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.core.*;
@@ -8,7 +9,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.ownership.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.persistence.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.*;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
+import com.ayoshiko.productivebeesgenesis.config.ServerConfigRuntime;
 import com.ayoshiko.productivebeesgenesis.config.BalancePreset;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeInventorySlot;
@@ -33,6 +34,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.*;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.AABB;
+import net.neoforged.fml.config.ModConfigs;
 import net.neoforged.neoforge.common.util.FakePlayerFactory;
 import static com.ayoshiko.productivebeesgenesis.apiculture.core.MemberUpgradeService.Action.*;
 import static com.ayoshiko.productivebeesgenesis.apiculture.core.MemberUpgradeService.Status.*;
@@ -263,12 +265,19 @@ final class MemberUpgradeProbe {
 		check(PbUpgradeType.TIME, REMOVE, 10, 1, false, MOVED, 1, revision()); ModConfig.SERVER.beeNetwork.enabled.set(true);
 		var preset = ModConfig.SERVER.balancePreset.get(); int timeLimit = ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount.get();
 		boolean speedExclusive = ModConfig.SERVER.speedUpgradeTiersExclusive.get();
+		var gameplay = ModConfigs.getModConfigs(ProductiveBeesGenesis.MOD_ID).stream()
+				.filter(loaded -> loaded.getSpec() == ModConfig.GAMEPLAY_SERVER_SPEC)
+				.findFirst().orElseThrow();
 		try {
-			ModConfig.SERVER.balancePreset.set(BalancePreset.CUSTOM); ModConfig.SERVER.speedUpgradeTiersExclusive.set(false);
-			ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount.set(8); BalanceConfig.refresh(false);
+			ModConfig.SERVER.balancePreset.set(BalancePreset.CUSTOM);
+			ModConfig.SERVER.speedUpgradeTiersExclusive.set(false);
+			ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount.set(8);
+			ServerConfigRuntime.onConfig(gameplay, false);
 			check(PbUpgradeType.TIME, INSTALL, 10, 6, false, MOVED, 6, revision());
 			check(PbUpgradeType.TIME_2, INSTALL, 12, 1, false, MOVED, 1, revision());
-			ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount.set(4); ModConfig.SERVER.speedUpgradeTiersExclusive.set(true); BalanceConfig.refresh(false);
+			ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount.set(4);
+			ModConfig.SERVER.speedUpgradeTiersExclusive.set(true);
+			ServerConfigRuntime.onConfig(gameplay, false);
 			check(PbUpgradeType.TIME, INSTALL, 10, 1, false, CONFLICT, 0, revision());
 			check(PbUpgradeType.TIME_2, REMOVE, 12, 1, false, MOVED, 1, revision());
 			check(PbUpgradeType.TIME, INSTALL, 10, 1, false, LIMIT, 0, revision());
@@ -277,8 +286,10 @@ final class MemberUpgradeProbe {
 			new MachineAssetStore(target).validate(record().returnImage(), player.serverLevel());
 			check(PbUpgradeType.TIME, REMOVE, 10, 5, false, MOVED, 5, revision());
 		} finally {
-			ModConfig.SERVER.balancePreset.set(preset); ModConfig.SERVER.speedUpgradeTiersExclusive.set(speedExclusive);
-			ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount.set(timeLimit); BalanceConfig.refresh(false);
+			ModConfig.SERVER.balancePreset.set(preset);
+			ModConfig.SERVER.speedUpgradeTiersExclusive.set(speedExclusive);
+			ModConfig.SERVER.mekCentrifugePbUpgradeTimeMaxCount.set(timeLimit);
+			ServerConfigRuntime.onConfig(gameplay, false);
 		}
 		slot(10, PbUpgradeInventorySlot.getRepresentativeStack(PbUpgradeType.PRODUCTIVITY).copyWithCount(2));
 		slot(12, PbUpgradeInventorySlot.getRepresentativeStack(PbUpgradeType.PRODUCTIVITY_2));

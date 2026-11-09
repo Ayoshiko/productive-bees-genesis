@@ -11,7 +11,6 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -65,24 +64,54 @@ final class ApiaryTilePersistence {
 	/** 构建升级数据（构建后立即清空旧方块所有槽位，防止 setRemoved 重复掉落） */
 	@org.jetbrains.annotations.Nullable
 	static ApiaryUpgradeData getUpgradeData(TileEntityMekApiary tile, HolderLookup.Provider provider) {
-		if (!com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.canUpgrade(tile)) return null;
-		var resourceUpgrade = com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.prepareUpgrade(tile);
-		ApiaryUpgradeData data = tile.nbtSerializer().buildUpgradeData(
-				provider, tile.getRedstoneControl(), tile.getSortingForUpgradeData());
-		data.resourceUpgrade = resourceUpgrade;
-		// 模块 3 Bug 2：outputItems 字段已是深拷贝（独立于 outputSlots 引用），清空槽位不影响升级数据完整性
-		saveAllItemsForDrop(tile);
-		return data;
+		if (tile.upgradeRecovery().blocked()
+				|| !com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.canUpgrade(tile)) return null;
+		ApiaryUpgradeData data;
+		try {
+			data = tile.nbtSerializer().buildUpgradeData(
+					provider, tile.getRedstoneControl(), tile.getSortingForUpgradeData());
+			data.resourceUpgrade = com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.prepareUpgrade(tile);
+		} catch (RuntimeException | LinkageError failure) {
+			ProductiveBeesGenesis.LOGGER.error("蜂箱升级预检或来源编码失败，原机未清空：{}", tile.getBlockPos(), failure);
+			return null;
+		}
+		tile.upgradeRecovery().begin(data.request, data.sourceSnapshot, "source_clear");
+		try {
+			clearForUpgrade(tile, provider);
+			tile.upgradeRecovery().sourceCleared();
+			return data;
+		} catch (RuntimeException | LinkageError failure) {
+			tile.upgradeRecovery().fail(failure);
+			ProductiveBeesGenesis.LOGGER.error("蜂箱升级源端清空失败，完整快照已保管：{}", tile.getBlockPos(), failure);
+			return null;
+		}
 	}
 
-	/** 应用升级数据；返回 false 时由调用方回退到父类实现 */
-	static boolean applyUpgradeData(TileEntityMekApiary tile, HolderLookup.Provider provider,
+	/** 只有未识别数据才交父类；已保管和完整应用保持不同结果。 */
+	static ApiaryNbtSerializer.UpgradeResult applyUpgradeData(TileEntityMekApiary tile, HolderLookup.Provider provider,
 			@NotNull IUpgradeData upgradeData) {
-		boolean applied = tile.nbtSerializer().applyUpgradeData(provider, upgradeData);
-		if (applied && upgradeData instanceof ApiaryUpgradeData apiary && apiary.resourceUpgrade != null) {
-			apiary.resourceUpgrade.apply(tile);
+		return tile.nbtSerializer().applyUpgradeData(provider, upgradeData);
+	}
+
+	/** 安装器源端不吞清空异常；中断后保管记录继续拥有尚未明确转出的部分。 */
+	private static void clearForUpgrade(TileEntityMekApiary tile, HolderLookup.Provider provider) {
+		tile.getGeneTreatRestock().clearAfterTransfer();
+		for (BeeSlot slot : tile.getBeeSlots()) {
+			slot.clear();
 		}
-		return applied;
+		for (FeederInventorySlot slot : tile.feederSlotManager.getFeederInventorySlots()) {
+			slot.setStack(ItemStack.EMPTY);
+		}
+		for (var slot : tile.getInventorySlots(null)) {
+			slot.setStack(ItemStack.EMPTY);
+		}
+		tile.getFluidTank().setEmpty();
+		tile.setPendingHoneyFluid(0, null);
+		tile.getOutputBuffer().clear();
+		tile.productionState().load(provider, new CompoundTag());
+		tile.tickHandler.clearTransferredCycles();
+		tile.setSelectedBeeSlot(-1);
+		tile.setChanged();
 	}
 
 	/**
@@ -217,32 +246,12 @@ final class ApiaryTilePersistence {
 		}
 	}
 
-	/** 设置配置卡数据 — 粘贴PB升级（生存模式消耗物品，创造模式直接安装） */
-	static void setConfigurationData(TileEntityMekApiary tile, @NotNull HolderLookup.Provider provider,
+	/** 设置配置卡数据；返回 false 时宿主保持全部配置。 */
+	static boolean setConfigurationData(TileEntityMekApiary tile,
 			@Nullable net.minecraft.world.entity.player.Player player, @NotNull CompoundTag data) {
-		PbConfigCardDataHelper.readAndApplyPbUpgrades(data, player,
-				tile::installPbUpgrade,
-				() -> clearAllPbUpgrades(tile),
-				PbConfigCardDataHelper.MachineType.APIARY);
+		return tile.pbUpgradeHandler().applyConfiguration(data, player);
 	}
 
-	/**
-	 * 清空所有已安装PB升级 — 供配置卡粘贴前调用
-	 * <br/>
-	 * 修复物品守恒：removePbUpgrade 返回的 ItemStack 列表必须消费，
-	 * 由调用方（PbConfigCardDataHelper.readAndApplyPbUpgrades）注入玩家物品栏或掉落地面。
-	 *
-	 * @return 被清空的 PB 升级物品栈列表
-	 */
-	private static List<ItemStack> clearAllPbUpgrades(TileEntityMekApiary tile) {
-		List<ItemStack> dropped = new ArrayList<>();
-		for (PbUpgradeType type : PbUpgradeType.values()) {
-			if (!type.isBuiltin() && tile.pbUpgradeHandler().getPbUpgradeCount(type) > 0) {
-				dropped.addAll(tile.pbUpgradeHandler().removePbUpgrade(type, true));
-			}
-		}
-		return dropped;
-	}
 
 	/** 保存AE2 per-tile状态到NBT — 供 ApiaryNbtSerializer 扳手拆卸持久化调用 */
 	static void saveAe2PerTileState(TileEntityMekApiary tile, CompoundTag nbt) {

@@ -8,6 +8,7 @@ import mekanism.common.tile.base.TileEntityMekanism;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
@@ -51,6 +52,9 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 
 	/** PB升级安装数量映射（服务端） */
 	private final Map<PbUpgradeType, Integer> pbUpgradeCounts = new EnumMap<>(PbUpgradeType.class);
+	private Tag unresolvedCounts;
+	private Tag unresolvedInputSlot;
+	private Tag unresolvedOutputSlot;
 
 	/** 客户端同步用：升级数量缓存（AtomicIntegerArray 保证可见性） */
 	private final AtomicIntegerArray clientUpgradeCounts = new AtomicIntegerArray(PbUpgradeType.values().length);
@@ -89,6 +93,20 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	@NotNull
 	public PbUpgradeInventorySlot getPbUpgradeOutputSlot() { return outputSlot; }
 
+	boolean applyConfiguration(CompoundTag data, Player player) {
+		if (hasUnresolvedData()) return false;
+		if (tile.getLevel() == null || tile.getLevel().isClientSide) {
+			return false;
+		}
+		return PbConfigCardDataHelper.readAndApplyPbUpgrades(data, player, pbUpgradeCounts,
+				this::getLimit, counts -> {
+					pbUpgradeCounts.clear();
+					pbUpgradeCounts.putAll(counts);
+					upgradeCountsVersion++;
+					tile.setChanged();
+				}, PbConfigCardDataHelper.MachineType.CENTRIFUGE);
+	}
+
 	// ===== 安装/卸载 =====
 
 	/**
@@ -97,6 +115,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * 受类型上限限制，超过上限返回 false。仅接受离心机支持的类型。
 	 */
 	boolean installPbUpgrade(PbUpgradeType type) {
+		if (hasUnresolvedData()) return false;
 		if (tile.getLevel() == null || tile.getLevel().isClientSide) return false;
 		if (type == null || type.isBuiltin() || !isSupported(type)) return false;
 		int current = pbUpgradeCounts.getOrDefault(type, 0);
@@ -121,6 +140,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * @return 实际安装数量（0 表示未安装，可能因类型无效、不支持或已达上限）
 	 */
 	int installPbUpgradeBulk(PbUpgradeType type, int maxAvailable) {
+		if (hasUnresolvedData()) return 0;
 		if (tile.getLevel() == null || tile.getLevel().isClientSide) return 0;
 		if (type == null || type.isBuiltin() || !isSupported(type)) return 0;
 		if (maxAvailable <= 0) return 0;
@@ -146,6 +166,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * @return true 如果成功卸载
 	 */
 	boolean extractPbUpgradeByType(PbUpgradeType type) {
+		if (hasUnresolvedData()) return false;
 		if (tile.getLevel() == null || tile.getLevel().isClientSide) return false;
 		if (type == null || type.isBuiltin() || !isSupported(type)) return false;
 		int current = pbUpgradeCounts.getOrDefault(type, 0);
@@ -187,6 +208,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 */
 	@NotNull
 	List<ItemStack> removePbUpgrade(PbUpgradeType type, boolean removeAll) {
+		if (hasUnresolvedData()) return Collections.emptyList();
 		if (tile.getLevel() == null || tile.getLevel().isClientSide) return Collections.emptyList();
 		if (type == null || type.isBuiltin() || !isSupported(type)) return Collections.emptyList();
 		int current = pbUpgradeCounts.getOrDefault(type, 0);
@@ -215,6 +237,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * 然后重置计数器。输入为空或无效时重置计数器。
 	 */
 	void processPbUpgradeInput() {
+		if (hasUnresolvedData()) return;
 		if (tile.getLevel() == null || tile.getLevel().isClientSide) return;
 		ItemStack input = inputSlot.getStack();
 		if (input.isEmpty()) { installTicks = 0; return; }
@@ -352,6 +375,10 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 
 	/** 保存PB升级数量映射到NBT */
 	void saveCounts(@NotNull CompoundTag nbt) {
+		if (unresolvedCounts != null) {
+			nbt.put(NBT_KEY_COUNTS, unresolvedCounts.copy());
+			return;
+		}
 		CompoundTag countsTag = new CompoundTag();
 		for (Map.Entry<PbUpgradeType, Integer> entry : pbUpgradeCounts.entrySet()) {
 			if (entry.getValue() > 0) {
@@ -370,35 +397,53 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	@Override
 	public void loadCounts(@NotNull CompoundTag nbt) {
 		pbUpgradeCounts.clear();
-		if (nbt.contains(NBT_KEY_COUNTS, Tag.TAG_COMPOUND)) {
-			CompoundTag countsTag = nbt.getCompound(NBT_KEY_COUNTS);
-			for (String typeId : countsTag.getAllKeys()) {
-				PbUpgradeType type = PbUpgradeType.byId(typeId);
-				if (type != null && !type.isBuiltin() && isSupported(type)) {
-					int count = countsTag.getInt(typeId);
-					if (count > 0) {
-						// Persisted counts are authoritative; caps affect future installs only.
-						pbUpgradeCounts.put(type, count);
-					}
+		unresolvedCounts = null;
+		Tag raw = nbt.get(NBT_KEY_COUNTS);
+		if (raw != null) {
+			try {
+				if (!(raw instanceof CompoundTag counts)) throw new IllegalArgumentException("Invalid PB upgrade counts");
+				for (String id : counts.getAllKeys()) {
+					PbUpgradeType type = PbUpgradeType.byId(id);
+					if (type == null || type.isBuiltin() || !isSupported(type)
+							|| !counts.contains(id, Tag.TAG_INT) || counts.getInt(id) < 0)
+						throw new IllegalArgumentException("Unknown PB upgrade count");
+					if (counts.getInt(id) > 0) pbUpgradeCounts.put(type, counts.getInt(id));
 				}
+			} catch (RuntimeException invalid) {
+				unresolvedCounts = raw.copy();
 			}
 		}
 		upgradeCountsVersion++;
 	}
 
-	/** 保存PB升级输入/输出槽到NBT */
-	void saveSlots(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
-		nbt.put(NBT_KEY_INPUT, inputSlot.serializeNBT(provider));
-		nbt.put(NBT_KEY_OUTPUT, outputSlot.serializeNBT(provider));
+	public boolean hasUnresolvedData() {
+		return unresolvedCounts != null || unresolvedInputSlot != null || unresolvedOutputSlot != null;
 	}
 
-	/** 从NBT加载PB升级输入/输出槽 */
+	/** 保存PB升级输入/输出槽到NBT */
+	void saveSlots(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
+		nbt.put(NBT_KEY_INPUT, unresolvedInputSlot == null ? inputSlot.serializeNBT(provider) : unresolvedInputSlot.copy());
+		nbt.put(NBT_KEY_OUTPUT, unresolvedOutputSlot == null ? outputSlot.serializeNBT(provider) : unresolvedOutputSlot.copy());
+	}
+
+	/** 无法解码的升级槽原文留在原字段，安装器和后续升级操作均停止。 */
 	void loadSlots(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
-		if (nbt.contains(NBT_KEY_INPUT, Tag.TAG_COMPOUND)) {
-			inputSlot.deserializeNBT(provider, nbt.getCompound(NBT_KEY_INPUT));
-		}
-		if (nbt.contains(NBT_KEY_OUTPUT, Tag.TAG_COMPOUND)) {
-			outputSlot.deserializeNBT(provider, nbt.getCompound(NBT_KEY_OUTPUT));
+		unresolvedInputSlot = loadSlot(nbt.get(NBT_KEY_INPUT), inputSlot, provider);
+		unresolvedOutputSlot = loadSlot(nbt.get(NBT_KEY_OUTPUT), outputSlot, provider);
+	}
+
+	private static Tag loadSlot(Tag raw, PbUpgradeInventorySlot slot, HolderLookup.Provider provider) {
+		if (raw == null) return null;
+		try {
+			if (!(raw instanceof CompoundTag saved) || !java.util.Set.of("item").containsAll(saved.getAllKeys()))
+				throw new IllegalArgumentException("Invalid PB upgrade slot");
+			if (saved.contains("item") && (!saved.contains("item", Tag.TAG_COMPOUND)
+					|| mekanism.api.SerializerHelper.parseOversizedOptional(provider, saved.getCompound("item")).isEmpty()))
+				throw new IllegalArgumentException("Invalid PB upgrade item");
+			slot.deserializeNBT(provider, saved);
+			return null;
+		} catch (RuntimeException invalid) {
+			return raw.copy();
 		}
 	}
 

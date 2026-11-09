@@ -1,64 +1,92 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
+import com.ayoshiko.productivebeesgenesis.network.OpenAeInputConfigPayload;
 import mekanism.client.gui.GuiMekanism;
 import mekanism.client.gui.element.GuiElement;
 import mekanism.client.gui.element.button.MekanismButton;
+import mekanism.common.inventory.container.tile.MekanismTileContainer;
+import mekanism.common.lib.transmitter.TransmissionType;
+import mekanism.common.tile.base.TileEntityMekanism;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
+import net.neoforged.neoforge.network.PacketDistributor;
 
-import java.util.function.Consumer;
+import java.util.function.Supplier;
 
-/**
-	 * AE2 输入拉取按钮 — 注入到 MEK 侧面配置窗口
-	 * <br/>
-	 * 14×14 像素按钮，复用于 3 个输入控制按钮（拉取开关/NBT忽略/过滤模式）。
-	 * 点击时通过回调发送对应网络包到服务端。
-	 * <p>
-	 * 继承 {@link MekanismButton} 复用渲染管线，使用 DEFAULT 灰色背景
-	 * （{@link GuiElement.ButtonBackground#DEFAULT}），与 GuiAeInputConfig 中的
-	 * CtrlButton 视觉一致，避免与 MEK SideConfig 窗口原版按钮风格冲突。
-	 * <p>
-	 * <b>target 字段</b>：由 {@link AeInputOverlay#ensureButtons} 每帧更新，
-	 * 指向当前侧面配置窗口的上下文。点击回调通过 target 获取方块坐标发送网络包。
-	 * <p>
-	 * <b>双重点击处理</b>：{@link AeInputOverlay#mouseClicked} 事件处理器在 Pre 阶段
-	 * 拦截点击，按钮自身的 onPress 回调作为后备路径，确保即使事件被其他模组取消也能响应。
-	 * 两者不会同时执行（事件取消后按钮不接收点击）。
-	 */
-public class AeInputButton extends MekanismButton {
+/** 侧面配置窗口内的输入配置入口；窗口实例独占控件，关闭后不再接受请求。 */
+public final class AeInputButton extends MekanismButton {
+	private final MekanismTileContainer<?> menu;
+	private final TileEntityMekanism tile;
+	private final IAe2InputHost host;
+	private final Supplier<TransmissionType> selectedType;
+	private final Tooltip openTooltip = Tooltip.create(
+			Component.translatable("productivebeesgenesis.gui.ae_input_config.open"));
+	private final Tooltip disabledTooltip = Tooltip.create(
+			Component.translatable("productivebeesgenesis.gui.ae2_input.global_disabled"));
+	private boolean closed;
 
-	/** 按钮尺寸（宽=高） */
-	private static final int BUTTON_SIZE = 14;
-
-	/** 当前覆盖层目标 — 由 AeInputOverlay 每帧更新 */
-	AeInputOverlay.OverlayTarget target;
-
-	/** 点击回调 — 接收当前 target 执行对应网络包发送 */
-	private final Consumer<AeInputOverlay.OverlayTarget> onClick;
-
-	/**
-	 * 构造 AE2 输入按钮
-	 *
-	 * @param gui     Mekanism GUI 实例
-	 * @param x       按钮 X 坐标（相对 GUI 左上角）
-	 * @param y       按钮 Y 坐标（相对 GUI 左上角）
-	 * @param label   按钮显示文字
-	 * @param onClick 点击回调（发送对应网络包）
-	 * @param target  初始覆盖层目标
-	 */
-	public AeInputButton(GuiMekanism<?> gui, int x, int y, Component label,
-			Consumer<AeInputOverlay.OverlayTarget> onClick,
-			AeInputOverlay.OverlayTarget target) {
-		super(gui, x, y, BUTTON_SIZE, BUTTON_SIZE, label, (element, mouseX, mouseY) -> {
-			if (element instanceof AeInputButton button && button.target != null) {
-				button.onClick.accept(button.target);
-				return true;
-			}
-			return false;
-		});
-		// 使用 DEFAULT 灰色背景，与 GuiAeInputConfig.CtrlButton 一致
+	public AeInputButton(GuiMekanism<?> screen, int x, int y, MekanismTileContainer<?> menu,
+			Supplier<TransmissionType> selectedType) {
+		super(screen, x, y, 14, 14, Component.literal("I"), AeInputButton::requestOpen, null);
 		setButtonBackground(GuiElement.ButtonBackground.DEFAULT);
-		this.target = target;
-		this.onClick = onClick;
+		this.menu = menu;
+		this.tile = menu.getTileEntity();
+		if (!(tile instanceof IAe2InputHost inputHost)) {
+			throw new IllegalArgumentException("AE input controls require an AE input host");
+		}
+		this.host = inputHost;
+		this.selectedType = selectedType;
+		refreshState();
+	}
+
+	@Override
+	public void tick() {
+		super.tick();
+		refreshState();
+	}
+
+	public void refreshState() {
+		visible = !closed && selectedType.get() == TransmissionType.ITEM;
+		boolean globallyEnabled = ModConfig.SERVER != null && ModConfig.SERVER.mekCentrifugeAeInputEnabled != null
+				&& ModConfig.SERVER.mekCentrifugeAeInputEnabled.get();
+		active = visible && globallyEnabled && hasCurrentMenu();
+		setTooltip(globallyEnabled ? openTooltip : disabledTooltip);
+	}
+
+	private boolean hasCurrentMenu() {
+		Minecraft client = Minecraft.getInstance();
+		return gui() instanceof GuiMekanism<?> screen && client.screen == screen && client.player != null && client.level != null
+				&& client.player.containerMenu == menu && screen.getMenu() == menu
+				&& menu.getTileEntity() == tile && !tile.isRemoved() && tile.getLevel() == client.level
+				&& client.level.getBlockEntity(tile.getBlockPos()) == tile;
+	}
+
+	private static boolean requestOpen(GuiElement element, double mouseX, double mouseY) {
+		AeInputButton button = (AeInputButton) element;
+		button.refreshState();
+		if (!button.active || !button.visible) {
+			return false;
+		}
+		return button.openConfigWindow();
+	}
+
+	private boolean openConfigWindow() {
+		if (!(gui() instanceof GuiMekanism<?> screen)) {
+			return false;
+		}
+		if (screen.getWindows().stream().anyMatch(GuiAeInputConfig.class::isInstance)) {
+			return false;
+		}
+		GuiAeInputConfig window = new GuiAeInputConfig(screen, 20, 20, host, null);
+		if (ModConfig.SERVER != null && ModConfig.SERVER.mekCentrifugeAeInputMinPages != null) {
+			window.setMinPages(ModConfig.SERVER.mekCentrifugeAeInputMinPages.get());
+		}
+		screen.addWindow(window);
+		PacketDistributor.sendToServer(new OpenAeInputConfigPayload(tile.getBlockPos()));
+		return true;
 	}
 
 	@Override
@@ -69,5 +97,13 @@ public class AeInputButton extends MekanismButton {
 	@Override
 	protected boolean displayButtonTextShadow() {
 		return false;
+	}
+
+	@Override
+	public void onWindowClose() {
+		closed = true;
+		visible = false;
+		active = false;
+		super.onWindowClose();
 	}
 }

@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -30,9 +31,10 @@ public final class BeeDesignerArchive {
 			throw new IOException("Project must be a regular file");
 		}
 		JsonObject root;
-		if (path.getFileName().toString().endsWith(".zip")) {
+		String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
+		if (name.endsWith(".zip")) {
 			root = readZip(path);
-		} else if (path.getFileName().toString().endsWith(".json")) {
+		} else if (name.endsWith(".json")) {
 			if (Files.size(path) > BeeDesignerStore.MAX_PACK_BYTES) {
 				throw new IOException("Project exceeds the import budget");
 			}
@@ -96,13 +98,13 @@ public final class BeeDesignerArchive {
 	}
 
 	private static JsonObject parseIndex(String raw) {
-		// 总工程可大于单蜂网络包；在解析前逐字符检查深度，避免深嵌套输入递归。
-		BeeDesignerProtocol.checkDepth(raw);
+		// 索引根对象额外占一层；解析后每蜂仍由 validateStructure 限制为 32 层和 28000 字节。
+		BeeDesignerProtocol.checkDepth(raw, BeeDesignerProtocol.MAX_DEPTH + 1);
 		return com.google.gson.JsonParser.parseString(raw).getAsJsonObject();
 	}
 
 	private static void add(Map<String, String> result, JsonObject document) {
-		BeeDesignerCompiler.validateStructure(document);
+		BeeDesignerCompiler.validateImportedStructure(document);
 		BeeDesignerLegacyOutputs.capture(document);
 		String id = document.get("id").getAsString();
 		if (result.putIfAbsent(id, document.toString()) != null) {
@@ -124,6 +126,21 @@ public final class BeeDesignerArchive {
 		Map<String, String> files = new LinkedHashMap<>(BeeDesignerCompiler.files(BeeDesignerCollection.sources(documents, credits)));
 		files.put("data/productivebeesgenesis/bee_designer/credits.json", creditsFile(documents, credits));
 		return BeeDesignerStore.write(directory, files, true).source();
+	}
+
+	private static boolean disabledRecipe(String raw) {
+		JsonObject recipe = BeeDesignerProtocol.parse(raw);
+		var conditions = recipe.get("neoforge:conditions");
+		if (conditions == null || !conditions.isJsonArray()) {
+			return false;
+		}
+		for (var condition : conditions.getAsJsonArray()) {
+			if (condition.isJsonObject() && "neoforge:false".equals(
+					BeeDesignerDocument.text(condition.getAsJsonObject(), "type", ""))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static String creditsFile(Map<String, String> documents, JsonObject credits) {
@@ -154,7 +171,7 @@ public final class BeeDesignerArchive {
 				String id = parts[1] + ":" + parts[2].substring("recipe/".length(), parts[2].length() - 5);
 				String quoted = new JsonPrimitive(id).toString();
 				script.append("  event.remove({id: ").append(quoted).append("});\n");
-				if (activeRecipes.contains(id) && !entry.getValue().contains("\"neoforge:false\"")) {
+				if (activeRecipes.contains(id) && !disabledRecipe(entry.getValue())) {
 					String json = new JsonPrimitive(entry.getValue()).toString().replace("\u2028", "\\u2028").replace("\u2029", "\\u2029");
 					script.append("  event.custom(JSON.parse(").append(json).append(")).id(").append(quoted).append(");\n");
 				}

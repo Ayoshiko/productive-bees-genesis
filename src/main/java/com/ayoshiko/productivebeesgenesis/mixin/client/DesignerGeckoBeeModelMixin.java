@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mixin.client;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesisClient;
 import com.ayoshiko.productivebeesgenesis.client.screen.authoring.DesignerPreviewData;
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
 import net.minecraft.nbt.CompoundTag;
@@ -24,6 +25,8 @@ public abstract class DesignerGeckoBeeModelMixin {
 	private Map<ResourceLocation, ResourceLocation> animationCache;
 	@Unique
 	private Map<ResourceLocation, CompoundTag> productivebeesgenesis$modelDeclarations;
+	@Unique
+	private long productivebeesgenesis$resourceGeneration = -1;
 	@Inject(method = "getModelResource(Lcy/jdkdigital/productivebees/common/entity/bee/GeckoBee;)Lnet/minecraft/resources/ResourceLocation;",
 			at = @At("HEAD"), cancellable = true, remap = false)
 	private void productivebeesgenesis$previewModel(@Coerce ConfigurableBee bee, CallbackInfoReturnable<ResourceLocation> callback) {
@@ -53,6 +56,13 @@ public abstract class DesignerGeckoBeeModelMixin {
 	private void productivebeesgenesis$refreshDeclaration(ConfigurableBee bee) {
 		if (productivebeesgenesis$modelDeclarations == null) {
 			productivebeesgenesis$modelDeclarations = new LinkedHashMap<>(64, 0.75F, true);
+		}
+		long resources = ProductiveBeesGenesisClient.resourceGeneration();
+		if (productivebeesgenesis$resourceGeneration != resources) {
+			productivebeesgenesis$modelDeclarations.clear();
+			modelCache.clear();
+			animationCache.clear();
+			productivebeesgenesis$resourceGeneration = resources;
 		}
 		ResourceLocation type = bee.getBeeType();
 		CompoundTag data = bee.getNBTData();

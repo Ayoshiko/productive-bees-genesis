@@ -25,7 +25,7 @@ class Ae2PendingItemBufferTest {
 	@Test
 	void inputPullerDoesNotClampExtractRequestToBufferRoom() throws Exception {
 		String source = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java"));
+				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputExecution.java"));
 		// 抽取量必须直接用槽位容量算出的 amount，不得再被 pending 缓冲额度截断
 		assertTrue(source.contains("transfer.beginExtract(() -> fingerprintCache.get(key, level.registryAccess()), amount)"));
 		assertTrue(source.contains("meStorage.extract(key, transfer.offeredAmount(), Actionable.MODULATE, actionSource)"));

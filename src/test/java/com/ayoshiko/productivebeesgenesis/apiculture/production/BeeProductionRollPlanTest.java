@@ -28,7 +28,7 @@ class BeeProductionRollPlanTest {
 			var expectedRandom = new Random(731_901);
 			var actualRandom = new Random(731_901);
 			for (int cycle = 0; cycle < 2_048; cycle++) {
-				int expected = BeeProduceBatchSampler.sampleRollCount(expectedRandom, 1, multiplier);
+				long expected = BeeProduceBatchSampler.sampleRollCount(expectedRandom, 1, multiplier);
 				double draw = multiplier == Math.floor(multiplier) ? 0 : actualRandom.nextDouble();
 				assertEquals(BigInteger.valueOf(expected), plan.sampleCycle(draw).exact(), "multiplier=" + multiplier);
 			}
@@ -42,8 +42,11 @@ class BeeProductionRollPlanTest {
 		assertEquals(5, BeeProductionSampling.adjustStackCount(2, 1));
 		for (int gene = 0; gene <= 3; gene++) {
 			for (int base = 1; base <= 64; base++) {
-				int perStack = gene == 0 ? base : base == 1 ? 1 + gene
-						: base + Math.round((1f / (gene + 2f) + (gene + 1f) / 2f) * base);
+				int perStack = base;
+				if (gene > 0) {
+					perStack = base == 1 ? 1 + gene
+							: base + Math.round((1f / (gene + 2f) + (gene + 1f) / 2f) * base);
+				}
 				assertEquals(BigInteger.valueOf(2L * perStack), plan.guaranteedOutput(base, gene, 0.75).exact());
 			}
 		}

@@ -68,11 +68,9 @@ public final class MekCentrifugeFactoryHelper {
 	/** Cached global smelting-compat master switch (refreshed on config load/reload, volatile read per probe). */
 	private static volatile boolean cachedSmeltingCompatGlobalEnabled = true;
 
-	/** Refresh the cached global smelting-compat master switch (called from ModConfigEvent listeners). */
-	public static void refreshSmeltingCompatConfig() {
-		cachedSmeltingCompatGlobalEnabled = ModConfig.SERVER != null
-				&& ModConfig.SERVER.mekCentrifugeSmeltingCompatEnabled != null
-				&& ModConfig.SERVER.mekCentrifugeSmeltingCompatEnabled.get();
+	/** 在游戏线程发布配置快照，避免监听线程改动运行时配方状态。 */
+	public static void publishSmeltingCompatConfig(boolean enabled) {
+		cachedSmeltingCompatGlobalEnabled = enabled;
 	}
 
 	/**

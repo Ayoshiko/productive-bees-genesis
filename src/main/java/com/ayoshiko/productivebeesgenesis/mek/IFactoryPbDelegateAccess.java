@@ -156,7 +156,9 @@ public interface IFactoryPbDelegateAccess extends IAe2OutputHostBase, IMekCentri
 	@Override
 	default boolean productivebeesgenesis$isValidInput(net.minecraft.world.item.ItemStack stack) {
 		var resourceProcessor = productivebeesgenesis$getPbProcessor();
-		if (resourceProcessor != null && resourceProcessor.acceptsResourceInput(stack)) return resourceProcessor.allowsNewResourceInput(stack);
+		if (resourceProcessor != null && resourceProcessor.acceptsResourceInput(stack)) {
+			return resourceProcessor.allowsNewResourceInput(stack) || resourceProcessor.hasRetainedInput(stack);
+		}
 		// 万象创世蜜脾/蜜脾块由动态特殊路径处理，没有静态 PB 配方，
 		// 不能按普通 PB 输入的 findPbRecipe 结果判无效。
 		if (MyriadCreationsEventHandler.isMyriadCreationsItem(stack)) return true;
@@ -164,12 +166,12 @@ public interface IFactoryPbDelegateAccess extends IAe2OutputHostBase, IMekCentri
 		// 与基础离心机 TileEntityMekCentrifuge.containsRecipe 语义一致
 		if (productivebeesgenesis$isPbCombInput(stack)) {
 			PbRecipeProcessor processor = productivebeesgenesis$getPbProcessor();
-			return processor != null && processor.findPbRecipe(stack) != null;
+			return processor != null && (processor.findPbRecipe(stack) != null || processor.hasRetainedInput(stack));
 		}
 		// 非 PB 蜜脾：同时检查 SMELTING 配方和 PB CentrifugeRecipe
 		if (containsSmeltingInput(stack)) return true;
 		// NPE 防御:接口默认方法无法保证所有实现类都正确初始化 pbProcessor
 		PbRecipeProcessor processor = productivebeesgenesis$getPbProcessor();
-		return processor != null && processor.findPbRecipe(stack) != null;
+		return processor != null && (processor.findPbRecipe(stack) != null || processor.hasRetainedInput(stack));
 	}
 }

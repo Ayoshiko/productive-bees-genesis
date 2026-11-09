@@ -61,6 +61,27 @@ class ResourceInventoryMinecraftTest {
         assertTrue(repair.reset()); assertEquals(changed, amounts(client.apply(roundTrip(repair))));
         assertEquals(Map.of(), amounts(client.apply(roundTrip(server.update(Map.of(), client.revision())))));
     }
+    @Test void unchangedExactDirectoryStillDetectsInPlaceMutationAndLostAcknowledgement() {
+        var server = new ResourceInventoryDelta.Publisher();
+        var client = new ResourceInventoryDelta.Receiver();
+        var current = new LinkedHashMap<ResourceKey, java.math.BigInteger>();
+        current.put(ResourceTypes.FE, java.math.BigInteger.TEN);
+        client.apply(roundTrip(server.update(current, 0)));
+        assertTrue(server.update(current, client.revision()).entries().isEmpty());
+        current.put(ResourceTypes.FE, java.math.BigInteger.valueOf(11));
+        var changed = server.update(current, client.revision());
+        assertEquals(1, changed.entries().size());
+        assertNull(changed.entries().getFirst().key());
+        assertEquals(11L, client.apply(roundTrip(changed)).getFirst().amount());
+        current.put(ResourceTypes.FE, java.math.BigInteger.ZERO);
+        assertThrows(IllegalArgumentException.class, () -> server.update(current, client.revision()));
+        current.put(ResourceTypes.FE, java.math.BigInteger.valueOf(11));
+        assertTrue(server.update(current, client.revision()).entries().isEmpty());
+        var reset = server.update(current, 0);
+        assertTrue(reset.reset());
+        assertEquals(11L, client.apply(roundTrip(reset)).getFirst().amount());
+    }
+
     @Test void fullDirectoryChurnStaysBoundedAndDoesNotConfuseReusedIds() {
         var server = new ResourceInventoryDelta.Publisher(); var client = new ResourceInventoryDelta.Receiver();
         var current = products(ResourceInventoryDelta.MAX_ENTRIES);

@@ -3,6 +3,12 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
+import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
+import cy.jdkdigital.productivebees.init.ModFluids;
+import mekanism.api.Action;
+import mekanism.api.AutomationType;
+import mekanism.common.tile.base.TileEntityMekanism;
+import net.neoforged.neoforge.fluids.FluidStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -237,6 +243,76 @@ class Ae2FilterPersistenceMinecraftTest {
         var reused = configuration();
         holder.savePerTileState(reused);
         assertFalse(reused.contains(KEY));
+    }
+
+    @Test
+    void malformedTagFilterKeepsRawTypeAndBlocksInputAndEditingAcrossRestore() {
+        var wrongField = new CompoundTag();
+        wrongField.putInt("w", 1);
+        var future = new CompoundTag();
+        future.putInt("version", 2);
+        future.putString("w", "c:ingots/iron");
+        var tooLong = new CompoundTag();
+        tooLong.putString("w", "a".repeat(Ae2TagFilter.MAX_EXPRESSION_LENGTH + 1));
+        var nestedRaw = new CompoundTag();
+        nestedRaw.putString("invalid_data", "original field");
+        for (net.minecraft.nbt.Tag raw : List.of(StringTag.valueOf("raw"), wrongField, future, tooLong, nestedRaw)) {
+            var holder = new Ae2OutputStateHolder();
+            var input = new CompoundTag();
+            input.put(Ae2NbtKeys.NBT_KEY_AE_INPUT_TAG_FILTER, raw);
+            holder.loadPerTileState(input);
+            assertTrue(holder.hasDeferredInputFilter());
+            assertTrue(holder.getAeTagFilter().hasInvalidData());
+            assertFalse(holder.getAeTagFilter().apply("c:ingots/iron", ""));
+            assertFalse(holder.retryInputFilterData());
+            assertEquals(raw, save(holder).get(Ae2NbtKeys.NBT_KEY_AE_INPUT_TAG_FILTER));
+            var upgrade = new CompoundTag();
+            holder.getAeTagFilter().save(upgrade);
+            var restored = new Ae2TagFilter();
+            restored.load(upgrade);
+            assertTrue(restored.hasInvalidData());
+            assertEquals(raw, restored.saveRaw());
+            holder.loadPerTileState(new CompoundTag());
+            assertFalse(holder.hasDeferredInputFilter());
+        }
+        var normal = new Ae2TagFilter();
+        var invalidSyntax = new CompoundTag();
+        invalidSyntax.putString("w", "(");
+        invalidSyntax.putString("b", "c:ingots/iron");
+        normal.loadRaw(invalidSyntax);
+        assertFalse(normal.hasInvalidData());
+        assertTrue(normal.hasError());
+        assertEquals("c:ingots/iron", normal.getBlacklistSource());
+    }
+
+    @Test
+    void fluidCapabilitiesFreezePendingDebitsWithoutBlockingInternalSettlement() {
+        for (var block : List.of(ModBlocks.MEK_APIARY.get(), ModBlocks.MEK_CENTRIFUGE.get(),
+                ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY.get())) {
+            var tile = (TileEntityMekanism)
+                    block.newBlockEntity(BlockPos.ZERO, block.defaultBlockState());
+            var host = (IAe2OutputHostBase) tile;
+            var tank = host.fluidOutputTank(0);
+            var template = new FluidStack(
+                    ModFluids.HONEY.get(), 10);
+            tank.setStack(template.copy());
+            var custody = OutputCustody.of(tile);
+            assertEquals(1, tank.extract(1, Action.SIMULATE,
+                    AutomationType.EXTERNAL).getAmount());
+            assertEquals(7, custody.handoffFluidFromTank(template, 7, "ae2-tank", () -> 7));
+            assertTrue(tank.extract(10, Action.EXECUTE,
+                    AutomationType.EXTERNAL).isEmpty());
+            assertTrue(tank.extract(10, Action.EXECUTE,
+                    AutomationType.MANUAL).isEmpty());
+            assertEquals(10, tank.getFluidAmount());
+            int internal = tank.extract(7, Action.EXECUTE,
+                    AutomationType.INTERNAL).getAmount();
+            assertEquals(7, internal);
+            custody.confirmSourceDebit(internal);
+            assertFalse(custody.blocked());
+            assertEquals(3, tank.extract(3, Action.EXECUTE,
+                    AutomationType.EXTERNAL).getAmount());
+        }
     }
 
     private static CompoundTag save(Ae2OutputStateHolder holder) {

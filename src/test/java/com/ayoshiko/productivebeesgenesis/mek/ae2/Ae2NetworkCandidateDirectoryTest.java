@@ -48,7 +48,7 @@ class Ae2NetworkCandidateDirectoryTest {
 	@Test
 	void pullerUsesSharedDirectoryButKeepsHostClassificationLocal() throws Exception {
 		String puller = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java"));
+				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputCandidatePolicy.java"));
 		String normalized = puller.replaceAll("\\s+", " ");
 
 		assertTrue(normalized.contains("Ae2NetworkCandidateDirectory.get( meStorage, availableStacks, "

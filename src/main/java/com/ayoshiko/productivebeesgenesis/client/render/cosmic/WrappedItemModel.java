@@ -7,6 +7,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
+import net.minecraft.client.renderer.block.model.ItemTransforms;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.BakedModel;
@@ -23,7 +24,7 @@ import java.util.function.Function;
 /**
 	 * 包装普通 BakedModel 的抽象基类
 	 * <br/>
-	 * 实现 PerspectiveModel，从被包装模型提取 ItemTransforms 构造 PerspectiveModelState；
+	 * 实现 PerspectiveModel，委托原模型的 ItemTransforms 供 NeoForge 应用完整显示变换；
 	 * 提供 renderWrapped 委托原模型渲染。
 	 * <p>
 	 * 物品模型烘焙工具方法已统一到 {@link RenderUtils#bakeItem}，本类不再持有副本。
@@ -31,7 +32,6 @@ import java.util.function.Function;
 public abstract class WrappedItemModel implements PerspectiveModel {
 
 	protected final BakedModel wrapped;
-	protected PerspectiveModelState parentState;
 	protected boolean cosmic = false;
 
 	// resolve 可能只查询模型而不渲染；模型缓存的生命周期超过世界，不能强引用渲染上下文。
@@ -71,15 +71,15 @@ public abstract class WrappedItemModel implements PerspectiveModel {
 		}
 	};
 
-	@SuppressWarnings("deprecation") // getTransforms() 是获取 ItemTransforms 的唯一途径，applyTransform 无法替代
 	public WrappedItemModel(BakedModel wrapped) {
 		this.wrapped = wrapped;
-		this.parentState = TransformUtils.stateFromItemTransforms(wrapped.getTransforms());
 	}
 
+	@SuppressWarnings("deprecation") // 原生 applyTransform 通过 getTransforms 应用左右手和 right_rotation。
 	@Override
-	public PerspectiveModelState getModelState() {
-		return this.parentState;
+	@NotNull
+	public ItemTransforms getTransforms() {
+		return this.wrapped.getTransforms();
 	}
 
 	@SuppressWarnings("deprecation") // BakedModel 接口要求实现 deprecated 的无参版本

@@ -19,7 +19,7 @@ final class CentrifugeOwnershipAssets implements MachineAssetSection {
 		this.tile = tile; this.processor = processor; this.upgrades = upgrades; this.progress = progress;
 	}
 	@Override public boolean prepared() {
-		return processor.ownershipStateReadable();
+		return !tile.hasUnresolvedFluidState() && processor.ownershipStateReadable();
 	}
 	@Override public CompoundTag capture(HolderLookup.Provider registries) {
 		var tag = new CompoundTag(); processor.saveAdditional(tag, registries); upgrades.saveCounts(tag); upgrades.saveSlots(tag, registries);
@@ -42,7 +42,8 @@ final class CentrifugeOwnershipAssets implements MachineAssetSection {
 	@Override public void validateWorld(ServerLevel level) { }
 	@Override public boolean empty() {
 		for (var type : PbUpgradeType.values()) if (!type.isBuiltin() && tile.getPbUpgradeInstalledCount(type) > 0) return false;
-		return tile.getOperatingTicks() == 0 && !processor.hasOwnershipWork() && tile.fluidOutputTank().isEmpty()
+		return !tile.hasUnresolvedFluidState() && tile.getOperatingTicks() == 0
+				&& !processor.hasOwnershipWork() && tile.fluidOutputTank().isEmpty()
 				&& upgrades.getInputSlot().isEmpty() && upgrades.getOutputSlot().isEmpty();
 	}
 }

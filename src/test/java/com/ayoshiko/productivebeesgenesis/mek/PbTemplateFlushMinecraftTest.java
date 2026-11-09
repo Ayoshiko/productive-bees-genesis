@@ -54,7 +54,7 @@ class PbTemplateFlushMinecraftTest {
 		assertFalse(completer.flushPendingPbOutputs(0));
 		assertEquals(4, input.getCount());
 		assertEquals(5, completer.pendingItemCount());
-		assertEquals(5, completer.getPendingOutputs().get(template));
+		assertEquals(5L, completer.getPendingOutputs().get(template));
 		assertEquals(1, template.getCount());
 		assertEquals(64, output.getCount());
 		when(context.productivebeesgenesis$pushGeneratedItemToAe(same(template), eq(5))).thenReturn(5);

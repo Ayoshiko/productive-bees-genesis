@@ -1,0 +1,34 @@
+Productive Bees Genesis — source and asset notices
+Updated 2026-11-08 / 更新于 2026-11-08
+
+Project-owned code, documentation, technical resources and previously valid MIT artwork remain MIT within the rights their owners can grant. Third-party works retain their own terms. Existing grants are not revoked.
+自有代码、文档、技术资源及既有有效 MIT 素材在权利人可授权范围内继续 MIT；第三方内容遵循原条款，不追溯撤销有效授权。
+
+Re:Avaritia-derived rendering: Copyright (c) 2022 cnlimiter.
+Code MIT text: LICENSES/ReAvaritia-MIT. Six Java derivatives retain the recorded code MIT and notice with incomplete historical/earlier-source mapping. Six shaders retain unresolved code/assets/earlier-grant scope; twelve exact-RGBA bitmaps retain attribution, earlier-source and applicable CC BY-NC-SA 4.0 use conditions. Local changes include namespaces, color, atlas limits, render queues, transforms and Iris compatibility.
+Mekanism textures: Copyright (c) 2017-2025 Aidan C. Brady.
+Ten exact-pixel textures and their original entry paths are listed in META-INF/license-manifest.json. Complete MIT: LICENSES/Mekanism-MIT.
+Mek-Energistics limited item-property, Attribute/property and drop-name adaptations: Copyright (c) 2026 Mek Energistics; complete MIT: LICENSES/Mek-Energistics-MIT.
+Mek-Energistics 的通知限于已识别的适配片段；直接 Mekanism 参考保留其自己的来源。
+UselessMod code reference: Copyright (c) 2025-2026 C-H716 and contributors; complete code MIT and its scope: LICENSES/Useless-MIT.
+Useless 引用分别为通用公式、成熟窗口原则和公共 API；该代码 MIT 不扩展到美术，也不将现行四个类整体归为上游复制。
+Retired AE overlay bodies: the former AeOutputOverlay and AeInputOverlay fallback algorithms retain their historical source/grant records. Current window-owned AeOutputButton/AeInputButton use native APIs; AeInputOverlay retains only its required four-field data record.
+旧覆盖层退役不清除历史分发缺口；现行数据 record 与独立窗口控件的范围分别登记。
+JDTE external integration: Copyright (c) 2026 JDTE contributors; LICENSES/JDTE-MIT.
+Fonts: Noto Sans / Noto Sans SC / JetBrains Mono, renamed Bee Designer Sans / CJK / Mono. Original copyright and full OFL-1.1 remain with the fonts.
+Other project artwork: maintainer confirmed grouped original/generated provenance on 2026-11-08; existing MIT applies within project-owned contributions. Identified third-party matches remain separate.
+Retired cage-slot image copies: exact crops of Modular Bees 3.3 by GlodBlock; historical source retained in the manifest. Current cage and gene-treat hints read installed PB resources at runtime and grayscale pixels in client memory.
+Handbook recolor: gummyc_type2, author of beebeeblock-the-skyhive. Supplied directly for this project; project-use permission confirmed by the maintainer on 2026-11-08. Attribution remains; no MIT relicensing or project-external sublicensing is implied.
+The former bundled PB gene-treat grayscale image was retired on 2026-11-08. Current JARs contain no copy of that image; historical distribution permissions remain recorded without a new grant.
+
+详细双语来源、修改范围及未决项见 THIRD_PARTY_LICENSES_productivebeesgenesis.md。
+See THIRD_PARTY_LICENSES_productivebeesgenesis.md for bilingual provenance, modifications and unresolved items.
+Source repository: https://github.com/Ayoshiko/productive-bees-genesis
+The maintained source manifest is gradle/license-manifest.json in the repository.
+Bundled file mapping: META-INF/license-manifest.json
+Final entry byte hashes: META-INF/license-entry-hashes.json
+Complete texts: LICENSES/; font notices: assets/productivebeesgenesis/font/*_ofl.txt
+
+Remaining current reference-code-history conditions concern the listed external GPL/LGPL versions, API exceptions and applicable combination, replacement or relinking obligations; the two reference MIT texts and seven method-level scope records are present. Retired historical gaps remain separate.
+This record is not a new license grant or permission clearance. Known unresolved distribution conditions must be resolved before a new public release.
+本记录不是新授权或许可已齐备的结论；已知分发条件未决项必须在新公开发布前处理。

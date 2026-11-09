@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 只有带 raw_materials/raw_ores 标签且拥有 Mekanism 或原版熔炼配方的物品才会转换；普通产物仍要求
  * ingots 输出标签，Powah 粗品质铀矿的非锭产物仅对其精确配方配对开放。
  * <p>
- * 服务端 tick 只访问本类的不可变快照和并发缓存；配方重载时由主类调用 {@link #invalidateCache()}。
+ * 配方查找复用 Mekanism 的候选缓存，并按当前数量和组件匹配；标签重载时清理粗矿资格缓存。
  */
 public final class RawOreSmeltingUpgradeHelper {
 
@@ -49,9 +49,8 @@ public final class RawOreSmeltingUpgradeHelper {
 	private static final List<TagKey<Item>> RAW_TAGS = List.of(
 			COMMON_RAW_MATERIALS, COMMON_RAW_ORES, FORGE_RAW_MATERIALS, FORGE_RAW_ORES);
 	private static final List<TagKey<Item>> INGOT_TAGS = List.of(COMMON_INGOTS, FORGE_INGOTS);
-	/** 熔炼配方只按物品类型匹配，按 Item 缓存可避免带动态组件的物品造成无界 key 增长。 */
-	private static final ConcurrentHashMap<Item, Optional<Conversion>> CONVERSIONS =
-			new ConcurrentHashMap<>();
+	/** 标签资格仅依赖 Item；数量与组件敏感的配方结果不在这里缓存。 */
+	private static final ConcurrentHashMap<Item, Boolean> RAW_MATERIAL_CACHE = new ConcurrentHashMap<>();
 
 	private RawOreSmeltingUpgradeHelper() {
 	}
@@ -111,6 +110,52 @@ public final class RawOreSmeltingUpgradeHelper {
 		return true;
 	}
 
+
+	/** 已付批次的精确数量转换；旧槽位与列表接口继续保留其 int 数量合同。 */
+	public static boolean convertPendingLongOutputs(Level level, Map<ItemStack, Long> outputs) {
+		return convertPendingLongOutputs(level, outputs, false);
+	}
+
+	public static boolean maximumPendingLongOutputs(Level level, Map<ItemStack, Long> outputs) {
+		return convertPendingLongOutputs(level, outputs, true);
+	}
+
+	private static boolean convertPendingLongOutputs(Level level, Map<ItemStack, Long> outputs, boolean maximum) {
+		if (level == null || outputs.isEmpty()) return false;
+		boolean changed = false;
+		Map<ItemStack, Long> converted = new java.util.LinkedHashMap<>();
+		for (var entry : outputs.entrySet()) {
+			long amount = entry.getValue();
+			if (amount <= 0) continue;
+			ItemStack template = entry.getKey();
+			Conversion conversion = findConversion(level, template, (int) Math.min(Integer.MAX_VALUE, amount)).orElse(null);
+			if (conversion == null || amount < conversion.inputCount()) {
+				addAmount(converted, template, amount);
+				continue;
+			}
+			changed = true;
+			long crafts = amount / conversion.inputCount();
+			addAmount(converted, conversion.result(), Math.multiplyExact(crafts, conversion.result().getCount()));
+			addAmount(converted, template, maximum ? Math.min(amount, conversion.inputCount() - 1L)
+					: amount % conversion.inputCount());
+		}
+		if (!changed) return false;
+		outputs.clear();
+		outputs.putAll(converted);
+		return true;
+	}
+
+	private static void addAmount(Map<ItemStack, Long> outputs, ItemStack template, long amount) {
+		if (template.isEmpty() || amount <= 0) return;
+		for (var entry : outputs.entrySet()) {
+			if (ItemStack.isSameItemSameComponents(template, entry.getKey())) {
+				entry.setValue(Math.addExact(entry.getValue(), amount));
+				return;
+			}
+		}
+		outputs.put(template.copyWithCount(1), amount);
+	}
+
 	/** 将一组输出转换为对应锭，数量不足一组时保留粗矿余数。 */
 	public static List<ItemStack> convert(Level level, List<ItemStack> drops) {
 		if (level == null || drops == null || drops.isEmpty()) return drops;
@@ -155,9 +200,9 @@ public final class RawOreSmeltingUpgradeHelper {
 		return false;
 	}
 
-	/** 清空熔炼配方缓存，服务器停止或数据重载时调用。 */
+	/** 清空粗矿标签资格缓存，服务器停止或数据重载时调用。 */
 	public static void invalidateCache() {
-		CONVERSIONS.clear();
+		RAW_MATERIAL_CACHE.clear();
 	}
 
 	/** 供单元测试验证数量换算边界。 */
@@ -172,14 +217,10 @@ public final class RawOreSmeltingUpgradeHelper {
 
 	private static Optional<Conversion> findConversion(Level level, ItemStack stack, int count) {
 		if (level == null || count <= 0 || stack == null || stack.isEmpty()) return Optional.empty();
-		Item key = stack.getItem();
-		Optional<Conversion> cached = CONVERSIONS.get(key);
-		if (cached != null) return cached;
-		// 普通产物也缓存否定结果，避免每次 pending 重试都检查四个粗矿标签。
-		// Item 键的保留范围受注册表限制；既有重载/停服入口同时清理这些结果。
-		return CONVERSIONS.computeIfAbsent(key,
-				ignored -> isRawMaterial(stack)
-						? resolveConversion(level, stack.copyWithCount(count)) : Optional.empty());
+		boolean rawMaterial = RAW_MATERIAL_CACHE.computeIfAbsent(stack.getItem(), ignored -> isRawMaterial(stack));
+		if (!rawMaterial) return Optional.empty();
+		// Mekanism 已缓存全部类型候选；每次按当前数量和组件选配方，不保存数量不足或回退结果。
+		return resolveConversion(level, stack.copyWithCount(count));
 	}
 
 	private static Optional<Conversion> resolveConversion(Level level, ItemStack input) {

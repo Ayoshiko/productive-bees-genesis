@@ -7,6 +7,7 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
+import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Action;
@@ -282,7 +283,8 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 				&& holder.isCachedFluidPushKeyComponentsEmpty(index) == componentsEmpty
 				&& (componentsEmpty
 						|| holder.getCachedFluidPushKeyComponentsHash(index) == componentsHash)
-				&& holder.getCachedFluidPushKey(index) instanceof AEFluidKey existing) {
+				&& holder.getCachedFluidPushKey(index) instanceof AEFluidKey existing
+				&& existing.matches(stack)) {
 			return existing;
 		}
 		AEFluidKey created = AEFluidKey.of(stack);
@@ -291,6 +293,10 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 	}
 
 	private boolean allows(TransmissionType transmission, boolean output) {
+		if (output && (OutputCustody.of(shared.sideConfiguration).blocked()
+				|| shared.host.productivebeesgenesis$getAe2StateHolder().getOutputLedger().hasInvalidData())) {
+			return false;
+		}
 		TileComponentConfig component = shared.sideConfiguration.getConfig();
 		if (component == null) return false;
 		ConfigInfo config = component.getConfig(transmission);

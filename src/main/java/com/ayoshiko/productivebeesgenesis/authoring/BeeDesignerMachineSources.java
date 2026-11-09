@@ -11,6 +11,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 /** 原脚本只读，内容摘要归档独立于单蜂网络工程；导出不覆盖整合包脚本。 */
@@ -26,12 +27,13 @@ public final class BeeDesignerMachineSources {
 
 	public static Import read(Path original, Path directory) throws IOException {
 		String name = original.getFileName().toString();
-		if (!name.endsWith(".js") && !name.endsWith(".json")) {
+		String extensionName = name.toLowerCase(Locale.ROOT);
+		if (!extensionName.endsWith(".js") && !extensionName.endsWith(".json")) {
 			throw new IOException("designer.error.machine_source_type");
 		}
 		String raw = readOriginal(original);
 		String hash = BeeDesignerMachineScripts.hash(raw);
-		Path archive = localDirectory(directory, "machine-sources").resolve(hash + (name.endsWith(".js") ? ".js" : ".json"));
+		Path archive = localDirectory(directory, "machine-sources").resolve(hash + (extensionName.endsWith(".js") ? ".js" : ".json"));
 		if (Files.exists(archive, LinkOption.NOFOLLOW_LINKS)) {
 			if (!readOriginal(archive).equals(raw)) {
 				throw new IOException("designer.error.machine_archive_changed");
@@ -40,7 +42,7 @@ public final class BeeDesignerMachineSources {
 			Files.writeString(archive, raw, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
 		}
 		List<BeeDesignerMachineScripts.Candidate> candidates;
-		if (name.endsWith(".js")) {
+		if (extensionName.endsWith(".js")) {
 			candidates = BeeDesignerMachineScripts.parse(raw);
 		} else {
 			BeeDesignerProtocol.checkDepth(raw);
@@ -69,7 +71,7 @@ public final class BeeDesignerMachineSources {
 		if (!imported.sha256().matches("[0-9a-f]{64}")) {
 			throw new IOException("designer.error.machine_archive_changed");
 		}
-		Path archive = localDirectory(directory, "machine-sources").resolve(imported.sha256() + (imported.name().endsWith(".js") ? ".js" : ".json"));
+		Path archive = localDirectory(directory, "machine-sources").resolve(imported.sha256() + (imported.name().toLowerCase(Locale.ROOT).endsWith(".js") ? ".js" : ".json"));
 		String source = readOriginal(archive);
 		if (!BeeDesignerMachineScripts.hash(source).equals(imported.sha256()) || candidate.start() < 0
 				|| candidate.end() > source.length() || candidate.end() < candidate.start()) {

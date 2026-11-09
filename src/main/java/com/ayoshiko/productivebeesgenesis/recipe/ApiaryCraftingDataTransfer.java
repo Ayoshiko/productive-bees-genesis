@@ -1,20 +1,17 @@
 package com.ayoshiko.productivebeesgenesis.recipe;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.ApiaryPbUpgradeHandler;
 import com.ayoshiko.productivebeesgenesis.apiary.ApiarySlotManager;
 import com.ayoshiko.productivebeesgenesis.apiary.ApiarySlotSerializer;
 import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
 import com.ayoshiko.productivebeesgenesis.apiary.GeneTreatRestockState;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEContainerSlotHelper;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEContainerSlotHelper;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugePbUpgradeHandler;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
-import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.attachments.containers.ContainerType;
 import mekanism.common.attachments.containers.item.ComponentBackedItemHandler;
@@ -39,6 +36,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * {@link ApiaryShapedRecipe} 的 BLOCK_ENTITY_DATA 转移/合并工具类（SRP 拆分）
@@ -88,6 +86,11 @@ final class ApiaryCraftingDataTransfer {
 			}
 		}
 		if (inputs.size() == 1) {
+			CompoundTag source = readBlockEntityData(inputs.getFirst());
+			if (isApiary && source != null && source.contains(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS)) {
+				ApiarySlotSerializer.validatedBeeSlots(source.get(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS),
+						resolveApiaryBeeSlotCapacity(outputBlock));
+			}
 			// 单输入场景：直接深拷贝 BLOCK_ENTITY_DATA 到输出
 			transferBlockEntityDataDirect(inputs.get(0), dest, targetTileId);
 		} else {
@@ -197,8 +200,8 @@ final class ApiaryCraftingDataTransfer {
 	 * <br/>
 	 * 合并规则：
 	 * <ul>
-	 *   <li>蜜蜂槽（仅蜂箱）：取并集，按输入顺序填充到目标容量上限，超出 WARN</li>
-	 *   <li>PB 升级数量：累加所有输入数量，按 {@link PbUpgradeType#getMaxCount()} 上限限制</li>
+	 *   <li>蜜蜂槽（仅蜂箱）：完整迁移并重新编号，容量不足时拒绝合成</li>
+	 *   <li>PB 升级数量：精确累加所有输入的持有数量</li>
 	 *   <li>其他字段：取首个非空（首输入的 NBT 作为 base，后续 merge 仅覆盖合并字段）</li>
 	 *   <li>"id"：替换为目标方块的 BlockEntityType 注册键（不能 remove，见 {@link #transferBlockEntityDataDirect}）</li>
 	 * </ul>
@@ -223,6 +226,12 @@ final class ApiaryCraftingDataTransfer {
 			}
 			try {
 				CompoundTag nbt = data.copyTag();
+				validateMergeableAssets(nbt);
+				if (isApiary && nbt.contains(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS)) {
+					Block sourceBlock = ((BlockItem) input.getItem()).getBlock();
+					ApiarySlotSerializer.validatedBeeSlots(nbt.get(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS),
+							resolveApiaryBeeSlotCapacity(sourceBlock));
+				}
 				nbts.add(nbt);
 				if (isApiary) {
 					if (nbt.contains(GeneTreatRestockState.NBT_KEY)
@@ -288,10 +297,10 @@ final class ApiaryCraftingDataTransfer {
 	}
 
 	/**
-	 * 合并蜜蜂槽数据 — 从<b>全部输入</b>重建，取并集并按输入顺序填充到目标容量上限
+	 * 合并蜜蜂槽数据 — 从<b>全部输入</b>重建，按输入顺序完整迁移并分配唯一索引
 	 * <br/>
 	 * 原理：清空 merged 中已有的 {@link ApiarySlotSerializer#NBT_KEY_BEE_SLOTS}，按输入顺序
-	 * 依次追加每个输入的蜜蜂槽 CompoundTag，达到目标容量上限后停止追加，超出部分记录 WARN。
+	 * 依次追加每个输入的蜜蜂槽 CompoundTag，超出目标容量时整体拒绝。
 	 * <p>
 	 * <b>为什么从零重建而不是「base 续接」</b>：base 可能是首输入的原始 NBT，也可能是 MEK 的
 	 * 合并结果（见 {@link #mergeMachineInputs}）。若沿用「首输入已在 base 中」的假设，
@@ -306,36 +315,28 @@ final class ApiaryCraftingDataTransfer {
 	 */
 	static void mergeBeeSlots(CompoundTag merged, List<CompoundTag> inputs, int targetCapacity) {
 		ListTag mergedBeeSlots = new ListTag();
-		int dropped = 0;
 		for (CompoundTag inputNbt : inputs) {
-			if (!inputNbt.contains(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS, Tag.TAG_LIST)) continue;
-			ListTag inputBeeSlots = inputNbt.getList(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS, Tag.TAG_COMPOUND);
-			for (int j = 0; j < inputBeeSlots.size(); j++) {
-				if (mergedBeeSlots.size() >= targetCapacity) {
-					// 剩余蜜蜂全部丢弃
-					dropped += (inputBeeSlots.size() - j);
-					break;
-				}
-				mergedBeeSlots.add(inputBeeSlots.getCompound(j).copy());
+			Tag raw = inputNbt.get(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS);
+			if (raw == null) continue;
+			ListTag inputBeeSlots = ApiarySlotSerializer.validatedBeeSlots(raw, Integer.MAX_VALUE);
+			if ((long) mergedBeeSlots.size() + inputBeeSlots.size() > targetCapacity) {
+				throw new IllegalArgumentException("Target apiary cannot hold every input bee");
+			}
+			for (Tag entry : inputBeeSlots) {
+				CompoundTag transferred = ((CompoundTag) entry).copy();
+				transferred.putInt("slot_index", mergedBeeSlots.size());
+				mergedBeeSlots.add(transferred);
 			}
 		}
-
-		// 超出容量警告
-		if (dropped > 0) {
-			DevLog.warn(DEV_FEATURE,
-					"合成升级合并蜜蜂槽超出目标容量,丢弃 {} 只蜜蜂 (目标容量={})",
-					dropped, targetCapacity);
-		}
-
-		// 写回合并后的蜜蜂槽（空列表也写入,确保字段存在）
 		merged.put(ApiarySlotSerializer.NBT_KEY_BEE_SLOTS, mergedBeeSlots);
+		merged.putInt("productivebeesgenesis_selected_bee", -1);
 	}
 
 	/**
-	 * 合并 PB 升级数量 — 从<b>全部输入</b>重新求和，按类型上限限制
+	 * 合并 PB 升级数量 — 从<b>全部输入</b>精确求和
 	 * <br/>
 	 * 原理：清空 merged 中已有的升级计数，遍历所有输入 NBT 的 PB 升级数量 CompoundTag
-	 * （key=类型id,value=数量），按类型累加，超过 {@link PbUpgradeType#getMaxCount()} 时截断并 WARN。
+	 * （key=类型id,value=数量），按类型累加，错误类型或整数溢出时整体拒绝。
 	 * <p>
 	 * 与 {@link #mergeBeeSlots} 同理：从零求和不依赖 base 来源，避免 base 换成 MEK 合并结果后
 	 * 首输入升级数被漏算。
@@ -346,44 +347,96 @@ final class ApiaryCraftingDataTransfer {
 	 */
 	static void mergePbUpgradeCounts(CompoundTag merged, List<CompoundTag> inputs, String pbUpgradeKey) {
 		CompoundTag mergedCounts = new CompoundTag();
-		boolean overflowed = false;
 		for (CompoundTag inputNbt : inputs) {
-			if (!inputNbt.contains(pbUpgradeKey, Tag.TAG_COMPOUND)) continue;
+			if (!inputNbt.contains(pbUpgradeKey)) continue;
+			if (!inputNbt.contains(pbUpgradeKey, Tag.TAG_COMPOUND)) {
+				throw new IllegalArgumentException("Invalid PB upgrade counts");
+			}
 			CompoundTag inputCounts = inputNbt.getCompound(pbUpgradeKey);
 			for (String typeId : inputCounts.getAllKeys()) {
-				int inputValue = inputCounts.getInt(typeId);
-				if (inputValue <= 0) continue;
-				int current = Math.max(0, mergedCounts.getInt(typeId));
-				mergedCounts.putInt(typeId, SaturatingMath.saturatingToInt(
-						SaturatingMath.saturatingAdd(current, inputValue)));
+				if (!inputCounts.contains(typeId, Tag.TAG_INT) || inputCounts.getInt(typeId) < 0) {
+					throw new IllegalArgumentException("Invalid PB upgrade count");
+				}
+				int count = Math.addExact(mergedCounts.getInt(typeId), inputCounts.getInt(typeId));
+				if (count > 0) mergedCounts.putInt(typeId, count);
 			}
 		}
-
-		// 按类型上限截断（PB 升级类型限制由 PbUpgradeType.getMaxCount 决定）
-		for (String typeId : mergedCounts.getAllKeys()) {
-			PbUpgradeType type = PbUpgradeType.byId(typeId);
-			if (type == null) {
-				// 未知类型 ID（可能来自未来版本）,保留原值不截断
-				continue;
-			}
-			int current = mergedCounts.getInt(typeId);
-			int max = type.getMaxCount();
-			if (current > max) {
-				mergedCounts.putInt(typeId, max);
-				overflowed = true;
-				DevLog.warn(DEV_FEATURE,
-						"合成升级合并 PB 升级 {} 超出上限,截断为 {} (输入合计={})",
-						typeId, max, current);
-			}
-		}
-
-		if (overflowed) {
-			ProductiveBeesGenesis.LOGGER.debug(
-					"[CraftingUpgrade] PB 升级合并发生超限截断,详见 DEV 日志");
-		}
-
-		// 写回合并后的 PB 升级数量（空 CompoundTag 也写入,确保字段存在）
+		// 安装上限影响新安装；已经持有的升级数量必须完整保留。
 		merged.put(pbUpgradeKey, mergedCounts);
+	}
+
+	/** 多台机器不能共享同一笔未结算资产；未完成的工作留在原机器。 */
+	private static void validateMergeableAssets(CompoundTag nbt) {
+		requireEmptyList(nbt, "productivebeesgenesis_pb_committed_pending");
+		if (nbt.contains("productivebeesgenesis_pb_progress")) {
+			if (!nbt.contains("productivebeesgenesis_pb_progress", Tag.TAG_INT_ARRAY)) {
+				throw new IllegalArgumentException("Invalid centrifuge paid progress");
+			}
+			for (int progress : nbt.getIntArray("productivebeesgenesis_pb_progress")) {
+				if (progress != 0) throw new IllegalArgumentException("Unsettled centrifuge progress");
+			}
+		}
+		if (nbt.contains("productivebeesgenesis_pb_paid_work")) {
+			if (!(nbt.get("productivebeesgenesis_pb_paid_work") instanceof CompoundTag work)
+					|| !Set.of("version", "entries", "paused").containsAll(work.getAllKeys())
+					|| !work.contains("version", Tag.TAG_INT)
+					|| work.getInt("version") != 1 && work.getInt("version") != 2
+					|| work.getInt("version") == 1 && work.contains("paused")
+					|| !work.contains("entries", Tag.TAG_LIST)
+					|| work.getInt("version") == 2 && !work.contains("paused", Tag.TAG_LIST)) {
+				throw new IllegalArgumentException("Invalid centrifuge paid work");
+			}
+			requireEmptyList(work, "entries");
+			requireEmptyList(work, "paused");
+		}
+		if (nbt.contains("productivebeesgenesis_output_buffer")) {
+			Tag raw = nbt.get("productivebeesgenesis_output_buffer");
+			if (!(raw instanceof CompoundTag buffer)
+					|| !Set.of("version", "production", "stacks").containsAll(buffer.getAllKeys())) {
+				throw new IllegalArgumentException("Unresolved apiary output buffer");
+			}
+			requireEmptyList(buffer, "stacks");
+			if (buffer.contains("production")) {
+				if (!(buffer.get("production") instanceof CompoundTag production)
+						|| !Set.of("version", "live_slots", "pending", "retained", "items", "fluid_amount")
+								.containsAll(production.getAllKeys())) {
+					throw new IllegalArgumentException("Unresolved apiary production");
+				}
+				requireEmptyList(production, "pending");
+				requireEmptyList(production, "retained");
+				requireEmptyList(production, "items");
+				if (production.contains("fluid_amount") && (!production.contains("fluid_amount", Tag.TAG_LONG)
+						|| production.getLong("fluid_amount") != 0)) {
+					throw new IllegalArgumentException("Unsettled apiary fluid");
+				}
+			}
+		}
+		for (String key : Set.of("productivebeesgenesis_apiary_fluid",
+				"productivebeesgenesis_ae_pending_items", "productivebeesgenesis_ae_output_ledger")) {
+			Tag value = nbt.get(key);
+			if (value != null && (!(value instanceof CompoundTag compound) || !compound.isEmpty())
+					&& (!(value instanceof ListTag list) || !list.isEmpty())) {
+				throw new IllegalArgumentException("Unsettled machine asset: " + key);
+			}
+		}
+		if (nbt.contains("neoforge:attachments")) {
+			if (!(nbt.get("neoforge:attachments") instanceof CompoundTag attachments)) {
+				throw new IllegalArgumentException("Invalid machine attachments");
+			}
+			Tag raw = attachments.get("productivebeesgenesis:resource_host");
+			if (raw != null && (!(raw instanceof CompoundTag host)
+					|| !host.contains("version", Tag.TAG_INT) || host.getInt("version") != 1
+					|| !Set.of("version", "native_output").containsAll(host.getAllKeys()))) {
+				throw new IllegalArgumentException("Resource identity cannot be merged");
+			}
+		}
+	}
+
+	private static void requireEmptyList(CompoundTag parent, String key) {
+		Tag raw = parent.get(key);
+		if (raw != null && (!(raw instanceof ListTag list) || !list.isEmpty())) {
+			throw new IllegalArgumentException("Unsettled machine asset: " + key);
+		}
 	}
 
 	/**

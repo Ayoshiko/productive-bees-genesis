@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.mek.TickBatchSkipState;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
@@ -143,7 +144,9 @@ class ApiaryTickHandler {
 	 */
 	boolean onUpdateServer() {
 		handledLastInvocation = false;
-		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(tile)) return false;
+		if (MemberBinding.isolated(tile) || tile.hasInvalidFluidData() || tile.upgradeRecovery().blocked()) {
+			return false;
+		}
 		// Task 6 批量收获模式：虚拟 tick 银行 + 每 tick 预算（对齐 JDTE 调度器哲学）
 		// decideAction 内部完成 onTick 计数、同 gameTick 门控与共享预算取款，消除 1024x 尖峰。
 		boolean skipBeeProcessing = false;
@@ -192,7 +195,9 @@ class ApiaryTickHandler {
 	 */
 	void flushAcceleratedTicks() {
 		handledLastInvocation = false;
-		if (com.ayoshiko.productivebeesgenesis.apiculture.ownership.MemberBinding.isolated(tile)) return;
+		if (MemberBinding.isolated(tile) || tile.hasInvalidFluidData() || tile.upgradeRecovery().blocked()) {
+			return;
+		}
 		Level level = tile.getLevel();
 		if (level == null || level.isClientSide) {
 			return;

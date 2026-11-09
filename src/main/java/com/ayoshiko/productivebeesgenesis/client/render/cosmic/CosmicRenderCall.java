@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexSorting;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix3f;
@@ -34,6 +36,10 @@ public class CosmicRenderCall {
 	public ItemDisplayContext context;
 	public int light;
 	public int overlay;
+	long frame;
+	long resourceGeneration;
+	IrisCompat.Pass pass;
+	VertexSorting vertexSorting;
 	/** 预分配的 pose 矩阵 — 通过 set() 覆写，避免每次入队 new Matrix4f */
 	public final Matrix4f pose = new Matrix4f();
 	/** 预分配的 normal 矩阵 — 通过 set() 覆写 */
@@ -81,6 +87,7 @@ public class CosmicRenderCall {
 		call.normal.set((Matrix3fc) pose.normal());
 		call.projection.set((Matrix4fc) projection);
 		call.modelView.set((Matrix4fc) modelView);
+		call.vertexSorting = RenderSystem.getVertexSorting();
 		return call;
 	}
 
@@ -97,6 +104,10 @@ public class CosmicRenderCall {
 		call.model = null;
 		call.stack = null;
 		call.context = null;
+		call.pass = null;
+		call.vertexSorting = null;
+		call.frame = 0;
+		call.resourceGeneration = 0;
 		synchronized (POOL) {
 			if (POOL.size() < MAX_POOL_SIZE) {
 				POOL.offer(call);

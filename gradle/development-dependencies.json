@@ -1,0 +1,150 @@
+{
+  "schema": 1,
+  "scope": "Pinned development JAR inputs for the standard build, not a Minecraft test-mod matrix or redistributed bundle.",
+  "license_reference": "THIRD_PARTY_LICENSES.md",
+  "entries": [
+    {
+      "path": "libs/ae2lt-2.1.1.jar",
+      "url": "https://cdn.modrinth.com/data/ArHeh5Fz/versions/S2Li22o0/ae2lt-2.1.1.jar",
+      "sha256": "38ab438c2afc1af897e9fdb28fa89db47417a346774da718b1132829dfc517c5",
+      "official_sha512": "2963783c8adf50841f244b495f485b23eaf076883c47ff3146092031a2ce21f9ccd968ad140addcd63071874601202cea78468f8ffedd5850b58b40999c058a5"
+    },
+    {
+      "path": "libs/appliedenergistics2-1.21.1-19.2.17.jar",
+      "url": "https://cdn.modrinth.com/data/XxWD5pD3/versions/kfyIqgJ6/appliedenergistics2-19.2.17.jar",
+      "sha256": "460d779a0609b81409907d9956de8f6f70a1b0912257e3e5c3c7e75ac9630e95",
+      "official_sha512": "55edfd948366aff620881e0625e48c333a2cb847e73249bc0b588efbc4b86709992a8ffbca97ea387e270df4186fe7f74ee2f27b739f1c952e932becfb9dea33"
+    },
+    {
+      "path": "libs/AppliedFlux-1.21-2.1.5-neoforge.jar",
+      "url": "https://cdn.modrinth.com/data/oMgZ004U/versions/4x40hq9D/AppliedFlux-1.21-2.1.5-neoforge.jar",
+      "sha256": "57e6a2c0f38e660c9e8416f9081d8c515f5ad096d6793d7b7f039e8e210d245b",
+      "official_sha512": "27bb367ad2f6695a485e11bf6e9567a86eb2d817194f5bdb381d1e493c345e0055eefb727308ca28fd27cf170d4303788c22681c349065515841cfe7a8c4b01b"
+    },
+    {
+      "path": "libs/ars_nouveau-1.21.1-5.12.1.jar",
+      "url": "https://cdn.modrinth.com/data/TKB6INcv/versions/7IK2KsiH/ars_nouveau-1.21.1-5.12.1.jar",
+      "sha256": "b24412acce7303baf5c46bf4130ba6add5c349047a6dfc445e1add0cd8528fa2",
+      "official_sha512": "9cbd5cd7ec692c052a4ca3b6c7d822006380468c75b559fa437cfa72c8a84e45f4c05b457adac28d2cbc13100f733d80b9904de2de5ab979a525417a1b391974"
+    },
+    {
+      "path": "libs/Evolved Mekanism-1.21.1-1.2.1-fix3.jar",
+      "url": "https://cdn.modrinth.com/data/BLOykUqo/versions/3vuQZTlx/Evolved%20Mekanism-1.21.1-1.2.1-fix3.jar",
+      "sha256": "b19dc40ef08b85fb448f3ed93f0ddcac9cbc47e977d40bacb7c172a28bf6c5db",
+      "official_sha512": "c6287fb022caa3ac94fc547b158d8d22e66dc10d803709ef006267a6493cc71acbf6047122dd2a8df87923589701c61cb7b584cad38f17750cba882bb971ad28"
+    },
+    {
+      "path": "libs/EvolvedMekanismExtras-1.21.1-1.2.1.jar",
+      "url": "https://edge.forgecdn.net/files/8118/26/EvolvedMekanismExtras-1.21.1-1.2.1.jar",
+      "sha256": "773d70beeb7d320e48a1b4fd267a58fdb6ca26b66dc08389a877566d2403cbad"
+    },
+    {
+      "path": "libs/experiencelib-1.21.1-1.2.1.jar",
+      "url": "https://cdn.modrinth.com/data/SglcIh0L/versions/xrg5MjEA/experiencelib-1.21.1-1.2.1.jar",
+      "sha256": "0b131b76087dd361735d6cf05e9223c68d0a2acdb022ca5f4616aa36a66d938a",
+      "official_sha512": "4e9757f770fda51495e3f63a1d84cf470994efa5482b32d9807d3903a6f3f07d01019561bdac54706d07722e985911307f357e7c5621c5e038786e7023e29e04"
+    },
+    {
+      "path": "libs/guideme-21.1.16.jar",
+      "url": "https://cdn.modrinth.com/data/Ck4E7v7R/versions/bFr2FBaJ/guideme-21.1.16.jar",
+      "sha256": "7938843929b065050375d7585398c9a478ae92a8f543ee6594161245750fd420",
+      "official_sha512": "52bc29671cb378045fc22598575f32ff80e4483e88aff75674d881ff49933a3e96ee9e424996ddaa52b63d9fdeb2ea0a993bf3fec5f6daf43e3142c0f973e192"
+    },
+    {
+      "path": "libs/industrial-foregoing-souls-1.21.1-1.10.7.jar",
+      "url": "https://cdn.modrinth.com/data/R6YQjhwo/versions/I0j6WSTx/industrial-foregoing-souls-1.21.1-1.10.7.jar",
+      "sha256": "f4fb3640fdfca313688f2e0561b1875cbf740271dbcf5a276c4d67347d7b67ec",
+      "official_sha512": "0766f027e015dd609bd65ba194050e66eda2c3e2774b43dcf4b8b9b11eb3ba9f6966f36fc81a5e2e3c7a81f9319a133695b87552f7cd59caf9e845cebef6eeef"
+    },
+    {
+      "path": "libs/Jade-1.21.1-NeoForge-15.10.5.jar",
+      "url": "https://cdn.modrinth.com/data/nvQzSEkH/versions/yd8FKCmx/Jade-1.21.1-NeoForge-15.10.5.jar",
+      "sha256": "067bb4b007e1d6f6b79f0afe99c91252aa825472b99a76d33a60d24442f9e92d",
+      "official_sha512": "678b998677a3d73f98f82dac4093893bfc8a3c2335ec627b4147811c381a040475decdb8db31cc3cbe600abb5a7a6dedcd356eed0ba471af0becdcf49bf5b137"
+    },
+    {
+      "path": "libs/jdte-0.6.1.0.jar",
+      "url": "https://edge.forgecdn.net/files/9027/141/jdte-0.6.1.0.jar",
+      "sha256": "e5b086544aa6b9df6bccc19f6363ebf801780ff061fc2474ace8287f1d7caf95"
+    },
+    {
+      "path": "libs/jei-1.21.1-neoforge-19.36.0.360.jar",
+      "url": "https://cdn.modrinth.com/data/u6dRKJwZ/versions/DG4uHSMD/jei-1.21.1-neoforge-19.36.0.360.jar",
+      "sha256": "3dd662a9a565b183e3d5a8832afc664d1b51b99cb3dc35615ded7ccd9c0a7439",
+      "official_sha512": "98584962d5bc782078dc4c9358114d86717169eadd003fe255b9fd88140c359c932196d3de13a047f4fb8fc9a31b895a2ca166ee552e54bae09c514904067f4e"
+    },
+    {
+      "path": "libs/jei-1.21.1-neoforge-19.39.0.368.jar",
+      "url": "https://cdn.modrinth.com/data/u6dRKJwZ/versions/bEGnP8IF/jei-1.21.1-neoforge-19.39.0.368.jar",
+      "sha256": "ac27623a1e425a05f95f170eea94974d26ea68ca2037e5695176fb66a090de84",
+      "official_sha512": "e0fedc5dddea7f48a061053f5f3cb8e4805dbd0734ee9ae07809a1766a02c7b6ed938b1d34234628dbb73e21277d9f09dacd20902006c678180ce009f4bc07b3"
+    },
+    {
+      "path": "libs/justdirethings-1.5.7.jar",
+      "url": "https://edge.forgecdn.net/files/7463/40/justdirethings-1.5.7.jar",
+      "sha256": "6e5f7dd7091cc271fee66b0df62bde2250e8b52397b51dd911f79c088eb22d2f"
+    },
+    {
+      "path": "libs/kubejs-neoforge-2101.7.2-build.368.jar",
+      "url": "https://edge.forgecdn.net/files/8083/208/kubejs-neoforge-2101.7.2-build.368.jar",
+      "sha256": "28867299e7a9f02cfd74e34745fdbbb073fe4887fddbc98fd6c1ed2e87b01482"
+    },
+    {
+      "path": "libs/mekanism_extras-1.21.1-1.4.0.jar",
+      "url": "https://cdn.modrinth.com/data/HUZkxNTQ/versions/DsGsees0/mekanism_extras-1.21.1-1.4.0.jar",
+      "sha256": "9b7a09d3d9a6f3bbdf7a68342cc3795f1e7df9c77c1874597ba1f74582df01e3",
+      "official_sha512": "48a2d43f35f5113017d9867ed6eaf64f9f0a7dc7e75ed072fe73f58d3df69afa687754e5eaf19c849b19865f219a82d07b180575fe2de14c241eed2eccf47678"
+    },
+    {
+      "path": "libs/mekanism_extras-1.21.1-1.4.1.jar",
+      "url": "https://cdn.modrinth.com/data/HUZkxNTQ/versions/fqPYikeY/mekanism_extras-1.21.1-1.4.1.jar",
+      "sha256": "7138aa6530cc184ef6838b02ec7138491907c045e870507bf11ae58cc4c70541",
+      "official_sha512": "03abb79bc79adab24fd674ab4d5fc84aedcde94a2304d199ebba59c6cef4c8a6283a59fd8d02b2ec0a85c832903c671db7b1f915718b4626d2bd9ed681557761"
+    },
+    {
+      "path": "libs/Mekanism-1.21.1-10.7.19.85.jar",
+      "url": "https://cdn.modrinth.com/data/Ce6I4WUE/versions/5KzzycBT/Mekanism-1.21.1-10.7.19.85.jar",
+      "sha256": "004dbc9f3106f4d192aeaa1ee1190dd16ec9ca8059ed3d093b80034f4c574f43",
+      "official_sha512": "66745825330a98f3e4a5ea3a44aff8b00870f715c144edc38dd2f61b4240589600b58ae89efac3b54dbb5aa430b1059dac1a28fd71cac5cc9002bbeb5ba3f22b"
+    },
+    {
+      "path": "libs/pneumaticcraft-repressurized-8.2.21+mc1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/ncAcdgk7/versions/JKqGh7uZ/pneumaticcraft-repressurized-8.2.21%2Bmc1.21.1.jar",
+      "sha256": "9bc768a00d7704184581cd82da5b0df2929efa01dbd8bf955e9026a159c56658",
+      "official_sha512": "0303ac3fa54622df1b596acbf8bae0a8e321f12d3343ac9147880bbc6ec0ddabc3eac54e3268e069c31c75c4f0d003755741438cfca2c8d9bb17fe5bcf467b72"
+    },
+    {
+      "path": "libs/productivebees-1.21.1-13.14.0.jar",
+      "url": "https://edge.forgecdn.net/files/8987/967/productivebees-1.21.1-13.14.0.jar",
+      "sha256": "2a7ecbcebb8bb91eca141261addfcdbc112f0be160b618ed47960c3b20ff0bf4"
+    },
+    {
+      "path": "libs/ProjectE-1.21.1-PE1.1.0.jar",
+      "url": "https://edge.forgecdn.net/files/6611/984/ProjectE-1.21.1-PE1.1.0.jar",
+      "sha256": "fec9389d8b70fcf87331a0bcc41b78ada79c1e6326ef02a7bb6db9a1d5a4c48b"
+    },
+    {
+      "path": "libs/upstream/rhino-2101.2.7-build.85.jar",
+      "url": "https://cdn.modrinth.com/data/sk9knFPE/versions/cQ4POTah/rhino-2101.2.7-build.85.jar",
+      "sha256": "e0e9b0e78edd380440266c0f4ea8d489dac851ef075a4566a66a6dae2f7bbb66",
+      "official_sha512": "0a6c7f4410281aeb03b815ec03487a8e80a4d3dae013d81282e447bf9c08144ef57318af614ea6d40b7d9a8c25031c557890ec792a5895a82467c1643116f693",
+      "provenance_note": "Official Modrinth build; existing libs/rhino-2101.2.7-build.85.jar is retained. Uncompressed entries differ only in Implementation-Timestamp in META-INF/MANIFEST.MF."
+    },
+    {
+      "path": "libs/sponge-mixin.jar",
+      "url": "https://maven.fabricmc.net/net/fabricmc/sponge-mixin/0.15.2%2Bmixin.0.8.7/sponge-mixin-0.15.2%2Bmixin.0.8.7.jar",
+      "sha256": "1d45cfe3ae4a2eab38dc74276803748cf799088986260d6d912e50ddb35d15c5"
+    },
+    {
+      "path": "libs/useless_mod-1.21.1-2.4.5.13.jar",
+      "url": "https://github.com/SorrowMist/UselessMod/releases/download/1.21.1-2.4.5.13/useless_mod-1.21.1-2.4.5.13.jar",
+      "sha256": "8621b8dd0b63880e51e8b9d2ee560dd164dc6c755a7290bb0620a05b5195d971"
+    },
+    {
+      "path": "libs/productivelib-1.21.1-0.2.0.jar",
+      "archive": "libs/productivebees-1.21.1-13.14.0.jar",
+      "entry": "META-INF/jarjar/productivelib-1.21.1-0.2.0.jar",
+      "sha256": "6671c8aa783d5fc3056b5a24b041edcf51b9c774b68fd85a790ae3346e4550e7"
+    }
+  ]
+}

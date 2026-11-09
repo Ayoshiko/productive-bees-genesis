@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.util.MachineDismantle;
 import com.ayoshiko.productivebeesgenesis.util.WrenchCapabilityHelper;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeState;
@@ -188,11 +189,8 @@ public class MekApiaryBlock<TILE extends TileEntityMekanism, TYPE extends BlockT
 		}
 		// 服务端兜底：shift+扳手直接拆卸（主要路径已由 ApiaryWrenchDismantleHandler 接管）
 		if (player.isShiftKeyDown() && isWrench) {
-			if (tile.getRadiationScale() <= 0) {
-				WorldUtils.dismantleBlock(state, level, pos, tile, player, stack);
-				return ItemInteractionResult.SUCCESS;
-			}
-			return ItemInteractionResult.FAIL;
+			boolean dismantled = MachineDismantle.tryDismantle(state, level, pos, tile, player, stack);
+			return dismantled ? ItemInteractionResult.SUCCESS : ItemInteractionResult.FAIL;
 		}
 		// 非 shift 场景委托 tryWrench 处理旋转
 		return tile.tryWrench(state, player, stack).getInteractionResult();
@@ -237,7 +235,8 @@ public class MekApiaryBlock<TILE extends TileEntityMekanism, TYPE extends BlockT
 					}
 				}
 				// 保存数据后清空所有槽位，防止 setRemoved 触发 Ejector 重复 popResource
-				if (updateable instanceof TileEntityMekApiary apiaryTile) {
+				if (!MachineDismantle.isPreviewing(updateable)
+						&& updateable instanceof TileEntityMekApiary apiaryTile) {
 					apiaryTile.markDropsSerialized();
 					apiaryTile.saveAllItemsForDrop();
 				}

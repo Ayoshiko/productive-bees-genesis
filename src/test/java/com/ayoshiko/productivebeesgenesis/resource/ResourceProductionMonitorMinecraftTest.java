@@ -33,11 +33,73 @@ class ResourceProductionMonitorMinecraftTest {
         monitor.route(List.of(ResourceTypes.AIR), true);
         assertEquals(ResourceProductionSnapshot.State.WAITING_OUTPUT, monitor.snapshot(2).entries().getFirst().state());
         clock.addAndGet(5000);
+        monitor.route(List.of(ResourceTypes.AIR), true);
         row = monitor.snapshot(101).entries().getFirst();
         assertEquals(BigInteger.ZERO, row.produced());
         assertEquals(ResourceProductionSnapshot.State.WAITING_OUTPUT, row.state());
         monitor.route(List.of(ResourceTypes.AIR), false);
         assertEquals(ResourceProductionSnapshot.State.RECENT, monitor.snapshot(102).entries().getFirst().state());
+    }
+
+    @Test void expiredHistoryMakesRoomWithoutResettingActiveDeltaIdentity() {
+        var clock = new AtomicLong(10_000);
+        var monitor = new ResourceProductionMonitor(clock::get);
+        var publisher = new ResourceProductionDelta.Publisher();
+        var receiver = new ResourceProductionDelta.Receiver();
+        var history = new java.util.LinkedHashMap<ResourceKey, BigInteger>();
+        for (int i = 0; i < ResourceAmounts.MAX_KEYS - 1; i++) {
+            var components = new CompoundTag();
+            components.putInt("audit_identity", i);
+            history.put(ResourceKey.aeKey(ResourceLocation.parse("ae2:item"),
+                    ResourceLocation.parse("minecraft:stone"), components), BigInteger.ONE);
+        }
+        history.put(ResourceTypes.AIR, BigInteger.TEN);
+        monitor.record(history);
+        monitor.observe(0, List.of(ResourceTypes.AIR), ResourceProductionSnapshot.State.WAITING_WORK, 1);
+        var initial = publisher.update(monitor.snapshot(1), 0);
+        receiver.apply(roundTrip(initial));
+        int activeId = initial.entries().stream().filter(entry -> ResourceTypes.AIR.equals(entry.key()))
+                .findFirst().orElseThrow().id();
+        assertEquals(ResourceAmounts.MAX_KEYS, initial.entries().size());
+        monitor.record(Map.of(ResourceTypes.FE, BigInteger.valueOf(12)));
+        var atCapacity = monitor.snapshot(2);
+        assertEquals(ResourceAmounts.MAX_KEYS, atCapacity.entries().size());
+        assertTrue(atCapacity.entries().stream().anyMatch(entry -> entry.key().equals(ResourceTypes.FE)));
+        assertTrue(atCapacity.entries().stream().anyMatch(entry -> entry.key().equals(ResourceTypes.AIR)));
+
+        clock.addAndGet(5000);
+        monitor.observe(0, List.of(ResourceTypes.AIR), ResourceProductionSnapshot.State.WAITING_WORK, 101);
+        monitor.record(Map.of(ResourceTypes.FE, BigInteger.valueOf(37)));
+        var current = monitor.snapshot(101);
+        assertEquals(2, current.entries().size());
+        var delta = publisher.update(current, receiver.revision());
+        assertFalse(delta.reset());
+        var active = delta.entries().stream().filter(entry -> entry.id() == activeId).findFirst().orElseThrow();
+        assertNull(active.key());
+        assertEquals(ResourceProductionSnapshot.State.WAITING_WORK, active.state());
+        assertEquals(BigInteger.ZERO, active.produced());
+        assertEquals(new java.util.HashSet<>(current.entries()),
+                new java.util.HashSet<>(receiver.apply(roundTrip(delta)).entries()));
+        assertEquals(BigInteger.valueOf(37), current.entries().stream()
+                .filter(entry -> entry.key().equals(ResourceTypes.FE)).findFirst().orElseThrow().produced());
+
+        clock.addAndGet(5000);
+        assertTrue(monitor.snapshot(201).entries().isEmpty());
+    }
+
+    @Test void currentWindowIsRetainedAndUnrefreshedBlockedHistoryExpires() {
+        var clock = new AtomicLong(10_000);
+        var monitor = new ResourceProductionMonitor(clock::get);
+        monitor.record(Map.of(ResourceTypes.AIR, BigInteger.TEN));
+        monitor.route(List.of(ResourceTypes.FE), true);
+        clock.addAndGet(4500);
+        assertEquals(2, monitor.snapshot(90).entries().size());
+        monitor.observe(0, List.of(ResourceTypes.AIR), ResourceProductionSnapshot.State.WAITING_WORK, 90);
+        clock.addAndGet(500);
+        var current = monitor.snapshot(100);
+        assertEquals(1, current.entries().size());
+        assertEquals(ResourceTypes.AIR, current.entries().getFirst().key());
+        assertEquals(BigInteger.ZERO, current.entries().getFirst().produced());
     }
 
     @Test void sameBucketAccumulatesExactEmcAndOtherProducingLanesRemainVisible() {

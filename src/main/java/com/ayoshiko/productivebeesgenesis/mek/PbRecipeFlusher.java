@@ -29,7 +29,7 @@ import java.util.Map;
  * <b>两种提交语义</b>：
  * <ul>
  *   <li><b>原子提交</b>（默认，输入尚未扣除）：全部产物能写入才提交，否则不做任何修改，
- *       由 {@link PbRecipeFlushHelper} 减半批量重试，保持「输入消耗 ↔ 产物产出」一致。</li>
+ *       保留已冻结批次，保持「输入消耗 ↔ 产物产出」一致。</li>
  *   <li><b>延迟提交</b>（{@code maxDeferredPerType > 0}，或输入已扣除的 pending）：
  *       写入能放下的部分、扣除一次输入，其余产物留在 pending 下个 tick 继续排空。
  *       这是产物种类多于三个物理输出槽时（如屠夫蜜脾 4 种产物 + 7 个稳定性升级）
@@ -71,7 +71,7 @@ public final class PbRecipeFlusher {
 
 	// ===== 上一次规划的诊断信息（供 PbRecipeFlushHelper 选择重试策略） =====
 	private boolean lastPlanUnplaceableType;
-	private int lastPlanMaxDeferredPerType;
+	private long lastPlanMaxDeferredPerType;
 	private int lastPlanSlotCapacity = 64;
 
 	/**
@@ -96,7 +96,8 @@ public final class PbRecipeFlusher {
 	 * @return 见 {@link Outcome}
 	 */
 	Outcome flush(PbRecipeCompleter completer, int processIndex, int maxDeferredPerType) {
-		if (completer.invalidPending()) return Outcome.BLOCKED;
+		if (completer.invalidPending() || completer.paymentPending()) return Outcome.BLOCKED;
+		if (completer.isPreparedOutput() && !completer.commitCompletedInput(processIndex)) return Outcome.BLOCKED;
 		if (!completer.hasPendingOutputs() && completer.getPendingInputShrink() <= 0) {
 			lastPlanUnplaceableType = false;
 			lastPlanMaxDeferredPerType = 0;
@@ -111,7 +112,7 @@ public final class PbRecipeFlusher {
 		lastPlanMaxDeferredPerType = 0;
 		// 输入已扣除的 pending 不再有原子性约束：能写多少写多少，剩余继续挂起重试。
 		boolean alreadyCommitted = completer.hasCommittedPendingOutputs();
-		int deferralBudget = alreadyCommitted ? Integer.MAX_VALUE : Math.max(0, maxDeferredPerType);
+		long deferralBudget = alreadyCommitted ? Long.MAX_VALUE : Math.max(0, maxDeferredPerType);
 
 		// 修复:纯流体输出配方(如 oritech 石油蜜蜂的蜜脾)没有物品输出,但仍有流体和输入扣除待处理
 		if ((completer.getPendingRecipe() == null && !alreadyCommitted)
@@ -137,7 +138,7 @@ public final class PbRecipeFlusher {
 					// AE 写入不可回滚。先提交一次输入，剩余产物保留 pending 重试，
 					// 避免本地回退槽已满时保留原料并复制已经进入 AE 的产物。
 					consumePendingInput(completer, context, processIndex);
-					deferralBudget = Integer.MAX_VALUE;
+					deferralBudget = Long.MAX_VALUE;
 				}
 			}
 
@@ -145,7 +146,7 @@ public final class PbRecipeFlusher {
 			// 与 AE 路径同样是「不可回滚」的外部写入，因此成功即提交一次输入并放开延迟预算。
 			if (pushPendingDirectToNeighbors(completer, context)) {
 				consumePendingInput(completer, context, processIndex);
-				deferralBudget = Integer.MAX_VALUE;
+				deferralBudget = Long.MAX_VALUE;
 			}
 			if (outputBlocked(context)) {
 				consumePendingInput(completer, context, processIndex);
@@ -245,7 +246,7 @@ public final class PbRecipeFlusher {
 	}
 
 	/** 上一次规划中单种产物需要延迟的最大数量 */
-	int lastPlanMaxDeferredPerType() {
+	long lastPlanMaxDeferredPerType() {
 		return lastPlanMaxDeferredPerType;
 	}
 
@@ -262,8 +263,8 @@ public final class PbRecipeFlusher {
 	 * 还是部分写入（{@link Outcome#DEFERRED}）。
 	 */
 	private Outcome placeItems(PbRecipeCompleter completer, PbRecipeContext context,
-			int processIndex, int slotCount, int deferralBudget) {
-		Map<ItemStack, Integer> pendingOutputs = completer.getPendingOutputs();
+			int processIndex, int slotCount, long deferralBudget) {
+		Map<ItemStack, Long> pendingOutputs = completer.getPendingOutputs();
 		if (pendingOutputs.isEmpty()) {
 			return Outcome.COMMITTED;
 		}
@@ -308,13 +309,13 @@ public final class PbRecipeFlusher {
 	}
 
 	/** 按规划结果扣减 pending 数量（写入成功的部分），剩余数量保留等待下次排空。 */
-	private void consumePlacedItems(PbRecipeCompleter completer, Map<ItemStack, Integer> pendingOutputs) {
-		int totalPlaced = 0;
+	private void consumePlacedItems(PbRecipeCompleter completer, Map<ItemStack, Long> pendingOutputs) {
+		long totalPlaced = 0;
 		for (int t = 0, count = planner.templateCount(); t < count; t++) {
-			int written = planner.placedAt(t);
+			long written = planner.placedAt(t);
 			if (written <= 0) continue;
 			ItemStack template = planner.templateAt(t);
-			int remaining = Math.max(0, planner.requestedAt(t) - written);
+			long remaining = Math.max(0, planner.requestedAt(t) - written);
 			if (remaining == 0) {
 				pendingOutputs.remove(template);
 			} else {
@@ -407,10 +408,11 @@ public final class PbRecipeFlusher {
 
 	private static boolean pushPendingDirectToAe(PbRecipeCompleter completer, PbRecipeContext context) {
 		boolean acceptedAny = false;
-		Iterator<Map.Entry<ItemStack, Integer>> iterator = completer.getPendingOutputs().entrySet().iterator();
+		Iterator<Map.Entry<ItemStack, Long>> iterator = completer.getPendingOutputs().entrySet().iterator();
 		while (iterator.hasNext() && !outputBlocked(context)) {
-			Map.Entry<ItemStack, Integer> entry = iterator.next();
-			int requested = Math.max(0, entry.getValue());
+			Map.Entry<ItemStack, Long> entry = iterator.next();
+			long remaining = Math.max(0, entry.getValue());
+			int requested = (int) Math.min(Integer.MAX_VALUE, remaining);
 			if (requested <= 0) {
 				iterator.remove();
 				continue;
@@ -419,10 +421,10 @@ public final class PbRecipeFlusher {
 			if (accepted <= 0) continue;
 			acceptedAny = true;
 			completer.consumePendingItemCount(accepted);
-			if (accepted >= requested) {
+			if (accepted >= remaining) {
 				iterator.remove();
 			} else {
-				entry.setValue(requested - accepted);
+				entry.setValue(remaining - accepted);
 			}
 		}
 
@@ -449,13 +451,14 @@ public final class PbRecipeFlusher {
 			PbRecipeCompleter completer, PbRecipeContext context) {
 		if (context instanceof IMekCentrifugeTile machine
 				&& !machine.productivebeesgenesis$isDirectContainerOutputEnabled()) return false;
-		Map<ItemStack, Integer> pendingOutputs = completer.getPendingOutputs();
+		Map<ItemStack, Long> pendingOutputs = completer.getPendingOutputs();
 		if (pendingOutputs.isEmpty()) return false;
 		boolean acceptedAny = false;
-		Iterator<Map.Entry<ItemStack, Integer>> iterator = pendingOutputs.entrySet().iterator();
+		Iterator<Map.Entry<ItemStack, Long>> iterator = pendingOutputs.entrySet().iterator();
 		while (iterator.hasNext() && !outputBlocked(context)) {
-			Map.Entry<ItemStack, Integer> entry = iterator.next();
-			int requested = Math.max(0, entry.getValue());
+			Map.Entry<ItemStack, Long> entry = iterator.next();
+			long remaining = Math.max(0, entry.getValue());
+			int requested = (int) Math.min(Integer.MAX_VALUE, remaining);
 			if (requested <= 0) {
 				iterator.remove();
 				continue;
@@ -464,10 +467,10 @@ public final class PbRecipeFlusher {
 			if (accepted <= 0) continue;
 			acceptedAny = true;
 			completer.consumePendingItemCount(accepted);
-			if (accepted >= requested) {
+			if (accepted >= remaining) {
 				iterator.remove();
 			} else {
-				entry.setValue(requested - accepted);
+				entry.setValue(remaining - accepted);
 			}
 		}
 		return acceptedAny;

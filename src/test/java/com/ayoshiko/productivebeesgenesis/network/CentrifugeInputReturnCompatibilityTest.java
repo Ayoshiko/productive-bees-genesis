@@ -52,8 +52,10 @@ class CentrifugeInputReturnCompatibilityTest {
 	void coreClassesLoadWithoutAe2() throws Exception {
 		Path mergedNeoForge;
 		try (var artifacts = Files.list(Path.of("build/moddev/artifacts"))) {
+			String version = Files.readAllLines(Path.of("gradle.properties")).stream()
+					.filter(line -> line.startsWith("neo_version=")).findFirst().orElseThrow().split("=", 2)[1];
 			mergedNeoForge = artifacts
-					.filter(path -> path.getFileName().toString().endsWith("-merged.jar"))
+					.filter(path -> path.getFileName().toString().equals("neoforge-" + version + "-merged.jar"))
 					.findFirst()
 					.orElseThrow();
 		}
@@ -62,8 +64,13 @@ class CentrifugeInputReturnCompatibilityTest {
 				mergedNeoForge.toUri().toURL(),
 				Path.of("libs/Mekanism-1.21.1-10.7.19.85.jar").toUri().toURL()
 		}, null)) {
+			try (URLClassLoader installed = new URLClassLoader(new java.net.URL[] {
+					Path.of("libs/appliedenergistics2-1.21.1-19.2.17.jar").toUri().toURL()
+			}, loader)) {
+				Class.forName("appeng.api.networking.IGrid", false, installed);
+			}
 			assertThrows(ClassNotFoundException.class,
-					() -> Class.forName("appeng.api.AEApi", false, loader),
+					() -> Class.forName("appeng.api.networking.IGrid", false, loader),
 					"隔离类加载器不得包含 AE2");
 			for (String className : List.of(
 					"com.ayoshiko.productivebeesgenesis.network.CentrifugeInputReturnPayloadHandler",
@@ -111,7 +118,7 @@ class CentrifugeInputReturnCompatibilityTest {
 		assertTrue(output.contains("Capabilities.ItemHandler.BLOCK"));
 		assertTrue(output.contains("worldSide.getOpposite()"));
 		int simulateInsert = output.indexOf("ItemHandlerHelper.insertItemStacked(target, candidate, true)");
-		int executeExtract = output.indexOf("source.shrinkStack(accepted, Action.EXECUTE)");
+		int executeExtract = output.indexOf("source.setStack(sourceSnapshot.copyWithCount(requested - accepted))");
 		assertTrue(simulateInsert >= 0 && executeExtract > simulateInsert,
 				"必须先模拟目标接收量，再实际提取源槽物品");
 		assertTrue(output.contains("newSetFromMap(new IdentityHashMap<>())"));
@@ -120,8 +127,10 @@ class CentrifugeInputReturnCompatibilityTest {
 		assertFalse(output.contains("ItemEntity"),
 				"即使回滚异常也不得生成单个物品实体");
 		assertTrue(output.contains("sourceSnapshot"));
-		assertTrue(output.contains("source.setStack(expected.copy())"),
-				"目标实际接收不足时必须按操作前快照恢复源槽");
+		assertTrue(output.contains("custody.handoffItem(extracted"),
+				"外部真实接收必须经过已有保管记录");
+		assertTrue(output.contains("custody.retainItem(extracted.copyWithCount(knownRemainder)"),
+				"只允许明确未接收的余量回填");
 		assertFalse(handler.contains("recovery_drop"));
 
 		String ae2 = Files.readString(Path.of(

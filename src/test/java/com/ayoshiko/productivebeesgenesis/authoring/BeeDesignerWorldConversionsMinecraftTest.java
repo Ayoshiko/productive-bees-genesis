@@ -58,9 +58,13 @@ class BeeDesignerWorldConversionsMinecraftTest {
 			assertTrue(type.endsWith("item_conversion") ? decoded instanceof ItemConversionRecipe : decoded instanceof BlockConversionRecipe);
 			assertTrue(BeeDesignerReader.belongs(recipe, BEE));
 			assertFalse(BeeDesignerReader.belongs(recipe, OTHER));
+			JsonObject before = recipe.deepCopy();
 			var files = BeeDesignerCompiler.files(Map.of(BEE, document.toString()));
 			String path = "data/test/recipe/" + ResourceLocation.parse(id).getPath() + ".json";
-			assertEquals(recipe, JsonParser.parseString(files.get(path)));
+			JsonObject expected = before.deepCopy();
+			expected.addProperty("productivebeesgenesis:designer_recipe", true);
+			assertEquals(expected, JsonParser.parseString(files.get(path)));
+			assertEquals(before, recipe);
 		}
 	}
 

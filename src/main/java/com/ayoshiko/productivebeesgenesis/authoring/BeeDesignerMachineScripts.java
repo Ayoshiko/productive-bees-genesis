@@ -58,31 +58,41 @@ public final class BeeDesignerMachineScripts {
 	private List<Candidate> parse() {
 		List<Candidate> result = new ArrayList<>();
 		boolean pendingControl = false;
+		boolean conditionalExpression = false;
+		ArrayDeque<Boolean> expressionScopes = new ArrayDeque<>();
 		for (int index = 0; index < tokens.size(); index++) {
 			Token token = tokens.get(index);
 			if (token.string() == null && List.of("if", "for", "while", "switch", "function", "try", "catch", "class", "with").contains(token.text())) {
 				pendingControl = true;
 			}
+			if (token.is("&") || token.is("|") || token.is("?")) {
+				conditionalExpression = true;
+			}
 			if (token.is("{")) {
-				scopes.push(new HashMap<>(scopes.peek()));
+				expressionScopes.push(conditionalExpression);
 				boolean recipeCallback = index >= 6 && tokens.get(index - 6).is("ServerEvents")
 						&& tokens.get(index - 4).is("recipes") && tokens.get(index - 1).is("=>");
-				dynamicScopes.push(dynamicScopes.peek() || pendingControl || !recipeCallback);
+				boolean dynamic = dynamicScopes.peek() || pendingControl || conditionalExpression || !recipeCallback;
+				// 动态块不执行常量绑定；共享只读父表，避免按嵌套层数复制全部绑定。
+				scopes.push(dynamic ? scopes.peek() : new HashMap<>(scopes.peek()));
+				dynamicScopes.push(dynamic);
 				pendingControl = false;
 			} else if (token.is("}") && scopes.size() > 1) {
 				scopes.pop();
 				dynamicScopes.pop();
+				conditionalExpression = expressionScopes.pop();
 				pendingControl = false;
 			} else if (token.is(";")) {
 				pendingControl = false;
+				conditionalExpression = false;
 			} else if (token.is("const") && index + 3 < tokens.size() && tokens.get(index + 2).is("=")) {
-				int declaration = dynamicScopes.peek() || pendingControl ? index : constant(index);
+				int declaration = dynamicScopes.peek() || pendingControl || conditionalExpression ? index : constant(index);
 				if (declaration > index) {
 					index = declaration - 1;
 				}
 			} else if (chain(index) != null) {
 				Chain chain = chain(index);
-				if (dynamicScopes.peek() || pendingControl) {
+				if (dynamicScopes.peek() || pendingControl || conditionalExpression) {
 					result.add(new Candidate("", null, "Conditional or function body preserved without evaluation", token.line(),
 							token.start(), tokens.get(chain.end() - 1).end()));
 				} else {
@@ -102,7 +112,7 @@ public final class BeeDesignerMachineScripts {
 					for (int position = 0; position < values.size(); position++) {
 						bindings.put(macro.parameters().get(position), values.get(position));
 					}
-					if (dynamicScopes.peek() || pendingControl) {
+					if (dynamicScopes.peek() || pendingControl || conditionalExpression) {
 						throw new IllegalArgumentException("Conditional helper invocation preserved without evaluation");
 					}
 					result.add(candidate(chain(macro.body()), bindings, token.start(), tokens.get(end - 1).end(), token.line()));

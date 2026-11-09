@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipFile;
@@ -64,7 +65,7 @@ public final class BeeDesignerInstanceCatalog {
 		if (Files.isDirectory(mods, LinkOption.NOFOLLOW_LINKS)) {
 			checkPath(mods);
 			try (var paths = Files.list(mods)) {
-				List<Path> jars = paths.filter(file -> file.getFileName().toString().endsWith(".jar")).sorted().limit(1025).toList();
+				List<Path> jars = paths.filter(file -> file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".jar")).sorted().limit(1025).toList();
 				if (jars.size() > 1024) {
 					throw new IOException("designer.error.instance_budget");
 				}
@@ -90,7 +91,7 @@ public final class BeeDesignerInstanceCatalog {
 					String source = "file/" + folder + "/" + pack.getFileName();
 					if (Files.isDirectory(pack, LinkOption.NOFOLLOW_LINKS)) {
 						readTree(pack.resolve("data"), source, resources, packs, bytes);
-					} else if (pack.getFileName().toString().endsWith(".zip")) {
+					} else if (pack.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".zip")) {
 						readZip(pack, source, resources, packs, bytes);
 					}
 				}
@@ -151,7 +152,7 @@ public final class BeeDesignerInstanceCatalog {
 		Map<String, String> result = new LinkedHashMap<>();
 		for (var entry : documents.entrySet()) {
 			try {
-				BeeDesignerCompiler.validateStructure(entry.getValue());
+				BeeDesignerCompiler.validateImportedStructure(entry.getValue());
 				BeeDesignerProtocol.checkSize(entry.getValue().toString());
 				result.put(entry.getKey(), entry.getValue().toString());
 			} catch (RuntimeException invalid) {
@@ -178,7 +179,7 @@ public final class BeeDesignerInstanceCatalog {
 			}
 			for (var entry : snapshot.getAsJsonObject("projects").entrySet()) {
 				JsonObject document = entry.getValue().getAsJsonObject();
-				BeeDesignerCompiler.validateStructure(document);
+				BeeDesignerCompiler.validateImportedStructure(document);
 				BeeDesignerProtocol.checkSize(document.toString());
 				if (!entry.getKey().equals(document.get("id").getAsString()) || !registered.contains(entry.getKey())) {
 					throw new IOException("designer.error.instance_snapshot");
@@ -293,9 +294,6 @@ public final class BeeDesignerInstanceCatalog {
 	private static void readZip(Path file, String source, Map<String, String> resources, Map<String, String> packs, long[] bytes) throws IOException {
 		checkPath(file);
 		try (ZipFile zip = new ZipFile(file.toFile())) {
-			if (source.startsWith("mod/") && zip.stream().noneMatch(entry -> entry.getName().matches("data/[a-z0-9_.-]+/productivebees/.+\\.json"))) {
-				return;
-			}
 			var entries = zip.entries();
 			while (entries.hasMoreElements()) {
 				var entry = entries.nextElement();

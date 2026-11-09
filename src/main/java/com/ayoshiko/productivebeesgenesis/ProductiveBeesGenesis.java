@@ -3,11 +3,9 @@ package com.ayoshiko.productivebeesgenesis;
 import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeProduceProcessor;
 import com.ayoshiko.productivebeesgenesis.command.DevModeCommand;
-import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.config.ClientConfigMigrationService;
-import com.ayoshiko.productivebeesgenesis.config.FactoryTierConfigService;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.config.ServerConfigMigrationService;
+import com.ayoshiko.productivebeesgenesis.config.ServerConfigRuntime;
 import com.ayoshiko.productivebeesgenesis.init.ModBlockEntities;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.init.ModCreativeTabs;
@@ -15,7 +13,6 @@ import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.init.ModStats;
 import com.ayoshiko.productivebeesgenesis.mek.DevModeManager;
-import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper;
 import com.ayoshiko.productivebeesgenesis.mek.MyriadBatchPlanner;
 import com.ayoshiko.productivebeesgenesis.mek.PbRecipeCompleter;
 import com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor;
@@ -24,7 +21,6 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.network.DevModeStateSyncPacket;
 import com.ayoshiko.productivebeesgenesis.network.ModPayloads;
 import com.ayoshiko.productivebeesgenesis.network.PayloadRateLimiter;
-import com.ayoshiko.productivebeesgenesis.util.BeeConfigApplier;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.BeeConversionQueries;
 import com.ayoshiko.productivebeesgenesis.util.BeeRecipeReloader;
@@ -32,6 +28,7 @@ import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.PBReflectionCacheCleaner;
 import com.ayoshiko.productivebeesgenesis.util.RecipeReloadRetryManager;
 import com.ayoshiko.productivebeesgenesis.util.ServerTickClock;
 import com.ayoshiko.productivebeesgenesis.util.SharedPbRecipeCache;
@@ -40,24 +37,20 @@ import mekanism.common.attachments.IAttachmentAware;
 import mekanism.common.capabilities.ICapabilityAware;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.config.ConfigTracker;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig.Type;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
-import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -65,7 +58,6 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -80,11 +72,9 @@ public final class ProductiveBeesGenesis {
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
 	private static final String PRODUCTIVE_BEES_MOD_ID = "productivebees";
-	private static final LevelResource SERVER_CONFIG_DIRECTORY = new LevelResource("serverconfig");
 
 	/** 配方版本号 — 每次 /reload 或数据包重载时递增,通知所有 PB 配方处理器清空缓存。AtomicLong 保证原子递增。 */
 	public static final AtomicLong RECIPE_VERSION = new AtomicLong(0L);
-	private boolean serverConfigsInitialized;
 
 	public ProductiveBeesGenesis(IEventBus eventBus, ModContainer modContainer) {
 		LOGGER.info("资源蜜蜂：创世模组初始化中...");
@@ -156,48 +146,16 @@ public final class ProductiveBeesGenesis {
 				Type.SERVER, ModConfig.CAPACITIES_SERVER_SPEC, ModConfig.CAPACITIES_SERVER_FILE_NAME);
 	}
 
-	/**
-	 * 注册配置加载/重载监听器
-	 * <br/>
-	 * 服务端配置加载/重载时：
-	 * <ol>
-	 *   <li>跨字段联合校验并自动修正无效组合（Task 13）</li>
-	 *   <li>应用蜜蜂属性覆盖（按存档生效）</li>
-	 *   <li>重载时额外失效万象创世过滤缓存（Task 15）</li>
-	 *   <li>重载时失效蜂箱槽位上限缓存（Task 3 — stackMultiplier 依赖配置，需主动失效）</li>
-	 * </ol>
-	 */
+	/** 配置回调只准备封闭快照，世界或连接的游戏线程负责发布。 */
 	private void registerConfigListeners(IEventBus eventBus) {
 		eventBus.addListener((ModConfigEvent.Loading event) -> {
 			if (isOwnClientConfig(event.getConfig())) {
 				ClientConfigMigrationService.onConfigLoading(event.getConfig());
 			}
-			if (isOwnServerConfig(event.getConfig())) {
-				ServerConfigMigrationService.onConfigLoading(event.getConfig());
-				MyriadCreationsEventHandler.invalidateEnabledCache();
-				initializeServerConfigs();
-			}
+			ServerConfigRuntime.onConfig(event.getConfig(), false);
 		});
-		eventBus.addListener((ModConfigEvent.Reloading event) -> {
-			if (isOwnServerConfig(event.getConfig()) && ModConfig.areServerSpecsLoaded()) {
-				MyriadCreationsEventHandler.invalidateEnabledCache();
-				boolean changed = ModConfig.validateAndFixCrossFields();
-				changed |= BalanceConfig.refresh(true);
-				if (changed) {
-					ModConfig.saveServerSpecs();
-				}
-				BeeConfigApplier.applyOverrides();
-				MekCentrifugeFactoryHelper.refreshSmeltingCompatConfig();
-				// The master recipe-mode switch can invalidate already cached Mekanism recipes.
-				mekanism.common.CommonWorldTickHandler.flushTagAndRecipeCaches = true;
-				MyriadCreationsEventHandler.invalidateFilterCache();
-				// 外部物流开关走 100 刻缓存，重载后立即失效以免等待 5 秒
-				com.ayoshiko.productivebeesgenesis.logistics.ExternalLogisticsSettings.invalidate();
-				// 工厂倍率快照只在 Loading 构建，Reloading 不替换；修改后仍需重启游戏生效。
-			}
-			// 同步到客户端的配置是内存对象，没有本地路径；重试检测只需要 mod id。
-			RecipeReloadRetryManager.onConfigChanged(event.getConfig().getModId());
-		});
+		eventBus.addListener((ModConfigEvent.Reloading event) ->
+				ServerConfigRuntime.onConfig(event.getConfig(), true));
 	}
 
 	private static boolean isOwnClientConfig(net.neoforged.fml.config.ModConfig config) {
@@ -207,28 +165,6 @@ public final class ProductiveBeesGenesis {
 				&& config.getSpec() == ModConfig.CLIENT_SPEC;
 	}
 
-	/** 三个服务端规格全部就绪后只初始化一次运行时配置快照。 */
-	private synchronized void initializeServerConfigs() {
-		if (serverConfigsInitialized || !ModConfig.areServerSpecsLoaded()) return;
-		serverConfigsInitialized = true;
-		boolean changed = ModConfig.validateAndFixCrossFields();
-		changed |= BalanceConfig.refresh(false);
-		FactoryTierConfigService.load(ModConfig.SERVER);
-		if (changed) ModConfig.saveServerSpecs();
-		BeeConfigApplier.applyOverrides();
-		MekCentrifugeFactoryHelper.refreshSmeltingCompatConfig();
-	}
-
-	/**
-	 * 仅处理本模组注册的 SERVER 配置，避免其他模组的配置事件触发本模组逻辑。
-	 * 配置同步到客户端后 spec 身份仍保持不变，mod id 和类型则提供额外边界校验。
-	 */
-	private static boolean isOwnServerConfig(net.neoforged.fml.config.ModConfig config) {
-		return config != null
-				&& MOD_ID.equals(config.getModId())
-				&& config.getType() == Type.SERVER
-				&& ModConfig.isServerSpec(config.getSpec());
-	}
 
 	/**
 	 * 注册 mod 事件总线监听器（FML 生命周期事件）
@@ -303,83 +239,48 @@ public final class ProductiveBeesGenesis {
 		// 通过重写 MekanismShapedRecipe.assemble 在输入消耗前转移 BLOCK_ENTITY_DATA，
 		// 避免 ItemCraftedEvent 在输入被消耗后读到空物品的时序问题。
 		// 服务器停止时清理静态缓存，防止跨存档数据泄漏
-		NeoForge.EVENT_BUS.addListener(this::onServerAboutToStart);
 		NeoForge.EVENT_BUS.addListener(this::onServerStopped);
 	}
 
-	/**
-	 * 迁移落盘后重新按 NeoForge 的存档覆盖规则加载三个 SERVER 配置。
-	 * <p>
-	 * 仅当存档 {@code serverconfig/} 里原本没有拆分文件、NeoForge 已把配置绑定到全局
-	 * config 目录时才需要重载；整合包只改全局 config 的情况由迁移服务直接替换内存对象。
-	 * {@code unloadConfigs} 是全局操作，会让所有模组多收一轮 Unloading/Loading 事件，
-	 * 因此这里限定为“确实发生了存档级迁移”这一次，并捕获异常避免拖垮开服流程。
-	 */
-	private void onServerAboutToStart(ServerAboutToStartEvent event) {
-		if (!ServerConfigMigrationService.consumeReloadRequired()) return;
-		Path serverConfigDirectory = event.getServer().getWorldPath(SERVER_CONFIG_DIRECTORY);
-		try {
-			serverConfigsInitialized = false;
-			ConfigTracker.INSTANCE.unloadConfigs(Type.SERVER);
-			ConfigTracker.INSTANCE.loadConfigs(
-					Type.SERVER, FMLPaths.CONFIGDIR.get(), serverConfigDirectory);
-			LOGGER.info("存档级配置迁移完成，已按存档覆盖规则重新加载服务端配置：{}",
-					serverConfigDirectory);
-		} catch (RuntimeException exception) {
-			LOGGER.error("重新加载存档级服务端配置失败，本次会话使用迁移前的配置对象：{}",
-					serverConfigDirectory, exception);
-		} finally {
-			initializeServerConfigs();
+	/** 标签事件仅在对应资源已被接收时发布；候选管理器不影响当前生产。 */
+	private void onTagsReload(TagsUpdatedEvent event) {
+		if (!event.shouldUpdateStaticData()) return;
+		if (event.getUpdateCause() == TagsUpdatedEvent.UpdateCause.SERVER_DATA_LOAD) {
+			var server = ServerLifecycleHooks.getCurrentServer();
+			if (server != null && !com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime.reloadInProgress(server)) {
+				acceptRecipeManager(server.getRecipeManager(), false);
+			}
+		} else if (FMLEnvironment.dist.isClient()) {
+			try {
+				Class<?> clientClass = Class.forName("com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesisClient");
+				clientClass.getMethod("rebuildCentrifugeIndex").invoke(null);
+			} catch (ReflectiveOperationException failure) {
+				LOGGER.warn("客户端离心配方索引重建失败", failure);
+			}
 		}
 	}
 
-	/**
-	 * 标签/配方重载完成回调 — 递增配方版本号、失效缓存、重建离心配方索引。
-	 * 失效 BeeInfoHelper/BeeProduceProcessor/PbRecipeCompleter/MyriadBatchPlanner 缓存。
-	 * Task 16.3 同步失效 BeeProduceProcessor 产出配方缓存(静态共享)。
-	 */
-	private void onTagsReload(TagsUpdatedEvent event) {
-		long newVersion = RECIPE_VERSION.incrementAndGet();
+	/** 接收当前管理器后统一发布所有依赖缓存；同一接收点不重复推进代际。 */
+	public static void acceptRecipeManager(net.minecraft.world.item.crafting.RecipeManager manager, boolean modified) {
+		if (!modified && CentrifugeRecipeIndex.isCurrent(manager)) return;
+		if (!CentrifugeRecipeIndex.rebuild(manager)) {
+			throw new IllegalStateException("Could not publish accepted centrifuge recipes");
+		}
 		BeeInfoHelper.invalidateCache();
-		// 失效机械蜂箱产出配方缓存（Task 16.3 — 静态缓存全局失效）
 		BeeProduceProcessor.invalidateCache();
-		// 失效物品/方块转化配方索引（配方重载后转化原料花朵判定需重建）
 		BeeConversionQueries.invalidate();
-		// 失效单原料合成配方索引（染料蜜蜂花→染料查找，配方重载后产出映射可能变化）
 		SingleIngredientCraftingIndex.invalidate();
-		// 失效 PB 离心配方输出表缓存（防止 getRecipeOutputs 返回过期 LinkedHashMap）
 		PbRecipeCompleter.invalidateRecipeOutputsCache();
-		// 失效 PB 离心配方静态共享查找缓存（P1 优化：跨机器共享 LRU，与 CentrifugeRecipeIndex 原子替换同步）
 		SharedPbRecipeCache.invalidate();
-		// 失效精华转化合成配方缓存，确保 /reload 后使用最新唯一配方
 		EssenceConversionUpgradeHelper.invalidateCache();
-		// 失效粗矿熔炼配方缓存，确保 /reload 后读取最新 Mekanism 配方
 		RawOreSmeltingUpgradeHelper.invalidateCache();
 		com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper.invalidateCache();
-		// 失效万象批量规划器模板缓存（标签重载后 bee_type 可能变化）（Task 19）
 		MyriadBatchPlanner.clearTemplateCache();
-		// CombFuzzyMatcher 已改为无缓存直读组件（AEItemKey.equals 比重算更贵），无需失效
-		// 失效万象创世 bee_type 缓存（标签重载可能变更 BeeReloadListener 数据，5 秒过期窗口消除）
 		MyriadBeeTypeCache.invalidate();
-		// 重建离心配方索引 — 服务端用 MinecraftServer，客户端用 ClientLevel
-		// Bug 1 修复：专用服务器客户端无本地服务器，此前跳过重建导致索引永远为 EMPTY，
-		// 客户端 containsRecipe 校验失败无法放入蜜脾。现在客户端也重建索引。
-		var server = ServerLifecycleHooks.getCurrentServer();
-		if (server != null) {
-			CentrifugeRecipeIndex.rebuild(server.getRecipeManager());
-		} else if (FMLEnvironment.dist.isClient()) {
-			// 客户端场景：通过反射安全调用客户端类方法，避免服务端加载 ProductiveBeesGenesisClient
-			// （该类引用 net.minecraft.client.Minecraft，服务端加载会导致 ClassNotFoundException）
-			try {
-				Class<?> clientClass = Class.forName(
-						"com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesisClient");
-				java.lang.reflect.Method method = clientClass.getMethod("rebuildCentrifugeIndex");
-				method.invoke(null);
-			} catch (Exception e) {
-				LOGGER.warn("客户端离心配方索引重建失败，降级到全量遍历", e);
-			}
-		}
-		LOGGER.info("配方/标签重载完成，recipeVersion 递增至 {}", newVersion);
+		PBReflectionCacheCleaner.clearBeeFishingCaches();
+		long version = RECIPE_VERSION.incrementAndGet();
+		RecipeReloadRetryManager.accepted(manager, version);
+		LOGGER.info("已接收配方/标签代际 {}", version);
 	}
 
 	/**
@@ -411,8 +312,8 @@ public final class ProductiveBeesGenesis {
 	/**
 	 * 注册蜜蜂配方重载器
 	 * <br/>
-	 * AddReloadListenerEvent 在 RecipeManager 完成数据包加载后触发，
-	 * 自定义监听器在所有内置监听器之后执行，此时配方已就绪可被替换。
+	 * AddReloadListenerEvent 仅注册本轮重载监听器，此时配方尚未完成加载。
+	 * BeeRecipeReloader 在 apply 阶段处理候选；整轮成功后再发布已接收的配方代际。
 	 */
 	private void onAddReloadListener(AddReloadListenerEvent event) {
 		event.addListener(new BeeRecipeReloader(
@@ -428,8 +329,7 @@ public final class ProductiveBeesGenesis {
 	 * ServerTickTimeMonitor。每个清理独立 try-catch,单个失败不中断后续。
 	 */
 	private void onServerStopped(ServerStoppedEvent event) {
-		serverConfigsInitialized = false;
-		safeClear(ServerConfigMigrationService::reset, "ServerConfigMigrationService");
+		safeClear(() -> ServerConfigRuntime.endServer(event.getServer()), "ServerConfigRuntime");
 		// 异常隔离：每个清理操作独立 try-catch，单个失败不中断后续清理，防止跨存档泄漏
 		safeClear(CentrifugeRecipeIndex::clear, "CentrifugeRecipeIndex");
 		// 清理 PB 离心配方静态共享查找缓存 — 防止跨存档残留旧 RecipeHolder 引用（P1 优化）
@@ -461,7 +361,6 @@ public final class ProductiveBeesGenesis {
 		safeClear(ServerTickClock::reset, "ServerTickClock");
 		safeClear(Ae2IntegrationLoader::clearServerCaches, "AE2 network caches");
 		safeClear(LogThrottle::clearAll, "LogThrottle");
-		safeClear(FactoryTierConfigService::resetToDefaults, "FactoryTierConfigService");
 	}
 
 	/**

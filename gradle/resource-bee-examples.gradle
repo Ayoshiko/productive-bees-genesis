@@ -61,22 +61,25 @@ def verifyExamples = tasks.register('verifyResourceBeeExamples') {
         logger.lifecycle("Validated ${bees.size()} example bees and their acquisition recipes.")
     }
 }
-def generateExamples = tasks.register('generateResourceBeeReferences') {
+def referenceSource = layout.buildDirectory.dir('intermediates/resource-bee-references/files')
+def referenceManifestFile = layout.buildDirectory.file('intermediates/resource-bee-references/manifest.json')
+def prepareExamples = tasks.register('prepareResourceBeeReferences') {
     group = 'distribution'
     dependsOn verifyExamples
     inputs.dir(exampleRoot.dir('datapack'))
     inputs.dir(exampleRoot.dir('resourcepack'))
     inputs.file(exampleRoot.file('field-notes.json'))
     inputs.file(exampleRoot.file('INSTALL.txt'))
-    outputs.dir(generatedExamples)
+    outputs.dir(referenceSource)
+    outputs.file(referenceManifestFile)
     doLast {
         def json = new groovy.json.JsonSlurper()
         def notes = json.parse(exampleRoot.file('field-notes.json').asFile, 'UTF-8')
-        def destination = generatedExamples.get().asFile
+        def manifest = new LinkedHashMap<String, String>()
         def write = { String relative, String content ->
-            def file = new File(destination, relative)
-            file.parentFile.mkdirs()
-            file.setText(content, 'UTF-8')
+            if (manifest.putIfAbsent(relative, content) != null) {
+                throw new GradleException("Duplicate generated example path: ${relative}")
+            }
         }
         def recipes = [:]
         def bees = [:]
@@ -130,7 +133,36 @@ def generateExamples = tasks.register('generateResourceBeeReferences') {
         }
         write('EXAMPLES.json', groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(index)) + '\n')
         write('INSTALL.txt', exampleRoot.file('INSTALL.txt').asFile.getText('UTF-8'))
+        // Finish every input before publishing the allowlist; stale staging files are never packaged.
+        def destination = referenceSource.get().asFile
+        manifest.each { relative, content ->
+            def file = new File(destination, relative)
+            file.parentFile.mkdirs()
+            file.setText(content, 'UTF-8')
+        }
+        def manifestFile = referenceManifestFile.get().asFile
+        manifestFile.parentFile.mkdirs()
+        manifestFile.setText(groovy.json.JsonOutput.toJson(manifest.keySet().toList()) + '\n', 'UTF-8')
     }
+}
+def referencePaths = providers.fileContents(referenceManifestFile).asText.map { text ->
+    new HashSet<String>(new groovy.json.JsonSlurper().parseText(text))
+}
+def generateExamples = tasks.register('generateResourceBeeReferences', Sync) {
+    group = 'distribution'
+    description = 'Synchronizes only references generated from the current example inputs.'
+    dependsOn prepareExamples
+    inputs.file(referenceManifestFile)
+    def currentPaths
+    from(referenceSource) {
+        include { entry ->
+            if (entry.isDirectory()) return true
+            if (currentPaths == null) currentPaths = referencePaths.get()
+            currentPaths.contains(entry.path)
+        }
+    }
+    into generatedExamples
+    includeEmptyDirs = false
 }
 def exampleZips = ['datapack', 'resourcepack'].collectEntries { folder ->
     [(folder): tasks.register("packageResourceBee${folder.capitalize()}", Zip) {

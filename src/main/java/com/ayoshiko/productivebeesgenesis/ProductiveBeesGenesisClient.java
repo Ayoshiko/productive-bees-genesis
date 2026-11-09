@@ -4,6 +4,8 @@ import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.client.BeeEntityCache;
 import com.ayoshiko.productivebeesgenesis.apiary.client.GuiMekApiary;
 import com.ayoshiko.productivebeesgenesis.apiary.client.GuiMekApiaryFactory;
+import com.ayoshiko.productivebeesgenesis.client.ClientDevModeState;
+import com.ayoshiko.productivebeesgenesis.config.ServerConfigRuntime;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.AbstractBakedModelCosmic;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.BakedModelHalo;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.CosmicRenderQueue;
@@ -11,6 +13,7 @@ import com.ayoshiko.productivebeesgenesis.client.render.cosmic.CosmicShaders;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.GeometryLoaderCosmic;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.GeometryLoaderHalo;
 import com.ayoshiko.productivebeesgenesis.client.render.cosmic.GeometryLoaderHell;
+import com.ayoshiko.productivebeesgenesis.client.render.cosmic.IrisCompat;
 import com.ayoshiko.productivebeesgenesis.client.screen.CustomConfigScreenFactory;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifuge;
@@ -22,12 +25,16 @@ import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEMenuTypeRegis
 import com.ayoshiko.productivebeesgenesis.init.ModMenuTypes;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.util.CentrifugeRecipeIndex;
+import com.ayoshiko.productivebeesgenesis.util.SharedPbRecipeCache;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.tile.factory.TileEntityFactory;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -42,6 +49,7 @@ import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.event.TextureAtlasStitchedEvent;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
@@ -54,12 +62,23 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 	 */
 @Mod(value = ProductiveBeesGenesis.MOD_ID, dist = Dist.CLIENT)
 public final class ProductiveBeesGenesisClient {
+	private static long resourceGeneration;
+
+	public static long resourceGeneration() {
+		return resourceGeneration;
+	}
+
 
 	public ProductiveBeesGenesisClient(IEventBus eventBus, ModContainer container) {
 		BeeDesignerClient.initialize();
 		eventBus.addListener((RegisterClientReloadListenersEvent event) ->
 				event.registerReloadListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener)
-						manager -> BeeEntityCache.clearCache()));
+						manager -> {
+							resourceGeneration++;
+							BeeEntityCache.clearCache();
+							CosmicRenderQueue.clear();
+							IrisCompat.reset();
+						}));
 		// 注册自定义配置屏幕 — 替代 NeoForge 默认 ConfigurationScreen
 		// 原因：默认 ConfigurationScreen 不支持空列表添加项，自定义屏幕提供完整的过滤列表编辑功能
 		// 直接传递实例避免 registerExtensionPoint 重载歧义
@@ -68,15 +87,47 @@ public final class ProductiveBeesGenesisClient {
 
 	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 	public static final class WorldCacheLifecycle {
+		private static Connection activeConnection;
+
+		public static void beginConnection(Minecraft minecraft, Connection connection) {
+			if (activeConnection != connection) {
+				activeConnection = connection;
+				ClientDevModeState.update(false, java.util.Map.of());
+			}
+			if (ServerConfigRuntime.beginConnection(connection, minecraft::execute)) {
+				clearRemoteCaches();
+			}
+		}
+
+		public static void endConnection(Connection connection) {
+			if (connection != activeConnection) {
+				return;
+			}
+			activeConnection = null;
+			if (ServerConfigRuntime.endConnection(connection)) {
+				clearRemoteCaches();
+			}
+			ClientDevModeState.update(false, java.util.Map.of());
+		}
+
+		private static void clearRemoteCaches() {
+			BeeEntityCache.clearCache();
+			CentrifugeRecipeIndex.clear();
+			SharedPbRecipeCache.invalidate();
+		}
+
 		@SubscribeEvent
 		public static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
+			endConnection(event.getConnection());
 			BeeEntityCache.clearCache();
+			CosmicRenderQueue.clear();
 		}
 
 		@SubscribeEvent
 		public static void onLevelUnload(LevelEvent.Unload event) {
 			if (event.getLevel().isClientSide()) {
 				BeeEntityCache.clearCache();
+				CosmicRenderQueue.clear();
 			}
 		}
 	}
@@ -135,6 +186,18 @@ public final class ProductiveBeesGenesisClient {
 	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 	public static final class CosmicRenderRegistry {
 		@SubscribeEvent
+		public static void onFrameStart(RenderFrameEvent.Pre event) {
+			CosmicShaders.cosmicInventoryRender = false;
+			CosmicRenderQueue.beginFrame();
+		}
+
+		@SubscribeEvent
+		public static void onFrameEnd(RenderFrameEvent.Post event) {
+			CosmicRenderQueue.clear();
+			CosmicShaders.cosmicInventoryRender = false;
+		}
+
+		@SubscribeEvent
 		public static void onRegisterGeometryLoaders(ModelEvent.RegisterGeometryLoaders event) {
 			event.register(ResourceLocation.fromNamespaceAndPath(ProductiveBeesGenesis.MOD_ID, "cosmic"),
 				new GeometryLoaderCosmic());
@@ -151,6 +214,9 @@ public final class ProductiveBeesGenesisClient {
 
 		@SubscribeEvent
 		public static void onTextureAtlasStitched(TextureAtlasStitchedEvent event) {
+			if (!event.getAtlas().location().equals(InventoryMenu.BLOCK_ATLAS)) {
+				return;
+			}
 			CosmicShaders.onTextureAtlasStitched(event);
 			// 失效 halo 四边形缓存：图集重建后 UV 可能变化，旧缓存会导致 halo 渲染错位或采样错误纹理
 			BakedModelHalo.invalidateCache();
@@ -190,25 +256,22 @@ public final class ProductiveBeesGenesisClient {
 		}
 	}
 
-	/**
-	 * 客户端重建离心配方索引
-	 * <br/>
-	 * Bug 1 修复：专用服务器客户端无本地服务器，此前 {@code onTagsReload} 中
-	 * {@code ServerLifecycleHooks.getCurrentServer()} 返回 null 导致索引不重建。
-	 * 此方法在客户端从 {@link net.minecraft.client.Minecraft#getLevel()} 获取 RecipeManager 重建索引。
-	 * <p>
-	 * 通过 {@link net.neoforged.fml.loading.FMLEnvironment#dist()} 守卫调用，
-	 * 服务端不会加载此方法（DistExecutor 隔离），避免 {@code net.minecraft.client.Minecraft} 类加载。
-	 */
-	public static void rebuildCentrifugeIndex() {
-		try {
-			net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-			net.minecraft.world.level.Level level = mc.level;
-			if (level != null) {
-				CentrifugeRecipeIndex.rebuild(level.getRecipeManager());
+	@EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
+	public static final class RecipeCacheLifecycle {
+		@SubscribeEvent
+		public static void onRecipesUpdated(net.neoforged.neoforge.client.event.RecipesUpdatedEvent event) {
+			var connection = net.minecraft.client.Minecraft.getInstance().getConnection();
+			if (connection != null && !connection.getConnection().isMemoryConnection()) {
+				ProductiveBeesGenesis.acceptRecipeManager(event.getRecipeManager(), true);
 			}
-		} catch (Throwable t) {
-			ProductiveBeesGenesis.LOGGER.warn("客户端离心配方索引重建失败，降级到全量遍历", t);
+		}
+	}
+
+	/** 标签更新后重建远端连接的索引；集成服务器的共享索引由服务器发布。 */
+	public static void rebuildCentrifugeIndex() {
+		var connection = net.minecraft.client.Minecraft.getInstance().getConnection();
+		if (connection != null && !connection.getConnection().isMemoryConnection()) {
+			ProductiveBeesGenesis.acceptRecipeManager(connection.getRecipeManager(), true);
 		}
 	}
 }

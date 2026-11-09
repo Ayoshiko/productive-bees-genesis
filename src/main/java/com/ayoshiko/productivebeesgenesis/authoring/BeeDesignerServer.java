@@ -18,6 +18,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.HashMap;
@@ -25,6 +26,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -62,11 +64,9 @@ public final class BeeDesignerServer {
 		private long lastAccess = System.nanoTime();
 		private long sourceVersion;
 		private JsonObject original;
+		private String managedSource;
 		private boolean exporting;
 		private BeeDesignerImportBatch importBatch;
-		private UUID importToken;
-		private JsonObject importReceipt;
-		private String importFailure;
 		private BeeDesignerLifecycle.Confirmation deletion;
 	}
 
@@ -99,9 +99,13 @@ public final class BeeDesignerServer {
 		}
 		State state = STATES.get(player.server);
 		Session session = state == null ? null : state.sessions.get(player.getUUID());
-		if (session == null || !session.token.equals(request.session()) || !holding(player)
-				|| request.sequence() <= session.lastSequence
-				|| System.nanoTime() - session.lastAccess > SESSION_LIFETIME_NANOS) {
+		if (session == null) {
+			return;
+		}
+		if (!active(player, state, session)) {
+			return;
+		}
+		if (!session.token.equals(request.session()) || request.sequence() <= session.lastSequence) {
 			return;
 		}
 		long now = System.nanoTime();
@@ -133,25 +137,12 @@ public final class BeeDesignerServer {
 				case "detail" -> detail(player, state, session, request.sequence(), data);
 				case "export_snapshot" -> exportSnapshot(player, state, session, request.sequence(), data);
 				case "copy_id" -> copyId(player, session, request.sequence(), data);
-				case "import_begin" -> {
-					if (!canPublish(player) || state.busy || state.publication.blocked() || session.exporting) {
-						throw new IllegalArgumentException("designer.error.permission_or_busy");
-					}
-					session.importBatch = new BeeDesignerImportBatch(data);
-					importReceipt(player, session, request.sequence(), "import_ready", null);
-				}
+				case "import_begin" -> importBegin(player, state, session, request.sequence(), data);
 				case "import_entry" -> importEntry(player, state, session, request.sequence(), data);
 				case "import_commit" -> importCommit(player, state, session, request.sequence(), data);
-				case "import_status" -> {
-					if (session.importToken == null || !session.importToken.toString().equals(BeeDesignerDocument.text(data, "token", ""))) {
-						throw new IllegalArgumentException("designer.error.collection_changed");
-					}
-					if (session.importFailure != null) {
-						send(player, session, request.sequence(), "import_rejected", session.importReceipt);
-					} else {
-						send(player, session, request.sequence(), session.importReceipt.has("done") ? "import_applied" : "import_state", session.importReceipt);
-					}
-				}
+				case "import_status" -> operationStatus(player, state, session, request.sequence(), data, false);
+				case "apply_status" -> operationStatus(player, state, session, request.sequence(), data, true);
+				case "import_document" -> operationDocument(player, state, session, request.sequence(), data);
 				case "import_cancel" -> {
 					if (session.importBatch != null) {
 						if (session.importBatch.token.toString().equals(BeeDesignerDocument.text(data, "token", ""))) {
@@ -181,8 +172,18 @@ public final class BeeDesignerServer {
 				JsonObject rejected = new JsonObject();
 				rejected.addProperty("token", data == null ? "" : BeeDesignerDocument.text(data, "token", ""));
 				rejected.addProperty("message", safeMessage(exception));
-				rejected.addProperty("uncertain", false);
-				send(player, session, request.sequence(), "import_rejected", rejected);
+				boolean unknown = request.action().equals("import_status") || request.action().equals("import_commit")
+						|| request.action().equals("import_document");
+				rejected.addProperty("uncertain", unknown);
+				rejected.addProperty("phase", unknown ? "unknown" : "rejected");
+				send(player, session, request.sequence(), unknown ? "import_state" : "import_rejected", rejected);
+			} else if (request.action().equals("apply_status")) {
+				JsonObject unknown = new JsonObject();
+				unknown.addProperty("token", data == null ? "" : BeeDesignerDocument.text(data, "token", ""));
+				unknown.addProperty("phase", "unknown");
+				unknown.addProperty("uncertain", true);
+				unknown.addProperty("message", safeMessage(exception));
+				send(player, session, request.sequence(), "publication_state", unknown);
 			} else {
 				result(player, session, request.sequence(), false, safeMessage(exception));
 			}
@@ -192,13 +193,11 @@ public final class BeeDesignerServer {
 	private static void copyId(ServerPlayer player, Session session, long sequence, JsonObject document) {
 		Set<String> reserved = new HashSet<>(BeeDesignerSources.managed.keySet());
 		reserved.addAll(BeeDesignerEggs.bees());
-		if (document.has("_copy_reserved_ids")) {
-			JsonArray drafts = document.remove("_copy_reserved_ids").getAsJsonArray();
-			if (drafts.size() > BeeDesignerCollection.MAX_BEES) {
-				throw new IllegalArgumentException("designer.error.draft_limit");
-			}
-			drafts.forEach(value -> reserved.add(ResourceLocation.parse(value.getAsString()).toString()));
+		int attempt = document.has("_copy_attempt") ? document.remove("_copy_attempt").getAsInt() : 0;
+		if (attempt < 0 || attempt >= 4096) {
+			throw new IllegalArgumentException("designer.error.copy_limit");
 		}
+		document.remove("_copy_reserved_ids");
 		ResourceLocation source = ResourceLocation.parse(document.get("id").getAsString());
 		if (!source.getPath().matches("[a-z0-9_.-]{1,96}")) {
 			throw new IllegalArgumentException("designer.error.id");
@@ -208,8 +207,18 @@ public final class BeeDesignerServer {
 		for (String project : BeeDesignerSources.managed.values()) {
 			recipes.addAll(JsonParser.parseString(project).getAsJsonObject().getAsJsonObject("recipes").keySet());
 		}
+		String base = source.getNamespace() + ":" + source.getPath().substring(0, Math.min(80, source.getPath().length())) + "_copy";
+		for (int skipped = 0; skipped < attempt; skipped++) {
+			reserved.add(skipped == 0 ? base : base + "_" + (skipped + 1));
+		}
+		String candidate = BeeDesignerDocument.nextCopyId(document, reserved, recipes);
+		int chosen = candidate.equals(base) ? 0 : Integer.parseInt(candidate.substring(base.length() + 1)) - 1;
+		if (chosen >= 4096) {
+			throw new IllegalArgumentException("designer.error.copy_limit");
+		}
 		JsonObject response = new JsonObject();
-		response.addProperty("id", BeeDesignerDocument.nextCopyId(document, reserved, recipes));
+		response.addProperty("id", candidate);
+		response.addProperty("attempt", chosen);
 		send(player, session, sequence, "copy_id", response);
 	}
 
@@ -226,6 +235,7 @@ public final class BeeDesignerServer {
 			throw new IllegalArgumentException("designer.error.already_deleted");
 		}
 		BeeDesignerReader.Snapshot snapshot = BeeDesignerReader.snapshot(player.server, bee);
+		String managedSource = BeeDesignerSources.managed.get(bee.toString());
 		state.busy = true;
 		session.deletion = null;
 		CompletableFuture.supplyAsync(() -> BeeDesignerReader.readSources(snapshot), state.io)
@@ -243,6 +253,7 @@ public final class BeeDesignerServer {
 						loaded.addProperty("baseline", BeeDesignerDocument.fingerprint(loaded));
 					}
 					session.original = loaded.deepCopy();
+					session.managedSource = managedSource;
 					session.sourceVersion = snapshot.generation();
 					session.deletion = new BeeDesignerLifecycle.Confirmation(loaded, snapshot.generation(), purging);
 					send(player, session, sequence, "delete_review", session.deletion.review());
@@ -413,8 +424,9 @@ public final class BeeDesignerServer {
 		receipt.addProperty("token", session.importBatch.token.toString());
 		receipt.addProperty("count", session.importBatch.size());
 		receipt.addProperty("expected", session.importBatch.expected());
+		receipt.addProperty("request_digest", session.importBatch.requestDigest());
 		if (staged != null) {
-			receipt.add("document", staged);
+			receipt.add("id", staged.get("id"));
 		}
 		send(player, session, sequence, action, receipt);
 	}
@@ -460,36 +472,145 @@ public final class BeeDesignerServer {
 				}));
 	}
 
-	private static void importCommit(ServerPlayer player, State state, Session session, long sequence, JsonObject query) {
-		if (!canPublish(player) || state.busy || state.publication.blocked() || session.exporting || session.importBatch == null) {
-			throw new IllegalArgumentException("designer.error.permission_or_busy");
+	private static void importBegin(ServerPlayer player, State state, Session session, long sequence, JsonObject query) {
+		if (!canPublish(player)) {
+			throw new IllegalArgumentException("designer.error.permission");
 		}
-		BeeDesignerImportBatch batch = session.importBatch;
-		batch.check(query);
-		Map<String, String> projects = batch.validate(player.server);
-		Map<String, String> files = BeeDesignerCompiler.files(projects);
-		JsonObject receipt = new JsonObject();
-		receipt.addProperty("token", batch.token.toString());
-		receipt.addProperty("count", batch.size());
-		session.importBatch = null;
-		session.importToken = batch.token;
-		session.importReceipt = receipt;
-		session.importFailure = null;
-		state.publication.start(batch.first(), files, false, () -> active(player, state, session) && canPublish(player),
-				() -> batch.generation == BeeDesignerSources.generation, path -> {}, loaded -> {
-					receipt.addProperty("done", true);
-					if (active(player, state, session)) {
-						send(player, session, sequence, "import_applied", receipt);
+		UUID token = UUID.fromString(query.get("token").getAsString());
+		state.publication.query(token, player.getUUID(), "", () -> active(player, state, session) && canPublish(player), record -> {
+			if (record != null) {
+				operationReceipt(player, session, sequence, record, false);
+				return;
+			}
+			try {
+				if (state.busy || state.publication.blocked() || session.exporting) {
+					throw new IllegalArgumentException("designer.error.permission_or_busy");
+				}
+				session.importBatch = new BeeDesignerImportBatch(query);
+				importReceipt(player, session, sequence, "import_ready", null);
+			} catch (RuntimeException failure) {
+				operationRejected(player, session, sequence, token, false, safeMessage(failure));
+			}
+		}, failure -> operationUnknown(player, session, sequence, token, false, failure));
+	}
+
+	private static void importCommit(ServerPlayer player, State state, Session session, long sequence, JsonObject query) {
+		if (!canPublish(player)) {
+			throw new IllegalArgumentException("designer.error.permission");
+		}
+		UUID token = UUID.fromString(query.get("token").getAsString());
+		String requestDigest = BeeDesignerDocument.text(query, "request_digest", "");
+		if (!requestDigest.matches("[a-f0-9]{64}")) {
+			throw new IllegalArgumentException("designer.error.collection_changed");
+		}
+		state.publication.query(token, player.getUUID(), requestDigest, () -> active(player, state, session) && canPublish(player), record -> {
+			if (record != null) {
+				operationReceipt(player, session, sequence, record, false);
+				return;
+			}
+			try {
+				if (state.busy || state.publication.blocked() || session.exporting || session.importBatch == null) {
+					throw new IllegalArgumentException("designer.error.permission_or_busy");
+				}
+				BeeDesignerImportBatch batch = session.importBatch;
+				batch.check(query);
+				if (!requestDigest.equals(batch.requestDigest())) {
+					throw new IllegalArgumentException("designer.error.collection_changed");
+				}
+				Map<String, String> projects = batch.validate(player.server);
+				Map<String, String> files = BeeDesignerCompiler.files(projects);
+				BeeDesignerOperation identity = BeeDesignerOperation.create(token, player.getUUID(), requestDigest, "import",
+						batch.baselines(), publishedDocuments(files));
+				session.importBatch = null;
+				state.publication.start(batch.first(), files, false, identity,
+						() -> active(player, state, session) && canPublish(player),
+						() -> batch.generation == BeeDesignerSources.generation, path -> {}, loaded -> {
+							if (active(player, state, session)) {
+								operationStatus(player, state, session, sequence, query, false);
+							}
+							player.server.getPlayerList().getPlayers().forEach(BeeDesignerServer::sendNames);
+						}, message -> {
+							if (active(player, state, session)) {
+								operationStatus(player, state, session, sequence, query, false);
+							}
+						});
+			} catch (RuntimeException failure) {
+				if (state.publication.running()) {
+					operationUnknown(player, session, sequence, token, false, safeMessage(failure));
+				} else {
+					operationRejected(player, session, sequence, token, false, safeMessage(failure));
+				}
+			}
+		}, failure -> operationUnknown(player, session, sequence, token, false, failure));
+	}
+
+	private static Map<String, String> publishedDocuments(Map<String, String> files) {
+		JsonObject index = JsonParser.parseString(files.get("data/productivebeesgenesis/bee_designer/index.json")).getAsJsonObject();
+		Map<String, String> documents = new LinkedHashMap<>();
+		for (var entry : index.entrySet()) {
+			JsonObject document = entry.getValue().getAsJsonObject().deepCopy();
+			document.addProperty("baseline", BeeDesignerDocument.fingerprint(document));
+			BeeDesignerProtocol.parse(document.toString());
+			documents.put(entry.getKey(), entry.getValue().toString());
+		}
+		return Map.copyOf(documents);
+	}
+
+	private static void operationStatus(ServerPlayer player, State state, Session session, long sequence, JsonObject query, boolean single) {
+		if (!canPublish(player)) {
+			throw new IllegalArgumentException("designer.error.permission");
+		}
+		UUID token = UUID.fromString(query.get("token").getAsString());
+		String digest = BeeDesignerDocument.text(query, "request_digest", "");
+		state.publication.query(token, player.getUUID(), digest, () -> active(player, state, session) && canPublish(player),
+				record -> operationReceipt(player, session, sequence, record == null ? BeeDesignerOperation.unknown(token) : record, single),
+				failure -> operationUnknown(player, session, sequence, token, single, failure));
+	}
+
+	private static void operationDocument(ServerPlayer player, State state, Session session, long sequence, JsonObject query) {
+		if (!canPublish(player)) {
+			throw new IllegalArgumentException("designer.error.permission");
+		}
+		UUID token = UUID.fromString(query.get("token").getAsString());
+		String digest = BeeDesignerDocument.text(query, "request_digest", "");
+		String id = ResourceLocation.parse(query.get("id").getAsString()).toString();
+		int offset = query.has("offset") ? query.get("offset").getAsInt() : 0;
+		state.publication.document(token, player.getUUID(), digest, id, offset, () -> active(player, state, session) && canPublish(player),
+				document -> {
+					if (document == null) {
+						operationUnknown(player, session, sequence, token, false, "designer.error.collection_changed");
+					} else {
+						send(player, session, sequence, "import_document", document);
 					}
-					player.server.getPlayerList().getPlayers().forEach(BeeDesignerServer::sendNames);
-				}, message -> {
-					session.importFailure = message;
-					receipt.addProperty("message", message);
-					receipt.add("uncertain", state.publication.status().get("uncertain"));
-					if (active(player, state, session)) {
-						send(player, session, sequence, "import_rejected", receipt);
-					}
-				});
+				}, failure -> operationUnknown(player, session, sequence, token, false, failure));
+	}
+
+	private static void operationReceipt(ServerPlayer player, Session session, long sequence, JsonObject record, boolean single) {
+		JsonObject receipt = BeeDesignerOperation.receipt(record);
+		String phase = BeeDesignerDocument.text(receipt, "phase", "unknown");
+		String action = "import_state";
+		if (single) {
+			action = "publication_state";
+		} else if (phase.equals("committed")) {
+			action = "import_applied";
+		} else if (phase.equals("rejected")) {
+			action = "import_rejected";
+		}
+		send(player, session, sequence, action, receipt);
+	}
+
+	private static void operationRejected(ServerPlayer player, Session session, long sequence, UUID token, boolean single, String message) {
+		JsonObject rejected = new JsonObject();
+		rejected.addProperty("token", token.toString());
+		rejected.addProperty("phase", "rejected");
+		rejected.addProperty("message", message);
+		operationReceipt(player, session, sequence, rejected, single);
+	}
+
+	private static void operationUnknown(ServerPlayer player, Session session, long sequence, UUID token, boolean single, String message) {
+		JsonObject unknown = BeeDesignerOperation.unknown(token);
+		unknown.addProperty("message", message);
+		operationReceipt(player, session, sequence, unknown, single);
 	}
 
 	private static void exportSnapshot(ServerPlayer player, State state, Session session, long sequence, JsonObject query) {
@@ -542,11 +663,12 @@ public final class BeeDesignerServer {
 			return;
 		}
 		BeeDesignerReader.Snapshot snapshot = BeeDesignerReader.snapshot(player.server, bee);
+		String managedSource = BeeDesignerSources.managed.get(bee.toString());
 		state.busy = true;
 		CompletableFuture.supplyAsync(() -> BeeDesignerReader.readSources(snapshot), state.io)
 				.whenComplete((loaded, failure) -> player.server.execute(() -> {
 					state.busy = false;
-					if (state.stopped || state.sessions.get(player.getUUID()) != session) {
+					if (!active(player, state, session)) {
 						return;
 					}
 					if (failure != null || snapshot.generation() != BeeDesignerSources.generation) {
@@ -560,12 +682,43 @@ public final class BeeDesignerServer {
 						loaded.addProperty("baseline", BeeDesignerDocument.fingerprint(loaded));
 					}
 					session.original = loaded.deepCopy();
+					session.managedSource = managedSource;
 					session.sourceVersion = snapshot.generation();
 					send(player, session, sequence, "detail", loaded);
 				}));
 	}
 
 	private static void publish(ServerPlayer player, State state, Session session, BeeDesignerProtocol.Request request, JsonObject document) {
+		if (!request.action().equals("apply")) {
+			publishNew(player, state, session, request, document, null, "");
+			return;
+		}
+		if (!canPublish(player)) {
+			throw new IllegalArgumentException("designer.error.permission");
+		}
+		UUID token = document.has("_publication_token") ? UUID.fromString(document.remove("_publication_token").getAsString()) : UUID.randomUUID();
+		JsonObject submitted = new JsonObject();
+		submitted.add("document", document.deepCopy());
+		String digest = BeeDesignerDocument.fingerprint(submitted);
+		state.publication.query(token, player.getUUID(), digest, () -> active(player, state, session) && canPublish(player), record -> {
+			if (record != null) {
+				operationReceipt(player, session, request.sequence(), record, true);
+				return;
+			}
+			try {
+				publishNew(player, state, session, request, document, token, digest);
+			} catch (RuntimeException failure) {
+				if (state.publication.running()) {
+					operationUnknown(player, session, request.sequence(), token, true, safeMessage(failure));
+				} else {
+					operationRejected(player, session, request.sequence(), token, true, safeMessage(failure));
+				}
+			}
+		}, failure -> operationUnknown(player, session, request.sequence(), token, true, failure));
+	}
+
+	private static void publishNew(ServerPlayer player, State state, Session session, BeeDesignerProtocol.Request request,
+			JsonObject document, UUID token, String requestDigest) {
 		if (state.busy || state.uncertain || state.publication.blocked()) {
 			throw new IllegalArgumentException("designer.error.busy");
 		}
@@ -593,7 +746,7 @@ public final class BeeDesignerServer {
 		}
 		String baseline = BeeDesignerDocument.text(document, "baseline", "new");
 		BeeDesignerLifecycle.validateTransition(session.original, document, session.deletion);
-		BeeDesignerWorldConversions.validateChanges(baseline.equals("new") ? null : session.original, document);
+		BeeDesignerLifecycle.validateSharedChanges(baseline.equals("new") ? null : session.original, document, Map.of(id, document));
 		boolean deleting = BeeDesignerLifecycle.deleted(document);
 		if (deleting && (session.original == null || !BeeDesignerLifecycle.deleted(session.original))
 				&& (session.deletion == null || !session.deletion.permits(document))) {
@@ -610,7 +763,8 @@ public final class BeeDesignerServer {
 			if (original == null || !id.equals(original.get("id").getAsString())
 					|| !baseline.equals(original.get("baseline").getAsString())
 					|| (session.sourceVersion != BeeDesignerSources.generation
-							&& (BeeDesignerMyriad.recipesOnly(original) || !BeeDesignerReader.unchanged(player.server, original)))) {
+							&& (!Objects.equals(session.managedSource, BeeDesignerSources.managed.get(id))
+									|| BeeDesignerMyriad.recipesOnly(original) || !BeeDesignerReader.unchanged(player.server, original)))) {
 				throw new IllegalArgumentException("designer.error.conflict");
 			}
 			session.sourceVersion = BeeDesignerSources.generation;
@@ -648,7 +802,9 @@ public final class BeeDesignerServer {
 		Map<String, String> files = BeeDesignerCompiler.files(documents);
 		long version = BeeDesignerSources.generation;
 		result(player, session, request.sequence(), true, export ? "designer.status.exporting" : "designer.status.applying");
-		state.publication.start(document, files, export, () -> active(player, state, session) && canPublish(player),
+		BeeDesignerOperation identity = export ? null : BeeDesignerOperation.create(token, player.getUUID(), requestDigest, "apply",
+				Map.of(id, baseline), publishedDocuments(files));
+		state.publication.start(document, files, export, identity, () -> active(player, state, session) && canPublish(player),
 				() -> version == BeeDesignerSources.generation, path -> {
 					JsonObject response = new JsonObject();
 					response.addProperty("path", path.toString());
@@ -658,6 +814,7 @@ public final class BeeDesignerServer {
 					loaded.addProperty("baseline", BeeDesignerDocument.fingerprint(loaded));
 					if (active(player, state, session)) {
 						session.original = loaded.deepCopy();
+						session.managedSource = BeeDesignerSources.managed.get(id);
 						session.sourceVersion = BeeDesignerSources.generation;
 						session.deletion = null;
 						send(player, session, request.sequence(), "applied", loaded);
@@ -666,25 +823,46 @@ public final class BeeDesignerServer {
 				}, message -> {
 					if (active(player, state, session)) {
 						result(player, session, request.sequence(), false, message);
+						if (!export) {
+							JsonObject query = new JsonObject();
+							query.addProperty("token", token.toString());
+							operationStatus(player, state, session, request.sequence(), query, true);
+						}
 					}
 				});
+		if (!export) {
+			JsonObject query = new JsonObject();
+			query.addProperty("token", token.toString());
+			operationStatus(player, state, session, request.sequence(), query, true);
+		}
 	}
 
 	private static boolean active(ServerPlayer player, State state, Session session) {
-		return !state.stopped && !player.hasDisconnected() && state.sessions.get(player.getUUID()) == session
-				&& holding(player) && System.nanoTime() - session.lastAccess <= SESSION_LIFETIME_NANOS;
+		if (state.stopped || state.sessions.get(player.getUUID()) != session) {
+			return false;
+		}
+		if (player.hasDisconnected() || !holding(player) || System.nanoTime() - session.lastAccess > SESSION_LIFETIME_NANOS) {
+			state.sessions.remove(player.getUUID(), session);
+			return false;
+		}
+		return true;
 	}
 
 	public static void sendNames(ServerPlayer player) {
-		PacketDistributor.sendToPlayer(player, new BeeDesignerProtocol.Response(new UUID(0, 0), 0, "names_reset", "{}"));
+		UUID batch = UUID.randomUUID();
+		long generation = BeeDesignerSources.generation;
+		JsonObject header = new JsonObject();
+		header.addProperty("count", BeeDesignerSources.managed.size());
+		PacketDistributor.sendToPlayer(player, new BeeDesignerProtocol.Response(batch, generation, "names_reset", header.toString()));
 		for (String value : BeeDesignerSources.managed.values()) {
 			JsonObject document = JsonParser.parseString(value).getAsJsonObject();
 			JsonObject names = new JsonObject();
 			names.addProperty("id", document.get("id").getAsString());
 			names.add("names", document.get("names"));
 			names.addProperty("deleted", BeeDesignerLifecycle.deleted(document));
-			PacketDistributor.sendToPlayer(player, new BeeDesignerProtocol.Response(new UUID(0, 0), 0, "names", names.toString()));
+			PacketDistributor.sendToPlayer(player, new BeeDesignerProtocol.Response(batch, generation, "names", names.toString()));
 		}
+		PacketDistributor.sendToPlayer(player, new BeeDesignerProtocol.Response(batch, generation, "names_complete", header.toString()));
 	}
 
 	private static void result(ServerPlayer player, Session session, long sequence, boolean success, String message) {
@@ -695,11 +873,13 @@ public final class BeeDesignerServer {
 	}
 
 	private static void send(ServerPlayer player, Session session, long sequence, String action, JsonObject data) {
+		State state = STATES.get(player.server);
+		if (state == null || !active(player, state, session)) {
+			return;
+		}
 		String json = data.toString();
 		BeeDesignerProtocol.checkSize(json);
-		if (!player.hasDisconnected()) {
-			PacketDistributor.sendToPlayer(player, new BeeDesignerProtocol.Response(session.token, sequence, action, json));
-		}
+		PacketDistributor.sendToPlayer(player, new BeeDesignerProtocol.Response(session.token, sequence, action, json));
 	}
 
 	public static String safeMessage(Throwable exception) {
@@ -717,6 +897,21 @@ public final class BeeDesignerServer {
 		}
 		String message = cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
 		return "designer.error.operation_detail|" + (message.length() > 350 ? message.substring(0, 350) : message);
+	}
+
+	@SubscribeEvent
+	public static void tick(ServerTickEvent.Post event) {
+		MinecraftServer server = event.getServer();
+		State state = STATES.get(server);
+		if (state == null || state.sessions.isEmpty()) {
+			return;
+		}
+		long now = System.nanoTime();
+		state.sessions.entrySet().removeIf(entry -> {
+			ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+			return player == null || player.hasDisconnected() || !holding(player)
+					|| now - entry.getValue().lastAccess > SESSION_LIFETIME_NANOS;
+		});
 	}
 
 	@SubscribeEvent

@@ -39,6 +39,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
@@ -85,7 +86,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	protected boolean isMultiFluidModeSynced = false;
 	/** Task 6: 孤儿多流体槽 NBT — MULTI→SINGLE 降级时保留的多流体槽数据,saveAdditional 显式写出确保持久化 */
 	@Nullable
-	private CompoundTag orphanedMultiFluidTanksNbt;
+	private Tag orphanedMultiFluidTanksNbt;
 	/** PB 配方处理器 — 封装所有 PB 离心配方处理逻辑 */
 	protected final PbRecipeProcessor pbProcessor;
 	/** 多进程、PB 余量及多罐共用外层所有权双回执。 */
@@ -265,8 +266,9 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	@Override
 	public void setConfigurationData(@NotNull HolderLookup.Provider provider,
 			@Nullable net.minecraft.world.entity.player.Player player, @NotNull CompoundTag data) {
-		super.setConfigurationData(provider, player, data);
-		CentrifugeFactoryCommonLogic.setConfigurationData(data, player, pbUpgradeDelegate);
+		if (pbUpgradeDelegate.applyConfiguration(data, player)) {
+			super.setConfigurationData(provider, player, data);
+		}
 	}
 
 	@NotNull
@@ -441,7 +443,8 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	@org.jetbrains.annotations.Nullable
 	@Override
 	public CentrifugeUpgradeData getUpgradeData(HolderLookup.Provider provider) {
-		if (!com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.canUpgrade(this)) return null;
+		if (!productivebeesgenesis$canUpgradeProduction()
+				|| !com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.canUpgrade(this)) return null;
 		var resourceUpgrade = com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.prepareUpgrade(this);
 		EnergyInventorySlot energySlot = ((TileEntityFactoryAccessor) this).productivebeesgenesis$getEnergySlot();
 		var data = CentrifugeFactoryCommonLogic.getUpgradeData(provider, redstone, getControlType(),
@@ -449,6 +452,9 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 				((TileEntityFactoryAccessor) this).productivebeesgenesis$getSorting(),
 				getComponents(), pbUpgradeDelegate, productivebeesgenesis$getAe2StateHolder(),
 				fluidOutputHolder);
+		data.pbWorkState = new CompoundTag();
+		pbProcessor.saveAdditional(data.pbWorkState, provider);
+		data.unresolvedFluidState = getOrphanedMultiFluidTanksNbt();
 		data.resourceUpgrade = resourceUpgrade;
 		return data;
 	}
@@ -458,7 +464,27 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	public void parseUpgradeData(HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) {
 		AbstractMekCentrifugeFactoryStateSupport.parseUpgradeData(this, provider, upgradeData,
 				inputSlots, outputSlots, data -> super.parseUpgradeData(provider, data));
-		if (upgradeData instanceof CentrifugeUpgradeData data && data.resourceUpgrade != null) data.resourceUpgrade.apply(this);
+		if (upgradeData instanceof CentrifugeUpgradeData data) {
+			if (data.pbWorkState != null) pbProcessor.loadAdditional(data.pbWorkState, provider);
+			setOrphanedMultiFluidTanksNbt(data.unresolvedFluidState);
+			if (data.resourceUpgrade != null) data.resourceUpgrade.apply(this);
+		}
+	}
+
+	@Override
+	public boolean productivebeesgenesis$canUpgradeProduction() {
+		return !pbProcessor.hasUnresolvedWork() && !pbUpgradeDelegate.hasUnresolvedData()
+				&& getOrphanedMultiFluidTanksNbt() == null
+				&& !(fluidOutputHolder instanceof com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder multi
+				&& multi.hasUnresolvedSavedData());
+	}
+
+	@Override
+	public boolean hasUnresolvedInput() {
+		return productivebeesgenesis$getAe2StateHolder().getPendingItemBuffer().isBlocked()
+				|| pbUpgradeDelegate.hasUnresolvedData() || getOrphanedMultiFluidTanksNbt() != null
+				|| fluidOutputHolder instanceof com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder multi
+				&& multi.hasUnresolvedSavedData();
 	}
 
 	// ===== PbRecipeContext 接口实现 =====
@@ -555,10 +581,10 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	}
 	/** Task 6: 存入孤儿多流体槽 NBT — MULTI→SINGLE 降级时保留数据,saveAdditional 显式写出确保持久化 */
 	@Override
-	public void setOrphanedMultiFluidTanksNbt(@Nullable CompoundTag nbt) { orphanedMultiFluidTanksNbt = nbt; }
+	public void setOrphanedMultiFluidTanksNbt(@Nullable Tag nbt) { orphanedMultiFluidTanksNbt = nbt; }
 	/** Task 6: 获取孤儿多流体槽 NBT — 供 saveAdditional 在 SINGLE 模式下写出 */
 	@Override
-	public @Nullable CompoundTag getOrphanedMultiFluidTanksNbt() { return orphanedMultiFluidTanksNbt; }
+	public @Nullable Tag getOrphanedMultiFluidTanksNbt() { return orphanedMultiFluidTanksNbt; }
 
 	@Override
 	public int processes() { return tier.processes; }

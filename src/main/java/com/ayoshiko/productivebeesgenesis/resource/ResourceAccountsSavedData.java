@@ -26,7 +26,7 @@ import java.util.function.Consumer;
 public final class ResourceAccountsSavedData extends SavedData {
 	/** 主世界 data 目录中的专用文件名。 */
 	public static final String STORAGE_NAME = "productivebeesgenesis_resource_accounts";
-	private static final long MAX_FILE_NBT_BYTES = 64L * 1024 * 1024;
+	private static final long MAX_FILE_NBT_BYTES = ResourceAccounts.MAX_FILE_NBT_BYTES;
 
 	@FunctionalInterface
 	interface Writer {

@@ -100,7 +100,7 @@ This is the easiest thing to get wrong. The same window accepts different sets o
 **Works on both machines**
 
 - **Productivity α / β / γ / ω**: increases comb output per cycle (PB default factor 1.2 / 1.5 / 2.0 / 2.6); ω **also enables comb-block mode**.
-- **Time / Time+**: cuts cycle time by **15%** / **30%** per level, raising power draw.
+- **Time / Time+**: adds **0.15** / **0.30** per upgrade to the speed factor (PB defaults), raising power draw. Cycle time is the original time divided by `1 + 0.15 × (Time count + 2 × Time+ count)`. One upgrade leaves about **86.96%** / **76.92%** of the original time; each upgrade does not subtract a fixed 15% / 30%.
 - **Byproduct Destruction**: the apiary discards honey-type byproducts and pollen puffs; the centrifuge discards PB honey fluid and beeswax. **Main products are untouched**.
 - **Essence Conversion**: compacts low-tier products that have a single-ingredient reverse recipe.
 

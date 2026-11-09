@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.domainprobe;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiculture.compat.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.core.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.energy.NetworkEnergyService;
@@ -9,7 +10,7 @@ import com.ayoshiko.productivebeesgenesis.apiculture.production.*;
 import com.ayoshiko.productivebeesgenesis.apiculture.storage.*;
 import com.ayoshiko.productivebeesgenesis.apiary.*;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
+import com.ayoshiko.productivebeesgenesis.config.ServerConfigRuntime;
 import com.ayoshiko.productivebeesgenesis.config.BalancePreset;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.google.gson.JsonObject;
@@ -29,6 +30,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.*;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.AABB;
+import net.neoforged.fml.config.ModConfigs;
 import net.neoforged.neoforge.common.util.FakePlayerFactory;
 import static com.ayoshiko.productivebeesgenesis.apiculture.core.MemberUpgradeService.Action.*;
 import static com.ayoshiko.productivebeesgenesis.apiculture.core.MemberUpgradeService.Status.*;
@@ -252,12 +254,19 @@ final class ApiaryUpgradeProbe {
 		check(PbUpgradeType.TIME, REMOVE, 10, 1, false, MOVED, 1, revision()); ModConfig.SERVER.beeNetwork.enabled.set(true);
 		var preset = ModConfig.SERVER.balancePreset.get(); int limit = ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount.get();
 		boolean exclusive = ModConfig.SERVER.speedUpgradeTiersExclusive.get();
+		var gameplay = ModConfigs.getModConfigs(ProductiveBeesGenesis.MOD_ID).stream()
+				.filter(loaded -> loaded.getSpec() == ModConfig.GAMEPLAY_SERVER_SPEC)
+				.findFirst().orElseThrow();
 		try {
-			ModConfig.SERVER.balancePreset.set(BalancePreset.CUSTOM); ModConfig.SERVER.speedUpgradeTiersExclusive.set(false);
-			ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount.set(8); BalanceConfig.refresh(false);
+			ModConfig.SERVER.balancePreset.set(BalancePreset.CUSTOM);
+			ModConfig.SERVER.speedUpgradeTiersExclusive.set(false);
+			ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount.set(8);
+			ServerConfigRuntime.onConfig(gameplay, false);
 			check(PbUpgradeType.TIME, INSTALL, 10, 6, false, MOVED, 6, revision()); setReference(PbUpgradeType.TIME, 6);
 			check(PbUpgradeType.TIME_2, INSTALL, 11, 1, false, MOVED, 1, revision()); setReference(PbUpgradeType.TIME_2, 1);
-			ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount.set(4); ModConfig.SERVER.speedUpgradeTiersExclusive.set(true); BalanceConfig.refresh(false);
+			ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount.set(4);
+			ModConfig.SERVER.speedUpgradeTiersExclusive.set(true);
+			ServerConfigRuntime.onConfig(gameplay, false);
 			comparePhysical(StaticApiaryAdapter.cycle(hive, record(), state().bee(0)));
 			check(PbUpgradeType.TIME, INSTALL, 10, 1, false, CONFLICT, 0, revision());
 			check(PbUpgradeType.TIME_2, REMOVE, 11, 1, false, MOVED, 1, revision()); setReference(PbUpgradeType.TIME_2, 0);
@@ -267,8 +276,10 @@ final class ApiaryUpgradeProbe {
 			new MachineAssetStore(hive).validate(record().returnImage(), player.serverLevel());
 			check(PbUpgradeType.TIME, REMOVE, 10, 5, false, MOVED, 5, revision()); setReference(PbUpgradeType.TIME, 0);
 		} finally {
-			ModConfig.SERVER.balancePreset.set(preset); ModConfig.SERVER.speedUpgradeTiersExclusive.set(exclusive);
-			ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount.set(limit); BalanceConfig.refresh(false);
+			ModConfig.SERVER.balancePreset.set(preset);
+			ModConfig.SERVER.speedUpgradeTiersExclusive.set(exclusive);
+			ModConfig.SERVER.apiaryPbUpgradeTimeMaxCount.set(limit);
+			ServerConfigRuntime.onConfig(gameplay, false);
 		}
 		check(PbUpgradeType.TIME, INSTALL, 10, 1, false, MOVED, 1, revision()); setReference(PbUpgradeType.TIME, 1);
 	}

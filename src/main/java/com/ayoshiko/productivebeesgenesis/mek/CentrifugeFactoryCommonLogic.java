@@ -3,7 +3,6 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeData;
 import com.ayoshiko.productivebeesgenesis.apiary.CentrifugeUpgradeDataHelper;
-import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputPuller;
@@ -41,7 +40,7 @@ import mekanism.common.upgrade.IUpgradeData;
 import mekanism.common.util.MekanismUtils;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.entity.player.Player;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
@@ -86,12 +85,14 @@ public final class CentrifugeFactoryCommonLogic {
 			@NotNull IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
 					SingleItem<ItemStackToItemStackRecipe>> recipeType, boolean allowSmelting) {
 		if (level == null) return false;
-		if (pbProcessor.acceptsResourceInput(stack)) return pbProcessor.allowsNewResourceInput(stack);
+		if (pbProcessor.acceptsResourceInput(stack)) {
+			return pbProcessor.allowsNewResourceInput(stack) || pbProcessor.hasRetainedInput(stack);
+		}
 		// Clear cached validation when the smelting-compat switch changes (O(1) flag compare per probe)
 		cache.setSmeltingAllowed(allowSmelting);
 		return cache.getResult(level, stack,
 				() -> MekCentrifugeFactoryHelper.getInputValidationResult(recipeType, level, stack, pbProcessor,
-					allowSmelting)).valid();
+					allowSmelting)).valid() || pbProcessor.hasRetainedInput(stack);
 	}
 
 	/** 检查输入是否产出指定输出（支持 PB 配方回退），带缓存 */
@@ -154,34 +155,7 @@ public final class CentrifugeFactoryCommonLogic {
 		ae2StateHolder.loadPerTileState(data);
 	}
 
-	/** 设置配置卡数据 — 处理 PB 升级粘贴（含生存模式物品消耗） */
-	public static void setConfigurationData(@NotNull CompoundTag data,
-			@Nullable Player player, @NotNull FactoryPbUpgradeDelegate pbUpgradeDelegate) {
-		PbConfigCardDataHelper.readAndApplyPbUpgrades(data, player,
-				pbUpgradeDelegate::installPbUpgrade,
-				() -> clearAllPbUpgrades(pbUpgradeDelegate),
-				PbConfigCardDataHelper.MachineType.CENTRIFUGE);
-	}
 
-	/**
-	 * 清空所有已安装 PB 升级 — 供配置卡粘贴前调用
-	 * <br/>
-	 * 修复物品守恒：使用 removePbUpgrade 直接清空并返还物品栈列表，
-	 * 由调用方（PbConfigCardDataHelper.readAndApplyPbUpgrades）注入玩家物品栏或掉落地面。
-	 * 不再依赖 extractPbUpgradeByType（输出槽空间不足会截断物品）。
-	 *
-	 * @return 被清空的 PB 升级物品栈列表
-	 */
-	@NotNull
-	public static java.util.List<ItemStack> clearAllPbUpgrades(@NotNull FactoryPbUpgradeDelegate pbUpgradeDelegate) {
-		java.util.List<ItemStack> dropped = new java.util.ArrayList<>();
-		for (PbUpgradeType type : PbUpgradeType.values()) {
-			if (!type.isBuiltin() && pbUpgradeDelegate.getPbUpgradeInstalledCount(type) > 0) {
-				dropped.addAll(pbUpgradeDelegate.removePbUpgrade(type, true));
-			}
-		}
-		return dropped;
-	}
 
 	// ===== NBT 序列化 =====
 
@@ -204,9 +178,9 @@ public final class CentrifugeFactoryCommonLogic {
 			// SINGLE 模式:若存在孤儿 NBT,写出以持久化
 			// 原理:saveAdditional 接收全新 CompoundTag,SINGLE 模式不调用 writeToNBT,
 			// 孤儿 NBT 字段确保上次 MULTI 模式的数据不会在第一次保存后永久丢失
-			CompoundTag orphanedNbt = host.getOrphanedMultiFluidTanksNbt();
+			Tag orphanedNbt = host.getOrphanedMultiFluidTanksNbt();
 			if (orphanedNbt != null) {
-				nbt.put(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, orphanedNbt);
+				nbt.put(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, orphanedNbt.copy());
 			}
 		}
 	}
@@ -236,9 +210,9 @@ public final class CentrifugeFactoryCommonLogic {
 		if (fluidOutputHolder instanceof MultiFluidTankHolder multiHolder) {
 			multiHolder.writeToNBT(nbt, provider);
 		} else if (factory instanceof IMultiFluidTankHost host) {
-			CompoundTag orphanedNbt = host.getOrphanedMultiFluidTanksNbt();
+			Tag orphanedNbt = host.getOrphanedMultiFluidTanksNbt();
 			if (orphanedNbt != null) {
-				nbt.put(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, orphanedNbt);
+				nbt.put(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, orphanedNbt.copy());
 			}
 		}
 		BlockEntity.addEntityType(nbt, typeSupplier.get());
@@ -256,6 +230,7 @@ public final class CentrifugeFactoryCommonLogic {
 		ae2LifecycleHandler.loadNodeNBT(factory, nbt);
 		factory.productivebeesgenesis$getAe2StateHolder().loadPerTileState(nbt);
 		factory.productivebeesgenesis$getAe2StateHolder().loadPendingItems(nbt);
+		if (factory instanceof IMultiFluidTankHost host) host.setOrphanedMultiFluidTanksNbt(null);
 		boolean hasMultiFluidTag = nbt.contains(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS);
 		// Task 6/10: 多流体槽 NBT 处理 — orphaned NBT 字段方案
 		// 原理:saveAdditional 接收全新 CompoundTag,SINGLE 模式不调用 writeToNBT 会导致数据丢失;
@@ -267,9 +242,11 @@ public final class CentrifugeFactoryCommonLogic {
 				multiHolder.readFromNBT(nbt, provider);
 			} else if (factory instanceof IMultiFluidTankHost host) {
 				// SINGLE 模式:存入孤儿 NBT,不加载到 SINGLE 持有者(数据休眠)
-				host.setOrphanedMultiFluidTanksNbt(nbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS));
+				host.setOrphanedMultiFluidTanksNbt(nbt.get(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS).copy());
 				DevLog.warn("fluid_tank", "检测到多流体槽数据,当前为 SINGLE 模式。数据已保留为孤儿 NBT,切换回 MULTI 模式可恢复");
 			}
+		} else if (fluidOutputHolder instanceof MultiFluidTankHolder multiHolder) {
+			multiHolder.rebuildMappings();
 		}
 		MekCentrifugeEnergyScaling.normalizeCapacity(factory);
 	}

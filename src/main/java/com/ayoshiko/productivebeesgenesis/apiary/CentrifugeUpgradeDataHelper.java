@@ -7,6 +7,7 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputFilter;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
+import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankNbtCodec;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
@@ -57,6 +58,33 @@ public final class CentrifugeUpgradeDataHelper {
 
 	private CentrifugeUpgradeDataHelper() {
 	}
+
+	/** 安装器已求出目标状态后调用；目标只构造容量，不挂世界或加载生命周期。 */
+	public static boolean canInstallTier(net.minecraft.world.level.block.entity.BlockEntity source,
+			net.minecraft.world.level.block.state.BlockState targetState) {
+		if (!(source instanceof com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile machine)) return true;
+		if (!machine.productivebeesgenesis$canUpgradeProduction()) return false;
+		if (!(source instanceof com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext sourceContext)
+				|| !(targetState.getBlock() instanceof net.minecraft.world.level.block.EntityBlock entityBlock)) return false;
+		var target = entityBlock.newBlockEntity(source.getBlockPos(), targetState);
+		if (!(target instanceof com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext targetContext)
+				|| targetContext.processes() < sourceContext.processes()) return false;
+		List<IExtendedFluidTank> sourceTanks = source instanceof com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost multi
+				? multi.getFluidTanks() : List.of(sourceContext.fluidOutputTank());
+		List<IExtendedFluidTank> targetTanks = target instanceof com.ayoshiko.productivebeesgenesis.mek.IMultiFluidTankHost multi
+				? multi.getFluidTanks() : List.of(targetContext.fluidOutputTank());
+		List<FluidStack> fluids = new ArrayList<>(sourceTanks.size());
+		for (IExtendedFluidTank tank : sourceTanks) {
+			if (!tank.isEmpty()) fluids.add(tank.getFluid().copy());
+		}
+		try {
+			MultiFluidTankNbtCodec.plan(fluids, targetTanks);
+			return true;
+		} catch (IllegalArgumentException insufficientCapacity) {
+			return false;
+		}
+	}
+
 
 	/**
 	 * 构建离心机工厂升级数据 — 保存完整状态供 ItemTierInstaller 升级时流转
@@ -205,7 +233,7 @@ public final class CentrifugeUpgradeDataHelper {
 	 * <br/>
 	 * v13: 基础离心机升级为工厂时,单流体槽内容需持久化到 multiFluidTanksNbt 字段。
 	 * 构造单 entry 的 ListTag,与 {@link com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankNbtCodec#writeToNBT}
-	 * 输出格式一致(省略 count 字段,readFromNBT 不读取该字段),使工厂的
+	 * 输出格式一致，并明确保存单槽 count，使工厂的
 	 * {@link com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder#readFromNBT}
 	 * 能直接读取并注入到首个槽位。
 	 *
@@ -219,6 +247,7 @@ public final class CentrifugeUpgradeDataHelper {
 	) {
 		CompoundTag root = new CompoundTag();
 		CompoundTag multiRoot = new CompoundTag();
+		multiRoot.putInt("count", 1);
 		ListTag tanksList = new ListTag();
 		CompoundTag entry = new CompoundTag();
 		entry.put("fluidStack", fluid.save(provider));
@@ -326,15 +355,16 @@ public final class CentrifugeUpgradeDataHelper {
 			ae2StateHolder.loadPendingItems(data.aePendingState.copy());
 		}
 
-		// Task 5: 恢复多流体槽 — 等级升级持久化与扳手拆卸/区块存档一致
-		// null 守卫：multiFluidTanksNbt 为 null 时跳过（SINGLE 模式或无多槽数据）
-		// 修复 MEDIUM-3: MULTI→SINGLE 降级时不再直接丢弃数据,改为合并多流体槽内容到单流体槽
 		if (data.multiFluidTanksNbt != null) {
 			if (fluidOutputHolder instanceof MultiFluidTankHolder multiHolder) {
 				multiHolder.readFromNBT(data.multiFluidTanksNbt, provider);
 			} else {
-				// 修复 MEDIUM-3: holder 类型不匹配（MULTI→SINGLE 降级）,合并多流体槽内容到单流体槽
-				mergeMultiFluidIntoSingleTank(data.multiFluidTanksNbt, provider, fluidOutputHolder);
+				try {
+					mergeMultiFluidIntoSingleTank(data.multiFluidTanksNbt, provider, fluidOutputHolder);
+				} catch (RuntimeException invalid) {
+					Tag raw = data.multiFluidTanksNbt.get(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS);
+					if (raw != null) data.unresolvedFluidState = raw.copy();
+				}
 			}
 		}
 
@@ -439,50 +469,13 @@ public final class CentrifugeUpgradeDataHelper {
 	 * @param fluidOutputHolder  单流体槽持有者（SINGLE 模式,可为 null）
 	 */
 	private static void mergeMultiFluidIntoSingleTank(@NotNull CompoundTag multiFluidTanksNbt,
-			@NotNull HolderLookup.Provider provider,
-			@Nullable IFluidTankHolder fluidOutputHolder) {
-		if (fluidOutputHolder == null) {
-			DevLog.warn("fluid_tank", "MULTI→SINGLE 降级:目标 holder 为 null,丢弃多流体槽数据");
-			return;
-		}
-		if (!multiFluidTanksNbt.contains(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, Tag.TAG_COMPOUND)) {
-			return;
-		}
-		CompoundTag root = multiFluidTanksNbt.getCompound(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS);
-		ListTag list = root.getList("tanks", Tag.TAG_COMPOUND);
-		if (list.isEmpty()) {
-			return;
-		}
-		// 获取单流体槽（SINGLE 模式仅一个槽,null 表示内部访问）
-		List<IExtendedFluidTank> tanks = fluidOutputHolder.getTanks(null);
-		if (tanks.isEmpty()) {
-			DevLog.warn("fluid_tank", "MULTI→SINGLE 降级:目标 holder 无可用槽,丢弃 {} 个流体栈", list.size());
-			return;
-		}
-		IExtendedFluidTank targetTank = tanks.get(0);
-		long totalMerged = 0;
-		long totalDiscarded = 0;
-		int processedCount = 0;
-		for (int i = 0; i < list.size(); i++) {
-			CompoundTag entry = list.getCompound(i);
-			FluidStack stack = FluidStack.parseOptional(provider, entry.getCompound("fluidStack"));
-			if (stack.isEmpty()) {
-				continue; // 解析失败跳过,不影响其他槽位
-			}
-			FluidStack remaining = targetTank.insert(stack, Action.EXECUTE, AutomationType.INTERNAL);
-			int merged = stack.getAmount() - remaining.getAmount();
-			totalMerged += merged;
-			processedCount++;
-			if (!remaining.isEmpty()) {
-				totalDiscarded += remaining.getAmount();
-			}
-		}
-		if (totalDiscarded > 0) {
-			DevLog.warn("fluid_tank", "MULTI→SINGLE 降级:合并 {} 个流体栈共 {} mB,容量不足丢弃 {} mB",
-					processedCount, totalMerged, totalDiscarded);
-		} else if (totalMerged > 0) {
-			DevLog.info("fluid_tank", "MULTI→SINGLE 降级:成功合并 {} 个流体栈共 {} mB 到单槽",
-					processedCount, totalMerged);
-		}
+			@NotNull HolderLookup.Provider provider, @Nullable IFluidTankHolder fluidOutputHolder) {
+		Tag raw = multiFluidTanksNbt.get(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS);
+		if (raw == null) return;
+		List<FluidStack> saved = MultiFluidTankNbtCodec.decode(raw, provider);
+		List<IExtendedFluidTank> tanks = fluidOutputHolder == null ? List.of() : fluidOutputHolder.getTanks(null);
+		FluidStack[] layout = MultiFluidTankNbtCodec.plan(saved, tanks);
+		for (int index = 0; index < layout.length; index++) tanks.get(index).setStack(layout[index]);
 	}
+
 }

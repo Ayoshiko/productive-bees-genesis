@@ -546,6 +546,36 @@ class BeeDesignerMinecraftTest {
 	}
 
 	@Test
+	void revisionReadbackAllowsIndexEnvelopeAtDocumentDepthLimit(@TempDir Path directory) throws IOException {
+		JsonObject document = BeeDesignerDocument.create("test:depth_limit");
+		JsonArray extension = new JsonArray();
+		JsonArray leaf = extension;
+		for (int layer = 1; layer < BeeDesignerProtocol.MAX_DEPTH - 1; layer++) {
+			JsonArray nested = new JsonArray();
+			leaf.add(nested);
+			leaf = nested;
+		}
+		leaf.add("preserved");
+		document.add("custom_extension", extension);
+		assertDoesNotThrow(() -> BeeDesignerCompiler.validateStructure(document));
+		Map<String, String> files = BeeDesignerCompiler.files(Map.of("test:depth_limit", document.toString()));
+		String index = files.get("data/productivebeesgenesis/bee_designer/index.json");
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerProtocol.checkDepth(index));
+		var revision = BeeDesignerStore.write(directory, files, false);
+		Map<String, String> restored = BeeDesignerStore.readRevision(directory, revision.source().getFileName().toString());
+		assertEquals(document, JsonParser.parseString(restored.get("test:depth_limit")));
+		JsonObject tooDeep = document.deepCopy();
+		JsonArray extra = new JsonArray();
+		extra.add(tooDeep.get("custom_extension"));
+		tooDeep.add("custom_extension", extra);
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerCompiler.validateStructure(tooDeep));
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerCompiler.files(Map.of("test:depth_limit", tooDeep.toString())));
+		Path single = directory.resolve("too-deep.json");
+		Files.writeString(single, tooDeep.toString(), StandardCharsets.UTF_8);
+		assertThrows(IllegalArgumentException.class, () -> BeeDesignerArchive.read(single));
+	}
+
+	@Test
 	void exportedProjectsRoundTripAndZipImportRejectsTraversalAndExpandedOverflow(@TempDir Path directory) throws IOException {
 		JsonObject original = BeeDesignerDocument.create("test:archive");
 		original.getAsJsonObject("definition").addProperty("unknown_property", 42);

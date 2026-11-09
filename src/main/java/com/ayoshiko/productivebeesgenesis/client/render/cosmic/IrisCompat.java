@@ -1,120 +1,90 @@
 package com.ayoshiko.productivebeesgenesis.client.render.cosmic;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.world.item.ItemDisplayContext;
 
 import java.lang.reflect.Method;
 
-/**
-	 * Iris 光影兼容工具类
-	 * <br/>
-	 * 通过反射检测 Iris 是否启用光影包；若启用则将第一/第三人称手持视角的 cosmic 光晕渲染延迟到世界渲染结束后执行。
-	 * <p>
-	 * 性能优化：
-	 * <ul>
-	 *   <li>反射获取的 Method 对象在 Holder 中缓存，避免每帧重复查找。</li>
-	 *   <li>isShaderPackEnabled 结果带 1 秒 TTL 缓存，避免每帧通过反射 invoke IrisApi。
-	 *       光影开关状态变化频率极低（用户手动切换），1 秒延迟可接受。</li>
-	 * </ul>
-	 */
+/** Iris 的可选 API 边界；阴影状态会在同一帧内变化，不能使用跨 pass 的 TTL 缓存。 */
 public final class IrisCompat {
+	public enum Pass {
+		VANILLA,
+		MAIN,
+		SHADOW,
+		UNAVAILABLE
+	}
 
-	/** 反射结果缓存 — null 表示未缓存，避免 Boolean 装箱歧义 */
-	private static volatile Boolean cachedShaderPackEnabled = null;
-	/** 缓存到期时间戳（毫秒） */
-	private static volatile long cacheExpiry = 0L;
-	/** 缓存 TTL — 1 秒，平衡响应性与反射开销 */
-	private static final long CACHE_TTL_MS = 1000L;
+	private static boolean queryFailed;
 
 	private IrisCompat() {
 	}
 
-	/**
-	 * Holder 模式 — 线程安全的懒加载反射 Method 缓存
-	 * <br/>
-	 * JVM 类初始化阶段保证原子性，Method 对象在首次调用时获取后常驻。
-	 * INITIALIZATION_FAILED 标记反射初始化失败，后续调用直接跳过。
-	 */
 	private static final class Holder {
-		static final boolean INITIALIZED;
-		static final Method GET_INSTANCE;
+		static final Object API;
 		static final Method IS_SHADER_PACK_IN_USE;
+		static final Method IS_RENDERING_SHADOW_PASS;
+		static final Pass FALLBACK;
 
 		static {
-			Method getInstance = null;
-			Method isShaderPackInUse = null;
-			boolean initialized = false;
+			Object api = null;
+			Method shaderPack = null;
+			Method shadowPass = null;
+			Pass fallback = Pass.UNAVAILABLE;
 			try {
 				Class<?> irisApi = Class.forName("net.irisshaders.iris.api.v0.IrisApi");
-				getInstance = irisApi.getMethod("getInstance");
-				isShaderPackInUse = irisApi.getMethod("isShaderPackInUse");
-				initialized = true;
-			} catch (Throwable t) {
-				// 此处需捕获 Throwable 而非 Exception：Iris API 不兼容变更会抛出
-				// LinkageError/NoClassDefFoundError 等 Error 子类；静态初始化块若不捕获会导致类初始化失败
-				// 一次性 ERROR 日志（静态初始化仅执行一次，无需节流）
-				ProductiveBeesGenesis.LOGGER.warn(
-						"Iris 光影兼容初始化失败, cosmic 光晕将不延迟渲染: {}", t.toString());
+				api = irisApi.getMethod("getInstance").invoke(null);
+				shaderPack = irisApi.getMethod("isShaderPackInUse");
+				shadowPass = irisApi.getMethod("isRenderingShadowPass");
+			} catch (ClassNotFoundException exception) {
+				// 未安装 Iris 时不加载任何 Iris 类型，继续原生绘制。
+				fallback = Pass.VANILLA;
+			} catch (ReflectiveOperationException | LinkageError | RuntimeException exception) {
+				ProductiveBeesGenesis.LOGGER.warn("Iris 渲染阶段 API 不可用，停用附加光效", exception);
 			}
-			INITIALIZED = initialized;
-			GET_INSTANCE = getInstance;
-			IS_SHADER_PACK_IN_USE = isShaderPackInUse;
+			API = api;
+			IS_SHADER_PACK_IN_USE = shaderPack;
+			IS_RENDERING_SHADOW_PASS = shadowPass;
+			FALLBACK = fallback;
 		}
 	}
 
-	/**
-	 * 检测 Iris 是否启用了光影包
-	 * <br/>
-	 * 使用 1 秒 TTL 缓存避免每帧通过反射 invoke IrisApi。
-	 * 缓存未命中或已过期时执行反射查询并刷新缓存。
-	 * <p>
-	 * 线程安全：cachedShaderPackEnabled 与 cacheExpiry 均为 volatile，
-	 * 读取为原子操作；并发刷新时最坏情况是多执行一次反射查询，结果一致无危害。
-	 *
-	 * @return true 如果 Iris 已安装且当前启用了光影包
-	 */
-	public static boolean isShaderPackEnabled() {
-		// 命中缓存直接返回（volatile 读保证可见性）
-		Boolean cached = cachedShaderPackEnabled;
-		if (cached != null && System.currentTimeMillis() < cacheExpiry) {
-			return cached;
+	public static Pass currentPass() {
+		if (Holder.API == null || Holder.IS_SHADER_PACK_IN_USE == null || Holder.IS_RENDERING_SHADOW_PASS == null) {
+			return Holder.FALLBACK;
 		}
-		// 缓存未命中或已过期 — 执行反射查询
-		boolean result = queryShaderPackEnabled();
-		cachedShaderPackEnabled = result;
-		cacheExpiry = System.currentTimeMillis() + CACHE_TTL_MS;
-		return result;
-	}
-
-	/**
-	 * 通过反射查询 IrisApi.isShaderPackInUse()
-	 * <br/>
-	 * 仅在缓存未命中时调用，避免每帧反射开销。
-	 */
-	private static boolean queryShaderPackEnabled() {
-		if (!Holder.INITIALIZED) {
-			return false;
+		if (queryFailed) {
+			return Pass.UNAVAILABLE;
 		}
 		try {
-			Object api = Holder.GET_INSTANCE.invoke(null);
-			return (Boolean) Holder.IS_SHADER_PACK_IN_USE.invoke(api);
-		} catch (LinkageError | ReflectiveOperationException | RuntimeException e) {
-			// LinkageError 覆盖 Iris 版本不兼容场景；
-			// ReflectiveOperationException 覆盖反射调用受检异常（InvocationTargetException 等）；
-			// RuntimeException 覆盖 NPE/ClassCastException 等运行时异常。
-			// 不捕获 Throwable 以避免吞没 OOM 等严重错误。
-			LogThrottle.warn("iris_shader_pack_query",
-					"Iris 光影包状态查询异常, 视为未启用: {}", e.toString());
-			return false;
+			if ((Boolean) Holder.IS_RENDERING_SHADOW_PASS.invoke(Holder.API)) {
+				return Pass.SHADOW;
+			}
+			return (Boolean) Holder.IS_SHADER_PACK_IN_USE.invoke(Holder.API) ? Pass.MAIN : Pass.VANILLA;
+		} catch (ReflectiveOperationException | LinkageError | RuntimeException exception) {
+			queryFailed = true;
+			ProductiveBeesGenesis.LOGGER.warn("Iris 渲染阶段查询失败，本次资源代际停用附加光效", exception);
+			return Pass.UNAVAILABLE;
 		}
 	}
 
-	public static boolean shouldDefer(ItemDisplayContext ctx) {
-		if (!isShaderPackEnabled()) {
+	public static void reset() {
+		queryFailed = false;
+	}
+
+	public static boolean isShaderPackEnabled() {
+		Pass pass = currentPass();
+		return pass == Pass.MAIN || pass == Pass.SHADOW;
+	}
+
+	public static boolean shouldDefer(ItemDisplayContext context) {
+		return shouldDefer(context, currentPass());
+	}
+
+	static boolean shouldDefer(ItemDisplayContext context, Pass pass) {
+		if (pass != Pass.MAIN || CosmicShaders.cosmicInventoryRender) {
 			return false;
 		}
-		return switch (ctx) {
+		return switch (context) {
 			case FIRST_PERSON_LEFT_HAND, FIRST_PERSON_RIGHT_HAND, THIRD_PERSON_LEFT_HAND, THIRD_PERSON_RIGHT_HAND -> true;
 			default -> false;
 		};

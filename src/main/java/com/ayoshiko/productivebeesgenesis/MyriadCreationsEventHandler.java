@@ -240,6 +240,11 @@ public final class MyriadCreationsEventHandler extends AbstractCombEventHandler 
 		}
 	}
 
+	/** 在游戏线程发布本次配置快照的启用状态。 */
+	public static void publishEnabled(boolean enabled) {
+		cachedMyriadEnabled = enabled;
+	}
+
 	/** 检查是否为万象创世蜜蜂类型 */
 	public static boolean isMyriadCreationsBeeType(ResourceLocation beeType) {
 		return beeType != null && PBConstants.MYRIADCREATIONS_TYPE.equals(beeType);

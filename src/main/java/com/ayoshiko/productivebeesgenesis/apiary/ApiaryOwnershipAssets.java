@@ -16,6 +16,8 @@ public final class ApiaryOwnershipAssets implements MachineAssetSection {
 	@Override public boolean prepared() {
 		var production = tile.productionState();
 		if (!tile.pendingCyclesReadable() || tile.getOutputBuffer().hasInvalidData()
+				|| tile.getSlotManager().hasInvalidBeeData() || tile.hasInvalidFluidData()
+				|| tile.upgradeRecovery().blocked()
 				|| production.suspended() || production.hasFrozen()
 				|| production.retained() != null && production.retained().total() > 0) return false;
 		var slots = tile.getSlotManager().getBeeSlots();
@@ -81,6 +83,8 @@ public final class ApiaryOwnershipAssets implements MachineAssetSection {
 		for (var type : PbUpgradeType.values()) if (!type.isBuiltin() && tile.getPbUpgradeInstalledCount(type) > 0) return false;
 		var production = tile.productionState();
 		return tile.pendingCyclesReadable() && !tile.getOutputBuffer().hasInvalidData()
+				&& !tile.getSlotManager().hasInvalidBeeData() && !tile.hasInvalidFluidData()
+				&& !tile.upgradeRecovery().blocked()
 				&& !production.suspended() && !production.hasFrozen() && production.total() == 0 && tile.getPbUpgradeInputSlot().isEmpty() && tile.getPbUpgradeOutputSlot().isEmpty()
 				&& tile.getFluidTank().isEmpty() && tile.getOutputBuffer().getBufferedGroupCount() == 0 && tile.getPendingHoneyFluidAmount() == 0;
 	}

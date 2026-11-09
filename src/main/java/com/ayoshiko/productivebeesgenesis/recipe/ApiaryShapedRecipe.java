@@ -14,6 +14,7 @@ import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.ShapedRecipe;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.Level;
 
 import java.util.List;
 
@@ -44,8 +45,8 @@ import java.util.List;
 	 *
 	 * <p><b>合并策略</b>（多输入场景，如 4 个基础蜂箱合成 1 个 BASIC 工厂蜂箱）：
 	 * <ul>
-	 *   <li>蜜蜂槽：取并集，按输入顺序填充到目标容量上限，超出部分丢弃并 WARN（仅蜂箱适用）</li>
-	 *   <li>PB 升级数量：累加所有输入的数量，按 {@link PbUpgradeType#getMaxCount()} 受类型上限限制</li>
+	 *   <li>蜜蜂槽：完整迁移并分配唯一索引，容量不足时拒绝合成（仅蜂箱适用）</li>
+	 *   <li>PB 升级数量：精确累加所有已持有数量，不按新安装上限裁剪</li>
 	 *   <li>其他字段（喂食槽/能量槽/流体罐/蜂笼 I/O 槽/选中槽位等）：取首个非空</li>
 	 * </ul>
 	 *
@@ -53,7 +54,6 @@ import java.util.List;
 	 * <ul>
 	 *   <li>SRP：仅负责合成路径的数据转移与合并，不涉及持久化序列化逻辑</li>
 	 *   <li>OCP：继承 MekanismShapedRecipe 扩展 assemble，不修改父类</li>
-	 *   <li>DIP：依赖 PbUpgradeType 抽象获取升级上限，不硬编码</li>
 	 * </ul>
 	 *
 	 * <p><b>线程安全</b>：assemble 在服务端主线程触发，CraftingInput 为合成矩阵快照，无需额外同步。
@@ -111,6 +111,11 @@ public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 	 * @param provider 注册表访问器
 	 * @return 合成结果物品（已转移自定义 NBT）；无法完整转移时返回 EMPTY，拒绝消耗输入
 	 */
+	@Override
+	public boolean matches(CraftingInput input, Level level) {
+		return super.matches(input, level) && !assemble(input, level.registryAccess()).isEmpty();
+	}
+
 	@Override
 	public ItemStack assemble(CraftingInput inv, HolderLookup.Provider provider) {
 		// 0. 预取输出模板，确定输出方块类型（super 可能因输出槽有物品返回 EMPTY，需先确定类型）

@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerSelections;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
@@ -38,10 +39,12 @@ final class DesignerRecipeFields {
 				ingredient("ingredient", recipe, "ingredient");
 				screen.rows.add(new DesignerFormScreen.Row("fluid", (x, y, w) -> screen.addRenderableWidget(new DesignerResourceButton(
 						x, y, w, recipe.getAsJsonObject("fluid"), true, () -> minecraft.setScreen(DesignerResourcePicker.open(screen, "fluid", chosen -> {
-							JsonObject fluid = new JsonObject();
-							fluid.add("fluid", chosen.get("id"));
-							fluid.addProperty("amount", 250);
-							recipe.add("fluid", fluid);
+							try {
+								recipe.add("fluid", BeeDesignerSelections.bottlerFluid(chosen,
+										recipe.getAsJsonObject("fluid"), minecraft.level.registryAccess()));
+							} catch (IllegalArgumentException invalid) {
+								screen.status = invalid.getMessage();
+							}
 						}))))));
 				screen.number("fluid_amount", recipe.getAsJsonObject("fluid"), "amount", "250", DesignerNumberRange.of(1, Integer.MAX_VALUE, true));
 				screen.rows.add(new DesignerFormScreen.Row("egg_output", (x, y, w) -> screen.stackButton(x, y, w,

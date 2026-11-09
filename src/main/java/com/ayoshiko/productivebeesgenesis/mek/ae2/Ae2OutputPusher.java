@@ -56,6 +56,7 @@ public final class Ae2OutputPusher {
 		Level level = host.productivebeesgenesis$getAe2Level();
 		if (level == null) return;
 		Ae2OutputLedger outputLedger = holder.getOutputLedger();
+		if (outputLedger.hasInvalidData()) return;
 		int settled = outputLedger.size() == 0 ? 0
 				: Ae2OutputCommitter.settleOutputLedger(host, outputLedger, level.registryAccess());
 		if (settled > 0) {

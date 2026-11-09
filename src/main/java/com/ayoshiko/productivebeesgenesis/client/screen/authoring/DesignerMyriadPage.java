@@ -96,7 +96,18 @@ final class DesignerMyriadPage {
 			String browser = kind;
 			screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> screen.button(x, y, w, DesignerFormScreen.tr("pick_item"), () ->
 					Minecraft.getInstance().setScreen(DesignerResourcePicker.open(screen, browser,
-							value -> values.add(field, value.get("id")))))));
+							value -> {
+								try {
+									if (browser.equals("fluid")) {
+										values.addProperty(field, com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerSelections.plainFluidId(
+												value, Minecraft.getInstance().level.registryAccess()));
+									} else {
+										values.add(field, value.get("id"));
+									}
+								} catch (IllegalArgumentException invalid) {
+									screen.status = invalid.getMessage();
+								}
+							})))));
 		}
 	}
 

@@ -3,11 +3,13 @@ package com.ayoshiko.productivebeesgenesis.client;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.LivingEntity;
+import com.mojang.blaze3d.vertex.PoseStack;
+import cy.jdkdigital.productivebees.common.entity.bee.ProductiveBee;
+import net.minecraft.client.model.EntityModel;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.RenderLivingEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
@@ -89,9 +91,9 @@ public final class MyriadCreationsClientEventHandler extends AbstractClientCombE
 		INSTANCE.handleClientTick(event);
 	}
 
-	@SubscribeEvent
-	public static void onRenderLivingPost(RenderLivingEvent.Post<LivingEntity, ?> event) {
-		INSTANCE.handleRenderLivingPost(event);
+	public static void renderBeeGlow(ProductiveBee bee, EntityModel<ProductiveBee> model, PoseStack poseStack,
+			MultiBufferSource buffers, int packedLight, ResourceLocation texture) {
+		INSTANCE.renderGlow(bee, model, poseStack, buffers, packedLight, texture);
 	}
 
 	@SubscribeEvent

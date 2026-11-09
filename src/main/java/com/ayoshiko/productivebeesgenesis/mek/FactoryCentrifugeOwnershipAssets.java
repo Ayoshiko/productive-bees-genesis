@@ -6,6 +6,7 @@ import java.util.Arrays;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -27,6 +28,8 @@ public final class FactoryCentrifugeOwnershipAssets implements MachineAssetSecti
 		this.progress = progress;
 	}
 	@Override public boolean prepared() {
+		if (fluidHost.getOrphanedMultiFluidTanksNbt() != null
+				|| fluids instanceof MultiFluidTankHolder multi && multi.hasUnresolvedSavedData()) return false;
 		// 旧独立周期没有固定的并行数与费用快照，必须在冻结前由原机结清。
 		for (int value : progress) if (value != 0) return false;
 		return processor.ownershipStateReadable() && !processor.hasOwnershipProgress();
@@ -68,7 +71,10 @@ public final class FactoryCentrifugeOwnershipAssets implements MachineAssetSecti
 		upgrades.getPbUpgradeInputSlot().setStack(net.minecraft.world.item.ItemStack.EMPTY);
 		upgrades.getPbUpgradeOutputSlot().setStack(net.minecraft.world.item.ItemStack.EMPTY);
 		if (fluids instanceof MultiFluidTankHolder multi) {
-			zero.put(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, new CompoundTag());
+			var emptyFluids = new CompoundTag();
+			emptyFluids.putInt("count", multi.getTanks().size());
+			emptyFluids.put("tanks", new ListTag());
+			zero.put(MekCentrifugeNbtKeys.NBT_KEY_MULTI_FLUID_TANKS, emptyFluids);
 			multi.readFromNBT(zero, registries);
 		} else tile.fluidOutputTank().setStack(FluidStack.EMPTY);
 		fluidHost.setOrphanedMultiFluidTanksNbt(null);
@@ -76,6 +82,7 @@ public final class FactoryCentrifugeOwnershipAssets implements MachineAssetSecti
 	@Override public void validateWorld(ServerLevel level) { }
 	@Override public boolean empty() {
 		if (processor.hasOwnershipWork() || fluidHost.getOrphanedMultiFluidTanksNbt() != null) return false;
+		if (fluids instanceof MultiFluidTankHolder multi && multi.hasUnresolvedSavedData()) return false;
 		for (int value : progress) if (value != 0) return false;
 		for (int value : upgrades.getPbUpgradeCounts().values()) if (value != 0) return false;
 		if (!upgrades.getPbUpgradeInputSlot().isEmpty() || !upgrades.getPbUpgradeOutputSlot().isEmpty()) return false;

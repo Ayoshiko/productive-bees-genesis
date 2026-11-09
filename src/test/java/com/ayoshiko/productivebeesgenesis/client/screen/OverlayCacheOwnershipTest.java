@@ -17,7 +17,7 @@ class OverlayCacheOwnershipTest {
 
 	@ParameterizedTest
 	@ValueSource(strings = {
-			"AeInputOverlay", "AeOutputOverlay", "ApiaryDirectEjectOverlay",
+			"ApiaryDirectEjectOverlay",
 			"CentrifugeDirectAeOutputOverlay", "DirectContainerOutputOverlay", "SmeltingCompatOverlay"
 	})
 	void staticWindowCachesDoNotOwnButtons(String overlay) throws Exception {

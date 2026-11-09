@@ -23,6 +23,23 @@ class ZeroTickBatchMathTest {
 			"productivebeesgenesis");
 
 	@Test
+	void partialBatchAndLowEnergyMatchSequentialTicks() {
+		assertEquals(18, ZeroTickBatchMath.coalescedEnergyCost(1, 33, 32));
+		assertEquals(33, ZeroTickBatchMath.affordableCoalescedOperations(1, 32, 18, 2));
+		assertEquals(1, ZeroTickBatchMath.affordableCoalescedOperations(10, 32, 10, 16));
+		for (long energy = 0; energy <= 40; energy++) {
+			long remaining = energy;
+			int operations = 0;
+			for (int i = 0; i < 3; i++) {
+				int next = MekCentrifugeEnergyScaling.affordableOperations(1, 32, remaining);
+				operations += next;
+				remaining -= MekCentrifugeEnergyScaling.parallelEnergyCost(1, next);
+			}
+			assertEquals(operations, ZeroTickBatchMath.affordableCoalescedOperations(1, 32, energy, 3));
+		}
+	}
+
+	@Test
 	void onlyZeroOrSingleTickRecipesCoalesce() {
 		assertTrue(ZeroTickBatchMath.isCoalescible(0), "CREATIVE 的 ticksRequired=0 必须合并");
 		assertTrue(ZeroTickBatchMath.isCoalescible(1), "单刻配方也无中间状态可复用");

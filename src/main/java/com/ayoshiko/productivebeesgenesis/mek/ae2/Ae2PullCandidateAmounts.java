@@ -28,7 +28,7 @@ final class Ae2PullCandidateAmounts {
 		flags.put(key, (decision.unlimited ? 1 : 0) | (decision.marked ? 2 : 0));
 	}
 
-	void apply(AEItemKey key, Ae2InputPuller.PullEntry entry, boolean unlimitedMode) {
+	void apply(AEItemKey key, Ae2InputExecution.PullEntry entry, boolean unlimitedMode) {
 		int value = flags.getInt(key);
 		entry.unlimited = unlimitedMode && (value & 1) != 0;
 		entry.marked = (value & 2) != 0;

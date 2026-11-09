@@ -98,7 +98,7 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	MachineEnergyContainer<?> productivebeesgenesis$getAe2EnergySource();
 
 	/**
-	 * 返回当前加速批次所有处理槽的预计 FE 需求。
+	 * 返回当前加速批次所有处理槽的预计 J 需求。
 	 * <p>
 	 * 该值只用于在批次开始前扩展本地缓冲并进行一次 AE2 注能；虚拟 tick 期间不重复访问网络。
 	 */

@@ -196,7 +196,7 @@ class Ae2ExtractBudgetTest {
 	@Test
 	void zeroReturnsAndExceptionsAreChargedBeforeLeavingTheAttempt() throws Exception {
 		String source = Files.readString(Path.of("src/main/java/com/ayoshiko/productivebeesgenesis/"
-				+ "mek/ae2/Ae2InputPuller.java"));
+				+ "mek/ae2/Ae2InputExecution.java"));
 		String extract = source.substring(source.indexOf("long extractStart = System.nanoTime()"),
 				source.indexOf("Ae2NetworkInventoryView.recordExtract(holder, gameTick"));
 		int failure = extract.indexOf("catch (LinkageError | RuntimeException error)");

@@ -29,6 +29,46 @@ import static org.mockito.Mockito.*;
 @Tag("minecraft")
 class Ae2InputTransferMinecraftTest {
     @Test
+    void sameTickMachinesAndExternalChangesCannotCrossReserveFloor() {
+        var level = mock(Level.class);
+        when(level.registryAccess()).thenReturn(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+        when(level.getGameTime()).thenReturn(20L);
+        var key = AEItemKey.of(Items.IRON_INGOT);
+        var cached = new KeyCounter();
+        cached.add(key, 1_000);
+        var storage = mock(MEStorage.class);
+        long[] live = {1_000};
+        when(storage.extract(eq(key), anyLong(), any(), any())).thenAnswer(call -> {
+            long requested = call.getArgument(1);
+            long extracted = Math.min(requested, live[0]);
+            if (call.getArgument(2) == Actionable.MODULATE) live[0] -= extracted;
+            return extracted;
+        });
+        var firstHolder = new Ae2OutputStateHolder();
+        var secondHolder = new Ae2OutputStateHolder();
+        var firstSlot = mekanism.common.inventory.slot.BasicInventorySlot.at(null, 0, 0);
+        var secondSlot = mekanism.common.inventory.slot.BasicInventorySlot.at(null, 0, 0);
+        Ae2InputExecution.pullBatchForType(level, firstHolder, key, 64, 900, storage,
+                IActionSource.empty(), List.of(firstSlot), new long[]{64}, null, key.toStack(1), 0,
+                BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget());
+        Ae2InputExecution.pullBatchForType(level, secondHolder, key, 64, 900, storage,
+                IActionSource.empty(), List.of(secondSlot), new long[]{64}, null, key.toStack(1), 0,
+                BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget());
+        assertEquals(64, firstSlot.getCount());
+        assertEquals(36, secondSlot.getCount());
+        assertEquals(900, live[0]);
+        assertEquals(1_000, cached.get(key));
+
+        live[0] = 800;
+        Ae2InputExecution.pullBatchForType(level, secondHolder, key, 28, 900, storage,
+                IActionSource.empty(), List.of(secondSlot), new long[]{28}, null, key.toStack(1), 0,
+                BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget());
+        assertEquals(36, secondSlot.getCount());
+        assertEquals(800, live[0]);
+        verify(storage, times(2)).extract(eq(key), anyLong(), eq(Actionable.MODULATE), any());
+    }
+
+    @Test
     void actualExtractionMutationAndInvalidReturnsStayIsolatedBeforeSlotDelivery() {
         for (long result : new long[] {-1, 101, Long.MIN_VALUE}) {
             var holder = new Ae2OutputStateHolder();
@@ -45,8 +85,8 @@ class Ae2InputTransferMinecraftTest {
                         if (result == Long.MIN_VALUE) throw new IllegalStateException("deducted 40 then failed");
                         return result;
                     });
-            assertThrows(IllegalStateException.class, () -> Ae2InputPuller.pullBatchForType(
-                    level, holder, key, 100, -1, new KeyCounter(), storage, IActionSource.empty(),
+            assertThrows(IllegalStateException.class, () -> Ae2InputExecution.pullBatchForType(
+                    level, holder, key, 100, -1, storage, IActionSource.empty(),
                     List.of(slot), new long[] {100}, null, key.toStack(1), 0, BlockPos.ZERO,
                     null, new Ae2FingerprintCache(), new Ae2ExtractBudget()));
             verifyNoInteractions(slot);
@@ -119,20 +159,20 @@ class Ae2InputTransferMinecraftTest {
 
     @Test
     void temporarilyDeferredTypeKeepsItsLaneUntilDemandIsExhausted() {
-        var iron = new Ae2InputPuller.PullEntry(AEItemKey.of(Items.IRON_INGOT), 100);
-        var gold = new Ae2InputPuller.PullEntry(AEItemKey.of(Items.GOLD_INGOT), 100);
+        var iron = new Ae2InputExecution.PullEntry(AEItemKey.of(Items.IRON_INGOT), 100);
+        var gold = new Ae2InputExecution.PullEntry(AEItemKey.of(Items.GOLD_INGOT), 100);
         var occupied = mekanism.common.inventory.slot.BasicInventorySlot.at(null, 0, 0);
         occupied.setStack(new ItemStack(Items.IRON_INGOT, 64));
         var empty = mekanism.common.inventory.slot.BasicInventorySlot.at(null, 0, 0);
         var lanes = new Ae2InputLaneSnapshot();
         lanes.capture(List.of(occupied, empty), 2);
-        assertTrue(Ae2InputPuller.hasUnassignedDemand(List.of(iron, gold), lanes, 2));
+        assertTrue(Ae2InputExecution.hasUnassignedDemand(List.of(iron, gold), lanes, 2));
         gold.remaining = 0;
-        assertFalse(Ae2InputPuller.hasUnassignedDemand(List.of(iron, gold), lanes, 2));
+        assertFalse(Ae2InputExecution.hasUnassignedDemand(List.of(iron, gold), lanes, 2));
         gold.remaining = 100;
         empty.setStack(new ItemStack(Items.GOLD_INGOT, 64));
         lanes.refresh(1);
-        assertFalse(Ae2InputPuller.hasUnassignedDemand(List.of(iron, gold), lanes, 2));
+        assertFalse(Ae2InputExecution.hasUnassignedDemand(List.of(iron, gold), lanes, 2));
     }
 
     @Test
@@ -185,8 +225,8 @@ class Ae2InputTransferMinecraftTest {
             holder.savePendingItems(savedInsideCallback);
             throw new IllegalStateException("after mutation");
         });
-        Ae2InputPuller.retryPendingItems(level, holder, storage, List.of(first, second), 0);
-        Ae2InputPuller.retryPendingItems(level, holder, storage, List.of(first, second), 100);
+        Ae2LeftoverReturner.retryPendingItems(level, holder, storage, List.of(first, second), 0, null, IActionSource.empty());
+        Ae2LeftoverReturner.retryPendingItems(level, holder, storage, List.of(first, second), 100, null, IActionSource.empty());
         assertEquals(40, delivered.get());
         verifyNoInteractions(second, storage);
         assertTrue(holder.getPendingItemBuffer().isBlocked());
@@ -214,8 +254,8 @@ class Ae2InputTransferMinecraftTest {
             holder.savePendingItems(saved);
             throw new IllegalStateException("accepted 10 then failed");
         });
-        Ae2InputPuller.retryPendingItems(level, holder, storage, List.of(), 0);
-        Ae2InputPuller.retryPendingItems(level, holder, storage, List.of(), 100);
+        Ae2LeftoverReturner.retryPendingItems(level, holder, storage, List.of(), 0, null, IActionSource.empty());
+        Ae2LeftoverReturner.retryPendingItems(level, holder, storage, List.of(), 100, null, IActionSource.empty());
         verify(storage, times(1)).insert(eq(key), eq(30L), eq(Actionable.MODULATE), any(IActionSource.class));
         var restored = new Ae2OutputStateHolder();
         restored.loadPendingItems(saved);

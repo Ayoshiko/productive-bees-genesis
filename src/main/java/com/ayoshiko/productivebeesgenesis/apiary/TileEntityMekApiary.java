@@ -168,7 +168,16 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	/** F4: 获取产物溢出缓冲区 — 供同包组件（NbtSerializer/TickHandler/SlotTickProcessor）访问 */
 	ApiaryOutputBuffer getOutputBuffer() { return outputBuffer; }
 	public ApiaryProductionState productionState() { return produceProcessor.production; }
-	public void retryOutputData() { outputBuffer.retryQuarantined(getLevel().registryAccess()); }
+	public ApiaryUpgradeRecovery upgradeRecovery() { return nbtSerializer.upgradeRecovery(); }
+	public void retryOutputData() {
+		outputBuffer.retryQuarantined(getLevel().registryAccess());
+		slotManager.retryInvalidBeeData();
+		nbtSerializer.retryInvalidFluidData(getLevel().registryAccess());
+	}
+
+	public boolean hasInvalidFluidData() {
+		return nbtSerializer != null && nbtSerializer.hasInvalidFluidData();
+	}
 	int pushGeneratedItemToAe(ItemStack stack) { return ae2HostAdapter.pushGeneratedItem(stack); }
 	long pushGeneratedFluidToAe(FluidStack stack, long amount) {
 		return ae2HostAdapter.pushGeneratedFluid(stack, amount);
@@ -184,6 +193,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	}
 
 	void addPendingHoneyFluid(FluidStack template, long amount) {
+		if (hasInvalidFluidData()) throw new IllegalStateException("Apiary fluid data is retained");
 		if (template == null || template.isEmpty() || amount <= 0) return;
 		FluidStack normalized = template.copyWithAmount(1);
 		if (pendingHoneyFluidTemplate == null || pendingHoneyFluidTemplate.isEmpty()) {
@@ -300,7 +310,14 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		ApiarySideConfigSupport.setupSideConfig(this);
 	}
 
-	/** 获取配方类型 — 占位返回SMELTING，蜂箱产出由 BeeProduceProcessor 处理 */
+	/** 蜂笼槽只参与蜜蜂交接；父 tick 的能量／弹出仍运行，但不能消费熔炼配方。 */
+	@Nullable
+	@Override
+	public ItemStackToItemStackRecipe getRecipe(int cacheIndex) {
+		return null;
+	}
+
+	/** 父类接口的类型占位；实际配方查询由 getRecipe 显式禁用。 */
 	@NotNull @Override
 	public IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
 			SingleItem<ItemStackToItemStackRecipe>> getRecipeType() {
@@ -345,6 +362,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	/** Runs apiary post-production routing once for the selected real game tick. */
 	private void productivebeesgenesis$runPostProductionAe2() {
+		if (hasInvalidFluidData() || upgradeRecovery().blocked()) return;
 		// LinkageError 兜底：NoClassDefFoundError 属 Error 非 Exception，原 catch 拦不住类加载失败；
 		// 漏守卫路径降级为节流日志而非 tick 崩溃（Issue #8 防御深度）
 		try { directEjectHandler.tryDirectEject(); } catch (Exception | LinkageError e) { logAe2(e, "tryDirectEject"); }
@@ -574,8 +592,18 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	@Override
 	public void saveAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
-		super.saveAdditional(nbt, provider);
-		ApiaryTilePersistence.saveAdditional(this, nbt, provider);
+		upgradeRecovery().save(nbt);
+		try {
+			super.saveAdditional(nbt, provider);
+			ApiaryTilePersistence.saveAdditional(this, nbt, provider);
+		} catch (RuntimeException | LinkageError failure) {
+			if (!upgradeRecovery().blocked()) {
+				throw failure;
+			}
+			upgradeRecovery().fail(failure);
+			upgradeRecovery().save(nbt);
+			ProductiveBeesGenesis.LOGGER.error("蜂箱升级保管期间保存局部状态失败，原快照仍保留：{}", getBlockPos(), failure);
+		}
 	}
 
 	@NotNull @Override
@@ -585,8 +613,17 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	@Override
 	public void loadAdditional(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
-		super.loadAdditional(nbt, provider);
-		ApiaryTilePersistence.loadAdditional(this, nbt, provider);
+		upgradeRecovery().load(nbt);
+		try {
+			super.loadAdditional(nbt, provider);
+			ApiaryTilePersistence.loadAdditional(this, nbt, provider);
+		} catch (RuntimeException | LinkageError failure) {
+			if (!upgradeRecovery().blocked()) {
+				throw failure;
+			}
+			upgradeRecovery().fail(failure);
+			ProductiveBeesGenesis.LOGGER.error("蜂箱升级保管期间加载局部状态失败，禁止自动重放：{}", getBlockPos(), failure);
+		}
 	}
 
 	/** 保存PB升级数量映射 — protected 供工厂版子类调用 */
@@ -624,7 +661,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	@Override
 	public void parseUpgradeData(HolderLookup.Provider provider, @NotNull IUpgradeData upgradeData) {
-		if (!ApiaryTilePersistence.applyUpgradeData(this, provider, upgradeData)) {
+		if (ApiaryTilePersistence.applyUpgradeData(this, provider, upgradeData) == ApiaryNbtSerializer.UpgradeResult.NOT_HANDLED) {
 			super.parseUpgradeData(provider, upgradeData);
 		}
 	}
@@ -771,8 +808,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	public void setConfigurationData(@NotNull HolderLookup.Provider provider,
 			@Nullable net.minecraft.world.entity.player.Player player,
 			@NotNull CompoundTag data) {
-		super.setConfigurationData(provider, player, data);
-		ApiaryTilePersistence.setConfigurationData(this, provider, player, data);
+		if (ApiaryTilePersistence.setConfigurationData(this, player, data)) {
+			super.setConfigurationData(provider, player, data);
+		}
 	}
 
 	/** 保存AE2 per-tile状态到NBT — 供 ApiaryNbtSerializer 扳手拆卸持久化调用 */
@@ -880,7 +918,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	}
 	@Override public IExtendedFluidTank fluidOutputTank() { return ae2HostAdapter.getPbRecipeAdapter().fluidOutputTank(); }
 	@Override public int baseTicksRequired() { return ae2HostAdapter.getPbRecipeAdapter().baseTicksRequired(); }
-	@Override public boolean canFunction() { return ae2HostAdapter.getPbRecipeAdapter().canFunction(); }
+	@Override public boolean canFunction() {
+		return (nbtSerializer == null || !upgradeRecovery().blocked()) && ae2HostAdapter.getPbRecipeAdapter().canFunction();
+	}
 	@Override public void setPbActiveState(boolean active, int process) {
 		ae2HostAdapter.getPbRecipeAdapter().setPbActiveState(active, process);
 	}

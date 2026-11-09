@@ -2,9 +2,11 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
+import com.ayoshiko.productivebeesgenesis.mek.PbConfigCardDataHelper;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import org.jetbrains.annotations.NotNull;
@@ -117,6 +119,19 @@ public class ApiaryPbUpgradeHandler {
 	@NotNull
 	PbUpgradeInventorySlot getOutputSlot() {
 		return pbUpgradeOutputSlot;
+	}
+
+	boolean applyConfiguration(CompoundTag data, Player player) {
+		if (tile.getLevel() == null || tile.getLevel().isClientSide) {
+			return false;
+		}
+		return PbConfigCardDataHelper.readAndApplyPbUpgrades(
+				data, player, pbUpgradeCounts, this::getPbUpgradeLimit, counts -> {
+					pbUpgradeCounts.clear();
+					pbUpgradeCounts.putAll(counts);
+					tile.upgradeHandler.invalidateUpgradeCache();
+					tile.setChanged();
+				}, PbConfigCardDataHelper.MachineType.APIARY);
 	}
 
 	// ===== 安装/卸载 API =====

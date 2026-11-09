@@ -25,9 +25,9 @@ import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
  * 所以不存在「多产出」或「吃掉不存在的输入」的可能，而完整计算次数从 k 降为 1。
  * <p>
  * <b>能量语义</b>：本模组的高并行边际计费曲线（{@link MekCentrifugeEnergyScaling}）对操作数是
- * <i>次线性</i>的，若直接按 {@code ops × k} 计费会让加速几乎免费。故这里按「每虚拟刻分得
- * storedEnergy/k 预算、单刻上限仍为原始 baseOperations」反推可承担量，
- * 并按 k 个刻分别计费，与逐刻推进的总额一致。
+ * <i>次线性</i>的，若直接按 {@code ops × k} 计费会让加速几乎免费。
+ * 因此满批与尾批分别计费，单刻上限仍为原始 baseOperations。
+ * 可承担量按当前总电量依次支付满刻，剩余电量再支付一个尾刻。
  */
 public final class ZeroTickBatchMath {
 
@@ -72,20 +72,30 @@ public final class ZeroTickBatchMath {
 		return storedEnergy / factor;
 	}
 
-	/**
-	 * 合并调用下的可承担操作总数 = 单刻可承担量 × factor。
-	 * <p>
-	 * 必须先按 {@code storedEnergy / factor} 求单刻可承担量再乘回来，
-	 * 不能直接对 {@code ops × factor} 套边际曲线 —— 后者是次线性的，会让加速几乎不耗电。
-	 */
+	/** 满批逐刻扣费，最后一刻只承担剩余电量实际能支付的操作。 */
 	public static int affordableCoalescedOperations(long energyPerOperation, int baseOperations,
 			long storedEnergy, int factor) {
 		int base = Math.max(1, baseOperations);
-		if (factor <= 1) {
-			return MekCentrifugeEnergyScaling.affordableOperations(energyPerOperation, base, storedEnergy);
+		int ticks = Math.max(1, factor);
+		if (energyPerOperation <= 0) return raisedBaseline(base, ticks);
+		long energy = Math.max(0, storedEnergy);
+		int first = MekCentrifugeEnergyScaling.affordableOperations(energyPerOperation, base, energy);
+		if (first < base) return first;
+		long fullCost = MekCentrifugeEnergyScaling.parallelEnergyCost(energyPerOperation, base);
+		long fullTicks = Math.min(ticks, energy / fullCost);
+		long operations = fullTicks * base;
+		if (fullTicks < ticks) {
+			long remaining = energy - fullTicks * fullCost;
+			operations += MekCentrifugeEnergyScaling.affordableOperations(energyPerOperation, base, remaining);
 		}
-		int perTick = MekCentrifugeEnergyScaling.affordableOperations(
-				energyPerOperation, base, perVirtualTickEnergyBudget(storedEnergy, factor));
-		return SaturatingMath.saturatingToInt(SaturatingMath.saturatingMultiply(perTick, factor));
+		return SaturatingMath.saturatingToInt(operations);
+	}
+	/** 总量按原始单刻上限分段，尾批不均摊到已经完成的满批。 */
+	public static long coalescedEnergyCost(long energyPerOperation, int operations, int baseOperations) {
+		if (operations <= 0 || energyPerOperation <= 0) return 0;
+		int base = Math.max(1, baseOperations);
+		long full = MekCentrifugeEnergyScaling.batchEnergyCost(energyPerOperation, base, operations / base);
+		long tail = MekCentrifugeEnergyScaling.parallelEnergyCost(energyPerOperation, operations % base);
+		return SaturatingMath.saturatingAdd(full, tail);
 	}
 }

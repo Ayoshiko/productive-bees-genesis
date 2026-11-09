@@ -3,6 +3,9 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 import com.ayoshiko.productivebeesgenesis.util.tagfilter.TagExpressionParser;
 import com.ayoshiko.productivebeesgenesis.util.tagfilter.TagFilterSpec;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
+
+import java.util.Set;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -27,9 +30,11 @@ public final class Ae2TagFilter {
 
 	private static final String KEY_WHITELIST = "w";
 	private static final String KEY_BLACKLIST = "b";
+	private static final String KEY_INVALID = "invalid_data";
 
 	/** 已编译规格；volatile 一次性发布，避免读到半初始化状态。 */
 	private volatile TagFilterSpec spec = TagFilterSpec.EMPTY;
+	private volatile Tag invalid;
 
 	/** 配置代号：每次表达式变更递增，供结果缓存整体失效。 */
 	private final AtomicInteger generation = new AtomicInteger();
@@ -66,6 +71,7 @@ public final class Ae2TagFilter {
 	 * @return true 表示配置确实发生变化（调用方据此决定 markForSave）
 	 */
 	public synchronized boolean apply(String whitelistSource, String blacklistSource) {
+		if (invalid != null) return false;
 		TagFilterSpec current = spec;
 		TagFilterSpec compiled = TagFilterSpec.compile(whitelistSource, blacklistSource);
 		if (current.whitelistSource().equals(compiled.whitelistSource())
@@ -79,31 +85,73 @@ public final class Ae2TagFilter {
 
 	/** 清空标签过滤（方块重建/旧存档无数据时使用）。 */
 	public synchronized void reset() {
-		if (spec == TagFilterSpec.EMPTY) return;
+		if (spec == TagFilterSpec.EMPTY && invalid == null) return;
+		invalid = null;
 		spec = TagFilterSpec.EMPTY;
 		generation.incrementAndGet();
 	}
 
 	/** 序列化；无配置时不写键，保持存档紧凑。 */
 	public void save(CompoundTag tag) {
+		Tag raw = invalid;
+		if (raw != null) {
+			tag.put(KEY_INVALID, raw.copy());
+			return;
+		}
 		TagFilterSpec current = spec;
 		if (!current.whitelistSource().isEmpty()) tag.putString(KEY_WHITELIST, current.whitelistSource());
 		if (!current.blacklistSource().isEmpty()) tag.putString(KEY_BLACKLIST, current.blacklistSource());
 	}
 
-	/**
-	 * 反序列化。表达式重新编译而非信任存档中的 AST，
-	 * 并对超长文本截断，防止被篡改的存档导致解析开销异常。
-	 */
+	/** 升级快照只接受 CompoundTag，坏外层经包封保留，正式 NBT 使用 saveRaw。 */
+	public Tag saveRaw() {
+		Tag raw = invalid;
+		if (raw != null) return raw.copy();
+		CompoundTag saved = new CompoundTag();
+		save(saved);
+		return saved;
+	}
+
 	public synchronized void load(CompoundTag tag) {
-		String whitelist = clamp(tag.getString(KEY_WHITELIST));
-		String blacklist = clamp(tag.getString(KEY_BLACKLIST));
-		spec = TagFilterSpec.compile(whitelist, blacklist);
+		if (tag.getAllKeys().equals(Set.of(KEY_INVALID))) {
+			loadRaw(tag.get(KEY_INVALID));
+		} else {
+			loadRaw(tag);
+		}
+	}
+
+	/** 缺省保持空过滤；坏结构和超长原文保留，不能降级为空表达式。 */
+	public synchronized void loadRaw(Tag raw) {
+		if (raw == null) {
+			reset();
+			return;
+		}
+		if (!(raw instanceof CompoundTag tag) || !isReadable(tag)) {
+			invalid = raw.copy();
+			spec = TagFilterSpec.EMPTY;
+			generation.incrementAndGet();
+			return;
+		}
+		invalid = null;
+		spec = TagFilterSpec.compile(tag.getString(KEY_WHITELIST), tag.getString(KEY_BLACKLIST));
 		generation.incrementAndGet();
 	}
 
-	private static String clamp(String source) {
-		if (source == null) return "";
-		return source.length() > MAX_EXPRESSION_LENGTH ? source.substring(0, MAX_EXPRESSION_LENGTH) : source;
+	public boolean hasInvalidData() {
+		return invalid != null;
+	}
+
+	public synchronized boolean retryDecode() {
+		if (invalid == null) return true;
+		loadRaw(invalid.copy());
+		return invalid == null;
+	}
+
+	private static boolean isReadable(CompoundTag tag) {
+		return Set.of(KEY_WHITELIST, KEY_BLACKLIST).containsAll(tag.getAllKeys())
+				&& (!tag.contains(KEY_WHITELIST) || tag.contains(KEY_WHITELIST, Tag.TAG_STRING))
+				&& (!tag.contains(KEY_BLACKLIST) || tag.contains(KEY_BLACKLIST, Tag.TAG_STRING))
+				&& tag.getString(KEY_WHITELIST).length() <= MAX_EXPRESSION_LENGTH
+				&& tag.getString(KEY_BLACKLIST).length() <= MAX_EXPRESSION_LENGTH;
 	}
 }

@@ -1,0 +1,177 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+import java.util.zip.ZipFile
+
+def sourceManifest = file('gradle/license-manifest.json')
+def workspaceRoot = layout.projectDirectory.asFile
+def resourceInputs = sourceSets.main.resources
+def classDirectories = sourceSets.main.output.classesDirs
+def distributionManifest = layout.buildDirectory.file('generated/license-manifest/META-INF/license-manifest.json')
+def licenseInputs = files('LICENSE', 'NOTICE', 'THIRD_PARTY_LICENSES.md', fileTree('LICENSES'))
+def generateLicenseManifest = tasks.register('generateLicenseManifest') {
+    dependsOn tasks.named('compileJava'), tasks.named('processResources')
+    inputs.file(sourceManifest)
+    inputs.files(resourceInputs, classDirectories, licenseInputs)
+    inputs.files(sourceSets.main.allJava)
+    inputs.property('modVersion', mod_version.toString())
+    outputs.file(distributionManifest)
+
+    doLast { task ->
+        def data = new JsonSlurper().parse(sourceManifest, 'UTF-8')
+        def digest = { byte[] bytes -> MessageDigest.getInstance('SHA-256').digest(bytes).encodeHex().toString() }
+        def paths = new HashSet<String>()
+        data.files.each { entry ->
+            if (!paths.add(entry.source_path)) {
+                throw new GradleException("Duplicate provenance source: ${entry.source_path}")
+            }
+            File source = new File(workspaceRoot, entry.source_path)
+            if (!source.isFile()) {
+                throw new GradleException("Missing provenance source: ${entry.source_path}")
+            }
+            String actual = digest(source.bytes)
+            if (entry.source_sha256 && entry.source_sha256 != actual) {
+                throw new GradleException("Asset changed without a provenance update: ${entry.source_path}")
+            }
+            entry.source_sha256 = actual
+            if (entry.class_prefix) {
+                String classPath = entry.class_prefix
+                def classes = []
+                classDirectories.files.each { directory ->
+                    File parent = new File(directory, classPath).parentFile
+                    String simpleName = classPath.tokenize('/').last()
+                    parent.listFiles()?.findAll { candidate ->
+                        candidate.name == simpleName + '.class'
+                                || (candidate.name.startsWith(simpleName + '$') && candidate.name.endsWith('.class'))
+                    }?.each { candidate ->
+                        classes.add(directory.toPath().relativize(candidate.toPath()).toString().replace('\\', '/'))
+                    }
+                }
+                if (classes.isEmpty()) {
+                    throw new GradleException("No compiled class for provenance source: ${entry.source_path}")
+                }
+                entry.jar_entries = classes.sort()
+            }
+        }
+        def recorded = data.files.findAll { it.jar_entry }.collect { it.jar_entry } as Set
+        resourceInputs.files.each { source ->
+            String relative = workspaceRoot.toPath().relativize(source.toPath()).toString().replace('\\', '/')
+            String entryPath
+            if (relative.startsWith('src/main/resources/')) {
+                entryPath = relative.substring('src/main/resources/'.length())
+            } else if (relative.startsWith('src/generated/resources/')) {
+                entryPath = relative.substring('src/generated/resources/'.length())
+            } else if (source.name == 'neoforge.mods.toml') {
+                entryPath = 'META-INF/neoforge.mods.toml'
+            } else {
+                throw new GradleException("Unmapped resource root: ${relative}")
+            }
+            if (!recorded.contains(entryPath)) {
+                boolean technical = entryPath.startsWith('data/') || entryPath.startsWith('META-INF/')
+                        || entryPath == 'kubejs.plugins.txt'
+                if (!technical) {
+                    throw new GradleException("Resource is missing from provenance manifest: ${entryPath}")
+                }
+                data.files.add([id: 'generated:' + entryPath, source_path: relative, jar_entry: entryPath,
+                        group: 'technical', license: 'MIT', authorization_status: 'existing_grant_preserved',
+                        source_sha256: digest(source.bytes), notices: ['LICENSE_productivebeesgenesis']])
+                recorded.add(entryPath)
+            }
+        }
+        data.license_files.each { notice ->
+            File source = new File(workspaceRoot, notice.source_path)
+            if (!source.isFile() || digest(source.bytes) != notice.sha256) {
+                throw new GradleException("License text differs from recorded original: ${notice.source_path}")
+            }
+        }
+        data.distribution_version = task.inputs.properties.modVersion
+        File output = distributionManifest.get().asFile
+        output.parentFile.mkdirs()
+        output.setText(JsonOutput.prettyPrint(JsonOutput.toJson(data)) + '\n', 'UTF-8')
+    }
+}
+
+tasks.named('jar', Jar) {
+    dependsOn generateLicenseManifest
+    from(distributionManifest) {
+        into 'META-INF'
+    }
+    from('NOTICE')
+    from('LICENSES') {
+        into 'LICENSES'
+    }
+}
+
+tasks.named('verifyReleaseArtifact') {
+    def artifactFile = tasks.named('jar', Jar).flatMap { it.archiveFile }
+    inputs.file(sourceManifest)
+    doLast {
+        File artifact = artifactFile.get().asFile
+        def digest = { byte[] bytes -> MessageDigest.getInstance('SHA-256').digest(bytes).encodeHex().toString() }
+        new ZipFile(artifact).withCloseable { zip ->
+            ['NOTICE', 'META-INF/license-manifest.json', 'META-INF/license-entry-hashes.json'].each { path ->
+                if (zip.getEntry(path) == null) {
+                    throw new GradleException("Missing distribution notice: ${path}")
+                }
+            }
+            def data = new JsonSlurper().parse(zip.getInputStream(zip.getEntry('META-INF/license-manifest.json')), 'UTF-8')
+            def hashes = new JsonSlurper().parse(zip.getInputStream(zip.getEntry('META-INF/license-entry-hashes.json')), 'UTF-8')
+            def names = zip.entries().findAll { !it.directory }.collect { it.name }
+            if (names.size() != (names as Set).size()) {
+                throw new GradleException('Duplicate JAR entry')
+            }
+            def expectedHashNames = names.findAll { it != 'META-INF/license-manifest.json'
+                    && it != 'META-INF/license-entry-hashes.json' } as Set
+            if ((hashes.keySet() as Set) != expectedHashNames) {
+                throw new GradleException('Final entry hash coverage differs from the JAR')
+            }
+            hashes.each { path, expected ->
+                if (digest(zip.getInputStream(zip.getEntry(path)).bytes) != expected) {
+                    throw new GradleException("Final entry hash mismatch: ${path}")
+                }
+            }
+            data.license_files.each { notice ->
+                def entry = zip.getEntry(notice.jar_entry)
+                if (entry == null || digest(zip.getInputStream(entry).bytes) != notice.sha256) {
+                    throw new GradleException("Missing or altered license text: ${notice.jar_entry}")
+                }
+            }
+            def mapped = new HashSet<String>()
+            data.files.each { source ->
+                def entries = source.jar_entries ?: (source.jar_entry ? [source.jar_entry] : [])
+                entries.each { path ->
+                    if (zip.getEntry(path) == null || !mapped.add(path)) {
+                        throw new GradleException("Missing or duplicate provenance mapping: ${path}")
+                    }
+                }
+                source.notices.each { path ->
+                    if (zip.getEntry(path) == null) {
+                        throw new GradleException("Provenance references missing notice: ${path}")
+                    }
+                }
+            }
+            names.findAll { it.startsWith('assets/') || it.endsWith('.png') }.each { path ->
+                if (!mapped.contains(path)) {
+                    throw new GradleException("Unrecorded bundled asset: ${path}")
+                }
+            }
+            logger.lifecycle("License manifest: ${data.files.size()} files; ${data.release_blockers.size()} unresolved distribution groups (see NOTICE).")
+        }
+    }
+}
+
+tasks.register('verifyDistributionPermissions') {
+    group = 'verification'
+    description = 'Rejects public distribution while recorded provenance or permissions remain unresolved.'
+    dependsOn tasks.named('verifyReleaseArtifact')
+    inputs.file(sourceManifest)
+    doLast {
+        def data = new JsonSlurper().parse(sourceManifest, 'UTF-8')
+        def unresolved = data.files.findAll { it.authorization_status == 'unresolved' }
+        if (!data.release_blockers.isEmpty() || !unresolved.isEmpty()) {
+            throw new GradleException('Public distribution is blocked: '
+                    + data.release_blockers.collect { it.id }.join(', ')
+                    + "; unresolved files: ${unresolved.size()}. See NOTICE and gradle/license-manifest.json.")
+        }
+    }
+}

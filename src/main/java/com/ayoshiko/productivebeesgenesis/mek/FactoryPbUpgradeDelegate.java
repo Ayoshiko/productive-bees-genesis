@@ -9,6 +9,7 @@ import mekanism.common.inventory.container.sync.SyncableInt;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.NotNull;
 
@@ -49,6 +50,10 @@ public class FactoryPbUpgradeDelegate implements IPbUpgradeProvider, ICentrifuge
 		this.tile = tile;
 		this.pbUpgradeHandler = new MekCentrifugePbUpgradeHandler((IMekCentrifugePbUpgradeHost) tile);
 		this.pbUpgradeInstallHandler = new PbUpgradeInstallHandler(tile, pbUpgradeHandler::installPbUpgrade);
+	}
+
+	public boolean applyConfiguration(CompoundTag data, Player player) {
+		return pbUpgradeHandler.applyConfiguration(data, player);
 	}
 
 	// ===== PB 升级输入处理 =====
@@ -118,6 +123,10 @@ public class FactoryPbUpgradeDelegate implements IPbUpgradeProvider, ICentrifuge
 	@Override
 	public void loadCounts(@NotNull CompoundTag nbt) {
 		pbUpgradeHandler.loadCounts(nbt);
+	}
+
+	public boolean hasUnresolvedData() {
+		return pbUpgradeHandler.hasUnresolvedData();
 	}
 
 	// ===== 卸载 API（供网络包调用） =====

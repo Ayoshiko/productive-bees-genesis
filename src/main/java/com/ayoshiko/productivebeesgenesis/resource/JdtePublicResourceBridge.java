@@ -52,7 +52,9 @@ final class JdtePublicResourceBridge {
             bioFactoryType = BuiltInRegistries.BLOCK_ENTITY_TYPE.get(BIO_FACTORY);
             var event = Class.forName("com.jdte.api.BioFactoryResourceCycleEvent").asSubclass(Event.class);
             apiVersion = event.getField("API_VERSION").getInt(null);
+            if (apiVersion < 1 || apiVersion > 3) throw new NoSuchMethodException("Unsupported JDTE resource API version");
             if (apiVersion == 3) {
+                event.getMethod("supplied");
                 event.getMethod("setOutputs", List.class);
                 event.getMethod("reject");
                 nativeOutputConstructor = Class.forName(event.getName() + "$ResourceOutput").getConstructor(
@@ -60,6 +62,7 @@ final class JdtePublicResourceBridge {
             } else {
                 event.getMethod("commit", long.class, Runnable.class);
                 event.getMethod("claim");
+                event.getMethod("handled");
             }
             if (apiVersion >= 2) {
                 BiPredicate<BlockEntity, Bee> matcher = JdtePublicResourceBridge::matchesExtendedRecipe;
@@ -101,6 +104,7 @@ final class JdtePublicResourceBridge {
     }
 
     private static void nativeCycle(Event event) {
+        if ((boolean) call(event, "supplied")) return;
         var host = (BlockEntity) call(event, "host");
         var candidate = (Bee) call(event, "bee");
         if (!matchesExtendedRecipe(host, candidate)) return;
@@ -120,25 +124,34 @@ final class JdtePublicResourceBridge {
             double rolls = (double) call(event, "rolls");
             call(event, "setOutputs", JdteNativeResourceRecipes.outputs(level, bee, rolls, nativeOutputConstructor));
         } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {
-            call(event, "reject");
+            try {
+                if (!(boolean) call(event, "supplied")) call(event, "reject");
+            } catch (RuntimeException | LinkageError rejectionFailure) {
+                failure.addSuppressed(rejectionFailure);
+            }
             com.ayoshiko.productivebeesgenesis.util.LogThrottle.warnWithCooldown("jdte_native_resource_recipe", 5000,
                     "JDTE native resource recipe unavailable at {}", host.getBlockPos(), failure);
         }
     }
 
     private static void cycle(Event event) {
+        if ((boolean) call(event, "handled")) return;
         var host = (BlockEntity) call(event, "host");
         var candidate = (Bee) call(event, "bee");
         if (!matchesExtendedRecipe(host, candidate)) return;
         var level = (ServerLevel) host.getLevel();
         var bee = (ConfigurableBee) candidate;
-        if (ResourceRuntime.reloadBlocked(level.getServer())) {
+        var spec = ResourceRuntime.pbCatalog(level).get(bee.getBeeType());
+        if (spec == null && !ResourceRuntime.reloadBlocked(level.getServer())) return;
+        try {
+            if ((boolean) call(event, "handled")) return;
             call(event, "claim");
+        } catch (RuntimeException | LinkageError failure) {
+            com.ayoshiko.productivebeesgenesis.util.LogThrottle.warnWithCooldown("jdte_resource_claim", 5000,
+                    "JDTE resource cycle claim failed at {}", host.getBlockPos(), failure);
             return;
         }
-        var spec = ResourceRuntime.pbCatalog(level).get(bee.getBeeType());
-        if (spec == null) return;
-        call(event, "claim");
+        if (ResourceRuntime.reloadBlocked(level.getServer())) return;
         var state = ResourceHiveHost.existing(host);
         if (state == null || state.reference() == null) return;
         if (!spec.validForJdte()) { state.status(spec.containerFlower() ? "unsupported_bee" : spec.problem()); return; }

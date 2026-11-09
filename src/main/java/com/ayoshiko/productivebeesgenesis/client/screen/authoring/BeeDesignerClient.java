@@ -9,6 +9,7 @@ import com.google.gson.JsonParser;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.locale.Language;
+import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.util.FormattedCharSequence;
@@ -23,14 +24,16 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.HashSet;
 import java.util.Set;
 
 /** 客户端接收器在客户端初始化时安装，共用协议类不加载 Screen 或 Minecraft。 */
 @EventBusSubscriber(modid = ProductiveBeesGenesis.MOD_ID, value = Dist.CLIENT)
 public final class BeeDesignerClient {
-	private static final Map<String, JsonObject> NAMES = new HashMap<>();
-	private static final Set<String> RETIRED = new HashSet<>();
+	private static Map<String, JsonObject> NAMES = Map.of();
+	private static Set<String> RETIRED = Set.of();
+	private static DesignerNameBatch nameBatch;
+	private static Connection namesConnection;
+	private static long namesGeneration = -1;
 	private static BeeDesignerScreen screen;
 	private static UUID session;
 	private static long sequence;
@@ -164,28 +167,24 @@ public final class BeeDesignerClient {
 		}
 	}
 
-	private static void receive(BeeDesignerProtocol.Response response) {
+	private static void receive(BeeDesignerProtocol.Response response, Connection connection) {
+		var listener = Minecraft.getInstance().getConnection();
+		if (listener == null || listener.getConnection() != connection) {
+			return;
+		}
+		if (response.action().equals("names_reset") || response.action().equals("names")
+				|| response.action().equals("names_complete")) {
+			receiveNames(response, connection);
+			return;
+		}
 		if (session != null && session.equals(response.session()) && CANCELLED.remove(response.sequence())) {
 			return;
 		}
-		JsonObject data = JsonParser.parseString(response.json()).getAsJsonObject();
-		if (response.action().equals("names_reset")) {
-			NAMES.clear();
-			RETIRED.clear();
-			namesDirty = true;
-			return;
-		}
-		if (response.action().equals("names")) {
-			if (NAMES.size() < com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCollection.MAX_BEES || NAMES.containsKey(data.get("id").getAsString())) {
-				NAMES.put(data.get("id").getAsString(), data.getAsJsonObject("names"));
-				if (data.has("deleted") && data.get("deleted").getAsBoolean()) {
-					RETIRED.add(data.get("id").getAsString());
-				}
-				namesDirty = true;
-			}
-			return;
-		}
+		JsonObject data = BeeDesignerProtocol.parse(response.json());
 		if (response.action().equals("open")) {
+			if (screen != null) {
+				screen.disconnected();
+			}
 			session = response.session();
 			sequence = 0;
 			REQUESTS.clear();
@@ -216,6 +215,17 @@ public final class BeeDesignerClient {
 						&& collecting.failed(response.sequence(), data.get("message").getAsString())) {
 					return;
 				}
+			}
+			if (Minecraft.getInstance().screen instanceof NewBeeScreen copy && response.action().equals("result")
+					&& !data.get("success").getAsBoolean() && copy.failed(response.sequence(), data.get("message").getAsString())) {
+				return;
+			}
+			if (response.action().equals("publication_state")) {
+				DesignerBatchImportScreen.recordPublicationState(data);
+				if (screen != null) {
+					screen.receive(response.sequence(), response.action(), data);
+				}
+				return;
 			}
 			if (Minecraft.getInstance().screen instanceof NewBeeScreen copy && response.action().equals("copy_id")) {
 				copy.receive(response.sequence(), data);
@@ -267,21 +277,46 @@ public final class BeeDesignerClient {
 			return;
 		}
 		if (session != null && session.equals(response.session()) && screen != null) {
-			if (response.action().equals("applied") && data.has("names")
-					&& (NAMES.size() < com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCollection.MAX_BEES || NAMES.containsKey(data.get("id").getAsString()))) {
-				NAMES.put(data.get("id").getAsString(), data.getAsJsonObject("names").deepCopy());
-				if (com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerLifecycle.deleted(data)) {
-					RETIRED.add(data.get("id").getAsString());
-				} else {
-					RETIRED.remove(data.get("id").getAsString());
-				}
-				refreshLanguage();
-			}
 			if (response.action().equals("result") && !data.get("success").getAsBoolean()
 					&& Minecraft.getInstance().screen instanceof DesignerFormScreen current) {
 				current.status = data.get("message").getAsString();
 			}
 			screen.receive(response.sequence(), response.action(), data);
+		}
+	}
+
+	private static void receiveNames(BeeDesignerProtocol.Response response, Connection connection) {
+		if (namesConnection != connection) {
+			namesConnection = connection;
+			nameBatch = null;
+			namesGeneration = -1;
+			NAMES = Map.of();
+			RETIRED = Set.of();
+			namesDirty = true;
+		}
+		boolean starting = response.action().equals("names_reset");
+		if (response.sequence() < namesGeneration
+				|| starting && nameBatch != null && response.sequence() < nameBatch.generation()
+				|| !starting && (nameBatch == null || !nameBatch.matches(response.session(), response.sequence()))) {
+			return;
+		}
+		try {
+			JsonObject data = BeeDesignerProtocol.parse(response.json());
+			if (starting) {
+				nameBatch = new DesignerNameBatch(response.session(), response.sequence(), data);
+			} else if (response.action().equals("names")) {
+				nameBatch.add(data);
+			} else {
+				DesignerNameBatch.Snapshot snapshot = nameBatch.finish(data);
+				NAMES = snapshot.names();
+				RETIRED = snapshot.retired();
+				namesGeneration = response.sequence();
+				nameBatch = null;
+				namesDirty = true;
+			}
+		} catch (RuntimeException failure) {
+			nameBatch = null;
+			ProductiveBeesGenesis.LOGGER.warn("Rejected bee name batch {}", response.session(), failure);
 		}
 	}
 
@@ -339,8 +374,11 @@ public final class BeeDesignerClient {
 		if (net.neoforged.fml.ModList.get().isLoaded("ae2")) {
 			DesignerAeKeyPicker.clear();
 		}
-		NAMES.clear();
-		RETIRED.clear();
+		NAMES = Map.of();
+		RETIRED = Set.of();
+		nameBatch = null;
+		namesConnection = null;
+		namesGeneration = -1;
 		namesDirty = false;
 		DesignerCatalogMetrics.clear();
 		DesignerDraftIndex.clear();

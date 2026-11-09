@@ -8,13 +8,13 @@
 | --- | --- |
 | 项目名称 | Productive Bees Genesis / 资源蜜蜂：创世 |
 | 模组 ID | `productivebeesgenesis` |
-| 内部/构建版本 | `1.0.9` |
-| CurseForge 待发布版本 | `1.0.9` |
-| 发布状态 | GitHub Release `v1.0.9` 与 CurseForge 正式版已发布 |
+| 内部/构建版本 | 以 `gradle.properties` 的 `mod_version` 为准；当前开发版本为 `1.2.4` |
+| CurseForge 版本 | 以 `curseforge_release_version` 为准；当前开发版本为 `1.2.4` |
+| 发布状态 | 当前 `1.2.4` 为 Unreleased 待发布候选；本地默认构建、换料与独立恢复、真实重连和 42 个编辑表单已有受限证据。生产提交 `500c11e` 的 [GitHub Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/42483843621) 已成功，25 项固定开发依赖下载及 JAR／构建证明已核验；正式分发仍须完成下列来源条件，既有 `v1.2.3` 附件保持原状 |
 | CurseForge 渠道 | Release |
 | Minecraft | `1.21.1` |
 | 模组加载器 | NeoForge |
-| 许可证 | MIT |
+| 许可证 | 自有内容 MIT；第三方条款和未决来源见 `NOTICE`、`THIRD_PARTY_LICENSES.md` 与 `gradle/license-manifest.json` |
 | 项目主页 | `https://github.com/Ayoshiko/productive-bees-genesis` |
 | 问题反馈 | `https://github.com/Ayoshiko/productive-bees-genesis/issues` |
 | 英文介绍 | `README.md` |
@@ -23,17 +23,13 @@
 
 ## 版本映射
 
-内部版本 `1.0.9` 与计划发布的 CurseForge 版本 `1.0.9` 使用同一个 JAR：
+版本由目标标签提交的 `gradle.properties` 决定，标签 `v<mod_version>`、文件名 `productivebeesgenesis-<mod_version>.jar`、NeoForge 的本模组版本与 Manifest `Implementation-Version` 必须一致。`CurseForge-Release-Version` 必须等于同一提交的 `curseforge_release_version`。当前两个属性为 `1.2.4`；后续发布不能按本文旧示例倒改版本。
 
-```text
-CurseForge 文件展示名: productivebeesgenesis-1.0.9.jar (MC 1.21.1)
-上传文件: productivebeesgenesis-1.0.9.jar
-JAR 内部版本: 1.0.9
-CurseForge 版本: 1.0.9
-发布渠道: Release
-```
+Build 工作流使用 [固定开发依赖清单](gradle/development-dependencies.json)，成功构建后在同一 Actions artifact 保管精确 JAR 与 `build-proof.json`。证明包含仓库、提交、事件／引用、run ID／attempt、版本、文件大小和 SHA-256。标签构建还执行 `verifyDistributionPermissions`；普通开发构建不受未决权利清单阻断。
 
-CurseForge 的 `1.0.9` 与 NeoForge 元数据、Manifest `Implementation-Version` 及 JAR 文件名保持一致。
+CurseForge 工作流从维护分支检出校验工具，读取标签的真实提交与版本，要求该提交位于维护历史，并从 GitHub Actions API 取得同一仓库、同一提交、正确 Build 工作流的成功运行。PR 合并构建或网络分支构建不作为维护发布证据。镜像附件必须与该运行保管的 JAR 摘要一致，并通过内嵌版本、通知、逐条目摘要和权限检查；镜像阶段不重新构建 JAR。旧正式版本缺少新格式证明时会拒绝自动镜像，需要先形成可核验的候选，不能据此宣称旧附件有错。
+
+`## English` 后的说明完整传入 CurseForge，包含独立 `EOF` 行也不会截断。输出分隔符与正文逐行检查冲突。发布授权和远端运行验收单独处理；本地脚本测试不表示 GitHub Actions 已实际成功。
 
 ## 历史开发版本
 
@@ -41,7 +37,7 @@ CurseForge 的 `1.0.9` 与 NeoForge 元数据、Manifest `Implementation-Version
 其 Git 标签统一使用 `dev-v...` 前缀，Release 标题使用 `dev-...` 前缀并标记为 Pre-release；新的
 `v1.0.0` 和 `v1.0.1` 是不带该前缀的正式标签。历史 Release 的 JAR 资产维持原文件名和校验和，不重新打包或改名。
 
-## 1.0.9 正式发布产物
+## 历史快照：1.0.9 正式发布产物（2026-09-26）
 
 ```text
 文件: build/libs/productivebeesgenesis-1.0.9.jar
@@ -49,7 +45,7 @@ CurseForge 的 `1.0.9` 与 NeoForge 元数据、Manifest `Implementation-Version
 SHA-256: CBD6280828A5AF08A92A9F857FB886B4CBC3E1C05773765AE80A12675E1FA2E5
 ```
 
-发布 JAR 排除了本地材质备份、预览文件和 Java 调试符号；上传后应以此 SHA-256 核对平台下载文件。
+该历史 JAR 排除了本地材质备份、预览文件和 Java 调试符号；上述 SHA-256 仅用于核对当时的 1.0.9 附件，不代表当前工作区。
 
 2026-09-26 正式发布验证：
 
@@ -99,22 +95,20 @@ SHA-256: CBD6280828A5AF08A92A9F857FB886B4CBC3E1C05773765AE80A12675E1FA2E5
 
 ## 每次发布前
 
-1. 确认 `gradle.properties` 中 `mod_version=1.0.9`、`curseforge_release_version=1.0.9`。
-2. 以 `CHANGELOG.md` 的 `[1.0.9]` 中英文内容整理发布说明，不使用过期的本地草稿。GitHub Release body 必须包含 `## English` 段落（从 changelog 提取时将 `### English` 调整为该标题），工作流会将其后的英文段落同步到 CurseForge。
-3. 在 PowerShell 运行 `.\gradlew cleanTest build --no-build-cache --no-daemon`。
-4. 确认 `build/libs/productivebeesgenesis-1.0.9.jar` 存在并记录 SHA-256，并先将同一 JAR 附加到 GitHub Release；CurseForge 工作流会下载该已校验资产，不依赖 CI 的本地 `libs/` 开发库。
-5. `verifyReleaseArtifact` 必须确认 JAR 内含 NeoForge 元数据、图标、Manifest、MIT 许可证和第三方许可说明。
-6. 检查 `neoforge.mods.toml` 中版本 `1.0.9`、依赖范围、主页、问题反馈和 `logoFile`。
-7. 在干净的测试实例中至少完成客户端启动、服务器启动、蜂箱/离心机放置及 AE2 连接测试。
-8. CurseForge 文件版本填写 `1.0.9`，渠道固定选择 `Release`，上传第 4 步的同一 JAR。
-9. 正式发布时将 changelog 的 `未发布` 改为实际日期、更新本文发布状态，并核对中英文 README 的平台链接。
+1. 从目标维护提交读取 `mod_version`、`curseforge_release_version`、游戏／加载器／Java 与依赖范围；在现有 CHANGELOG 汇总上一正式标签后的实际变化，使用实际发布日期。Release 保留准确的 `## English` 标题。
+2. 按变更运行必要场景并复用仍有效证据；包末将 `build verifyReleaseArtifact verifyNoExampleBeesInJar` 合并执行。单次验证及其子进程最多 300 秒，不以全量 clean 强制重做无关检查。
+3. 正式分发前执行 `verifyDistributionPermissions`。当前明确未决为 Re:Avaritia 的两组／18 个文件：6 个 cosmic/hell shader 与 12 张 cosmic/halo 图片，其原作者、更早来源、代码／素材许可适用范围及实际用途下的条件仍须核实。另保留 6 个 Java 派生文件的历史原件／版本／更早来源映射，以及列明外部 GPL／LGPL 版本的 API 例外、only-or-later 和适用组合、替换／重链接条件；不能以根 MIT 或未内嵌 JAR 推导全部豁免。普通公共 API、公式和原则参考不自动变成需重新授权的全类复制。已确认的项目素材和手册使用授权继续有效，退役副本不清除历史分发记录。通知完整不代替这些实际条件闭合；公开新的正式 Release 前须完成相应核实。
+4. 已获发布授权后，等待对应维护提交／标签的 Build 成功，使用该运行的精确 JAR 和证明。缺失、失败、跳过、超时及过期 artifact 均不能视为成功；不得换成本地同版本测试包。
+5. 从同一成功 Build 取出附件，核对 Manifest、NeoForge 元数据、完整通知、图标、排除边界、大小及 SHA-256，再发布 GitHub Release。镜像工作流会独立验证标签→提交→成功运行→附件字节的一致性。
+6. 跟踪 CurseForge 同步工作流至成功，核对平台实际附件版本与摘要；外部平台审核与工作流完成分别记录。失败保管日志并定位，不静默替换历史标签或附件。
+7. 更新现行发布状态和双语 README 平台链接。历史 1.0.9 记录保持注明日期，不被当前构建结果覆盖。
 
 ## 文件命名
 
 构建产物由 Gradle 统一命名：
 
 ```text
-productivebeesgenesis-1.0.9.jar
+productivebeesgenesis-<mod_version>.jar
 ```
 
 不要为平台上传手工重命名 JAR，以便校验哈希并确认各平台提供的是同一构建产物。

@@ -4,6 +4,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 
 import java.util.UUID;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -20,6 +21,8 @@ public final class Ae2InputTransfer {
     private long known;
     private long offered;
     private Tag unreadable;
+    private UUID player;
+    private String playerDestination;
 
     public boolean isPresent() {
         return phase != null || unreadable != null;
@@ -38,7 +41,8 @@ public final class Ae2InputTransfer {
     }
 
     public String destination() {
-        return unreadable == null ? phase + (slot < 0 ? "" : ":" + slot) : "invalid-data";
+        return unreadable == null ? phase + (slot < 0 ? "" : ":" + slot)
+                + (player == null ? "" : ":player=" + player + ":" + playerDestination) : "invalid-data";
     }
 
     public UUID request() {
@@ -74,6 +78,17 @@ public final class Ae2InputTransfer {
         known = amount;
     }
 
+    public void playerContext(UUID actor, boolean cursor) {
+        if (!isPresent() || actor == null) throw new IllegalStateException("Missing player transfer");
+        player = actor;
+        playerDestination = cursor ? "cursor" : "inventory";
+    }
+
+    public void offerToPlayer(long amount) {
+        offer(amount, -1);
+        phase = "player";
+    }
+
     private void begin(Supplier<String> identity, long amount) {
         if (isPresent() || identity == null || amount <= 0 || amount > Integer.MAX_VALUE) {
             throw new IllegalStateException("Input transfer unavailable or invalid amount");
@@ -103,7 +118,7 @@ public final class Ae2InputTransfer {
     }
 
     public void accepted(long amount) {
-        if (!"slot".equals(phase) && !"return".equals(phase)) {
+        if (!"slot".equals(phase) && !"return".equals(phase) && !"player".equals(phase)) {
             throw new IllegalStateException("No input delivery in flight");
         }
         checkResult(amount);
@@ -165,7 +180,11 @@ public final class Ae2InputTransfer {
             parent.put(NBT_KEY, unreadable.copy());
         } else if (phase != null) {
             CompoundTag tag = new CompoundTag();
-            tag.putInt("version", 1);
+            tag.putInt("version", player == null ? 1 : 2);
+            if (player != null) {
+                tag.putUUID("player", player);
+                tag.putString("player_destination", playerDestination);
+            }
             tag.putUUID("request", request());
             tag.putString("fingerprint", fingerprint());
             tag.putString("phase", phase);
@@ -183,7 +202,7 @@ public final class Ae2InputTransfer {
         Tag raw = parent.get(NBT_KEY);
         if (raw == null) return;
         if (!(raw instanceof CompoundTag tag) || !tag.contains("version", Tag.TAG_INT)
-                || tag.getInt("version") != 1 || !tag.hasUUID("request")
+                || (tag.getInt("version") != 1 && tag.getInt("version") != 2) || !tag.hasUUID("request")
                 || !tag.contains("fingerprint", Tag.TAG_STRING) || tag.getString("fingerprint").isBlank()
                 || !tag.contains("phase", Tag.TAG_STRING) || !tag.contains("slot", Tag.TAG_INT)
                 || !tag.contains("known", Tag.TAG_LONG) || !tag.contains("offered", Tag.TAG_LONG)) {
@@ -198,12 +217,23 @@ public final class Ae2InputTransfer {
             case "extract" -> savedKnown == 0 && savedOffered > 0 && savedSlot == -1;
             case "slot" -> savedOffered > 0 && savedSlot >= 0;
             case "withdraw-slot" -> savedKnown == 0 && savedOffered > 0 && savedSlot >= 0;
-            case "return" -> savedOffered > 0 && savedSlot == -1;
+            case "return", "player" -> savedOffered > 0 && savedSlot == -1;
             case "known" -> savedOffered == 0 && savedSlot == -1;
             default -> false;
         };
         if (!validPhase || savedKnown < 0 || savedOffered < 0 || savedKnown > Integer.MAX_VALUE
                 || savedOffered > Integer.MAX_VALUE - savedKnown) {
+            unreadable = raw.copy();
+            return;
+        }
+        if (tag.getInt("version") == 2) {
+            if (!tag.hasUUID("player") || !Set.of("cursor", "inventory").contains(tag.getString("player_destination"))) {
+                unreadable = raw.copy();
+                return;
+            }
+            player = tag.getUUID("player");
+            playerDestination = tag.getString("player_destination");
+        } else if ("player".equals(savedPhase) || tag.contains("player") || tag.contains("player_destination")) {
             unreadable = raw.copy();
             return;
         }
@@ -224,5 +254,7 @@ public final class Ae2InputTransfer {
         known = 0;
         offered = 0;
         unreadable = null;
+        player = null;
+        playerDestination = null;
     }
 }

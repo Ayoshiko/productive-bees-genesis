@@ -237,8 +237,7 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		}
 		int factor = productivebeesgenesis$activeCoalesceFactor;
 		if (factor > 1) {
-			// 合并调用：先算「单虚拟刻可承担量」再乘回倍数。直接对总操作数套边际曲线是错的 ——
-			// 曲线次线性，会让 1024 倍加速几乎不耗电。
+			// 按满刻和剩余电量的尾刻裁剪，保留原有逐刻边际费用。
 			return ZeroTickBatchMath.affordableCoalescedOperations(perTickEnergy.getAsLong(),
 					productivebeesgenesis$zeroTickCoalesce.base(),
 					productivebeesgenesis$availableStoredEnergy(), factor);
@@ -307,12 +306,9 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 			}
 			int factor = productivebeesgenesis$activeCoalesceFactor;
 			if (factor > 1) {
-				// 合并调用代表多个虚拟刻：按刻分摊后逐刻计费，总额与逐刻推进一致。
 				int base = productivebeesgenesis$zeroTickCoalesce.base();
-				int virtualTicks = ZeroTickBatchMath.virtualTicksFor(operations, base);
-				int perTickOps = ZeroTickBatchMath.operationsPerVirtualTick(operations, virtualTicks);
-				productivebeesgenesis$chargeEnergy(MekCentrifugeEnergyScaling.batchEnergyCost(
-						energyPerTick, perTickOps, virtualTicks));
+				productivebeesgenesis$chargeEnergy(ZeroTickBatchMath.coalescedEnergyCost(
+						energyPerTick, operations, base));
 			} else {
 				productivebeesgenesis$chargeEnergy(MekCentrifugeEnergyScaling.batchEnergyCost(
 						energyPerTick, operations, 1));

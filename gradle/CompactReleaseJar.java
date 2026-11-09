@@ -7,10 +7,15 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.HexFormat;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
@@ -41,12 +46,17 @@ public final class CompactReleaseJar {
         Path staged = Files.createTempFile(archive.getParent(), "compact-release-", ".jar");
         List<String> changes = new ArrayList<>();
         int entries = 0;
+        Map<String, String> entryHashes = new TreeMap<>();
+        int hashIndexBytes = 0;
         long jsonSaved = 0;
         long pngSaved = 0;
         try (ZipFile original = new ZipFile(archive.toFile());
              ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(staged))) {
             output.setLevel(Deflater.BEST_COMPRESSION);
             for (ZipEntry entry : original.stream().sorted((a, b) -> a.getName().compareTo(b.getName())).toList()) {
+                if (entry.getName().equals("META-INF/license-entry-hashes.json")) {
+                    continue;
+                }
                 ZipEntry target = new ZipEntry(entry.getName());
                 target.setTimeLocal(ARCHIVE_TIME);
                 if (entry.isDirectory()) {
@@ -70,6 +80,9 @@ public final class CompactReleaseJar {
                 if (compact.length != data.length) {
                     changes.add((data.length - compact.length) + "\t" + entry.getName());
                 }
+                if (!entry.getName().equals("META-INF/license-manifest.json")) {
+                    entryHashes.put(entry.getName(), sha256(compact));
+                }
                 int compressedSize = deflate(compact, true).length;
                 CRC32 checksum = new CRC32();
                 checksum.update(compact);
@@ -86,9 +99,17 @@ public final class CompactReleaseJar {
                 output.closeEntry();
                 entries++;
             }
+            byte[] hashIndex = hashIndex(entryHashes);
+            hashIndexBytes = hashIndex.length;
+            ZipEntry indexEntry = new ZipEntry("META-INF/license-entry-hashes.json");
+            indexEntry.setTimeLocal(ARCHIVE_TIME);
+            output.putNextEntry(indexEntry);
+            output.write(hashIndex);
+            output.closeEntry();
+            entries++;
         }
         long after = Files.size(staged);
-        if (after > before) {
+        if (after > before + hashIndexBytes + 512L) {
             throw new IOException("Compacted archive grew; original retained at " + archive);
         }
         try (ZipFile result = new ZipFile(staged.toFile())) {
@@ -105,6 +126,27 @@ public final class CompactReleaseJar {
                 + "\njson_uncompressed_saved=" + jsonSaved + "\npng_saved=" + pngSaved
                 + "\nchanges:\n" + String.join("\n", changes) + "\n", StandardCharsets.UTF_8);
         System.out.println("Lossless release compaction: " + before + " -> " + after + " bytes");
+    }
+
+    private static String sha256(byte[] content) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("Java 21 must provide SHA-256", exception);
+        }
+    }
+
+    private static byte[] hashIndex(Map<String, String> hashes) {
+        StringBuilder json = new StringBuilder("{");
+        for (Map.Entry<String, String> entry : hashes.entrySet()) {
+            if (json.length() > 1) {
+                json.append(',');
+            }
+            String path = entry.getKey().replace("\\", "\\\\").replace("\"", "\\\"")
+                    .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+            json.append('"').append(path).append("\":\"").append(entry.getValue()).append('"');
+        }
+        return json.append('}').toString().getBytes(StandardCharsets.UTF_8);
     }
 
     private static byte[] minifyJson(byte[] source) throws IOException {

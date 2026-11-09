@@ -13,7 +13,7 @@ import dev.latvian.mods.kubejs.event.EventHandler;
 	 * <p>
 	 * 用法示例（server_scripts）：
 	 * <pre>{@code
-	 * MyriadBeeEvents.REGISTER.register(event => {
+	 * MyriadBeeEvents.register(event => {
 	 *     event.addBreeding('mymod:custom_breeding', 'productivebees:iron_bee', 'productivebees:gold_bee',
 	 * 'productivebees:myriadcreations')
 	 * })
@@ -21,7 +21,7 @@ import dev.latvian.mods.kubejs.event.EventHandler;
 	 */
 public interface MyriadBeeEvents {
 
-	/** 事件组 — 在 KubeJS 脚本中通过 MyriadBeeEvents.REGISTER 访问 */
+	/** 事件组 — 在 KubeJS 脚本中通过 MyriadBeeEvents.register(...) 监听 */
 	EventGroup GROUP = EventGroup.of("MyriadBeeEvents");
 
 	/** 蜜蜂配方注册事件 — 服务端脚本阶段触发 */

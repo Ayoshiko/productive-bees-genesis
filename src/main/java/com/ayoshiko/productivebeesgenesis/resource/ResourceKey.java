@@ -13,6 +13,7 @@ public final class ResourceKey {
 	private final ResourceLocation kind;
 	private final int version;
 	private final CompoundTag payload;
+	private final int savedSize;
 
 	/** 复制并验证原始身份；不要求对应可选模组当前已安装。 */
 	public ResourceKey(ResourceLocation kind, int version, CompoundTag payload) {
@@ -23,6 +24,7 @@ public final class ResourceKey {
 		}
 		this.version = version;
 		this.payload = payload.copy();
+		this.savedSize = save().sizeInBytes();
 	}
 
 	/** 用注册名构造化学品身份，不加载 ChemicalStack 或 AEKey。 */
@@ -98,6 +100,8 @@ public final class ResourceKey {
 		tag.put("payload", payload.copy());
 		return tag;
 	}
+
+	int savedSize() { return savedSize; }
 
 	/** 严格读取身份；无效条目由账户加载器整体隔离，不猜测默认值。 */
 	public static ResourceKey load(CompoundTag tag) {
