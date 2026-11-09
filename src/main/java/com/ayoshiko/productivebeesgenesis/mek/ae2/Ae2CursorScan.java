@@ -111,12 +111,51 @@ final class Ae2CursorScan {
 	static <T> int collectPrioritized(List<T> out, List<T> prefixScratch, Set<T> seen,
 			Iterable<T> prioritizedKeys, Iterable<T> fallbackKeys, T cursor,
 			int maxTypes, Predicate<T> acceptable) {
-		collectMapped(out, prefixScratch, seen, prioritizedKeys, cursor, maxTypes,
+		return collectPrioritized(out, prefixScratch, seen, prioritizedKeys, fallbackKeys,
+				cursor, cursor, maxTypes, acceptable);
+	}
+
+	/**
+	 * Collects the prioritized class first and only uses leftover capacity for fallback candidates.
+	 * Separate cursors let both classes resume fairly without changing that priority.
+	 */
+	static <T> int collectPrioritized(List<T> out, List<T> prefixScratch, Set<T> seen,
+			Iterable<T> prioritizedKeys, Iterable<T> fallbackKeys,
+			T prioritizedCursor, T fallbackCursor, int maxTypes, Predicate<T> acceptable) {
+		int initialSize = out.size();
+		collectMapped(out, prefixScratch, seen, prioritizedKeys, prioritizedCursor, maxTypes,
 				Function.identity(), acceptable);
-		int prioritizedCount = out.size();
-		collectMapped(out, prefixScratch, seen, fallbackKeys, cursor, maxTypes,
+		int prioritizedCount = out.size() - initialSize;
+		collectMapped(out, prefixScratch, seen, fallbackKeys, fallbackCursor, maxTypes,
 				Function.identity(), acceptable);
 		return prioritizedCount;
+	}
+
+	/** Prioritized bounded scan with independent cursors that resume after each last-selected key. */
+	static <T> int collectPrioritizedRotating(List<T> out, Set<T> seen,
+			List<T> prioritizedKeys, List<T> fallbackKeys,
+			T prioritizedCursor, T fallbackCursor, int maxTypes, Predicate<T> acceptable) {
+		int initialSize = out.size();
+		collectRotating(out, seen, prioritizedKeys, prioritizedCursor, maxTypes, acceptable);
+		int prioritizedCount = out.size() - initialSize;
+		collectRotating(out, seen, fallbackKeys, fallbackCursor, maxTypes, acceptable);
+		return prioritizedCount;
+	}
+
+	private static <T> void collectRotating(List<T> out, Set<T> seen, List<T> values,
+			T cursor, int maxTypes, Predicate<T> acceptable) {
+		if (values.isEmpty() || maxTypes <= out.size()) return;
+		int start = cursorNextIndex(values, cursor);
+		for (int visited = 0; visited < values.size() && out.size() < maxTypes; visited++) {
+			T key = values.get((start + visited) % values.size());
+			if (key != null && !seen.contains(key) && acceptable.test(key)) select(out, seen, key);
+		}
+	}
+
+	private static <T> int cursorNextIndex(List<T> values, T cursor) {
+		if (values.isEmpty() || cursor == null) return 0;
+		int index = cursorStartIndex(values, cursor, Function.identity());
+		return cursor.equals(values.get(index)) ? (index + 1) % values.size() : 0;
 	}
 
 	/**

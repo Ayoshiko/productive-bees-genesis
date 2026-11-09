@@ -15,7 +15,7 @@
   "colorCycle": false,
   "size": 1.2,
   "speed": 0.6,
-  "attack": 20.0,
+  "attack": 2.147483647E9,
   "breedingItem": "productivebees:honey_treat",
   "breedingItemCount": 1,
   "selfbreed": true,

@@ -1,0 +1,25 @@
+{
+  "type": "productivebees:advanced_beehive",
+  "ingredient": "example:lightning_ehv_comb",
+  "results": [
+    {
+      "item": {
+        "item": "productivebees:configurable_honeycomb",
+        "components": {
+          "productivebees:bee_type": "example:lightning_ehv_comb"
+        }
+      },
+      "chance": 1
+    }
+  ],
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2lt"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:lightning_ehv_comb"
+    }
+  ]
+}

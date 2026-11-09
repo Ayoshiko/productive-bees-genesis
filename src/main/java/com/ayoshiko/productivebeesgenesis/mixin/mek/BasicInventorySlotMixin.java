@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mixin.mek;
 
 import com.ayoshiko.productivebeesgenesis.inventory.ExternalInsertPolicy;
+import com.ayoshiko.productivebeesgenesis.inventory.BulkItemPullScope;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.ayoshiko.productivebeesgenesis.inventory.SlotLimitCache;
 import com.ayoshiko.productivebeesgenesis.inventory.SlotRollbackWindow;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
@@ -219,6 +221,19 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 			onContentsChanged();
 		}
 		cir.setReturnValue(extracted);
+	}
+
+	/**
+	 * 只放宽本模组拉取目标 Bin 的单次返回数量。原方法仍负责 canExtract、
+	 * 真实库存上限、扣减与通知；创造 Bin 在进入基类前已将 action 转为 SIMULATE。
+	 */
+	@ModifyExpressionValue(method = "extractItem(ILmekanism/api/Action;"
+			+ "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/ItemStack;getMaxStackSize()I"))
+	private int productivebeesgenesis$bulkBinPullLimit(int original, int amount, Action action,
+			AutomationType automationType) {
+		return automationType == AutomationType.EXTERNAL && amount > original
+				&& BulkItemPullScope.allowsBin(this, current) ? amount : original;
 	}
 
 	/**

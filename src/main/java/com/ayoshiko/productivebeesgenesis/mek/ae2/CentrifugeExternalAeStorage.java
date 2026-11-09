@@ -240,13 +240,15 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 			shared.itemSnapshotKeys = new Object[slotCount];
 			shared.itemSnapshotAmounts = new long[slotCount];
 		}
+		Object keyCache = shared.host.productivebeesgenesis$getAeItemKeyCache();
+		AeItemKeyCache cache = keyCache instanceof AeItemKeyCache existing ? existing : null;
 		int count = 0;
 		for (int i = 0; i < slotCount; i++) {
 			IInventorySlot slot = outputSlot(i);
 			if (slot == null || slot.isEmpty()) continue;
 			ItemStack stack = slot.getStack();
 			if (stack.isEmpty() || stack.getCount() <= 0) continue;
-			AEItemKey key = AEItemKey.of(stack);
+			AEItemKey key = cache == null ? AEItemKey.of(stack) : cache.get(i, stack);
 			if (key == null) continue;
 			shared.itemSnapshotKeys[count] = key;
 			shared.itemSnapshotAmounts[count] = stack.getCount();

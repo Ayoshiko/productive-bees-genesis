@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mixin;
 
+import com.ayoshiko.productivebeesgenesis.resource.PbResourceMixinContract;
 import net.neoforged.fml.loading.FMLLoader;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;
@@ -86,6 +87,11 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"ExtraFactoryOutputInventorySlotMixin"
 	);
 
+	/** 资源事务要求整组入口齐全；版本与字节码预检通过后使用严格注入。 */
+	private static final Set<String> JDTE_RESOURCE_MIXINS = Set.of(
+		"JdteBioFactoryResourceMixin"
+	);
+
 	/** 仅依赖 JDTE 的合并加速 Mixin。 */
 	private static final Set<String> JDTE_MIXINS = Set.of(
 		"JdteApiaryCoalescedMixin",
@@ -154,10 +160,18 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"Ae2EMExtraCentrifugeFactoryInputMixin"
 	);
 
+	private static final Set<String> AE2_CREATE_MIXINS = Set.of("CreateBottomlessBulkPullMixin");
+	private static final Set<String> AE2_INFINITY_CELL_MIXINS = Set.of("InfinityCellKeySupplierMixin");
+
 	/** 引用 mekenergistics 类的 Mixin 简单类名集合（目标类仅当该 mod 加载时存在） */
 	private static final Set<String> MEKENERGISTICS_MIXINS = Set.of(
 			"MekEnergisticsInstallerGuardMixin",
 			"MekEnergisticsTargetResolverGuardMixin"
+	);
+
+	/** 新样板入口引用 AE2 API，独立门控以保留既有安装器兼容条件。 */
+	private static final Set<String> MEKENERGISTICS_AE2_MIXINS = Set.of(
+			"MekEnergisticsPatternGuardMixin"
 	);
 
 	/** 引用 buildinggadgets2 类的 Mixin 简单类名集合（目标类仅当该 mod 加载时存在） */
@@ -165,9 +179,12 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"RenderBlockBeLoadFixMixin"
 	);
 
-	/** 仅引用 JEI GhostIngredientDrag 的客户端 Mixin。 */
+	/** JEI 拖拽及 PB 配方布局修正，仅在 JEI 存在时加载。 */
 	private static final Set<String> JEI_MIXINS = Set.of(
-			"JeiGhostIngredientDragMixin"
+			"JeiGhostIngredientDragMixin",
+			"PbContainerFlowerJeiMixin",
+			"PbCentrifugeJeiLayoutMixin",
+			"PbMyriadBeehiveJeiMixin"
 	);
 
 	/**
@@ -183,6 +200,8 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		static final boolean EME_LOADED = isModLoaded(EME_MOD_ID);
 		/** AE2 是否加载（Mixin 阶段检测，仅计算一次） */
 		static final boolean AE2_LOADED = isModLoaded(AE2_MOD_ID);
+		static final boolean CREATE_LOADED = isModLoaded("create");
+		static final boolean ME_INFINITY_CELL_LOADED = isModLoaded("meinfinitycell");
 		/** Mek Energistics 是否加载（Mixin 阶段检测，仅计算一次） */
 		static final boolean MEKENERGISTICS_LOADED = isModLoaded(MEKENERGISTICS_MOD_ID);
 		/** Building Gadgets 2 是否加载（Mixin 阶段检测，仅计算一次） */
@@ -350,6 +369,28 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
 		String simpleName = simpleClassName(mixinClassName);
+		if (simpleName.equals("DesignerRecipeUnificationMixin")) {
+			return isModLoaded("almostunified") && FMLLoader.getLoadingModList().getMods().stream()
+					.anyMatch(mod -> mod.getModId().equals("almostunified") && mod.getVersion().toString().equals("1.21.1-1.4.2"));
+		}
+		if (simpleName.equals("DesignerGeckoBeeModelMixin")) {
+			return isModLoaded("geckolib");
+		}
+		if (simpleName.equals("MyriadGuideHotkeyMixin")) return isModLoaded("guideme");
+		if (simpleName.equals("PbResourceProductionMixin") || simpleName.equals("PbResourceMixedOutputMixin")) {
+			return PbResourceMixinContract.supported();
+		}
+		if (JDTE_RESOURCE_MIXINS.contains(simpleName)) {
+			return Holder.JDTE_LOADED && FMLLoader.getLoadingModList().getMods().stream()
+					.anyMatch(mod -> mod.getModId().equals("jdte") && mod.getVersion().toString().equals("0.6.1.0"))
+					&& com.ayoshiko.productivebeesgenesis.resource.JdteResourceMixinContract.supported();
+		}
+		if (AE2_CREATE_MIXINS.contains(simpleName)) {
+			return Holder.AE2_LOADED && Holder.CREATE_LOADED;
+		}
+		if (AE2_INFINITY_CELL_MIXINS.contains(simpleName)) {
+			return Holder.AE2_LOADED && Holder.ME_INFINITY_CELL_LOADED;
+		}
 		if (PB_LEGACY_MIXINS.contains(simpleName)) {
 			return Holder.PB_LEGACY_HEATED_CAN_OPERATE;
 		}
@@ -380,6 +421,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		// AE2 + EME Mixin — 目标类继承 EME 基类，需两者同时加载
 		if (AE2_EME_MIXINS.contains(simpleName)) {
 			return Holder.AE2_LOADED && Holder.EME_LOADED;
+		}
+		if (MEKENERGISTICS_AE2_MIXINS.contains(simpleName)) {
+			return Holder.MEKENERGISTICS_LOADED && Holder.AE2_LOADED;
 		}
 		if (MEKENERGISTICS_MIXINS.contains(simpleName)) {
 			return Holder.MEKENERGISTICS_LOADED;
@@ -414,6 +458,6 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 
 	@Override
 	public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-		// 无后置处理
+		// MixinExtras 的晚期变换在此回调之后执行；完整性由注入数量要求与加载后行为测试确认。
 	}
 }

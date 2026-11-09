@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.compat.mekenergistics;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.mek.IMekApiaryTile;
+import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
@@ -19,6 +21,11 @@ import net.minecraft.world.level.block.Block;
 public final class MekEnergisticsBlockGuard {
 
 	private MekEnergisticsBlockGuard() {
+	}
+
+	/** 通过自有标记接口覆盖所有等级，不加载 ME/EME 的可选实现类。 */
+	public static boolean isProtectedMachineHost(Object host) {
+		return host instanceof IMekCentrifugeTile || host instanceof IMekApiaryTile;
 	}
 
 	/**

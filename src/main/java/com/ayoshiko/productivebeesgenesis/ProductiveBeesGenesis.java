@@ -131,6 +131,7 @@ public final class ProductiveBeesGenesis {
 	 * 注册 DeferredRegister 到 mod 事件总线
 	 */
 	private void registerDeferredRegisters(IEventBus eventBus) {
+		com.ayoshiko.productivebeesgenesis.resource.ResourceContent.register(eventBus);
 		ModBlocks.BLOCKS.register(eventBus);
 		ModBlockEntities.register(eventBus);
 		ModItems.ITEMS.register(eventBus);
@@ -173,11 +174,13 @@ public final class ProductiveBeesGenesis {
 			}
 			if (isOwnServerConfig(event.getConfig())) {
 				ServerConfigMigrationService.onConfigLoading(event.getConfig());
+				MyriadCreationsEventHandler.invalidateEnabledCache();
 				initializeServerConfigs();
 			}
 		});
 		eventBus.addListener((ModConfigEvent.Reloading event) -> {
 			if (isOwnServerConfig(event.getConfig()) && ModConfig.areServerSpecsLoaded()) {
+				MyriadCreationsEventHandler.invalidateEnabledCache();
 				boolean changed = ModConfig.validateAndFixCrossFields();
 				changed |= BalanceConfig.refresh(true);
 				if (changed) {
@@ -188,8 +191,6 @@ public final class ProductiveBeesGenesis {
 				// The master recipe-mode switch can invalidate already cached Mekanism recipes.
 				mekanism.common.CommonWorldTickHandler.flushTagAndRecipeCaches = true;
 				MyriadCreationsEventHandler.invalidateFilterCache();
-				// 同步万象创世启用状态缓存（避免每 tick 32 次 volatile read 配置查询）
-				MyriadCreationsEventHandler.invalidateEnabledCache();
 				// 外部物流开关走 100 刻缓存，重载后立即失效以免等待 5 秒
 				com.ayoshiko.productivebeesgenesis.logistics.ExternalLogisticsSettings.invalidate();
 				// 工厂倍率快照只在 Loading 构建，Reloading 不替换；修改后仍需重启游戏生效。
@@ -354,6 +355,7 @@ public final class ProductiveBeesGenesis {
 		EssenceConversionUpgradeHelper.invalidateCache();
 		// 失效粗矿熔炼配方缓存，确保 /reload 后读取最新 Mekanism 配方
 		RawOreSmeltingUpgradeHelper.invalidateCache();
+		com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper.invalidateCache();
 		// 失效万象批量规划器模板缓存（标签重载后 bee_type 可能变化）（Task 19）
 		MyriadBatchPlanner.clearTemplateCache();
 		// CombFuzzyMatcher 已改为无缓存直读组件（AEItemKey.equals 比重算更贵），无需失效
@@ -438,6 +440,8 @@ public final class ProductiveBeesGenesis {
 		safeClear(BeeProduceProcessor::invalidateCache, "BeeProduceProcessor");
 		safeClear(EssenceConversionUpgradeHelper::invalidateCache, "EssenceConversionUpgradeHelper");
 		safeClear(RawOreSmeltingUpgradeHelper::invalidateCache, "RawOreSmeltingUpgradeHelper");
+		safeClear(com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper::invalidateCache,
+				"UselessByproductUpgradeHelper");
 		// 清理物品/方块转化配方索引 — 防止跨存档残留旧 RecipeHolder 引用（与 onTagsReload 生命周期一致）
 		safeClear(BeeConversionQueries::invalidate, "BeeConversionQueries");
 		safeClear(SingleIngredientCraftingIndex::invalidate, "SingleIngredientCraftingIndex");
@@ -478,6 +482,7 @@ public final class ProductiveBeesGenesis {
 		event.enqueueWork(() -> {
 			checkProductiveBeesCompatibility();
 			ModStats.init();
+			com.ayoshiko.productivebeesgenesis.resource.UselessResourceIntegration.install();
 		});
 	}
 

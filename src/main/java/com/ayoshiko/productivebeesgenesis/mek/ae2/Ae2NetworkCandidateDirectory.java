@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.KeyCounter;
+import appeng.api.networking.storage.IStorageService;
 import it.unimi.dsi.fastutil.objects.Object2LongMap;
 
 import java.lang.ref.ReferenceQueue;
@@ -25,6 +27,31 @@ final class Ae2NetworkCandidateDirectory {
 			new ConcurrentHashMap<>();
 
 	private Ae2NetworkCandidateDirectory() {
+	}
+
+	/** 普通候选沿目录窗口读取，库存保留策略仍强制刷新；实际抽取始终由 ME 确认。 */
+	static KeyCounter readInventory(Object networkIdentity, IStorageService storage, long gameTick,
+			boolean requireFresh) {
+		Directory directory = directoryFor(networkIdentity);
+		synchronized (directory) {
+			KeyCounter inventory = directory.inventory.get();
+			if (requireFresh || inventory == null || directory.refreshTick == Long.MIN_VALUE
+					|| gameTick < directory.refreshTick
+					|| gameTick - directory.refreshTick >= REFRESH_INTERVAL_TICKS) {
+				inventory = storage.getCachedInventory();
+				directory.inventory = new WeakReference<>(inventory);
+			}
+			return inventory;
+		}
+	}
+
+	static void invalidate(Object networkIdentity) {
+		if (networkIdentity == null) return;
+		Directory directory = DIRECTORIES.get(new IdentityWeakReference(networkIdentity));
+		if (directory != null) {
+			directory.inventory.clear();
+			directory.inventorySource.clear();
+		}
 	}
 
 	/**
@@ -115,6 +142,7 @@ final class Ae2NetworkCandidateDirectory {
 	}
 
 	private static final class Directory {
+		private WeakReference<KeyCounter> inventory = new WeakReference<>(null);
 		private WeakReference<Object> inventorySource = new WeakReference<>(null);
 		private long refreshTick = Long.MIN_VALUE;
 		private long generation;

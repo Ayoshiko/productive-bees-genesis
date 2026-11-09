@@ -42,11 +42,23 @@ final class ApiaryPayloadHandlers {
 	 */
 	private static final String FEEDER_SLOT_TOGGLE_RATE_KEY = "feeder_slot_toggle";
 
+	static boolean validSession(IPayloadContext context, net.minecraft.core.BlockPos pos) {
+        if (!(context.player() instanceof ServerPlayer player) || player.isSpectator()
+                || !(player.containerMenu instanceof MekanismTileContainer<?> container)) return false;
+        var tile = container.getTileEntity();
+        return tile != null && !tile.isRemoved() && tile.getLevel() == player.level()
+                && tile.getBlockPos().equals(pos) && player.level().hasChunkAt(pos)
+                && player.level().getBlockEntity(pos) == tile && container.stillValid(player)
+                && player.distanceToSqr(pos.getCenter()) <= NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ
+                && mekanism.api.security.IBlockSecurityUtils.INSTANCE.canAccess(player, player.level(), pos, tile);
+    }
+
 	private ApiaryPayloadHandlers() {
 	}
 
 	static void handleToggleApiaryGeneTreatRestock(ToggleApiaryGeneTreatRestockPayload payload,
 			IPayloadContext context) {
+		if (!validSession(context, payload.pos())) return;
 		if (!(context.player() instanceof ServerPlayer player)
 				|| !(player.containerMenu instanceof MekanismTileContainer<?> container)
 				|| !(container.getTileEntity() instanceof TileEntityMekApiary apiary)
@@ -63,6 +75,9 @@ final class ApiaryPayloadHandlers {
 	}
 
 	static void handleToggleApiaryDirectEject(ToggleApiaryDirectEjectPayload payload, IPayloadContext context) {
+		if (!validSession(context, payload.pos())) return;
+        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handleToggleApiaryDirectEject",
+                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer)
 				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
 				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
@@ -83,6 +98,9 @@ final class ApiaryPayloadHandlers {
 	 */
 	static void handleToggleApiaryFeederConversion(ToggleApiaryFeederConversionPayload payload,
 			IPayloadContext context) {
+		if (!validSession(context, payload.pos())) return;
+        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handleToggleApiaryFeederConversion",
+                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer)
 				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
 				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
@@ -106,6 +124,7 @@ final class ApiaryPayloadHandlers {
 	 * 故与 AE2 过滤类包同款按玩家 500ms 限频，防止恶意客户端高频发包放大流量。
 	 */
 	static void handleToggleFeederSlotDisabled(ToggleFeederSlotDisabledPayload payload, IPayloadContext context) {
+		if (!validSession(context, payload.pos())) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer)
 				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
 				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
@@ -138,6 +157,7 @@ final class ApiaryPayloadHandlers {
 	 */
 	static void handleSetAllFeederSlotsDisabled(SetAllFeederSlotsDisabledPayload payload,
 			IPayloadContext context) {
+		if (!validSession(context, payload.pos())) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer)
 				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
 				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
@@ -161,6 +181,9 @@ final class ApiaryPayloadHandlers {
 	 * -1 表示取消选择，0~beeSlotCount-1 表示选中对应槽位。
 	 */
 	static void handleApiarySelectBee(ApiarySelectBeePayload payload, IPayloadContext context) {
+		if (!validSession(context, payload.pos())) return;
+        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handleApiarySelectBee",
+                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}
@@ -211,6 +234,9 @@ final class ApiaryPayloadHandlers {
 	 * </ul>
 	 */
 	static void handleApiaryCageOperation(ApiaryCageOperationPayload payload, IPayloadContext context) {
+		if (!validSession(context, payload.pos())) return;
+        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handleApiaryCageOperation",
+                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}
@@ -284,6 +310,9 @@ final class ApiaryPayloadHandlers {
 	 * {@link ApiaryHoneyTreatFeeder} 复用 Productive Bees 原版喂食行为。
 	 */
 	static void handleApiaryFeedBee(ApiaryFeedBeePayload payload, IPayloadContext context) {
+		if (!validSession(context, payload.pos())) return;
+        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handleApiaryFeedBee",
+                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer)
 				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
 				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
@@ -372,6 +401,9 @@ final class ApiaryPayloadHandlers {
 	 * </ol>
 	 */
 	static void handleApiaryToggleSorting(ApiaryToggleSortingPayload payload, IPayloadContext context) {
+		if (!validSession(context, payload.pos())) return;
+        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handleApiaryToggleSorting",
+                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}
@@ -416,6 +448,9 @@ final class ApiaryPayloadHandlers {
 	 * 防止恶意客户端一次性清空异常大量的升级导致服务端性能压力。
 	 */
 	static void handlePbUpgradeExtract(PbUpgradeExtractPayload payload, IPayloadContext context) {
+		if (!validSession(context, payload.pos())) return;
+        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handlePbUpgradeExtract",
+                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}

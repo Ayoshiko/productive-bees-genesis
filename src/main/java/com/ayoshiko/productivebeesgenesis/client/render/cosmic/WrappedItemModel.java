@@ -17,6 +17,7 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 
+import java.lang.ref.WeakReference;
 import java.util.function.Function;
 
 /**
@@ -33,13 +34,12 @@ public abstract class WrappedItemModel implements PerspectiveModel {
 	protected PerspectiveModelState parentState;
 	protected boolean cosmic = false;
 
-	// 渲染上下文：由 ItemOverrides.resolve 回调写入，renderBakedModel 读取。
-	// 这是 Minecraft 物品渲染管线的标准模式：渲染线程在 renderItem 前同步调用 resolve，
-	// 单线程顺序执行，不存在并发访问。若未来引入批量/并行渲染则需重构为参数传递。
+	// resolve 可能只查询模型而不渲染；模型缓存的生命周期超过世界，不能强引用渲染上下文。
+	// 两个入口均在渲染线程调用，只有 renderBakedModel 的局部变量保留本次渲染所需的强引用。
 	@Nullable
-	protected LivingEntity entity;
+	private WeakReference<LivingEntity> entity;
 	@Nullable
-	protected ClientLevel world;
+	private WeakReference<ClientLevel> world;
 
 	protected final ItemOverrides overrideList = new ItemOverrides() {
 		@Override
@@ -50,11 +50,20 @@ public abstract class WrappedItemModel implements PerspectiveModel {
 			@Nullable LivingEntity entity,
 			int seed
 		) {
-			WrappedItemModel.this.entity = entity;
-			// 使用 instanceof 检查避免 ClassCastException：entity.level() 在非客户端环境可能非 ClientLevel
-			// 转换失败时 world 为 null，下游 resolve 接受 @Nullable ClientLevel，可安全降级
-			WrappedItemModel.this.world = level != null ? level
-					: (entity != null && entity.level() instanceof ClientLevel cl ? cl : null);
+			if (entity == null) {
+				WrappedItemModel.this.entity = null;
+			} else if (WrappedItemModel.this.entity == null || WrappedItemModel.this.entity.get() != entity) {
+				WrappedItemModel.this.entity = new WeakReference<>(entity);
+			}
+			ClientLevel world = level;
+			if (world == null && entity != null && entity.level() instanceof ClientLevel clientLevel) {
+				world = clientLevel;
+			}
+			if (world == null) {
+				WrappedItemModel.this.world = null;
+			} else if (WrappedItemModel.this.world == null || WrappedItemModel.this.world.get() != world) {
+				WrappedItemModel.this.world = new WeakReference<>(world);
+			}
 			if (WrappedItemModel.this.cosmic) {
 				return WrappedItemModel.this.wrapped.getOverrides().resolve(originalModel, stack, level, entity, seed);
 			}
@@ -157,7 +166,9 @@ public abstract class WrappedItemModel implements PerspectiveModel {
 		Function<VertexConsumer,
 		VertexConsumer> consumerOverride
 	) {
-		BakedModel resolved = model.getOverrides().resolve(model, stack, this.world, this.entity, 0);
+		LivingEntity entity = this.entity == null ? null : this.entity.get();
+		ClientLevel world = this.world == null ? null : this.world.get();
+		BakedModel resolved = model.getOverrides().resolve(model, stack, world, entity, 0);
 		ItemRenderer itemRenderer = Minecraft.getInstance().getItemRenderer();
 		for (BakedModel bakedModel : resolved.getRenderPasses(stack, fabulous)) {
 			for (RenderType renderType : bakedModel.getRenderTypes(stack, fabulous)) {

@@ -3,6 +3,11 @@ package com.ayoshiko.productivebeesgenesis.network;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerProtocol;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerServer;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.network.chat.Component;
@@ -12,6 +17,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -79,12 +85,15 @@ public final class ModPayloads {
 	@SubscribeEvent
 	public static void register(RegisterPayloadHandlersEvent event) {
 		PayloadRegistrar registrar = event.registrar("1");
+		PayloadRegistrar filterRegistrar = event.registrar("2");
 		// 万象创世过滤配置同步包 — 由客户端配置界面发送
-		registrar.playToServer(
+		filterRegistrar.playToServer(
 				FilterConfigSyncPayload.TYPE,
 				FilterConfigSyncPayload.STREAM_CODEC,
 				ModPayloads::handleFilterConfigSync
 		);
+		filterRegistrar.playToClient(FilterConfigResultPayload.TYPE, FilterConfigResultPayload.CODEC,
+				(payload, context) -> FilterConfigResultPayload.receiver.accept(payload));
 		// 工厂版蜂箱排序切换包 — 由 GuiApiarySortingTab 发送
 		registrar.playToServer(
 				ApiaryToggleSortingPayload.TYPE,
@@ -282,6 +291,28 @@ public final class ModPayloads {
 		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
 			return;
 		}
+		if (!payload.save()) {
+			if (payload.page() >= 0) {
+				if (!PayloadRateLimiter.tryAccept(serverPlayer, "filter_config_catalog", 150)) {
+					filterReply(serverPlayer, payload, false, "designer.filter_rate");
+					return;
+				}
+				try {
+					JsonObject page = com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerFilterCatalog.page(
+							serverPlayer.server, payload.page(), payload.generation());
+					PacketDistributor.sendToPlayer(serverPlayer, new FilterConfigResultPayload(payload.request(), true, "designer.filter_catalog", page.toString()));
+				} catch (RuntimeException failure) {
+					filterReply(serverPlayer, payload, false, BeeDesignerServer.safeMessage(failure));
+				}
+				return;
+			}
+			if (!PayloadRateLimiter.tryAccept(serverPlayer, "filter_config_read", 500)) {
+				filterReply(serverPlayer, payload, false, "designer.filter_rate");
+				return;
+			}
+			filterReply(serverPlayer, payload, true, "designer.filter_loaded");
+			return;
+		}
 
 		// 0. 频率限制：每玩家 3 秒冷却，防止恶意客户端高频发包
 		// 采用 ConcurrentHashMap + AtomicLong + CAS 模式，采用与其它热路径缓存一致的并发安全思路
@@ -295,6 +326,7 @@ public final class ModPayloads {
 		AtomicLong lastAccept = FILTER_SYNC_LAST_ACCEPT.computeIfAbsent(playerId, k -> new AtomicLong(0));
 		long last = lastAccept.get();
 		if (now - last < FILTER_SYNC_COOLDOWN_MS) {
+			filterReply(serverPlayer, payload, false, "designer.filter_rate");
 			long remainingSeconds = (FILTER_SYNC_COOLDOWN_MS - (now - last) + 999) / 1000;
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.rate_limited", remainingSeconds));
@@ -302,12 +334,15 @@ public final class ModPayloads {
 		}
 		// CAS 推进时间戳，防止并发包穿透冷却窗口
 		if (!lastAccept.compareAndSet(last, now)) {
+			filterReply(serverPlayer, payload, false, "designer.filter_rate");
 			// CAS 失败说明已被其他线程更新，本包拒绝（保守策略，让客户端稍后重试）
 			return;
 		}
 
 		// 1. 权限校验
-		if (!serverPlayer.hasPermissions(REQUIRED_PERMISSION_LEVEL)) {
+		if (!serverPlayer.hasPermissions(REQUIRED_PERMISSION_LEVEL)
+				&& (serverPlayer.server.isDedicatedServer() || !serverPlayer.server.isSingleplayerOwner(serverPlayer.getGameProfile()))) {
+			filterReply(serverPlayer, payload, false, "designer.error.permission");
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.permission_denied"));
 			LogThrottle.warn("filter_sync_permission", "玩家 {} 尝试修改服务端过滤配置但权限不足",
@@ -317,6 +352,7 @@ public final class ModPayloads {
 
 		// 2. 配置加载状态校验（防御性，理论上 join 后已加载）
 		if (!ModConfig.areServerSpecsLoaded()) {
+			filterReply(serverPlayer, payload, false, "designer.filter_unavailable");
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.not_loaded"));
 			// 热路径日志：多玩家场景下可累积刷屏（10 玩家 × 3 次/秒 = 30 条/秒），使用 LogThrottle 全局节流
@@ -325,15 +361,21 @@ public final class ModPayloads {
 		}
 
 		// 2.5 防御性输入长度校验：StreamCodec 已限制字符串与列表上限，此处冗余校验防止协议层变更后绕过
+		if (!filterSnapshot().get("baseline").getAsString().equals(payload.baseline())) {
+			filterReply(serverPlayer, payload, false, "designer.filter_conflict");
+			return;
+		}
 		String filterModeName = payload.filterModeName();
 		if (filterModeName == null
 				|| filterModeName.length() > NetworkSecurityConstants.MAX_FILTER_MODE_NAME_LENGTH) {
+			filterReply(serverPlayer, payload, false, "designer.filter_invalid");
 			LogThrottle.warn("filter_sync_mode_too_long", "收到过长的过滤模式名称：长度 {}",
 					filterModeName == null ? "null" : filterModeName.length());
 			return;
 		}
 		List<String> rawBeeTypes = payload.beeTypes();
 		if (rawBeeTypes != null && rawBeeTypes.size() > NetworkSecurityConstants.MAX_BEE_TYPES_LIST_SIZE) {
+			filterReply(serverPlayer, payload, false, "designer.filter_invalid");
 			LogThrottle.warn("filter_sync_list_too_long", "收到过长的蜜蜂类型列表：大小 {}", rawBeeTypes.size());
 			return;
 		}
@@ -343,6 +385,7 @@ public final class ModPayloads {
 		try {
 			filterMode = ModConfig.FilterMode.valueOf(filterModeName);
 		} catch (IllegalArgumentException e) {
+			filterReply(serverPlayer, payload, false, "designer.filter_invalid");
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.invalid_mode", filterModeName));
 			LogThrottle.warn("filter_sync_invalid_mode", "收到无效的过滤模式: {}", filterModeName);
@@ -352,24 +395,74 @@ public final class ModPayloads {
 		// 4. 蜜蜂类型列表校验（格式 + 去重）
 		List<String> validated = validateAndDeduplicate(payload.beeTypes(), serverPlayer);
 		if (validated == null) {
+			filterReply(serverPlayer, payload, false, "designer.filter_invalid");
 			// 校验失败已通过 sendSystemMessage 通知玩家
 			return;
 		}
 
 		// 5. 写入配置并持久化
 		try {
-			ModConfig.SERVER.myriadCreationsFilteredBeeTypes.set(validated);
-			ModConfig.SERVER.myriadCreationsFilterMode.set(filterMode);
-			ModConfig.saveGameplayServerSpec();
-			// 6. 失效过滤缓存
-			MyriadCreationsEventHandler.invalidateFilterCache();
+			JsonObject expected = filterSnapshot(filterMode.name(), validated);
+			BeeDesignerProtocol.checkSize(expected.toString());
+			BeeDesignerServer.saveFilterConfig(serverPlayer.server, filterMode, validated, message -> {
+				if (serverPlayer.server.getPlayerList().getPlayer(serverPlayer.getUUID()) != serverPlayer) {
+					return;
+				}
+				boolean success = message.equals("designer.filter_saved");
+				if (success && !expected.equals(filterSnapshot())) {
+					filterReply(serverPlayer, payload, false, "designer.filter_conflict");
+				} else {
+					filterReply(serverPlayer, payload, success, message);
+				}
+			});
 		} catch (Exception e) {
+			filterReply(serverPlayer, payload, false, BeeDesignerServer.safeMessage(e));
 			// 异常路径日志使用 LogThrottle.error 节流；
 			// SLF4J 会将最后一个 Throwable 参数识别为堆栈打印对象，保留完整堆栈输出
 			LogThrottle.error("filter_sync_exception", "处理过滤配置同步包时发生异常", e);
 			serverPlayer.sendSystemMessage(Component.translatable(
 					"productivebeesgenesis.config.sync.error"));
 		}
+	}
+
+	private static JsonObject filterSnapshot() {
+		if (!ModConfig.areServerSpecsLoaded()) {
+			return new JsonObject();
+		}
+		return filterSnapshot(ModConfig.SERVER.myriadCreationsFilterMode.get().name(), ModConfig.SERVER.myriadCreationsFilteredBeeTypes.get());
+	}
+
+	private static JsonObject filterSnapshot(String mode, List<? extends String> values) {
+		var data = new JsonObject();
+		data.addProperty("mode", mode);
+		var types = new JsonArray();
+		values.forEach(types::add);
+		data.add("types", types);
+		data.addProperty("baseline", BeeDesignerDocument.fingerprint(data));
+		return data;
+	}
+
+	private static void filterReply(ServerPlayer player, FilterConfigSyncPayload request, boolean success, String message) {
+		String snapshot = "";
+		if (!ModConfig.areServerSpecsLoaded()) {
+			success = false;
+			message = "designer.filter_unavailable";
+		} else if (success || message.equals("designer.filter_conflict")) {
+			try {
+				var current = filterSnapshot();
+				if (current.getAsJsonArray("types").size() > 512) {
+					throw new IllegalArgumentException("designer.filter_limit");
+				}
+				snapshot = current.toString();
+				BeeDesignerProtocol.checkSize(snapshot);
+			} catch (IllegalArgumentException tooLarge) {
+				snapshot = "";
+				success = false;
+				message = "designer.filter_config_large";
+			}
+		}
+		PacketDistributor.sendToPlayer(player,
+				new FilterConfigResultPayload(request.request(), success, message, snapshot));
 	}
 
 	/**

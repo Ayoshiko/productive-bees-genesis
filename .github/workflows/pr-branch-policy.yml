@@ -1,0 +1,46 @@
+name: PR branch policy
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Existing PR number; leave empty to validate a branch
+        required: false
+        type: string
+      branch:
+        description: Registered branch to validate when no PR number is supplied
+        required: true
+        default: main-neo/1.21.1
+        type: choice
+        options:
+          - main-neo/1.21.1
+          - forge/1.20.1
+          - bees-processing-network/1.21.1
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+concurrency:
+  group: pr-branch-policy-${{ github.event.number || inputs.pull_request_number || inputs.branch }}
+  cancel-in-progress: false
+
+jobs:
+  policy:
+    if: github.repository == 'Ayoshiko/productive-bees-genesis'
+    name: Validate PR target and platform
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Only trusted default-branch code runs with check-writing permission.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Validate PR metadata without executing contributor code
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/pr_branch_policy.py

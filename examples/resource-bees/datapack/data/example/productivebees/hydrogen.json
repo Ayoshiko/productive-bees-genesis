@@ -1,0 +1,9 @@
+{
+  "primaryColor": "#BFEFFF",
+  "secondaryColor": "#FFFFFF",
+  "createComb": true,
+  "flowerItem": "minecraft:iron_ingot",
+  "breedingItem": "minecraft:iron_ingot",
+  "breedingItemCount": 1,
+  "selfbreed": true
+}

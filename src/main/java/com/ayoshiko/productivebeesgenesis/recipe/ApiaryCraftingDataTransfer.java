@@ -21,6 +21,7 @@ import mekanism.common.attachments.containers.item.ComponentBackedItemHandler;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.interfaces.IHasTileEntity;
 import mekanism.common.tier.FactoryTier;
+import mekanism.common.registries.MekanismDataComponents;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -71,6 +72,21 @@ final class ApiaryCraftingDataTransfer {
 	 */
 	static void transferAllBlockEntityData(List<ItemStack> inputs, ItemStack dest, Block outputBlock, boolean isApiary) {
 		String targetTileId = resolveBlockEntityTypeId(outputBlock);
+		// MEK 合成只合并库存等升级数据；侧面组件采用矩阵中首份设置。
+		for (var input : inputs) {
+			var config = input.get(MekanismDataComponents.SIDE_CONFIG);
+			if (config != null) {
+				dest.set(MekanismDataComponents.SIDE_CONFIG, config);
+				break;
+			}
+		}
+		for (var input : inputs) {
+			var ejector = input.get(MekanismDataComponents.EJECTOR);
+			if (ejector != null) {
+				dest.set(MekanismDataComponents.EJECTOR, ejector);
+				break;
+			}
+		}
 		if (inputs.size() == 1) {
 			// 单输入场景：直接深拷贝 BLOCK_ENTITY_DATA 到输出
 			transferBlockEntityDataDirect(inputs.get(0), dest, targetTileId);
@@ -255,6 +271,13 @@ final class ApiaryCraftingDataTransfer {
 		String pbUpgradeKey = isApiary ? ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS
 				: MekCentrifugePbUpgradeHandler.NBT_KEY_COUNTS;
 		mergePbUpgradeCounts(merged, nbts, pbUpgradeKey);
+        for (var nbt : nbts) {
+            if (nbt.contains(com.ayoshiko.productivebeesgenesis.resource.ResourceSidePersistence.KEY)) {
+                merged.put(com.ayoshiko.productivebeesgenesis.resource.ResourceSidePersistence.KEY,
+                        nbt.get(com.ayoshiko.productivebeesgenesis.resource.ResourceSidePersistence.KEY).copy());
+                break;
+            }
+        }
 
 		// 替换为目标方块的 BlockEntityType 注册键（不能 remove：CODEC_WITH_ID 校验顶层 id）
 		if (targetTileId != null) {

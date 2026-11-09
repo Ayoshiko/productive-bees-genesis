@@ -1,7 +1,7 @@
 # 资源蜜蜂：创世
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-下载-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.0.10-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.2.3-blue?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -11,9 +11,17 @@
 
 **语言**: [English](README.md) · [中文](README_zh.md)
 
+**1.2.3：编辑器搜索、草稿保存与万象 JEI 显示更新。** 于 2026-11-04 正式发布，支持批量应用草稿与 PB 原生蜜蜂配方编辑，修复未编辑也提示保存的问题，并继续优化生产热路径。客户端和服务端请一起更新。完整变更见 [CHANGELOG](CHANGELOG.md#123---2026-11-04)。
+
 **下载**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
 > 如遇到 bug 或兼容性问题，请通过 [GitHub Issues](https://github.com/Ayoshiko/productive-bees-genesis/issues) 反馈。
+
+**翻译与贡献：** 所有人都可以通过 [Fork](https://github.com/Ayoshiko/productive-bees-genesis/fork) 提交 PR。从对应平台的分支开始修改：**NeoForge 1.21.1／Java 21 使用 `main-neo/1.21.1`**，**Forge 1.20.1／Java 17 使用 `forge/1.20.1`**，网络开发使用 `bees-processing-network/1.21.1`。创建 PR 时保持目标分支一致。`Alpha` 是历史分支；不要把不同加载器或实验分支整树合入维护分支。共用修复须为各加载器分别适配。
+
+PR 需要通过目标平台校验和对应构建，获得当前版本的审查批准，并解决审查对话。CI、发布、构建输入和平台元数据的改动需要所有者审查。外部贡献的 Actions 可能需要维护者先批准运行。Fork PR 不要求仓库写权限；Forge 维护者更新分支也通过经审查的 PR。翻译文件位于 `src/main/resources/assets/productivebeesgenesis/lang/`（例如 `fr_fr.json`）。若流程被 GitHub 阻止，请在 issue 中提供完整报错与比较页面网址。
+
+也可以[创建空白 issue](https://github.com/Ayoshiko/productive-bees-genesis/issues/new)，附上翻译 JSON；若 GitHub 不接受 JSON 附件，请先打包成 ZIP。
 
 ---
 
@@ -107,13 +115,19 @@
 
 #### 升级支持
 
-离心机支持三类升级体系，可共存安装：
+离心机支持以下升级体系：
 - **Mekanism 原版升级**：速度（SPEED）、能量（ENERGY）、静音（MUFFLING）
 - **通用机械：扩展 升级**：堆叠（STACK，2^N 倍并行）、创造（CREATIVE，无限能量）— 仅当 MEKExtras 已安装
-- **通用机械：增强 升级**：强化速度、强化能量、IO 容量、自动插入器、快速物品插入、快速物品弹出 — 仅当 MekanismEmpowered 已安装
+- **通用机械：增强／增强·解放 升级**：强化速度、强化能量、IO 容量、自动插入器、快速物品插入、快速物品弹出 — 安装任意一种附属后，蜂箱与离心机均支持六种升级
 - **PB 升级系统**：详见 [PB 升级系统](#pb-升级系统) 章节
 
 蜂箱支持相同的升级体系，其中一点不同：**所有等级的蜂箱均可安装 MEKExtras 创造（CREATIVE）升级**（无限能量、每刻产出——STACK 升级仍排除）。
+
+强化速度在普通速度装满后生效；强化能量的储能加成在普通能量装满后生效。速度、耗电和储能沿已安装附属的公式计算，升级数量变化与卸载立即生效。蜂箱仍保留最短 1 tick 的生产周期。
+
+自动插入器需要开启对应的插入面，并把机器该面设置为输入。快速物品插入缩短自动拉取等待，IO 容量提高自动输入速率，也适用于蜂笼与基因小食。Genesis 已内置快速物品弹出和整罐流体输出，这两条输出不再额外叠加等待／速率倍率。IO 容量不会增加蜂槽或内部物品／流体库存容量。
+
+原版增强需同版 Core；增强·解放已合并 Core 与 Unleashed。两者择一安装，合并版不能与原版增强或独立 Mekanism Unleashed 同装。本次验证的 1.21.1 发行版要求 NeoForge 21.1.217+；原版增强要求 Kotlin for Forge 5.10.0+，合并版要求 5.12.0+。
 
 ### 通用机械蜂箱
 
@@ -140,12 +154,14 @@
 - **槽位体系**：蜜蜂槽 / 输出槽 / 蜂笼槽（双向转移）/ 能量槽 / 蜂蜜流体罐 / PB 升级槽。
 - **喂食器系统**：自研MEK风格独立窗口管理花朵物品。基础版使用固定 3×3 = 9 槽布局；工厂版按蜜蜂槽数量动态布局。
 - **PB 升级系统**：自研升级卡 — 生产力（α/β/γ/Ω）、时间（I/II）、基因采样、蜜脾块、副产物销毁，外加内置的模拟升级 — 详见 [PB 升级系统](#pb-升级系统) 章节。
+- **无普通产物蜂种采样**：成年神风特工队蜜蜂等没有蜜脾配方的蜂种也可在机械蜂箱完成基因采样，仍需有效采蜜材料、费用和输出空间；采样不凭空产生默认蜂蜜。
 - **AE2 集成**：物品和流体可推送至 ME 网络；机器能量可从 AppliedFlux 存储的 FE 或 AE2 原生能源补充，并支持优先级切换。
 - **直接弹出**：蜂箱相邻方块为离心机时，绕过通用机械弹出器节流，将蜜脾直接转移到离心机输入槽 — 详见[蜂箱直连离心机](#蜂箱直连离心机)。
 - **离心机优先**：按机器独立的开关，开启后蜜脾不进入 AE 网络、专供相邻离心机 — 蜜脾产出经快速通道直写离心机输入槽，不经蜂箱输出槽中转；缓冲区中的蜜脾永不被 FIFO 淘汰（溢出先回 AE 网络，FIFO 仅作最后兜底）。
 - **Jade 悬停面板**：显示蜜蜂数量、生产进度、AE2 网络状态。
 - **GUI 标签页**：排序 / 喂食器 / PB 升级 / 多流体罐 — 四个可自定义标签页，窗口位置持久化。
-- **性能**：GUI 能量条节流同步（每 5 游戏刻一次）、tick 加速下的批量能量扣除、蜜蜂槽序列化缓存，大型工厂的 CPU 与网络开销保持轻量。
+- **停工诊断**：蜂槽与 Jade 分别显示等待蜂蜜、已生成产物、原蜜蜂已付周期、扩展账户、缓冲满和结果待核验，空物品槽不再统一解释为“等待输出”。管理员可用 `/pbgoutput <X> <Y> <Z> status` 查看已付周期、冻结产物、蜂蜜、缓冲和每槽状态；未知交付继续保管，不自动补发。资源 ME 初始化失败只暂停对应资源输出。
+- **性能**：GUI 能量条节流同步（每 5 游戏刻一次）、tick 加速下的批量能量扣除、蜜蜂槽序列化缓存，减少重复工作。蜜蜂槽满时跳过剩余蜂蛋的实体构造和含蜂蜂笼的 NBT 复制；空蜂笼仍可取蜂，空槽出现后立即恢复装入。
 
 ### 蜂箱直连离心机
 
@@ -245,8 +261,10 @@ PB 升级系统与 Mekanism 原版升级（SPEED / ENERGY / MUFFLING）完全独
 - **AE2 原生能量提取开关**（`aeNativeEnergyInputEnabled`，仅安装 Applied Flux 时出现）：关闭后仅从 AppliedFlux 存储的 FE 提取能量，避免网络 FE 不足时过量抽取 AE 能量导致 ME 网络断电。
 - **输入拉取**（仅离心机）：可从连接的 ME 网络主动拉取模糊匹配蜜脾、精确蜜脾/蜜脾块条目或普通 Mekanism SMELTING 输入。
 - **拉取过滤**：支持关闭/黑名单/白名单、精确匹配、忽略 NBT、单项拉取量、单项或全局无限拉取，以及整机或单项网络库存保留线。大型精确白名单按游标轮转，后续条目不会饿死。
+- **拆装保留**：镐挖后重放与扳手、合成升级、工厂安装器一样保留 AE2 拉取过滤和开关。原所有者重新放置可安全认领同一托管资源账户；旧引用冲突或未知请求保持暂停，未开始的失效资源输入转入返料保管，恢复网络后返还。
 - **SMELTING 标签门**：普通熔炼候选可使用独立黑白名单表达式过滤，支持物品 id、标签、`&|^!()` 运算符和 `*` 通配符。
 - **事务安全**：拉取后无法落槽的剩余物进入有界且持久化的机器 pending 缓冲，不再掉落到世界；物品输出使用持久化“预留—提交—确认”账本，只有源槽安全扣减后才最终确认网络插入。
+- **慢网络恢复**：等待共享网络预算的机器保留排队顺序，跨拉取冷却仍可轮到；输入回送共用输入预算，避免普通产物占满其恢复机会。仅等待预算不增加失败退避，断线时已知余量仍可落入有效本地槽。拉取量、配置周期和实际拒收的退避保持原策略；离心机库存列举复用物品键，并校验完整组件变化。
 - **Jade 悬停面板**：显示 AE2 网络连接状态（离线 / 加载中 / 缺少频道 / 在线）。
 - 节点生命周期与产物输出开关解耦 — 关闭产物推送不会让设备离线，ME 能量输入通道不受影响。
 
@@ -257,6 +275,95 @@ PB 升级系统与 Mekanism 原版升级（SPEED / ENERGY / MUFFLING）完全独
 - 已添加/未添加蜜蜂的视觉区分。
 - 数字索引、特殊蜜蜂的动态产物信息。
 - 排序模式和折叠状态持久化。
+
+### 资源蜜蜂编辑器
+
+在创造模式取得“蜂蜂应援手册”并右键打开资源蜜蜂编辑器，可新建蜂种或读取已有蜂种，编辑外观、属性、采蜜材料、获得方式与多种产物。手册只允许创造模式使用；独立服务端应用到世界要求 OP 等级至少 2，创造模式普通玩家可本地编辑、保存和导出。背包和快捷栏常驻；拖入材料只复制完整组件，不消耗物品。
+
+目录同时收录 PB 的 JSON 蜂种和原生实体蜜蜂；蓝色条纹蜜蜂、苦力怕蜜蜂等可按中文本名、单字或拼音搜索。原生蜂种打开后进入获取配方页，可编辑获取、普通产物和世界转化的数据配方；外观、属性、繁殖限制及特殊行为保持原模组实现。
+
+在“草稿库”多选已编辑好的草稿，点击“批量导入到世界”，核对名单后选择“检查并应用全部”。所选草稿保持原 ID，服务器先检查整批依赖、配方和基准，全部通过后只重载一次世界。冲突、未完成输入或检查失败时保留全部草稿；成功后一起更新草稿基准。独立服务端仍需 OP2，结果未明时先查询应用结果。
+
+拖动标题栏移动编辑器，拖动边缘或四角缩放，使用图钉固定窗口。靠近边缘会显示相应缩放光标；窗口移动只受屏幕与底部背包约束，JEI 根据实际占用区自行避让。3×／4× 自动调整设计器内部密度，底部按钮随窗口尺寸扩大。背包使用同风格明暗材质；导航按文字宽度保留直接栏目，常用工具优先显示，剩余操作进入“更多”。Ctrl+0 恢复布局，F2 切换主题，Ctrl+F 聚焦搜索，Ctrl+S 保存当前草稿。Ctrl+Z／Y 和“编辑历史”恢复会话快照，并显示字段的具体变化；本机草稿有独立草稿库。“修订历史”记录成功应用到当前世界的发布，存草稿和本地导出不会产生发布修订。
+
+获得方式与产物目录先显示配方摘要，点击条目或“编辑”进入完整表单。物品框按名称收紧，产物数量与概率可直接点击输入；固定数量同步上下限，范围数量分别编辑，概率填写百分数。流体显示图标、本地化名称和数量，流体用量与处理时间也可直接修改。机器材料行按实际空间同行或换行，获取方式按钮按标题宽度自动排列。相邻的短摘要字段会利用剩余宽度：结果蜂与概率、流体与数量／时间优先同行，宽度不足再换行；缩放保留正在编辑的字段焦点。蜂种、材料、AE 资源、机器、群系、草稿及文件支持中文全拼和首字母搜索，兼容声调及 lv／lü／lu；保留名称、ID、@模组、#标签与多词匹配，页码输入后按 Enter 跳转。名称可继续添加其他本地化语言。JSON 编辑器提供语法颜色、行号、格式化和文本撤销；Ctrl+F 查找、Ctrl+H 替换、F3／Shift+F3 跳转匹配、Ctrl+G 跳转行，支持区分大小写、全部替换、Tab／Shift+Tab 缩进、Ctrl+D 复制行或选区、Ctrl+Shift+K 删除行、Ctrl+Shift+F 格式化。行列／选区状态、匹配高亮、括号匹配、可关闭的自动括号与缩进、停止输入后的语法检查帮助定位问题；只读页面可查找和复制，无法替换。“检查与导出”先列检查结果，再提供当前世界应用、本机数据包、便携收藏和 KubeJS 导出；生成文件与次要操作可展开。AE 资源选择集中在一行，完整身份和组件收在高级分组；目录仍读取已安装桥、JEI 真实键和包裹模板。
+
+在“获取”页的“机器配方”中选择服务器已发现的 MI、MBD2 或 MMR 配方类型／机器，再编辑输入、蜂蛋输出、数量、概率和宿主费用。MI 使用 EU 与处理时间，MBD2 保留独立能力及每 tick 设置，MMR 将材料用量与画布坐标分开。输入、输出和费用集中分组；来源详情、MBD2 内容选项及 MMR 画布／位置按需展开。缺少宿主、机器定义或版本不匹配时拒绝应用，草稿仍可保留。此入口编辑现有机器的配方，机器定义需由整合包提供。
+
+“导入机器配方”支持拖入 JS 或原生配方 JSON，保管原文并仅解析已支持的数据调用；动态表达式和未知调用会显示具体原因。导入前重新核对来源摘要，外部修改会提示冲突。“导出机器脚本”在本机生成独立 KubeJS 脚本和工程副本，原脚本保持原样；将导出的脚本放入目标实例的 `kubejs/server_scripts` 后再重载。
+
+“组合生产流程”一次配置配套产物，明确区分蜂箱直接产出与专属蜜脾离心；“独立配方”按原 ID 分别生效，每条说明实际宿主与输入。预览支持左右／上下拖动，并提供水平旋转、俯仰和灵敏度滑块；体型修改会刷新实体尺寸。已配置的语言列在名称编辑页上方，基因选项优先使用 PB 的现有翻译。重要状态和错误显示在面板内的固定底栏。
+
+机器目录与编辑页优先显示宿主提供的游戏内名称，同时保留模组、版本和 ID。“更换机器并保留配置”在同宿主内保留原参数；跨宿主迁移保留可表达的物品、流体、数量、概率与处理时间。遇到未知字段、单位或每 tick 行为不兼容时拒绝转换并保留原配方，不会静默删除配置。
+
+“导出 KubeJS 作者包”生成 ZIP，内含 `kubejs/data` 蜂种及工程索引、`kubejs/assets` 名称翻译、`kubejs/server_scripts/bee_designer` 配方脚本。解压到目标整合包根目录后重启游戏，后续配方修改可重载；目标实例仍需安装相应模组和机器定义。同一蜂种选择数据包导出或 KubeJS 作者包之一，避免重复安装。作者包可重新导入设计器。
+
+标题栏设置按钮或 Ctrl+, 打开个性化设置：现代深色、现代浅色、AE 风格浅色和两份自定义深浅主题，密度、内部缩放、背景遮罩、动画、减少动态效果、旋转灵敏度、提示延迟及自动草稿。内部缩放可在 85%～115% 调整文字与控件，释放滑块后重排，窗口范围和背包大小保持稳定，并可一键恢复 100%。初始基因可选下拉菜单或全部按钮；全部按钮按宽度换行，保留随机及未知旧值，点击当前选项不改写草稿。主题可以逐色编辑、通过 JSON 导入／导出，错误输入保留原配色；设置保存在实例的 `bee-designer/preferences.json`。损坏设置保留原文件，未改动时关闭设置不会用默认值覆盖。快捷键与独立服务端安装说明在同一设置页。
+
+新偏好默认使用现代浅色，已有主题设置保留。页面切换仅让内容轻微滑动，窗口／标题／背包保持稳定；开关滑块提供局部动效。右上角关闭、设置、固定和明暗图标采用统一尺寸，标题栏 X 会处理暂存编辑并在保存成功后退出。表单和材料网格连续滚动，JSON 与材料滑块可直接拖动，只读 JSON 也可格式化。仅选择蜂巢生成材料时优先列出 PB 蜂巢／蜂箱；群系删除可 Ctrl+Z 撤回，物品显示完整单一提示。MI 的 EU=0 配方可迁移到 MMR，保留可表达的材料、数量、概率与时间。
+
+蜜蜂编辑器及所有子页面使用独立平滑文字渲染，内置由 Noto Sans、Noto Sans SC 和 JetBrains Mono 裁剪并改名的精简字体，覆盖当前翻译、GB2312 一级的 3,755 个常用汉字，以及常见西文字母与符号；JSON 使用等宽子集并回退中文字体。其余字符先尝试系统 SansSerif／Monospaced 矢量字体，再回退 Minecraft 原生字形。字体文件在 JAR 中压缩后约 1.05 MB；保留横排整形与重音定位，去除未使用的竖排和装饰替代特性。设置可选择自动清晰、距离场或游戏当前字体；自动模式按实际屏幕尺寸生成字形，连续缩放使用距离场，文字宽度、换行、光标与选区共用布局。光标、选区、长度上限、粘贴和删除保留完整字素及代理对；JSON 达到长度上限后仍可使用选区释放的空间替换文字。字体模式切换与资源重载更新目录宽度缓存，并释放旧字形缓存。不要求安装 ModernUI 或 LDLib2，不在运行时下载字体，完整字体许可随模组保留。罕见字与 emoji 的覆盖取决于系统和游戏提供的字形。
+
+现代主题将窗口、卡片和控件的圆角与阴影分层，同组字段连续显示在卡片中，标题与正文形成字号层级。草稿与选中卡片保持完整圆角，分隔线内缩且不贴卡片底边，产物拖动手柄平时仅显示点阵。背包数量使用紧凑等宽文字和轻阴影，移除黑色底块；机器输入／输出的数量标签限制在图标范围内并优先对齐屏幕像素，其他界面的原版数量保持原入口。JSON 文字、光标、命中和选区共享整行布局，连续选区合并后一次绘制，避免逐字背景重叠形成竖条。可选择实体或轻透玻璃面板，文字区域保持稳定底色；原 AE 像素主题继续可选。状态徽章保留未应用提示，普通保存成功使用短提示；错误、发布结果未知和恢复信息持续可见。材料拖入区区分添加与替换，危险操作、选中槽和输入焦点采用对应颜色。
+
+外观页将颜色／粒子与体型／渲染分组，常用内容默认展开且可折叠；体型、采蜜后体型、速度、攻击与繁殖用量使用紧凑数字行，范围说明放在提示中。PB 的普通／上下翻转姿态可直接选择，半透明与发光层保留在常用外观；未知旧姿态值保留，点击当前选项不改写草稿。副色和第三色缺省跟随主色，粒子色缺省与 PB 一致为黑色。万象页面使用相同姿态控件。可选择 PB 已有模型及配套贴图，预览旋转方向跟随鼠标；特殊模型需要 GeckoLib，外形不会赋予独居或农夫 AI。“发布 → 图形总览”可以直接修改外观、属性开关、获得配方、机器材料和生产数量／概率；各分区和机器条目的“编辑”返回完整表单。组合离心生产的时间同步到普通物品与扩展配方，重新进入生产编辑页不会丢失。检查问题会滚动到实际字段并高亮，切换页面清除原位置标记。应用及重进后蜂蛋／实体读取世界名称，修改模型后已存在的世界蜜蜂也会刷新。
+
+当前蜂种默认每 60 秒自动保存本机草稿，设置可调整为 15 秒～10 分钟或关闭。仅读取已有蜂种、浏览或切换页面不会生成草稿；实际编辑、新建工程和手动保存仍会保存。持续编辑也会按间隔保存；未确认的生产节点和 JSON 原文可恢复，确认或明确放弃后才清除，不会自动应用到世界。蜂种目录前置并高亮未应用草稿，点击继续编辑；草稿库显示本地化名称、蜂蛋、编辑日期，支持最近／最早／名称／ID 排序和搜索。应用成功清除标记，再编辑会重新标记。
+
+**便携蜂种收藏：**在目录开启“多选蜜蜂”，使用独立多选工具区的“全选”“清空选择”，或通过“快速选择”选择整合包注册、编辑器新增／修改及未应用草稿；范围覆盖全部目录页，每次最多 4096 只。便携 ZIP 保管完整蜂种工程、配方、名称、来源与署名，供其他整合包导入。填写来源整合包名称，可补充版本、作者、HTTPS 发布链接和许可说明；本机 CurseForge／Modrinth 清单只补已声明信息。导入可预览整批身份映射，选择复制冲突、保留身份、跳过冲突或全部复制。整批迁移会一起更新本批繁殖链、转化、`bee_exists`、蜂蛋／蜜脾组件及机器配方中的蜂种身份，共享配方使用同一新 ID；批次以外的引用保留。先保管全部本机草稿，再一次校验并应用到世界；不同旧草稿先归档，保管或校验失败时保留草稿并停止应用，结果未知时可查询。新身份不继承来源包的停用配方清单。收藏不包含其他模组的贴图、模型、机器定义或脚本，目标包仍需提供相应依赖；缺失物品、流体或宿主时明确拒收。数据包／KubeJS 也支持多蜂导出，配方或名称键冲突时拒绝。单蜂复制只更新自身引用，整批迁移更新本批所有映射引用。未修改的旧 PB 产物配方保留原有概率／数量，修改后重新检查；目标包安装 Almost Unified `1.21.1-1.4.2` 时，编辑器生成的配方保持所迁移的材料和组件，避免再次统一或删除重复配方，应用后仍核对实际完整内容。
+
+目录的工程行集中“新建蜂种”“导入工程”“草稿库”“跨整合包”，右侧“管理”提供修订历史与回收站。搜索旁放独立圆形刷新按钮，右侧切换“多选／完成多选”。多选行左侧为“全选”“快速选择”“清空选择”，右侧以“导出（数量）”作为主要操作；快速选择在原位展开来源菜单。现代主题减轻次要按钮底色与边框，圆角选择框配清晰勾形，多选时工程入口仍可访问。“跨整合包”用于浏览其他整合包：填写整合包父目录，例如 `E:/mczuixin/.minecraft/versions`，选择来源后搜索、预览 JSON、按来源全选或导入／导出整批工程。离线浏览读取模组资源、KubeJS 数据和数据包，不执行脚本；注册快照标出实际读取时间，只将来源运行中确认的蜂种标为已注册。来源包成功完成全部注册蜂种导出后更新本机快照。
+
+**小窗口与个性化：**导航按实际本地化标题宽度自适应，能完整显示的栏目直接切换，其余放进“更多”；也可在设置中选择优先菜单。目录的工程操作按实际文字宽度换行，搜索独立，多选增加全选、快速选择、清空选择和导出；空间不足时工具行进入现有滚动区，蜜蜂列表保持可达。弹出菜单限制在编辑器内，并向 JEI 报告占用区域。字段只在标签和控件都足够宽时双列，短标签减少留白，基因可选下拉或全部按钮，普通枚举用下拉，布尔属性用开关，流程模式保留分段切换，过窄时上下排列。可选择单列／优先双列、折叠次要分组、隐藏目录提示；自定义颜色编辑也可收起。问题定位自动展开目标，用轻淡背景和控件自身柔和边框提示；导入、复制和取消始终在底部。AE 风格像素材质独立于主题配色，含 AE 深色与自定义颜色；明暗切换保留系列，自定义主题显示文字对比度估算。可选择轻柔按压或涟漪、方向滑动或局部展开，并支持减少动态效果或关闭。首次使用提供 11 步交互教学，先介绍工程入口与跨包迁移，再指向实际字段，补充 JEI 拖入；目录仅在首次使用时显示可收起的“快速入门”提示；完成、跳过或关闭提示后，后续访问不再常驻，可从“设置 → 快捷键”重新查看教学。JEI 步骤圈选实际材料接收槽；教学卡按完整说明计算高度，空间不足或会挡住操作目标时使用紧凑教学条，悬停标题查看完整说明。JEI 拖入时暂时收起教学卡，拖曳预览位于前层，完成或取消后恢复。
+
+蜂种目录与草稿库都可复制蜂种，自动避让已注册蜂种、本机草稿、PB 名称键和受管配方 ID；副本保留原属性、完整组件和未知字段，生成独立草稿，应用前不改变世界。目录卡片标出实际来源：PB 原版、Genesis 原版、整合包注册、其他模组或编辑器新增；已编辑覆盖和未应用草稿单独标记。
+
+已有可配置蜂种可经三步确认删除，最后需输入完整 ID。确认后先保存待删除草稿，点击“应用到世界”才停用新周期和受管获取配方；删除前的本机草稿保管到回收站。世界实体、蜂箱内蜜蜂、背包、箱子及 AE2 中的蜂蛋、蜂笼、蜜脾和产物保留原身份、数量与组件，不扫描清理玩家库存。已有蜜脾仍可离心，已付周期与待输出资产仍由原机器保管、结清。世界删除记录随存档保留，回收站可恢复同一蜂种，再次应用后重新启用；本机归档草稿也可恢复，同 ID 的新草稿不会被覆盖，冲突时可复制恢复为新蜂种。保留提供原物品的模组和兼容身份数据包，避免旧物品失去定义。
+
+攻击伤害的 PB 定义与万象配置允许声明 0～2147483647，万象新配置默认声明改为 BeeBee 的 `2.147483647E9`；已有配置保持原值，非法输入会提示中文字段和合法范围。PB 13.14 将 JSON 攻击值先读成 float，BeeBee 内部值会舍入；Minecraft 1.21.1 的攻击属性上限为 2048，极限模式的 PB 额外伤害另有 1000 限制。本次正式非极限模式攻击验收中万象与 BeeBee 实际伤害均为 2048，不把声明值等同于每次伤害。保存失败后可修正并重新保存，关闭确认不会锁住编辑器。
+
+工程和机器源码导入页都提供“浏览文件”：选择本机磁盘、进入／返回文件夹、搜索 JSON／ZIP（机器来源另含 JS），选中文件后回填路径，再按原导入流程校验。目录读取有界且在独立后台队列运行，可取消，失败保留编辑；此功能不写服务器路径。特殊行为可编辑筑巢标签、方块／实体标签花源、授粉后处理、粒子与现有特性。实体花源按实体类型标签校验；农夫／独居蜂独立实体的硬编码 AI 尚无上游数据编辑入口。
+
+页面动效可选连续跟随或柔和缓动，设置幅度 0～24 像素和时长 80～400 毫秒；窗口、标题和背包保持不透明，按钮提供按压／涟漪、页签移动背景和开关滑块反馈。预览和草稿监测只在声明变更时重建快照，材料目录分批索引并缓存最多 8 个查询；这些优化的收益以具体测试场景为准。
+
+目录卡片的“⋯”菜单提供复制、删除和单蜂导出，万象创世卡片进入专属配置页。目录支持 Shift 首尾连选、Ctrl 点击增减、鼠标框选、Ctrl+A 选择可见蜂种和 Esc 取消；范围跨页时先读取所需目录页，每次最多 4096 只，选择不会打开工程或生成草稿。收藏页首次打开自动读取当前实例可用的 CurseForge／Modrinth 清单，只补空白字段，不覆盖手填内容；链接、许可和补充说明默认收起。
+
+文件浏览器固定显示路径、搜索、磁盘与当前实例入口，文件采用统一整行列表。单击选择、双击或底部按钮打开；Ctrl+L 编辑路径、Enter 前往、Alt+↑ 返回上级。AE2 主题采用终端灰紫面板、像素明暗边、凹槽和工具按钮；安装 AE2 时引用其资源包中的原生按钮／图标，未安装时保留自绘边框。现代主题采用圆角与短促选中反馈，设置提供轻柔／跟手／静止预设以及独立菜单、选中动效开关；页内花源切换只移动指示，不带动整页。
+
+PB 数据字段新增第三颜色、循环配色、采蜜后体型、发光层、攻击附加效果和伤害免疫列表。繁殖食物支持单物品、#物品标签与 PB 默认；方块标签花源可反向匹配。普通蜂种使用 PB 真实颜色／发光字段，未知原字段仍保留。PB 物品／方块转化已接入“产物 → 独立配方”，可编辑输入、结果、概率、授粉及真实方块状态属性。已有多蜂共享转化只读；复制蜂种生成独立归属，停用其中一蜂保留其它蜂种。PB 13.14.0 的 `bee_nbt_changer.matches` 固定为 false，暂不展示为可工作的 NBT 修改模板。PB 灌装机的蜂蛋配方已支持物品、流体输入及完整蜂种结果；孵化配方暂因该版本序列化器复用材料字段、无法独立往返而未开放编辑。特殊全局配方与独立 FarmerBee／SolitaryBee AI 保持原支持边界；`passiveEffects` 在此版本读取器中没有实现。
+
+逐步教学会自动进入目录、外观、属性、获得、产物、检查、导出和生成文件对应页面，用贴近控件的细圆角光圈、步骤标记和短曲线箭头说明操作。可实际编辑，子页面通过自身“完成”或返回保留修改；Alt+左右切步，Esc 退出，不自动创建工程或应用世界。教学尊重减少动态效果设置。生成文件点开后可用上一个／下一个和文件列表快速切换。
+
+万象创世专属配置页提供伤害免疫、攻击反馈、第三颜色、采蜜后体型、发光图层、渲染变换和方块／标签／流体花源。免疫列表可清空，第三颜色留空沿用主颜色，采蜜体型为 0 时沿用基础体型。“获得方式”打开额外配方工程，可配置繁殖、转化、蜂巢生成、钓鱼、灌装、合成和已支持的机器配方。额外配方可检查、应用和导出，重载不会被原万象处理器覆盖；便携导入保留目标整合包的万象属性，完整万象配置仍由其专属页面管理。
+
+**万象蜜脾转化过滤：**页面分为“过滤列表”“添加蜂种”“效果预览”。先选择不过滤、排除列表或仅允许列表，再从真实服务器候选目录添加蜂种；草稿会显示允许的蜜脾与蜜脾块种类数，并说明无产物、缺失、停用或依赖不可用的条目。规则按蜂种 ID 同时作用于蜜脾和蜜脾块；列表顺序只便于整理，不改变随机权重。支持拼音和 @模组搜索、Shift 连选、拖动、选择计数、批量移除、复制／粘贴、按 ID 排序和 Ctrl+Z 撤销。缺失条目默认保留，也可明确清理。宽窗口双列，窄窗口合并常用工具；保存后才改变服务器配置。外部修改发生冲突时可“合并我的改动”后检查并保存，或载入服务器版本；保存失败和未收到回执时保留草稿供核对。
+
+同一轮资源加载中读取其他蜂种时复用反向配方索引，物品／方块拼音与标签只在搜索需要时生成；重载及停服会失效或释放相关快照。完整重载期间暂停新资源生产和读取，失败保持暂停，后续成功重载再恢复；界面会显示当前状态，避免把旧目录误当作新结果。
+
+精华升级自动合成现已支持 PB 的凋零骷髅头碎片 `productivebees:wither_skull_chip`：9 个碎片合成 1 个 `minecraft:wither_skeleton_skull`。保留完整组件匹配和余量，空间不足时原物品留在原位置；只有精确 9∶1 的原配方进入该例外，其他方块产物和混合配方不会因此全部开放。
+
+机械蜂箱取出／更换蜜蜂后，原蜜蜂已付费完成的周期继续保管，避免旧周期永久占住新蜂槽。固定配方自动结清；木材、石料、染料或琥珀等依赖花源的旧周期保留在最多 128 组的独立暂存中，补回原蜜蜂花源即可结清。`/pbgoutput <x> <y> <z> status` 会显示原蜂种和待结清数量。暂存满、输出满或结果未知时保留资产并明确暂停；普通蜜蜂没有扩展账户时不会把未绑定误报成资源存储故障。
+
+产物标题提供“删除产物”和上移／下移按钮。右键产出物品，或选中后按 Delete，可删除整组产物；拖动物品或标题手柄到同一列表的其他产物上可调整顺序，数量、概率和完整组件一起移动。松开到有效目标之外或按 Esc 可取消拖动。生产编辑、原有配方和图形总览共用这些操作，已提交的修改可通过会话编辑历史撤销。
+
+回收站支持确认永久删除本机归档草稿，无法读取的归档也可删除；丢弃待删除或待清除变更会删除对应本机草稿并结束当前编辑，不应用到世界。世界已停用蜂种的“清除回收记录”需三步确认并再次应用，仅移除恢复入口，继续保留库存物品与旧蜜脾所需的蜂种身份和处理配方；蜂种保持停用，玩家库存不清空。
+
+进入 **设置 → 文件位置**，也可从草稿库、回收站和发布页面打开。每个目录显示完整路径，提供“复制路径”和“打开文件夹”。下表以**当前游戏实例目录**为根；启动器可能为不同整合包使用独立目录，具体位置以编辑器显示为准。
+
+| 文件类型 | 当前游戏实例中的位置 |
+|---|---|
+| 蜂种草稿 | `bee-designer/drafts/<命名空间>/<蜂种>.json` |
+| 本机回收站 | `bee-designer/drafts-archive/<UUID>.json` |
+| 本地数据包和名称资源包导出 | `bee-designer/productivebeesgenesis/bee_designer/exports/` |
+| KubeJS 作者包 | `bee-designer/kubejs-exports/` |
+| 便携蜂种收藏包 | `bee-designer/collections/` |
+| 跨包浏览的实际注册快照 | `bee-designer/registered-projects.json` |
+| 机器脚本和工程副本 | `bee-designer/machine-exports/` |
+| 机器导入原文保管 | `bee-designer/machine-sources/` |
+| 自定义主题导出 | `bee-designer/themes/` |
+| 编辑器个性化设置 | `bee-designer/preferences.json` |
+
+最近一次导出另有快捷打开入口。单人游戏还可打开当前世界的导出、数据包和修订目录；世界“导出”保存在 `<存档>/productivebeesgenesis/bee_designer/exports/`，“应用”安装到 `<存档>/datapacks/`。独立服务器的这些文件位于服务器电脑，要在自己电脑上直接取得打包文件，请使用**本地导出**或 **KubeJS 导出**，也可请管理员取回世界导出文件。
 
 ### KubeJS 集成
 
@@ -272,6 +379,222 @@ PB 升级系统与 Mekanism 原版升级（SPEED / ENERGY / MUFFLING）完全独
   - `addBeeProduce(...)` — 注册高级蜂箱产出配方。
   - `addMekData(...)` — 注册 Mekanism `mek_data` 有序合成配方。
 - 通过 KubeJS 注册的配方会在 `beforeRecipeLoading` 阶段注入到原版 `RecipeManager` 的 JSON 映射中，与数据包配方共存；同时被游戏内配方缓存和 JEI 配方查看器识别。
+
+#### 扩展资源蜜蜂
+
+你可以自己添加蜜蜂，让它产出物品、蜜脾，或 FE、化学品、魔源等资源。外观、采蜜材料、繁殖食物和获得方式继续使用 PB 的 JSON；Genesis 增加资源产物配方和容器花源。
+
+**扩展蜂同样支持 PB 的繁殖、物品转化、巢穴生成和钓鱼。** 在这些配方中填写扩展蜂的蜂种 ID 即可。扩展资源产出请使用 **Genesis 机械蜂箱、机械离心机及其工厂**；PB 自带的蜂箱和离心机用于普通 PB 产物。
+
+##### 下载与安装
+
+适用版本：Minecraft **1.21.1**、NeoForge、Productive Bees **13.14**、Genesis **1.1.0**。示例是可选内容，**不会打进模组 JAR，也不会随模组自动注册**。
+
+| 下载 | 用途 |
+|---|---|
+| [全部示例合集](https://github.com/Ayoshiko/productive-bees-genesis/releases/download/resource-bee-examples-1.1.0/resource-bees-all.zip) | 推荐。包含可编辑文件、安装包、KubeJS 完整脚本、注释参考和每只蜂的文件索引 |
+| [可运行数据包](https://github.com/Ayoshiko/productive-bees-genesis/releases/download/resource-bee-examples-1.1.0/resource-bees-datapack.zip) | 放进存档的 `datapacks`，不必解压 |
+| [中英文名称资源包](https://github.com/Ayoshiko/productive-bees-genesis/releases/download/resource-bee-examples-1.1.0/resource-bees-resourcepack.zip) | 放进游戏的 `resourcepacks`，在“选项 → 资源包”启用 |
+| [带注释参考包](https://github.com/Ayoshiko/productive-bees-genesis/releases/download/resource-bee-examples-1.1.0/resource-bees-reference.zip) | 逐字段说明，只用于阅读 |
+
+**注释版 `.jsonc` 含有 `//` 注释，不能作为游戏 JSON 直接加载。只改后缀也不行。** 建议对照注释版，修改数据包中的无注释 `.json`。合集的 `INSTALL.txt` 提供安装步骤，`EXAMPLES.json` 列出每只蜂的定义、花源、获取材料和相关配方。
+
+多人游戏由服务器安装数据包，每位玩家启用名称资源包。增加蜂种后重新进入世界；修改已有配方用 `/reload`，修改名称用 `F3+T`。缺少可选模组时，对应蜂种和配方不会加载。
+
+##### 先试一只铜能量蜂
+
+这一例沿用整合包中实际使用的“空蜂笼 + 蜂蜜点心 + 铜锭”获取方式：
+
+1. 在工作台合成铜能量蜂蛋。**请使用空蜂笼**，配方不会保护装在蜂笼里的蜜蜂。
+2. 将蜜蜂放进 Genesis 机械蜂箱，在采蜜槽放铜锭，并给蜂箱供电。
+3. 它会直接产出 FE，无需离心。铜锭作为采蜜材料可重复使用。
+4. 打开 Mekanism 侧面配置，在 **ENERGY** 页把需要的面设为输出，再接能量线缆。产出的 FE 与机器工作电量分开。
+5. 在 JEI 中查看蜂蛋、蜜蜂和蜜脾的配方与用途，确认获得方式、采蜜材料和产物。
+
+32 只示例蜂均有便捷蜂蛋合成。28 只扩展蜂还各有繁殖与转化配方；玩家可以按整合包进度调整材料、产量，并选择保留哪些获取方式。
+
+##### 新建自己的蜂：只改这些文件
+
+以 `example:copper_energy` 为例，`example` 是命名空间，`copper_energy` 是蜂种名。若改成 `mypack:amber_energy`，要同时修改文件路径、配方里的蜂种 ID 和名称键。
+
+**1. 蜂种定义** — [copper_energy.json](examples/resource-bees/datapack/data/example/productivebees/copper_energy.json)，位于 `data/example/productivebees/`：
+
+~~~json
+{
+  "primaryColor": "#C97852",
+  "secondaryColor": "#82452F",
+  "flowerItem": "minecraft:copper_ingot",
+  "breedingItem": "minecraft:copper_ingot",
+  "breedingItemCount": 1,
+  "selfbreed": true,
+  "createComb": false
+}
+~~~
+
+这里改颜色、采蜜材料和繁殖食物。`flowerItem` 决定采蜜槽放什么；`breedingItem` 决定繁殖时喂什么，两者可以不同。`selfbreed: true` 允许同种繁殖，跨蜂种配对还需要下面的繁殖配方。
+
+**2. 资源产物** — [copper_energy_production.json](examples/resource-bees/datapack/data/example/recipe/copper_energy_production.json)，位于 `data/example/recipe/`，注意 `recipe` 是单数：
+
+~~~json
+{
+  "type": "productivebeesgenesis:resource_production",
+  "bee": "example:copper_energy",
+  "outputs": [
+    { "kind": "energy", "energy_type": "FE", "amount": "1000", "chance": 1 }
+  ]
+}
+~~~
+
+改 `bee`、资源种类和数量即可。`amount` 必须是带引号的正整数；`chance` 是 0～1 的数字，`1` 必定产出，`0.25` 表示 25%。数量是基础值，蜜蜂基因和升级会继续生效。
+
+**3. 获取方式** — 根据玩法保留需要的配方：
+
+| 方式 | 示例文件 | 主要修改项 |
+|---|---|---|
+| 蜂蛋合成 | [acquisition/copper_energy.json](examples/resource-bees/datapack/data/example/recipe/acquisition/copper_energy.json) | `ingredients` 材料、蜂蛋组件中的 `type` |
+| 两种蜂繁殖 | [bee_breeding/copper_energy.json](examples/resource-bees/datapack/data/example/recipe/bee_breeding/copper_energy.json) | `parent1`、`parent2`、`offspring` |
+| 物品转化 | [bee_conversion/copper_energy.json](examples/resource-bees/datapack/data/example/recipe/bee_conversion/copper_energy.json) | `source`、`result`、`item`、`chance` |
+| 巢穴生成 | [bee_spawning/copper_energy.json](examples/resource-bees/datapack/data/example/recipe/bee_spawning/copper_energy.json) | 巢穴 `ingredient`、蜂种 `results`、群系 `biomes` |
+| 钓鱼 | [bee_fishing/container_water.json](examples/resource-bees/datapack/data/example/recipe/bee_fishing/container_water.json) | `bee`、`biomes`、`chance` |
+
+例如，让 PB 铜蜂与红石蜂繁殖出你的扩展蜂：
+
+~~~json
+{
+  "type": "productivebees:bee_breeding",
+  "parent1": "productivebees:copper",
+  "parent2": "productivebees:redstone",
+  "offspring": "example:copper_energy"
+}
+~~~
+
+繁殖时分别给亲本喂它们自己的繁殖食物。转化则给源蜜蜂使用指定物品；转化概率与产物概率分别由各自配方的 `chance` 决定。巢穴和钓鱼也沿用 PB 的玩法。
+
+下载包保留了 `neoforge:conditions`：改名时一起修改里面的蜂种 ID；更换可选模组时一起修改 `modid`。引用示例亲本时，也要安装这些亲本的定义和获取配方，或换成整合包已经存在的蜂。
+
+**4. 名称** — 修改资源包中的 `assets/productivebees/lang/zh_cn.json` 和 `en_us.json`：
+
+~~~json
+{
+  "entity.productivebees.copper_energy_bee": "铜能量蜜蜂"
+}
+~~~
+
+PB 名称键固定以 `entity.productivebees.` 开头，再接蜂种路径和 `_bee`。例如 `mypack:amber_energy` 使用 `entity.productivebees.amber_energy_bee`，不要把键中的 `productivebees` 换成 `mypack`。
+
+##### PB 普通蜜蜂的完整配置示例
+
+[pb_copper.json](examples/resource-bees/datapack/data/example/productivebees/pb_copper.json) 包含所参考 PB 模板中的外观、初始基因、体型、速度、攻击、繁殖和环境字段；另有独立花源例子，避免把互斥字段写进同一只蜂。
+
+| 自定义内容 | 字段与示例 |
+|---|---|
+| 身体、条纹、花粉颜色 | `primaryColor`、`secondaryColor`、`particleColor`，使用 `#RRGGBB` |
+| 四种 PB 花源，选一种 | `pb_copper`：`flowerBlock` 铜块；`pb_redstone`：`flowerItem` 红石；`pb_water`：`flowerFluid` 水；`pb_tag`：`flowerTag` 自定义标签 |
+| 初始基因 | `attributes` 内的耐候、性情、作息、耐力和生产力；取值见注释版 |
+| 体型、速度、攻击 | `size`、`speed`、`attack` |
+| 繁殖食物与同种繁殖 | `breedingItem`、`breedingItemCount`、`selfbreed` |
+| 防水、防火 | `waterproof`、`fireproof` |
+| 专属蜜脾 | `createComb`；仍需写蜂箱产物配方 |
+| 可选模组条件 | 蜂种用 `conditions`，配方用 `neoforge:conditions` |
+
+普通 PB 路线是“蜜蜂 → 蜜脾 → 物品／液体”。四只 `pb_` 蜂均配有 `productivebees:advanced_beehive` 与 `productivebees:centrifuge` 配方；铜蜂演示繁殖，红石蜂演示转化，标签蜂演示巢穴，水蜂演示钓鱼与液体产物。**这些 PB 字段也可以加到扩展蜂上**，例如给魔源蜂设置夜间工作或自定义繁殖食物。
+
+`flowerTag` 填标签 ID，不加 `#`；同时参考 `tags/block/resource_flowers.json` 和 `tags/item/resource_flowers.json`。`flowerBlock`、`flowerItem`、`flowerFluid`、`flowerTag` 只选一种。
+
+##### 先产蜜脾，再离心出资源
+
+参考 [hydrogen.json](examples/resource-bees/datapack/data/example/productivebees/hydrogen.json)、[hydrogen_honeycomb.json](examples/resource-bees/datapack/data/example/recipe/hydrogen_honeycomb.json) 和 [hydrogen_centrifuging.json](examples/resource-bees/datapack/data/example/recipe/hydrogen_centrifuging.json)：
+
+1. 蜂种设置 `createComb: true`，氢气蜂的采蜜物品为铁锭。
+2. PB 蜂箱配方产出 `productivebees:configurable_honeycomb`，保留 `productivebees:bee_type` 组件，值为 `example:hydrogen`。
+3. Genesis 资源离心配方选择化学品：
+
+~~~json
+{
+  "type": "productivebeesgenesis:resource_centrifuging",
+  "bee": "example:hydrogen",
+  "processing_time": 20,
+  "outputs": [
+    { "kind": "chemical", "id": "mekanism:hydrogen", "amount": "100", "chance": 1 }
+  ]
+}
+~~~
+
+`processing_time` 是游戏刻，20 刻约一秒；不写时默认为 200。PB 普通离心配方使用的是 `processingTime`，不要混用。`createComb` 只提供蜜脾外观，不会自动添加产物配方。
+
+`energy` 与 `energy_comb` 分别演示直接产 FE、蜜脾离心产 FE。给同一只蜂同时加两条路线，会在两个阶段分别产资源。
+
+##### 选用其他扩展资源
+
+以下均有完整蜂种、获取和产物文件。带 `_comb` 的例子先产蜜脾；氢气例子本身走蜜脾路线。
+
+| 示例 | 采蜜材料 | `kind` 与需要修改的字段 | 对应模组 |
+|---|---|---|---|
+| `energy` / `copper_energy` | 红石 / 铜锭 | `energy`，`energy_type: "FE"` | Genesis |
+| `hydrogen` | 铁锭 | `chemical`，`id: "mekanism:hydrogen"` | Mekanism |
+| `source` | 魔源宝石 | `source` | Ars Nouveau |
+| `soul` | 灵魂沙 | `soul` | Industrial Foregoing Souls |
+| `air` | 压力表 | `air` | PneumaticCraft |
+| `emc` | 炼金煤炭 | `emc` | ProjectE |
+| `experience` | 附魔之瓶 | `experience`，数量为经验点 | ExperienceLib |
+| `lightning` / `lightning_ehv` | 闪电坍缩矩阵 | `lightning`，`tier` 为 `high_voltage` / `extreme_high_voltage` | AE2 Lightning Tech |
+| `ae_key` | 钻石 | `ae_key`，`type`、`id`、完整 `data` | AE2 及所选资源提供方 |
+
+`ae_key` 示例每次产一颗钻石，使用 `type: "ae2:i"`。添加其他 AE2 资源时，需要提供方真实的资源键数据和可接收的存储；仅改显示名称不能创建新资源。
+
+`mixed` 演示同一蜂同时产普通物品和 FE，保留 PB 蜂箱配方与 Genesis 直接资源配方即可。`mixed_essence` 提供小颗粒物品，便于搭配精华转换升级；`mixed_tag` 使用标签花源。`combined` 演示一次离心同时产普通物品与 FE：设置 `include_pb_outputs: true`，并保留匹配的 PB 离心配方。
+
+##### 用装满资源的容器采蜜
+
+容器花源适用于 Genesis 机械蜂箱及工厂。在蜂种 JSON 中用 `flowerResource` 替换其他花源字段：
+
+~~~json
+{
+  "flowerResource": {
+    "kind": "chemical",
+    "id": "mekanism:hydrogen",
+    "amount": "1000"
+  }
+}
+~~~
+
+这是花源字段片段，放入完整蜂种定义中使用。例子要求一个储槽内至少有 1000 mB 氢气，可以使用装有氢气的 Mekanism 化学品罐。**采蜜不会消耗容器或里面的资源**，空罐和装错资源的罐不满足条件。
+
+- `container_water`：至少 1000 mB 水，可用水桶，演示以水为花源产 FE。
+- `container_hydrogen`：至少 1000 mB 氢气。
+- `container_energy`：至少 1000 FE，可用已充电的能量容器。
+- `container_ae_key`：真实 ME 物品存储元件内至少有 16 颗钻石，产物也是钻石；检查花源时不要求蜂箱联网。
+
+`amount` 表示最低含量，默认 `"1"`。多个容器或多个采蜜槽的数量不会相加。四种容器例子也都提供 PB 繁殖和转化配方。
+
+##### 使用 KubeJS 注册配方
+
+完整合集中的 `kubejs` 可以复制到整合包的 KubeJS 目录：
+
+- `data` 保留蜂种 JSON 和花源标签。
+- `assets` 提供中英文名称。
+- `server_scripts/genesis_resource_bees.js` 使用 `event.custom(...)` 注册全部获取与产物配方，和数据包内容一致。
+
+**数据包安装与完整脚本安装选一种。** 仓库里的分类型脚本供单独选用，不要与完整脚本重复安装。`flowerResource` 和 PB 属性继续放在蜂种 JSON 中。若只修改一个配方，保留它的配方 ID，避免旧配方与新配方同时生效。
+
+##### 在游戏中输出资源
+
+在机器的 Mekanism 侧面配置窗口中，**化学品图标在左侧 ENERGY 下方**。其他扩展资源从**右侧入口**进入，再用正方形图标选择魔源、灵魂、空气、经验或闪电；仅显示已安装的类型。选择输出面后，可开启自动弹出，或使用该资源支持的管道提取。
+
+FE 使用原生 ENERGY 页：输入给工作电池充电，输出提供蜜蜂产出的 FE，输入／输出可在同一面同时使用。空气需要连通且不漏气的气动管网。
+
+使用 ME 存储时，需要 AE2、可用频道、供电、对应存储和资源桥接模组：化学品用 Applied Mekanistics，FE 用 Applied Flux，魔源用 Ars Énergistique，灵魂用 Soulplied Energistics，空气用 Applied Pneumatics，经验用 Applied Experienced，闪电用 AE2 Lightning Tech。EMC 会存入机器拥有者的 ProjectE 账户；安装 FTB Teams 后可在资源窗口选择同队在线收款人。
+
+机器资源面板可查看产量和待输出库存，图标不能拿到背包里。暂时没有可用出口时，先检查输出面、容器空间或 ME 存储。
+
+##### 常见问题
+
+- **找不到蜜蜂：** 检查所需模组、数据包是否启用、目录是否正确，再重新进入世界。
+- **有蜂但不工作：** 在 JEI 查看花源，把对应物品放进启用的采蜜槽，并给机械蜂箱供电。
+- **繁殖或转化无效：** 核对亲本／源蜜蜂 ID、繁殖食物或转化物品；改名后也要更新加载条件。
+- **只有蜜脾，没有资源：** 蜜脾路线需要 Genesis 机械离心机和匹配的资源离心配方。
+- **显示英文键名：** 启用名称资源包，核对 `entity.productivebees.<蜂种名>_bee`，按 `F3+T`。
+- **配方报错：** 使用无注释 JSON；检查逗号、引号、单数 `recipe` 目录，以及字符串形式的扩展 `amount`。
 
 ## 前置依赖
 
@@ -294,9 +617,12 @@ PB 升级系统与 Mekanism 原版升级（SPEED / ENERGY / MUFFLING）完全独
 | [Evolved Mekanism](https://www.curseforge.com/minecraft/mc-mods/evolved-mekanism) | 进化通用机械 等级工厂（超频 / 量子 / 致密 / 多元宇宙 / 创造） |
 | [Evolved Mekanism Extras](https://www.curseforge.com/minecraft/mc-mods/evolved-mekanism-extras) | 进化通用机械：扩展 等级工厂（绝对超频 / 至尊量子 / 宇宙致密 / 无限多元） |
 | [Mekanism Unleashed](https://www.curseforge.com/minecraft/mc-mods/mekanism-unleashed) | 扩展升级上限 |
-| [Mekanism Empowered](https://www.curseforge.com/minecraft/mc-mods/mekanism-empowered) | 强化速度 / 强化能量 / IO 容量 / 自动插入器 / 快速物品插入 / 快速物品弹出升级（离心机 6 种，蜂箱 5 种） |
+| [Mekanism Empowered](https://www.curseforge.com/minecraft/mc-mods/mekanism-empowered) | 蜂箱与离心机六种升级，需同版 Empowered Core |
+| [Mekanism Empowered Unleashed](https://github.com/zaixiayesheng/MekanismEmpoweredUnleashed) | 相同六种升级及合并的普通升级上限扩展；与原版增强／独立 Unleashed 择一安装 |
 | [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2) | 网络连接、物品/流体输出、离心机输入拉取与 ME 网络能量输入 |
 | [AppliedFlux](https://www.curseforge.com/minecraft/mc-mods/appliedflux) | ME 网络存储的 FE 作为机器能量来源 |
+| Ars Nouveau 5.12.1+ | 魔源生产与原生中继输出 |
+| Ars Énergistique 2.1.1-beta+ | 配合 AE2、Ars Nouveau 输出到 ME 魔源存储 |
 | [Jade](https://www.curseforge.com/minecraft/mc-mods/jade) | AE2 网络状态悬停显示 + 蜂箱蜜蜂数量 / 生产进度 |
 | [Iris Shaders](https://www.curseforge.com/minecraft/mc-mods/irisshaders) | 宇宙渲染光影兼容 |
 | [Just Enough Items](https://www.curseforge.com/minecraft/mc-mods/jei) | 配方查看  |
@@ -457,7 +783,9 @@ cd productive-bees-genesis
 ./gradlew build
 ```
 
-正式发布产物为 `build/libs/productivebeesgenesis-1.0.10.jar`。
+本地构建产物为 `build/libs/productivebeesgenesis-1.2.3.jar`。
+
+运行 `./gradlew runClient --no-daemon` 会通过仅开发环境使用的 `devExamples` sourceSet 自动加载资源蜜蜂示例，可测试 `example:energy`、`example:hydrogen`、`example:mixed` 等蜂种。可选资源仍需安装对应模组。示例不会打入发布 JAR，`verifyReleaseArtifact` 会检查这一隔离边界。
 
 > 需要 **Java 21**，且需联网从 Cursemaven / Modrinth Maven 下载 Mekanism、Productive Bees、AE2 等依赖。
 >
@@ -556,7 +884,7 @@ com.ayoshiko.productivebeesgenesis/
 
 ### 隐私声明
 
-本模组**不收集、存储或传输任何玩家数据**。无遥测、统计、崩溃上报或外部网络通信。所有网络包均为 Minecraft 原生通道内的客户端-服务端游戏状态同步。玩家 UUID 仅用作内存中的频率限制器键，不持久化、不外发。
+本模组没有遥测、统计、崩溃上报或外部数据上传。世界存档会保存资源账户拥有者和 EMC 收款人的 UUID，用于资产归属、权限和入账；资源窗口通过 Minecraft 原生通道同步必要的收款身份与游戏状态。频率限制器使用内存中的玩家身份键。这些数据用于本地游戏玩法，不上传到外部服务。
 
 ### 适龄提示与健康提醒
 
@@ -568,6 +896,7 @@ com.ayoshiko.productivebeesgenesis/
 
 ## 致谢
 
+- **gummyc_type2**（**beebeeblock-the-skyhive** 作者）—— 提供蜂蜂应援手册的书本原材质，本模组仅换为黄色。感谢他的分享与支持。
 - **Productive Bees** 开发团队
 - **Mekanism** 开发团队
 - **NeoForge** 开发团队

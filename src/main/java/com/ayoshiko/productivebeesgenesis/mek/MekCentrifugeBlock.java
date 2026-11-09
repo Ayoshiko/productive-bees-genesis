@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
 import com.ayoshiko.productivebeesgenesis.util.WrenchCapabilityHelper;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.attribute.AttributeState;
@@ -259,6 +260,9 @@ public class MekCentrifugeBlock<TILE extends TileEntityMekanism, TYPE extends Bl
 					// Task 6：定向发送给放置者，避免全服广播（安全拥有者仅需放置者客户端同步）
 					PacketDistributor.sendToPlayer(serverPlayer, new PacketSyncSecurity(placer.getUUID()));
 				}
+			}
+			if (!level.isClientSide && ResourceHiveHost.existing(updateable) != null) {
+				ResourceHiveHost.ensureMechanical(updateable);
 			}
 		}
 	}

@@ -1,0 +1,23 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:pb_redstone",
+  "result": "example:lightning",
+  "chance": 1,
+  "item": {
+    "item": "ae2lt:lightning_collapse_matrix"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2lt"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_redstone"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:lightning"
+    }
+  ]
+}

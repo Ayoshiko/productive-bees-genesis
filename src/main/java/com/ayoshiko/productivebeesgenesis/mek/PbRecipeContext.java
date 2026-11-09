@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
@@ -25,6 +26,12 @@ import net.neoforged.neoforge.fluids.FluidStack;
 	 * MULTI 模式下工厂类重写这些方法,日志在工厂类中添加。
 	 */
 public interface PbRecipeContext {
+
+	/** 未知输入尚待核验时，普通、资源及已缓存熔炼配方均不得继续消费。 */
+	default boolean hasUnresolvedInput() {
+		return this instanceof IAe2InputHost host
+				&& host.productivebeesgenesis$getAe2StateHolder().getPendingItemBuffer().isBlocked();
+	}
 
 	/** Marks context-owned transient processing state for persistence. */
 	default void productivebeesgenesis$markForSave() {
@@ -294,6 +301,12 @@ public interface PbRecipeContext {
 		return 0;
 	}
 
+	/** 模板与数量分开传递；旧实现继续通过独立拷贝接收完整请求。 */
+	default int productivebeesgenesis$pushGeneratedItemToAe(ItemStack template, int amount) {
+		return amount <= 0 || template.isEmpty() ? 0
+				: productivebeesgenesis$pushGeneratedItemToAe(template.copyWithCount(amount));
+	}
+
 	/**
 	 * 尝试将新生成的流体直接写入 AE。
 	 *
@@ -319,6 +332,15 @@ public interface PbRecipeContext {
 				? com.ayoshiko.productivebeesgenesis.logistics.IFastEjectHost.push(
 						sideConfiguration.getEjector(), stack)
 				: 0;
+	}
+
+	/** 先解析直通目标，只有实际提交给外部容器时才构造请求栈。 */
+	default int productivebeesgenesis$pushGeneratedItemToNeighbors(ItemStack template, int amount) {
+		if (amount <= 0 || template.isEmpty()) return 0;
+		return this instanceof mekanism.common.tile.interfaces.ISideConfiguration sideConfiguration
+				? com.ayoshiko.productivebeesgenesis.logistics.IFastEjectHost.push(
+						sideConfiguration.getEjector(), template, amount)
+				: productivebeesgenesis$pushGeneratedItemToNeighbors(template.copyWithCount(amount));
 	}
 
 	/** Simulates direct AE fluid acceptance without mutating the network. */

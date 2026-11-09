@@ -30,6 +30,7 @@ public final class FastFluidEjector {
 	private static final int IDLE_BACKOFF_TICKS = 10;
 
 	private final NeighborFluidTargets targets;
+	private final TileEntityMekanism owner;
 	private int tankCursor;
 	private int sideCursor;
 	private int consecutiveIdleTicks;
@@ -40,6 +41,7 @@ public final class FastFluidEjector {
 
 	public FastFluidEjector(TileEntityMekanism tile) {
 		this.targets = new NeighborFluidTargets(tile);
+		this.owner = tile;
 	}
 
 	public void onConfigChanged() {
@@ -49,7 +51,7 @@ public final class FastFluidEjector {
 
 	/** 批量弹出所有可提取流体；调用方应在本模组机器上用本方法替代原版 FLUID eject。 */
 	public void tick(TileEntityMekanism tile, @Nullable ConfigInfo fluidConfig, long gameTime) {
-		if (fluidConfig == null || lastAttemptGameTime == gameTime) return;
+		if (OutputCustody.of(owner).blocked() || fluidConfig == null || lastAttemptGameTime == gameTime) return;
 		lastAttemptGameTime = gameTime;
 		if (gameTime < backoffUntilTick) {
 			long fingerprint = sampleContents(fluidConfig);
@@ -120,51 +122,36 @@ public final class FastFluidEjector {
 			RelativeSide relativeSide = RelativeSide.fromDirections(tile.getDirection(), side);
 			if (fluidConfig.getDataType(relativeSide) != dataType) continue;
 			IFluidHandler target = targets.handler(side);
-			if (target != null) moved += transfer(tank, target);
+			if (target != null && !OutputCustody.of(owner).blocked()) moved += transfer(tank, target, OutputCustody.of(owner));
 		}
 		return moved;
 	}
 
 	/** 先模拟目标接收量，再精确抽取；异常目标少收时把余量原样放回源槽。 */
-	private static int transfer(IExtendedFluidTank source, IFluidHandler target) {
+	static int transfer(IExtendedFluidTank source, IFluidHandler target, OutputCustody custody) {
+		if (custody.blocked()) return 0;
 		FluidStack available = source.extract(Integer.MAX_VALUE, Action.SIMULATE, AutomationType.EXTERNAL);
 		if (available.isEmpty()) return 0;
 		int accepted;
-		try {
-			accepted = Math.max(0, Math.min(available.getAmount(),
-					target.fill(available, IFluidHandler.FluidAction.SIMULATE)));
-		} catch (Exception exception) {
-			LogThrottle.warn("fast_fluid_eject_simulate",
-					"相邻流体处理器模拟接收异常，已跳过本目标: {}", exception.toString());
-			return 0;
-		}
-		if (accepted <= 0) return 0;
-
+		try { accepted = Math.max(0, Math.min(available.getAmount(), target.fill(available.copy(), IFluidHandler.FluidAction.SIMULATE))); }
+		catch (RuntimeException e) { return 0; }
+		if (accepted == 0) return 0;
 		FluidStack extracted = source.extract(accepted, Action.EXECUTE, AutomationType.EXTERNAL);
 		if (extracted.isEmpty()) return 0;
-		int inserted;
-		try {
-			inserted = Math.max(0, Math.min(extracted.getAmount(),
-					target.fill(extracted, IFluidHandler.FluidAction.EXECUTE)));
-		} catch (Exception exception) {
-			returnToSource(source, extracted);
-			LogThrottle.warn("fast_fluid_eject_execute",
-					"相邻流体处理器实际接收异常，流体已退回源槽: {}", exception.toString());
-			return 0;
+		int handed = (int) custody.handoffFluid(extracted, extracted.getAmount(), "neighbor-fluid",
+				() -> target.fill(extracted.copy(), IFluidHandler.FluidAction.EXECUTE));
+		int remaining = extracted.getAmount() - handed;
+		if (remaining > 0) {
+			FluidStack rest = extracted.copyWithAmount(remaining);
+			int returned = (int) custody.handoffFluid(rest, remaining, "return-fluid", () -> {
+				FluidStack rejected = source.insert(rest.copy(), Action.EXECUTE, AutomationType.INTERNAL);
+				if (!rejected.isEmpty() && !FluidStack.isSameFluidSameComponents(rest, rejected))
+					throw new IllegalStateException("Invalid fluid return");
+				return rest.getAmount() - rejected.getAmount();
+			});
+			if (returned < remaining) custody.retainFluid(rest, remaining - returned, "return-fluid-full");
 		}
-		if (inserted < extracted.getAmount()) {
-			FluidStack rejected = extracted.copyWithAmount(extracted.getAmount() - inserted);
-			returnToSource(source, rejected);
-		}
-		return inserted;
-	}
-
-	private static void returnToSource(IExtendedFluidTank source, FluidStack rejected) {
-		FluidStack notReturned = source.insert(rejected, Action.EXECUTE, AutomationType.INTERNAL);
-		if (!notReturned.isEmpty()) {
-			LogThrottle.warn("fast_fluid_eject_return",
-					"流体目标拒收后有 {} mB 无法放回源槽", notReturned.getAmount());
-		}
+		return handed;
 	}
 
 	/** 计算无分配内容指纹；退避期间仍能在产出变化的下一刻立即恢复。 */

@@ -1,0 +1,15 @@
+{
+  "primaryColor": "#AA66DD",
+  "secondaryColor": "#FFFFFF",
+  "createComb": false,
+  "flowerItem": "ars_nouveau:source_gem",
+  "breedingItem": "ars_nouveau:source_gem",
+  "breedingItemCount": 1,
+  "selfbreed": true,
+  "conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ars_nouveau"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "type": "productivebees:bee_spawning",
+  "ingredient": {
+    "item": "productivebees:gravel_nest"
+  },
+  "biomes": "#productivebees:is_beach_or_river",
+  "results": [
+    "example:pb_tag"
+  ],
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_tag"
+    }
+  ]
+}

@@ -7,7 +7,9 @@ import net.minecraft.world.item.crafting.RecipeManager;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.Set;
+import net.minecraft.resources.ResourceLocation;
 
 /**
 	 * 配方重载延迟重试管理器
@@ -43,9 +45,12 @@ public final class RecipeReloadRetryManager {
 	 */
 	public record PendingRetryContext(
 			RecipeManager recipeManager,
-			HolderLookup.Provider registryAccess) {
+			HolderLookup.Provider registryAccess, Set<ResourceLocation> customRecipes) {
+		public PendingRetryContext {
+			customRecipes = Set.copyOf(customRecipes);
+		}
 		// 空上下文表示无待重试任务
-		static final PendingRetryContext EMPTY = new PendingRetryContext(null, null);
+		static final PendingRetryContext EMPTY = new PendingRetryContext(null, null, Set.of());
 	}
 
 	/**
@@ -91,11 +96,15 @@ public final class RecipeReloadRetryManager {
 	 * 重置 retryCount：用于外部首次 reload 事件（如配置未加载），新的 reload 事件应重新开始计数。
 	 */
 	public static void scheduleRetry(RecipeManager recipeManager, HolderLookup.Provider registryAccess) {
+		scheduleRetry(recipeManager, registryAccess, Set.of());
+	}
+
+	public static void scheduleRetry(RecipeManager recipeManager, HolderLookup.Provider registryAccess, Set<ResourceLocation> customRecipes) {
 		// 死循环检测：EM 配置死循环时暂停安排配方重载（Task 8）
 		if (deadLoopDetected) {
 			return;
 		}
-		pendingRetryContext.set(new PendingRetryContext(recipeManager, registryAccess));
+		pendingRetryContext.set(new PendingRetryContext(recipeManager, registryAccess, customRecipes));
 		retryCount.set(0);
 	}
 
@@ -109,11 +118,15 @@ public final class RecipeReloadRetryManager {
 	 * 与 {@link #scheduleRetry} 的区别仅在于不重置计数器。
 	 */
 	public static void rescheduleRetry(RecipeManager recipeManager, HolderLookup.Provider registryAccess) {
+		rescheduleRetry(recipeManager, registryAccess, Set.of());
+	}
+
+	public static void rescheduleRetry(RecipeManager recipeManager, HolderLookup.Provider registryAccess, Set<ResourceLocation> customRecipes) {
 		// 死循环检测：EM 配置死循环时暂停重新安排配方重载（Task 8）
 		if (deadLoopDetected) {
 			return;
 		}
-		pendingRetryContext.set(new PendingRetryContext(recipeManager, registryAccess));
+		pendingRetryContext.set(new PendingRetryContext(recipeManager, registryAccess, customRecipes));
 	}
 
 	/**
@@ -198,7 +211,7 @@ public final class RecipeReloadRetryManager {
 	 *
 	 * @param reloader 配置就绪时执行的回调，参数为延迟重试上下文中存储的 recipeManager 和 registryAccess
 	 */
-	public static void onServerTick(BiConsumer<RecipeManager, HolderLookup.Provider> reloader) {
+	public static void onServerTick(Consumer<PendingRetryContext> reloader) {
 		// 快速路径：原子读取，无锁开销
 		// 99.9% 的情况下无待重试任务，直接返回
 		if (!hasPendingRetry()) {
@@ -218,7 +231,7 @@ public final class RecipeReloadRetryManager {
 	 * 如果 reloader 调用了 scheduleRetry/rescheduleRetry 设置了新 ctx，CAS 会失败，
 	 * 保留新 ctx 让下次 tick 继续重试；否则 CAS 成功，清除完成。
 	 */
-	private static void onServerTickSlowPath(BiConsumer<RecipeManager, HolderLookup.Provider> reloader) {
+	private static void onServerTickSlowPath(Consumer<PendingRetryContext> reloader) {
 		// 单次快照读取保证 recipeManager 和 registryAccess 一致性
 		PendingRetryContext ctx = pendingRetryContext.get();
 		if (ctx == PendingRetryContext.EMPTY || ctx.recipeManager() == null) {
@@ -254,7 +267,7 @@ public final class RecipeReloadRetryManager {
 
 		// 执行配方修改
 		try {
-			reloader.accept(ctx.recipeManager(), ctx.registryAccess());
+			reloader.accept(ctx);
 		} catch (Exception e) {
 			ProductiveBeesGenesis.LOGGER.error("延迟配方重载失败", e);
 		} finally {

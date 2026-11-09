@@ -129,7 +129,7 @@ class CentrifugeInputReturnCompatibilityTest {
 		assertFalse(ae2.contains("remainingLimit"));
 		assertFalse(ae2.contains("maxItems"));
 		assertTrue(ae2.contains("int requested = Math.max(0, current.getCount())"));
-		int aeSimulateInsert = ae2.indexOf("storage.insert(key, requested, Actionable.SIMULATE");
+		int aeSimulateInsert = ae2.indexOf("holder, storage, key, requested, Actionable.SIMULATE");
 		int aeSimulateExtract = ae2.indexOf("slot.shrinkStack(requestedExtract, Action.SIMULATE)");
 		assertTrue(aeSimulateInsert >= 0 && aeSimulateExtract > aeSimulateInsert,
 				"AE2 路径必须先模拟网络接收量，再探测源槽可提取量");
@@ -142,6 +142,27 @@ class CentrifugeInputReturnCompatibilityTest {
 		assertTrue(chinese.contains("\"返还输入槽中的物品\""));
 		assertFalse(english.contains("recovery_drop"));
 		assertFalse(chinese.contains("recovery_drop"));
+	}
+
+	@Test
+	@DisplayName("自动返还和已知 pending 回收不受新输入拉取开关限制")
+	void automaticReturnAndPendingRecoveryPrecedeInputPullSwitch() throws Exception {
+		String puller = Files.readString(Path.of(
+				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java"));
+		int autoReturn = puller.indexOf("Ae2CentrifugeInputReturnService.returnUnprocessableInputs");
+		int pullSwitch = puller.indexOf("if (!inputPullEnabled || holder.getPendingItemBuffer().isBlocked()) return;");
+		assertTrue(autoReturn >= 0 && pullSwitch > autoReturn,
+				"熔炼兼容关闭后的输入清理必须先于新输入拉取开关");
+		assertTrue(puller.contains("holder.getPendingItemBuffer().hasRetryableItems(currentTick)"));
+		assertTrue(puller.contains("if (!inputPullEnabled && !pendingRetryable) return;"));
+		assertTrue(puller.contains("if (pendingRetryable) {"));
+
+		String service = Files.readString(Path.of(
+				"src/main/java/com/ayoshiko/productivebeesgenesis/network/Ae2CentrifugeInputReturnService.java"));
+		assertTrue(service.contains("MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(outputHost)"),
+				"全局和单机熔炼兼容开关都必须生效");
+		assertTrue(service.contains("!host.productivebeesgenesis$canProcessInput(stack)"),
+				"只应返还当前机器不能处理的输入");
 	}
 
 	private static String readClassBytes(String internalName) throws Exception {

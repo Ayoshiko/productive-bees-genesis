@@ -1,0 +1,19 @@
+{
+  "type": "productivebeesgenesis:resource_centrifuging",
+  "bee": "example:energy_comb",
+  "outputs": [
+    {
+      "kind": "energy",
+      "energy_type": "FE",
+      "amount": "1000",
+      "chance": 1
+    }
+  ],
+  "processing_time": 20,
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:energy_comb"
+    }
+  ]
+}

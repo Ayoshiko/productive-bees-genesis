@@ -1,0 +1,13 @@
+{
+  "primaryColor": "#609FFF",
+  "secondaryColor": "#FFFFFF",
+  "flowerResource": {
+    "kind": "fluid",
+    "id": "minecraft:water",
+    "amount": "1000"
+  },
+  "createComb": false,
+  "breedingItem": "minecraft:water_bucket",
+  "breedingItemCount": 1,
+  "selfbreed": true
+}

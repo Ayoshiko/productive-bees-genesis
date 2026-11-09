@@ -127,9 +127,9 @@ jobs:
           changelog: ${{ steps.curseforge_changelog.outputs.changelog }}
 
           dependencies: |
-            curseforge:223794(required)
+            curseforge:377897(required)
             curseforge:268560(required)
-            curseforge:574300(required)
+            curseforge:223794(optional)
 
           loaders: |
             neoforge

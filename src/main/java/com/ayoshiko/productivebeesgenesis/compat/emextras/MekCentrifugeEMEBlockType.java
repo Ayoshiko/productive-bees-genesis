@@ -19,7 +19,6 @@ import mekanism.common.content.blocktype.FactoryType;
 import mekanism.common.content.blocktype.Machine;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
-import mekanism.common.registries.MekanismSounds;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -146,7 +145,7 @@ public final class MekCentrifugeEMEBlockType {
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
 				.withGui(() -> EMEMenuTypeRegistration.EME_CENTRIFUGE_FACTORY)
-				.withSound(MekanismSounds.ENERGIZED_SMELTER)
+				// 不添加 withSound：工作声改由 MekCentrifugeSoundHandler 服务端播放（降噪 + 破坏后不残留满音量循环）
 				// 添加原版AttributeFactoryType(SMELTING)，使EME方块能被MekanismUtils.isSameTypeFactory()
 				// 识别，从而支持配置卡在EME工厂与原版/EM/ME工厂之间跨等级粘贴
 				.with(new AttributeFactoryType(FactoryType.SMELTING))

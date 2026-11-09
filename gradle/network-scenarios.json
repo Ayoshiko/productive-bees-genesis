@@ -1,0 +1,148 @@
+{
+  "schema": 1,
+  "baseline": {
+    "minecraft": "1.21.1",
+    "java": 21,
+    "neoforge": "21.1.216",
+    "source": "gradle.properties"
+  },
+  "scenarios": {
+    "compile": {
+      "purpose": "合并后的生产、测试和专服探针接口编译",
+      "tasks": [
+        "compileJava",
+        "compileTestJava",
+        "compileDomainProbeJava"
+      ],
+      "properties": [
+        "networkDomainProbe"
+      ]
+    },
+    "core": {
+      "purpose": "显式选择受影响纯逻辑行为并构建可分发产物",
+      "tasks": [
+        "test",
+        "build",
+        "compileDomainProbeJava"
+      ],
+      "properties": [
+        "networkDomainProbe"
+      ]
+    },
+    "hosts": {
+      "purpose": "注册表初始化后的真实蜂箱、离心与正式资源账户行为",
+      "tasks": [
+        "test"
+      ],
+      "properties": [
+        "minecraftTests"
+      ]
+    },
+    "ordinary": {
+      "purpose": "普通生产正式 ticker：铁蜂、金蜂和独立蜂蜜",
+      "tasks": [
+        "runNetworkDomainServer"
+      ],
+      "properties": [
+        "networkDomainProbe",
+        "networkOrdinaryProduction",
+        "networkProbeRun={runId}"
+      ],
+      "probe": true,
+      "report": "domain.json",
+      "fixture": "src/domainProbe/java/com/ayoshiko/productivebeesgenesis/domainprobe/RuntimeBeeProbe.java",
+      "inputs": {
+        "hosts": [
+          "productivebeesgenesis:bee_network_core",
+          "productivebeesgenesis:mek_apiary"
+        ],
+        "bees": [
+          "productivebees:iron",
+          "productivebees:gold"
+        ],
+        "flowers": [
+          "minecraft:iron_block",
+          "minecraft:gold_block"
+        ],
+        "baseCycleTicks": 5,
+        "sharedSteps": 1,
+        "maintenanceFePerTick": 7,
+        "quantitySource": "RuntimeBeeProbe/FIXTURES and initialized bee plans"
+      }
+    },
+    "combined-write": {
+      "purpose": "组合机六蜂位三进程接管、共享网络生产、费用和断开保管",
+      "tasks": [
+        "runNetworkMultiblockServer"
+      ],
+      "properties": [
+        "networkDomainProbe",
+        "networkCombinedProbe",
+        "networkMultiblockMode=write",
+        "networkProbeRun={runId}"
+      ],
+      "probe": true,
+      "report": "multiblock.json",
+      "fixture": "src/domainProbe/java/com/ayoshiko/productivebeesgenesis/multiblock/world/CombinedNetworkProbe.java",
+      "inputs": {
+        "beeSlots": 6,
+        "centrifugeLanes": 3,
+        "quantitySource": "CombinedNetworkProbe and MachineProductionFixture; read native capacities before inserting"
+      }
+    },
+    "combined-read": {
+      "purpose": "独立 JVM 恢复组合机托管、已付升级和交还独立生产",
+      "tasks": [
+        "runNetworkMultiblockServer"
+      ],
+      "properties": [
+        "networkDomainProbe",
+        "networkCombinedProbe",
+        "networkMultiblockMode=read",
+        "networkProbeRun={runId}"
+      ],
+      "probe": true,
+      "report": "multiblock.json",
+      "writer": "combined-write"
+    },
+    "machine-write": {
+      "purpose": "独立组合机正式生产、满载保管与实际计费",
+      "tasks": [
+        "runNetworkMultiblockServer"
+      ],
+      "properties": [
+        "networkDomainProbe",
+        "networkMachineProduction",
+        "networkMultiblockMode=write",
+        "networkProbeRun={runId}"
+      ],
+      "probe": true,
+      "report": "multiblock.json",
+      "fixture": "src/domainProbe/java/com/ayoshiko/productivebeesgenesis/multiblock/world/MachineProductionFixture.java"
+    },
+    "machine-read": {
+      "purpose": "独立 JVM 已付工作恢复、部分交付与产物费用守恒",
+      "tasks": [
+        "runNetworkMultiblockServer"
+      ],
+      "properties": [
+        "networkDomainProbe",
+        "networkMachineProduction",
+        "networkMultiblockMode=read",
+        "networkProbeRun={runId}"
+      ],
+      "probe": true,
+      "report": "multiblock.json",
+      "writer": "machine-write"
+    },
+    "artifact": {
+      "purpose": "复用有效测试证据后更新 JAR 并核对元数据和开发内容排除",
+      "tasks": [
+        "jar",
+        "verifyReleaseArtifact",
+        "reportReleaseArtifact"
+      ],
+      "properties": []
+    }
+  }
+}

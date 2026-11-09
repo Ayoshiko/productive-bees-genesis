@@ -1,0 +1,13 @@
+{
+  "primaryColor": "#FFCC44",
+  "secondaryColor": "#FFFFFF",
+  "flowerResource": {
+    "kind": "energy",
+    "energy_type": "FE",
+    "amount": "1000"
+  },
+  "createComb": false,
+  "breedingItem": "mekanism:basic_energy_cube",
+  "breedingItemCount": 1,
+  "selfbreed": true
+}

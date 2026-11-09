@@ -18,6 +18,9 @@ final class CentrifugeOwnershipAssets implements MachineAssetSection {
 	CentrifugeOwnershipAssets(TileEntityMekCentrifuge tile, PbRecipeProcessor processor, MekCentrifugePbUpgradeHandler upgrades, IntConsumer progress) {
 		this.tile = tile; this.processor = processor; this.upgrades = upgrades; this.progress = progress;
 	}
+	@Override public boolean prepared() {
+		return processor.ownershipStateReadable();
+	}
 	@Override public CompoundTag capture(HolderLookup.Provider registries) {
 		var tag = new CompoundTag(); processor.saveAdditional(tag, registries); upgrades.saveCounts(tag); upgrades.saveSlots(tag, registries);
 		tag.putInt("nativeProgress", tile.getOperatingTicks()); tag.put("fluid", tile.fluidOutputTank().serializeNBT(registries)); return tag;

@@ -77,6 +77,21 @@ public class FeederSlotManager {
 	/** 花朵有效性缓存（按蜜蜂类型键，喂食槽变化时主动失效） */
 	private final FlowerValidityCache flowerValidityCache = new FlowerValidityCache();
 
+	// 容器内容可能原位变化且不触发槽回调，只在当前真实服务器 tick 内复用查询。
+	private final java.util.Map<ResourceLocation, Boolean> containerFlowerCache = new java.util.HashMap<>();
+	private long containerFlowerTick = Long.MIN_VALUE;
+	private int containerFlowerVersion = -1;
+	private java.util.function.Supplier<HolderLookup.Provider> registryLookup = () -> null;
+
+	public void setRegistryLookup(java.util.function.Supplier<HolderLookup.Provider> lookup) {
+		registryLookup = java.util.Objects.requireNonNull(lookup);
+		invalidateFlowerCache();
+	}
+
+	public boolean hasContainerFlower(ResourceLocation bee) {
+		return BeeInfoHelper.getFlowerPreference(bee).container() != null;
+	}
+
 	/** 上次同步的转化配方版本号 — 配方重载后失效花朵缓存（转化原料作为花朵来源） */
 	private int lastConversionQueriesVersion = -1;
 
@@ -177,7 +192,7 @@ public class FeederSlotManager {
 	 * <ul>
 	 *   <li>flowerTag：检查物品标签，BlockItem 同时检查方块标签（兼容仅创建方块标签的模组）</li>
 	 *   <li>flowerItem：检查 ItemStack 是否为指定物品</li>
-	 *   <li>flowerFluid：检查 ItemStack 是否为指定流体的桶</li>
+	 *   <li>flowerFluid：检查桶或流体能力容器内的实际流体</li>
 	 * </ul>
 	 * <p>
 	 * 使用 {@link BeeNbtHelper#resolveBeeTypeKey} 解析蜜蜂类型键（如 productivebees:iron），
@@ -210,6 +225,14 @@ public class FeederSlotManager {
 	public boolean hasValidFlower(ResourceLocation beeTypeKey) {
 		refreshFlowerCacheState();
 		boolean conversionEnabled = lastConversionEnabled;
+		if (hasContainerFlower(beeTypeKey)) {
+			long tick = com.ayoshiko.productivebeesgenesis.util.ServerTickClock.now();
+			int version = flowerValidityCache.version();
+			if (tick == Long.MIN_VALUE || containerFlowerTick != tick || containerFlowerVersion != version) {
+				containerFlowerCache.clear(); containerFlowerTick = tick; containerFlowerVersion = version;
+			}
+			return containerFlowerCache.computeIfAbsent(beeTypeKey, bee -> computeHasValidFlower(bee, conversionEnabled));
+		}
 		Boolean cached = flowerValidityCache.get(beeTypeKey);
 		if (cached != null) {
 			return cached;
@@ -340,6 +363,14 @@ public class FeederSlotManager {
 	}
 
 	private boolean computeHasValidFlower(ResourceLocation beeTypeKey, boolean conversionEnabled) {
+		FlowerPreference pref = BeeInfoHelper.getFlowerPreference(beeTypeKey);
+		if (pref.container() != null && pref.container().custom()) {
+			// 显式容器定义不能通过任意物品、旧花源或转化原料绕过。
+			for (var slot : feederSlots) {
+				if (slot.isActive() && pref.container().matches(slot.getStack(), registryLookup.get())) return true;
+			}
+			return false;
+		}
 		// PB isFlowerItem/isFlowerBlock 语义：转化原料（物品转化 / 方块转化 BlockItem）
 		// 对任意花朵类型（blocks/entity_types/Rancher）都是有效花朵，与 flowerType 无关——
 		// 必须在 Rancher/实体早退分支之前检查，否则 entity_types 类蜜蜂放入转化原料
@@ -356,8 +387,6 @@ public class FeederSlotManager {
 		if (MultiFlowerBeeAdapter.isMultiFlowerBee(beeTypeKey)) {
 			return MultiFlowerBeeAdapter.hasValidFlower(beeTypeKey, this);
 		}
-		FlowerPreference pref = BeeInfoHelper.getFlowerPreference(beeTypeKey);
-
 		// Rancher 是固定蜜蜂，不经过 BeeReloadListener 的 configurable flower 数据。
 		if (RANCHER_BEE_TYPE.equals(beeTypeKey)) {
 			return AmberEntityFlowerHelper.hasContainedEntityAmberMatching(feederSlots, ModTags.RANCHABLES, false);

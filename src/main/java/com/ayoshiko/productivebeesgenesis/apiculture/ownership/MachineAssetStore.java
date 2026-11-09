@@ -4,6 +4,8 @@ import com.ayoshiko.productivebeesgenesis.apiary.ApiaryOwnershipAssets;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
+import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import mekanism.api.Upgrade;
 import mekanism.common.tile.base.TileEntityMekanism;
 import net.minecraft.core.HolderLookup;
@@ -29,6 +31,8 @@ public final class MachineAssetStore {
 		host = (IAe2OutputHostBase) tile;
 	}
 	public boolean prepared() {
+		var resource = ResourceHiveHost.existing(tile);
+		if (resource != null && resource.hasIndependentState() || OutputCustody.of(tile).blocked()) return false;
 		if (tile instanceof TileEntityMekApiary apiary) {
 			var restock = apiary.getGeneTreatRestock();
 			// 补货尚有已提取物品或结果未知时，保留独立机的结算／隔离入口，不能先冻结。
@@ -66,6 +70,8 @@ public final class MachineAssetStore {
 		if (!empty()) throw new IllegalStateException("Physical source did not clear completely");
 	}
 	public boolean empty() {
+		var resource = ResourceHiveHost.existing(tile);
+		if (resource != null && resource.hasIndependentState() || OutputCustody.of(tile).blocked()) return false;
 		if (host.energyContainer().getEnergy() != 0 || !section.empty()) return false;
 		for (var slot : tile.getInventorySlots(null)) if (!slot.isEmpty()) return false;
 		for (var upgrade : Upgrade.values()) if (tile.getComponent().getUpgrades(upgrade) != 0) return false;

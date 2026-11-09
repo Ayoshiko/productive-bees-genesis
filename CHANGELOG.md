@@ -229,6 +229,7 @@
 
 ### 变更
 
+- 网络分支同步正式维护版 1.2.3，保留独立机器的扩展资源、蜂种设计与生产修正。带独立资源账户的机器和资源配方蜜蜂暂不允许接入旧网络，原账户与产物继续保管，后续通过统一资产转移协议开放。
 - 网络开发验证分为小步与阶段联合范围：D17c1 默认只启动升级专项专服及一组客户端；双依赖与跨 JVM 累计矩阵保留在联合验收。取消任意检查数量门槛，按行为和风险保留测试，失败只重跑受影响入口。
 - 根据 D02 实测选择稀疏 long＋BigInteger 作为正式数量后端，保留后端替换边界；把预算化快照与保存成功回执提前至 P2，避免照搬百万键整表保存的主线程开销。
 - 增强发行包校验，禁止开发探针进入 JAR；本地规则、临时参考源码和测试证据保持在版本控制之外。
@@ -238,6 +239,7 @@
 
 ### 修复
 
+- 修复整合后读档可能清空已付蜂箱周期的问题；网络接管只转移一份静态周期，离槽保管、冻结产物、未知外部接收和损坏离心余量会阻止接管，避免重复生产或遗失工作。合并 JEI 运行时清理，保留网络终端和蜂种设计器的失效处理。
 - 新建隔离测试目录默认使用简体中文并跳过首次辅助功能／语言确认页，客户端设置正常保存，自动测试无需手动确认。
 - 修正 P1 联调中的完整组件恢复、哈希碰撞、组保留额度分配和转移回调重入边界；避免不同变体误合并、重叠规则重复预约、模拟改写权威数据或重复结算，失败返回不生成掉落物实体。
 - 修复核心同进程重建时误用旧目录回执的问题；交还必须等当前释放版本落盘后解锁。基础机流体恢复改为幂等替换，避免原生与自定义字段重复恢复；蜂箱已付费周期纳入保存与升级迁移。
@@ -430,6 +432,7 @@
 
 #### Changed
 
+- Updated the network branch to maintenance 1.2.3, retaining standalone extended resources, bee authoring and production fixes. Machines with independent resource accounts and resource-producing bees cannot join the old network yet; existing accounts and products remain held until unified asset transfer is implemented.
 - Split network validation into step and joint scopes. D17c1 defaults to one focused upgrade server and one client; the cumulative dependency and cross-JVM matrix remains a joint gate. Removed arbitrary check-count thresholds, kept behavior-based checks, and rerun only affected entries after a failure.
 - Selected sparse long/BigInteger storage from D02 measurements and moved budgeted snapshots and durable-save receipts into P2. Development probes and local reference data are excluded from distributable artifacts.
 - Merged `1.0.8-hotfix`, including version metadata and the bounded shared PB recipe cache. Takeover remains disabled by default; managed machines do not produce yet.
@@ -438,11 +441,503 @@
 
 #### Fixed
 
+- Fixed paid apiary cycles being cleared on load after integration. Network takeover transfers static cycles once and refuses retained work, frozen outputs, unknown external receipts or malformed centrifuge output, preserving assets without replay. Combined JEI runtime cleanup now invalidates both network terminals and the bee designer.
 - Fresh isolated test directories now default to Simplified Chinese and skip first-run accessibility/language onboarding. Client settings persist without manual confirmation.
 - Hardened component identity, shared reserve allowances, simulation, reentrancy, duplicate settlement, partial transfers, and unknown-result quarantine.
 - Fixed same-process core recovery to await the current directory revision before unlocking returned machines. Made base-machine fluid restoration idempotent and persisted paid apiary cycles across saves and upgrades.
 - Included the maintenance fixes for quarry/lumber bee blacklists, PB spawn-egg admission and entity validation, and disabled feeder-slot handling.
+## [1.2.3] - 2026-11-04
 
+**编辑器搜索、草稿与万象 JEI 显示更新。** 本版优化蜂种和材料搜索及重复打开，修复未编辑也提示保存的问题，支持批量应用草稿与 PB 原生蜂种配方编辑，并继续减少蜂箱和离心机生产热路径的开销。客户端和服务端请一起更新到 1.2.3。
+
+### 新增
+
+- 蜜蜂编辑器的草稿库可多选已编辑好的草稿并批量导入当前世界。保持原蜂种 ID，整批检查配方、依赖和服务器基准后只重载一次世界；失败、冲突或结果未明时保留草稿，成功后一起更新基准。
+
+### 变更
+
+- 优化蜂种目录与材料浏览器的逐字搜索，保留中文、拼音及模组／标签筛选；分帧预建并在同一连接复用材料索引，减少首次载入和重复打开时的等待。
+- 减少机械蜂箱结算已付生产周期时对蜂种、生产力和基因属性的重复解析；花源类型沿既有版本缓存，容器内部内容仍逐真实 tick 核验。离心机复用准备规划与已付产物编码，减少常见容量计算的临时对象；真实容量与输出接收仍逐次复核。
+
+### 修复
+
+- 修复仅打开蜂种、浏览页面或移动文字光标也被判定为未保存并自动生成草稿的问题；未编辑的已生效工程显示正确状态，真实修改及未确认输入仍保留保存保护。
+- 万象创世蜂箱的 JEI 页面保留万象蜜脾并同时展示三个随机蜜脾槽；万象蜜脾与蜜脾块的离心页面也展示三个随机槽，保留蜂蜜等配方副产物。槽内轮播当前可用候选，明确说明实际产出受服务器配置、配方和升级影响，避免仅显示蜂蜜造成误解。
+- 修复蜜蜂编辑器目录只读取 JSON 蜂种，遗漏蓝色条纹蜜蜂、苦力怕蜜蜂等 PB 原生实体蜜蜂的问题。目录与名称搜索统一使用真实蜂种身份，可按中文名称、单字或拼音查找；原生蜂种支持数据配方编辑，保留原实体外观、属性和特殊行为。
+
+### English
+
+**Editor search, drafts and Myriad JEI display update.** This version improves bee and material searches and reopening, fixes save prompts without edits, adds batch draft application and PB native bee recipe editing, and continues reducing repeated work in apiary and centrifuge production. Update both clients and servers to 1.2.3.
+
+#### Added
+
+- The bee editor's Draft Library can apply multiple edited drafts to the current world. Original bee IDs are retained, and the server checks all recipes, dependencies and baselines before a single world reload. Failures, conflicts or unknown results preserve drafts; success updates their baselines together.
+
+#### Changed
+
+- Improved per-keystroke searches in the bee catalog and material browser, preserving Chinese, Pinyin, mod and tag filters. Material indexes are built across frames and reused within the same connection, reducing waits on initial loading and reopening.
+- Reduced repeated bee type, productivity and gene parsing while mechanical apiaries settle paid production cycles. Flower types follow the existing cache version; container contents are still checked every real tick. Centrifuges reuse preparation planners and committed-output encodings and avoid temporary objects in common capacity calculations. Actual capacity and output receipts are still checked on every attempt.
+
+#### Fixed
+
+- Fixed opening a bee, browsing pages or moving a text cursor being mistaken for an unsaved edit and creating a draft. Unedited active projects show the correct status; real edits and unconfirmed input retain their save protection.
+- The Myriad Creations beehive JEI page keeps its own comb and shows three random comb slots. Centrifuging Myriad combs or comb blocks also shows three random slots alongside recipe byproducts such as honey. Slots cycle through currently available candidates and explain that actual output follows server configuration, recipes and upgrades, avoiding the misleading honey-only display.
+- Fixed the bee editor catalog reading only JSON bees and omitting PB native entity bees such as Blue Banded Bees and Creeper Bees. Catalog and name searches now use the same real bee identities, including localized names, Chinese characters and Pinyin. Native bees support data recipe editing while retaining their original entity appearance, attributes and special behavior.
+
+## [1.2.2] - 2026-11-03
+
+**生产恢复与性能维护更新。** 本版修复万象创世禁用不完整、满载反复重试及旧蜂箱等待输出问题，改善 AE2 拉取与回送，并把编辑器首次教程引导到应用和导出按钮。客户端和服务端请一起更新到 1.2.2。
+
+扩展资源故障只暂停使用对应资源的蜂种和车道，普通蜜蜂与 Wanna 抽蜂仍可正常生产。已有产物和已付周期继续保管；暂时不可用的数据可在加载或成功重载后恢复，损坏数据与结果不明的交付仍保留等待核验。
+
+### 变更
+
+- 减少机械蜂箱与离心机重复准备产出上界、解析旧工作和编码产物审计文本的开销，并减少空批次结算、高倍率熔炼及物流交接的临时分配。缓存按完整物品组件区分身份，随配方、升级、原文或注册表变化失效；实际容量、费用和接收结果仍实时校验。
+- 改进 AE2 拉取与回送：普通取料复用短时库存目录，库存保留策略仍核对当前库存；拉取与回送分别等待，满载回送不再额外推迟正常取料。断网时已有余量优先安全保管，恢复或换网后继续交付。
+- 优化蜜蜂编辑器首次教程：检查步骤直接定位校验按钮，最后一步明确圈出“应用到世界”和“导出到本机”。没有应用权限时说明原因并指向本机导出；完成教程后停留在出口附近，保留编辑内容，实际应用仍需原确认流程。窄窗口和低高度窗口按可用空间安排提示，可跳过或从设置重新查看。
+
+### 修复
+
+- 修复关闭万象创世蜜蜂总开关后仍可用木棍转化获取、在蜂箱中生产或继续专属蜜脾转化的问题。禁用只影响万象创世，其它蜜蜂与通用机器照常工作；已有蜜蜂、物品和已付周期保留，蜜蜂槽的 Shift 详情明确显示停工原因及恢复方式。
+- 修复机械蜂箱输出槽、溢出缓冲和已付产物同时积压时，仍每刻反复尝试满载的本地输出、ME 存储、相邻容器或直连离心机而增加 tick 开销的问题。连续零接收时短暂降低重试频率，保留原产物和生产进度；本地腾位、路由变化或成功交付后及时恢复，不降低其它正常蜂箱的生产频率。
+- 修复扩展资源注册、重载或账户准备失败时牵连普通蜜蜂、Wanna 抽蜂和普通蜜脾加工／AE2 取料的问题。故障仅暂停声明相应扩展产出的蜂种与资源车道，成功重载后自动恢复；Shift 详情区分正在重载、资源配方／依赖不可用和账户／容量等待。
+- 强化旧蜂箱的产物与已付周期恢复：读档及成功重载后有界重试暂时无法解码的原始产物，保留完整组件和数量；换蜂后的动态旧周期继续独立保管，新蜂可正常生产。失效账户引用仍锁住原已付车道，未知交付和损坏原文继续保管等待核验，避免自动重放或补发。
+- 修复原生 FE 出口只模拟接收 1 FE，被 Mekanism 等整数能量换算桥误判为满载，导致资源蜜脾被返还或停工的问题。预检采用有界模拟金额，实际交付继续按原余额和真实接收量结算。
+- 修复高倍率下组合蜜脾转换产物的预检顺序与实际入槽顺序不一致，容量足够却误判为等待输出的问题。统一产物顺序，保留原产量、转换余料和真实容量限制。
+- 修复高倍率熔炼使用完整 tick 更新前的旧配方缓存，以及中途失败后部分车道的批次未正确结束的问题。已开始的批次仍逐一清理，合并费用只结算一次，并保留最初失败及后续清理错误。
+
+### English
+
+**Production recovery and performance maintenance update.** This version fixes incomplete Myriad Creations disabling, repeated full-output retries and retained work in old apiaries, improves AE2 pulling and returns, and guides the editor's first tutorial to application and export. Update both clients and servers to 1.2.2.
+
+Extended resource faults pause only the bees and lanes using the affected resources; ordinary bees and Wanna Bees can keep producing. Existing products and paid cycles remain retained. Temporarily unavailable data can recover on loading or a successful reload, while damaged data and transfers with unknown results stay retained for review.
+
+#### Changed
+
+- Reduced repeated maximum-output preparation, retained-work decoding and audit-text encoding in mechanical apiaries and centrifuges, with fewer temporary allocations in empty batch settlement, accelerated smelting and logistics handoffs. Caches distinguish full item components and invalidate when recipes, upgrades, original data or registries change; current capacity, costs and actual acceptance are still checked.
+- Improved AE2 pulling and returns. Ordinary pulls reuse a short-lived inventory directory while stock-retention policies still check current stock. Pulling and returns use separate delays, so full return destinations no longer add a delay to ordinary pulls. Existing leftovers stay safely retained across disconnections and resume delivery when the network recovers or changes.
+- Improved the bee editor's first tutorial. Validation now points directly to the check button, and the final step highlights “Apply to world” and “Export locally”. Players without application permission receive an explanation and a local-export path. Finishing leaves the editor near these actions and preserves edits; applying still uses the original confirmation. Narrow and low-height windows place guidance within the available space, and the tutorial can be skipped or reopened from settings.
+
+#### Fixed
+
+- Fixed the Myriad Creations master switch allowing stick conversion, hive production or special comb conversion after disabling the bee. Only Myriad Creations is affected; other bees and machines keep working. Existing bees, items and paid cycles are retained, and the bee-slot Shift tooltip explains the stop reason and how to resume.
+- Fixed mechanical apiaries repeatedly retrying full local outputs, ME storage, adjacent containers or directly connected centrifuges every tick when their output slots, overflow buffer and paid products are backed up. Repeated zero acceptance now uses a short retry delay while retaining products and progress. Local space changes, routing changes or successful delivery restore prompt retries without reducing production frequency in other healthy apiaries.
+- Fixed extended resource registration, reload or account preparation failures blocking ordinary bees, Wanna Bees, ordinary comb processing or AE2 input pulling. Only bees and lanes with the affected extended outputs pause, and a successful reload restores work automatically. Shift details distinguish an active reload, unavailable resource recipes/dependencies and account/capacity waits.
+- Strengthened recovery of old apiary products and paid cycles. Loading and successful reloads retry temporarily undecodable original products within a shared budget, preserving full components and amounts. Replaced bees' dynamic paid cycles stay separately retained while current bees work. Stale account references still isolate their original paid lanes; unknown transfers and damaged data remain retained for review without automatic replay or replacement products.
+- Fixed native FE output probing only 1 FE, which integer energy conversion bridges such as Mekanism could incorrectly report as full, returning resource combs or stopping work. Probes now use a bounded simulated amount; actual transfers still debit only the original balance and confirmed receipt.
+- Fixed combined comb conversion using different output orders for capacity checks and actual placement at high acceleration, incorrectly waiting for output despite sufficient space. Both paths now keep the same order while preserving yields, conversion remainders and real capacity limits.
+- Fixed accelerated smelting using a stale recipe cache from before the full tick, and leaving some lane batches open after a mid-batch failure. Started batches are cleaned up individually, combined energy usage is settled once, and both the original failure and subsequent cleanup errors are preserved.
+
+## [1.2.1] - 2026-10-31
+
+**编辑器易用性与跨整合包迁移更新。** 本版改进蜜蜂编辑器的布局、文字、搜索、批量选择与导入导出，并修复多项升级兼容、保存和 ME 取料问题。客户端和服务端请一起更新到 1.2.1。
+
+跨包收藏不包含其他模组的贴图、模型、机器定义和脚本，目标整合包仍需安装这些依赖。扩展资源生产继续使用 Genesis 机械蜂箱与离心机；PB 独居／农夫等硬编码行为、暂不可完整保存的特殊配方不属于本次编辑支持。
+
+### 新增
+
+- **多选与快速选择**：目录和草稿库支持批量导出，目录可用 Shift 连选、Ctrl 增减或鼠标框选。全选覆盖全部搜索结果，也可按整合包添加、编辑器新增／修改和未应用草稿快速选择；每批最多 4096 只，读取失败或取消保留原选择。
+- **便携蜂种收藏**：将多只蜜蜂的完整设置、配方、名称和署名打成 ZIP，带到其他整合包导入；也能批量导出数据包或 KubeJS 作者包。收藏可填写来源整合包、版本、作者、发布链接和许可说明。
+- **跨整合包浏览与整批迁移**：从本机安装目录浏览其他整合包的蜜蜂，支持搜索、查看 JSON 和按来源选择。导入先预览重名处理，可复制冲突、保留身份、跳过冲突或全部复制；本批蜜蜂之间的繁殖、转化、条件及蜂蛋／蜜脾引用一起更新。已在来源游戏中确认注册的蜜蜂会显示快照时间，离线读取的定义单独标明。
+- **中文拼音搜索**：蜂种、材料、机器、群系、草稿和文件支持全拼、首字母与带声调输入，兼容 lv／lü／lu；名称、注册 ID、@模组、#标签和多个关键词仍可使用。
+- **中键自动滚动**：在表单、目录、材料网格或 JSON 区域点击中键，移动鼠标控制滚动方向和速度，回到起点附近暂停；再次点击或按 Esc 停止。
+- **JSON 编辑工具**：新增查找／替换、区分大小写、匹配计数、跳转行、行列信息、缩进、复制行／选区、删除行和括号提示。编辑可以撤销，错误原文会保留；只读页面仍可查找和复制。
+- **更多 PB 设置与配方**：普通可配置蜜蜂新增第三颜色、配色循环、采蜜后体型、发光层、攻击效果、伤害免疫和繁殖食物标签；方块标签采蜜支持反向匹配。可编辑 PB 物品转化、方块转化和灌装蜂蛋配方，多蜂共用的转化配方保持只读，复制后可单独修改。
+- **万象创世设置补充**：新增伤害免疫、攻击反馈、第三颜色、采蜜体型、发光层、上下翻转及方块／标签／流体采蜜设置。专属获得方式可添加 PB、合成以及已适配的 Modern Industrialization、MBD2、MMR 机器配方，并独立检查、应用和导出。
+- **文件位置与回收管理**：设置、草稿库、回收站和发布页可复制或打开实际保存目录，查找最近导出。可确认清除本机归档草稿或丢弃待删除内容；停用蜂种的恢复入口另需多步确认，不清理已有蜂蛋、蜜脾和库存。
+
+### 变更
+
+- **工具栏更清楚**：新建、导入、草稿和跨包入口保持可见，管理放右侧，刷新独立放在搜索旁。多选时全选、快速选择和清空在左侧，带数量的导出在右侧；辅助按钮减轻边框，选中状态使用更清晰的圆角勾选框。
+- **文字与主题**：编辑器和子页面采用更清晰的平滑文字，支持自动、距离场或游戏当前字体；无需安装额外界面模组。现代主题统一圆角、层级和短反馈，也可选 AE 像素材质、深色、自定义配色、减少动态效果或关闭动画。
+- **小窗口与字段排版**：按钮按实际译文宽度排列，窄窗口换行，高度不足时工具进入滚动区。短字段能同行时成组显示，宽度不足再上下排列；缩放调整内部文字和控件密度，窗口与物品栏保持稳定。
+- **获得方式与产物编辑**：先看配方摘要，再进入完整表单；数量、概率、流体用量和处理时间可直接修改。物品产物可右键／Delete 删除整组，用拖动或上下按钮调整顺序，数量、概率与组件随条目一起移动。
+- **首次教学**：11 步教学先介绍工程入口和跨包迁移，再指向实际编辑控件，并补充 JEI 拖入。首次提示可关闭，完成、跳过或关闭后不再常驻，可从设置→快捷键重新查看。
+- **万象蜜脾过滤界面**：统一编辑器主题，分为过滤列表、添加蜂种与效果预览；支持搜索、批量选择、排序、拖动、撤销和剪贴板操作，明确标出缺失、停用或暂不可用的蜜蜂。
+- **导入与保存更谨慎**：分别提示当前世界、旧草稿和名称冲突，替换前保留不同的旧草稿。先存草稿，再检查整批内容并应用；缺少材料、机器或所需模组时明确拒收，无法确认应用结果时保留内容并提供查询。
+- **减少重复读取**：调整蜜蜂、配方、材料和文件预览的读取与搜索，减少重复计算。发布 JAR 精简图片编码和文本空白，保留资源内容与许可。
+
+### 修复
+
+- 修复 JEI 遮挡编辑器弹出菜单和拖曳材料预览的问题；拖入时暂时收起教学卡，结束后恢复，配方窗口可正常返回编辑器。
+- 修复管理按钮文字偏高、菜单和普通按钮文字不齐，以及部分中文／法语和深色提示显示问题。
+- 修复 JSON 选区背景重叠、光标和点击位置偏移，以及粘贴或删除时拆开组合字符的问题；到达字符上限后仍可替换已有选区。
+- 修复仅浏览蜂种、基因、条件或 MMR 布局就自动生成草稿，检查通过后误报内容变更，以及应用成功提示被自动保存覆盖的问题。
+- 修复目录迟到刷新覆盖新选择、蜂卡拦截菜单点击、问题定位跳错配方和导入等待时可重复操作的问题。
+- 修复万象新增设置没有完整应用、更换采蜜材料留下旧设置、额外获得配方在重载时丢失，以及更正非法值后仍无法保存退出的问题。
+- 修复跨包迁移改变旧 PB 配方概率／数量、MI 配方材料与来源不一致的问题。目标安装 Almost Unified 1.21.1-1.4.2 时，编辑器生成配方保持迁入的材料和组件。
+- 修复修改 PB 物品／方块转化配方后没有及时生效；完整重载失败时暂停相关新工作，成功重载后恢复。
+- 修复过滤配置保存冲突、超时和结果不明确时可能丢失编辑的问题；单人主人可保存，独立服务器仍要求管理员权限。
+- 修复 Mekanism Empowered 与 Empowered Unleashed 的六种升级适配、安装／卸载后的耗电与储能刷新，以及 ME／EME 工厂升级更新遗漏；蜂箱仍保留最短 1 tick 周期。
+- 修复物品数量显示样式异常，恢复编辑器物品栏的游戏字体、耐久和冷却显示；机器槽恢复原有紧凑数字。
+- 修复满槽蜂箱反复处理蜂蛋／蜂笼的多余工作；空蜂笼取蜂和腾出位置后的装入可继续正常使用。
+- 修复慢 AE2 网络下部分离心机长时间取不到原料、等待被算成失败，以及断网待回送原料阻挡其他可恢复内容的问题。
+- 修复物品组件被原地修改后仍使用旧的 ME 物品身份，以及客户端物品模型缓存滞留旧世界的问题。
+- 修正 CurseForge 必需依赖为 Productive Bees 和 Mekanism；AE2 保持可选，不再被下载器当作必装模组。
+
+### English
+
+**Editor usability and cross-pack migration update.** This version improves the bee editor's layout, text, search, bulk selection and import/export, and fixes upgrade compatibility, saving and ME input issues. Update both clients and servers to 1.2.1.
+
+Collections do not include other mods' textures, models, machine definitions or scripts; the destination pack still needs these dependencies. Extended outputs continue to use Genesis mechanical apiaries and centrifuges. Hard-coded solitary/farmer behaviors and special recipes that cannot be fully preserved are outside this editor update.
+
+#### Added
+
+- **Bulk and quick selection**: export selected bees or drafts together. The catalog supports Shift ranges, Ctrl toggles and drag selection. Select all includes every search result, or select modpack additions, editor-created/edited bees and unapplied drafts by source. Batches support up to 4096 bees; failed or cancelled loading preserves the previous selection.
+- **Portable bee collections**: pack complete bee settings, recipes, names and attribution into a ZIP for another modpack. Bulk datapack and KubeJS author-bundle export are also available. Collections can include the source pack, version, authors, release link and license notes.
+- **Cross-pack browsing and batch migration**: browse bees from other local installations, search, inspect JSON and select by source. Import previews identity conflicts with Copy conflicts, Keep identities, Skip conflicts or Copy all. Breeding, conversion, conditions and egg/comb references between bees in the batch move together. Timed snapshots distinguish bees confirmed in the source game's registry from offline definitions.
+- **Pinyin search**: bees, ingredients, machines, biomes, drafts and files support full Pinyin, initials and tone marks, including lv/lü/lu. Names, registry IDs, @mod, #tag and multiple search terms remain available.
+- **Middle-click auto-scroll**: click the middle mouse button in forms, catalogs, ingredient grids or JSON, then move the pointer to control direction and speed. Return near the starting point to pause; click again or press Esc to stop.
+- **JSON editing tools**: Find/Replace, case sensitivity, match counts, Go to Line, line/column information, indentation, line/selection duplication, line deletion and bracket hints. Changes support undo, invalid text is retained, and read-only pages still allow searching and copying.
+- **More PB settings and recipes**: configurable bees gain third colors, color cycling, nectar size, glow layers, attack effects, damage immunity and breeding-food tags, with inverse block-tag flowering. Edit PB item conversion, block conversion and bottler egg recipes. Conversions shared by several bees remain read-only; a copied bee can use its own editable recipe.
+- **Additional Myriad settings**: damage immunity, attack effects, third color, nectar size, glow layers, upside-down rendering and block/tag/fluid flowering. Its acquisition page supports additional PB, crafting and supported Modern Industrialization, MBD2 and MMR machine recipes, with validation, application and export.
+- **File locations and recycle management**: settings, drafts, recycling and publishing can copy/open their actual folders and locate the latest export. Confirm removal of archived drafts or discard pending deletions. Clearing a retired bee's restoration entry requires separate confirmations and does not clear existing eggs, combs or inventories.
+
+#### Changed
+
+- **Clearer catalog tools**: New, Import, Drafts and Other modpacks remain visible, Manage sits on the right, and refresh has its own button beside search. Selection tools sit on the left, with Export and its count on the right. Secondary controls have lighter borders and selections use clearer rounded checkboxes.
+- **Text and themes**: clearer smooth text throughout the editor and its pages, with Auto, distance-field or the current game font. No extra UI mod is required. Modern themes use consistent rounded controls, hierarchy and brief feedback, with AE pixel materials, dark/custom palettes, reduced motion and animation-off choices.
+- **Small windows and field layout**: controls use measured localized widths, wrap in narrow windows and scroll when height is limited. Short fields share rows when they fit and stack when needed. Internal scaling adjusts text and control density while keeping the window and inventory stable.
+- **Acquisition and output editing**: summaries lead to full forms, with directly editable amounts, chances, fluid quantities and processing times. Remove a complete item output with right-click/Delete and reorder by dragging or up/down buttons; amounts, chances and components stay together.
+- **First-use guidance**: an 11-step tour introduces project tools and cross-pack migration before guiding the actual fields, including JEI dragging. Dismiss, finish or skip the introduction to hide it on later visits, and reopen the tour from Settings → Shortcuts.
+- **Myriad comb filtering**: adopts the editor theme with Rules, Add bees and Preview views. Search, bulk selection, sorting, dragging, undo and clipboard operations show missing, retired and temporarily unavailable bees clearly.
+- **More careful import and saving**: distinguish world, draft and name conflicts, preserving a different previous draft before replacement. Save drafts, validate the entire batch and then apply it. Missing ingredients, machines or mods cause explicit rejection; uncertain application results retain the content and offer a status query.
+- **Less repeated work**: revised bee, recipe, ingredient and file-preview loading/searching to reduce repeated calculations. Release JARs compact image encoding and text whitespace while retaining resource contents and licenses.
+
+#### Fixed
+
+- Fixed editor popups and dragged ingredient previews being covered by JEI. Coaching hides during a drag and returns afterward; recipe windows return to the editor normally.
+- Fixed the raised Manage label, misaligned menu/button text and several Chinese, French and dark-theme display issues.
+- Fixed overlapping JSON selection backgrounds, caret/click offsets and pasted/deleted text splitting combined characters. Existing selections can still be replaced at the character limit.
+- Fixed drafts appearing after merely browsing bees, genes, conditions or MMR layouts, false change notices after validation and autosave hiding a successful application message.
+- Fixed late catalog refreshes overwriting newer selections, bee cards swallowing menu clicks, diagnostics opening the wrong recipe and repeated actions during pending imports.
+- Fixed new Myriad settings not being fully applied, old flowering settings remaining after replacement, extra acquisition recipes being lost on reload and saving/closing staying blocked after correcting invalid values.
+- Fixed migration changing legacy PB recipe chances/amounts and mismatches between MI recipe materials and their source. With Almost Unified 1.21.1-1.4.2, designer recipes retain migrated materials and components.
+- Fixed edited PB item/block conversions not taking effect promptly. Related new work pauses after a failed complete reload and resumes after a successful one.
+- Fixed edits being lost around filter-save conflicts, timeouts or uncertain results. Single-player owners can save; dedicated servers still require administrator permission.
+- Fixed all six Mekanism Empowered/Empowered Unleashed upgrade integrations, power/storage updates after installation or removal and missed updates in ME/EME factories. Apiaries retain their one-tick minimum cycle.
+- Fixed item-count display styles, restoring the game font, durability and cooldown displays in the editor inventory and the original compact machine-slot counts.
+- Fixed unnecessary egg/cage processing in full apiaries. Empty-cage extraction and inserting a bee after freeing a slot continue to work.
+- Fixed centrifuges being starved of inputs on slow AE2 networks, waiting being counted as failure and disconnected returns blocking other recoverable items.
+- Fixed stale ME item identities after in-place component changes and client item-model caches retaining previous worlds.
+- Corrected CurseForge required dependencies to Productive Bees and Mekanism. AE2 remains optional instead of being required by the downloader.
+
+## [1.2.0] - 2026-10-22
+
+**资源蜜蜂编辑器初版正式发布。** 现在可以在游戏里创建、修改资源蜜蜂，并将设置应用到当前世界，或导出给整合包使用。
+
+**因时间有限，本版本没有进行充分测试，游玩中仍可能遇到问题。欢迎大家使用、测试，反馈问题并提出建议。更新前请备份存档。** 客户端和服务端请一起更新到 1.2.0。
+
+### 新增
+
+- **游戏内资源蜜蜂编辑器**：创造模式使用「蜂蜂应援手册」打开。支持名称与翻译、颜色、体型、模型、基础属性、基因、采蜜材料，以及繁殖、合成、机器配方、蜂巢生成和钓鱼等获得方式；也能设置直接产出或蜜脾离心后的物品、流体与扩展资源。
+- **图形总览与配方预览**：集中查看蜜蜂外观、属性、获得方式和产物，在总览中修改常用内容，或点击进入对应页面继续编辑。机器配方显示机器名称，支持查询 JEI 和更换机器时保留兼容设置。
+- **草稿、复制和回收站**：定时保存本地草稿，目录前置显示未应用的修改；草稿显示蜂蛋、名称和编辑日期。可以复制已有蜂种或草稿并自动避开命名冲突。删除蜂种需多步确认，删除后可从回收站恢复，应用到世界后才生效。
+- **数据包与 KubeJS 导出**：导出蜂种、配方和名称文件，方便整合包作者打包；本机文件浏览器可选择需要导入的文件。独立服务器应用需要管理员权限，编辑器内提供安装说明。
+- **个性化设置**：提供现代浅色、深色、AE 风格及自定义 JSON 主题，支持密度、界面尺寸、提示延迟、自动保存和动效设置，并展示快捷键。
+- **法语本地化**：补齐编辑器、配置、错误提示及本次新增功能的法语翻译。
+- **更多 PB 外观与行为设置**：支持已安装的 PB 模型和动画资源，以及 PB 可配置蜜蜂提供的部分特殊属性、授粉后行为和野外筑巢偏好。万象创世蜜蜂也能调整这些外观与属性，仍使用原有随机产出。
+
+### 变更
+
+- 目录改为连续滚动，支持滚轮和可拖动滑块，按窗口尺寸与当前语言调整每行显示数量；复制、删除按钮与蜂种来源标记更便于辨认。
+- 调整按钮、标题栏、开关、颜色选择器、配方网格与产物分组。改善 3×／4× 界面布局和默认文字缩放，重要提示移到窗口内。
+- 页面与滚动动效更柔和，支持调整幅度、时长和减少动态效果；保留标题栏明暗切换、固定、设置和关闭按钮，窗口移动可与 JEI 配合。
+- 材料浏览器分批建立索引，复用搜索结果，只在需要时读取名称与标签；蜂巢优先排序只用于蜂巢材料选择。
+- 攻击伤害声明范围支持 0～2147483647，万象创世蜜蜂的默认声明与 PB BeeBee 相同。实际伤害仍受游戏和其他模组影响。
+
+### 修复
+
+- 修复使用蜂笼取出、替换蜜蜂后，旧生产周期占用当前蜂槽并阻碍继续生产的问题；旧周期和产物会保留，木材、石料等依赖原花源的产物可补回对应材料后继续结算。
+- 修复旧蜂箱物品再次放置时，保存数据混入新机器默认字段后被错误判为无效、拆放或重进存档也无法恢复的问题。已确认的旧存档故障机器在更新后加载时自动恢复，背包中的故障蜂箱正常放置后恢复，不需要修复指令或清空旧产物。
+- 修复离心机挖下再放置后 AE2 输入拉取设置丢失，以及部分资源账户、ME 拒收和扩展资源蜜脾返还状态影响正常生产的问题。
+- 修复安装基因采样升级的机械蜂箱无法从神风特工队蜜蜂获取基因的问题；将凋零骷髅头碎片加入精华升级自动合成白名单。
+- 修复当前整合包的部分生效蜂种无法读取：正确选择条件加载后的定义，无关合成配方不再阻碍读取；无法安全编辑的内容保留并提供明确提示。
+- 修复 PB 默认离心时间错误显示为非法 0、目录滚轮跳页、浏览时冒出选择提示，以及请求失败后目录停止加载的问题。
+- 修复预览拖动方向、缩放后显示不完整、群系删除撤销、JSON 滑块拖动、错误定位、部分重复提示和翻译不同步等编辑交互问题。
+- 修复 MI 零 EU 配方无法转换为 MMR，以及万象设置修改后保存／退出被错误状态阻碍的问题。
+
+### English
+
+**First full release of the Resource Bee Editor.** Create and edit resource bees in game, apply your changes to the current world, or export them for a modpack.
+
+**Testing has been limited due to time constraints, and issues may remain. You are welcome to try the editor, report problems and suggest improvements. Back up your world before updating.** Update both clients and servers to 1.2.0.
+
+#### Added
+
+- **In-game Resource Bee Editor**: use the BeeBee Support Handbook in Creative mode. Edit names and translations, colors, size, models, traits, genes, flowering materials, and acquisition through breeding, crafting, machines, nests or fishing. Configure direct output or comb processing for items, fluids and extended resources.
+- **Visual overview and recipe previews**: review appearance, traits, acquisition and outputs in one place, edit common settings directly, or open the relevant page. Machine recipes show machine names, offer JEI lookup and retain compatible settings when changing machines.
+- **Drafts, copying and recycle bin**: save local drafts automatically, show unapplied changes first, and display bee eggs, names and edit dates. Copy existing bees or drafts with unique names. Deletion requires multiple confirmations and can be reversed in the recycle bin; world changes require applying.
+- **Datapack and KubeJS export**: export bee definitions, recipes and translations for modpacks, and browse local files for imports. Applying on a dedicated server requires administrator permission; setup guidance is included in the editor.
+- **Personalization**: modern light, dark, AE-style and custom JSON themes; adjustable density, UI size, hints, autosave and motion; keyboard shortcut reference.
+- **French localization**: completed translations for the editor, settings, errors and new features.
+- **More PB appearance and behavior options**: installed PB models and animations, selected configurable-bee traits, post-pollination actions and wild nesting preferences. Myriad Creations gains these appearance and trait settings while retaining its existing random output.
+
+#### Changed
+
+- Continuous bee catalog scrolling with wheel and draggable scrollbar, adaptive columns for the window and language, clearer copy/delete controls and source badges.
+- Refined buttons, title bar, switches, color picker, crafting grid and output groups; improved 3×/4× layouts and default text scaling, with important messages inside the window.
+- Softer page and scroll motion with adjustable distance, duration and reduced-motion settings. Title-bar theme, pin, settings and close controls remain available, and window movement works with JEI.
+- Material indexing runs in batches, reuses search results and reads names/tags only when needed. Nest-first ordering applies only to nest material selection.
+- Declared attack damage accepts 0–2147483647; Myriad Creations uses the same default declaration as PB BeeBee. Effective damage still depends on the game and other mods.
+
+#### Fixed
+
+- Fixed old paid cycles occupying current bee slots after cage extraction or replacement and preventing production. Old work and outputs are retained; dynamic wood/stone outputs resume when their original flowering materials are restored.
+- Fixed legacy apiary items becoming incorrectly invalid after placement merged their saved data with new machine defaults, leaving them stuck after replacement or restart. Confirmed affected machines recover when loaded after updating, and old affected items recover through normal placement, without repair commands or clearing retained products.
+- Fixed AE2 pulling settings being lost after mining and replacing centrifuges, and several resource-account, ME-rejection and comb-return states blocking healthy production.
+- Fixed gene sampling from Kamikazbees in mechanical apiaries, and added Wither Skeleton Skull Chips to Essence Conversion auto-crafting.
+- Fixed reading some active bees in the current modpack: select the definition that passed loading conditions and avoid encoding unrelated crafting recipes. Content that cannot be edited safely is retained with a clear message.
+- Fixed PB default centrifuge time appearing as invalid zero, skipped catalog pages, selection hints during browsing and catalog loading stopping after a failed request.
+- Fixed preview drag direction and resizing, biome-removal undo, JSON scrollbar dragging, issue navigation, duplicate tooltips and unsynchronized translations.
+- Fixed conversion of valid zero-EU MI recipes to MMR and incorrect states preventing Myriad settings from saving or closing.
+
+## [1.1.0] - 2026-10-19
+
+> **扩展资源蜜蜂产出的首个正式版本。** 本次新增和改动较多，新功能的稳定性暂不保证，仍可能存在 bug。更新前请备份存档。
+>
+> 本模组只提供扩展资源蜜蜂注册与产出的底层支持，不会主动提供或注册现成的扩展资源蜜蜂。注册示例见先前发布的[独立示例包](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/resource-bee-examples-1.1.0)。
+>
+> **First full release of extended-resource bee output support.** Many features and behaviors are new; their stability is not guaranteed and bugs may remain. Back up your world before updating.
+>
+> The mod provides registration and output support only; it does not include or automatically register ready-made extended-resource bees. See the previously published [standalone examples](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/resource-bee-examples-1.1.0).
+
+### 开发基础
+
+- **扩展资源侧面配置**：资源配置页与物品、流体、ENERGY 并列显示在 MEK 原生侧面窗口中；每类资源仅在对应模组加载时显示。化学品沿用 MEK 原生化学品侧面图标，其他资源显示居中的对应模组代表物品。化学品、魔源、灵魂、经验、闪电支持六面输出和自动弹出，空气主动安全供气；FE 使用原生 ENERGY 页／配置器，INPUT 为工作电池、OUTPUT 为产物账户、INPUT_OUTPUT 同面双容器。设置随存档、安装器、拆卸／挖掘和合成升级保存，旧 FE 设置迁移一次；配置卡只复制设置。
+- **Extended resource sides**: resource pages sit beside Items, Fluids and ENERGY in Mekanism's native side-configuration window and appear only when their supporting mod is loaded. Chemicals use Mekanism's native chemical-side icon; other pages show centered representative items from their mods. Native resource faces and auto-eject are configurable, air supplies safely, and FE uses separate battery INPUT and product OUTPUT containers in the native ENERGY page/configurator. Settings persist through saving, installers, machine items and crafting upgrades; configuration cards copy settings without accounts, balances or EMC recipients.
+
+- **扩展资源生产监控与同步**：资源窗口默认显示近 5 秒实际结算产率，可切换待输出库存。空库存、无出口蜜脾返网后仍显示已观察资源及等待状态；停止后归零。统计只在窗口打开时走有界目录增量，关闭释放会话，Jade 不同步产率；客户端缓存展示文本与提示。收款人明确为 EMC 账户收款人，Jade 状态更名为扩展资源输出／扩展资源 ME 输出。
+- **大数量 ME 输出**：取消空气与普通通用 AEKey 每次 2.1G 的错误统一截断，保留 long 接收量、原生接口限量和共享网络预算。Soulplied Energistics 1.0.3 外部灵魂存储存在 long 强转 int，灵魂及对应通用键保留溢出保护。
+
+- **资源离心返料与恢复**：扩展资源没有可用出口或暂存额度不足时，机械离心机把原蜜脾交给持久化返还缓冲，ME 可接收时返网，并暂停该类蜜脾的新取料。出口恢复后自动续料；已付周期保留原配方、种子和完整输入身份，未知扣料／接收结果继续保管，不自动重放。 缺失账户引用保存旧身份凭证，为现存输入的后续生产建立独立账户；不补发旧未知资产。同位置同身份的区块实体替换不会退役账户，输出异常按有界退避恢复，不永久停机。 When an extended resource has no usable output or its pending allowance is full, mechanical centrifuges move the original combs into persistent return custody, send them back when ME accepts them and pause new pulls of that input. Output recovery resumes pulling automatically. Paid cycles retain their recipe, seed and complete input identity; unknown consumption or acceptance remains quarantined without replay.
+
+- **容器采蜜 JEI 显示**：按蜂种真实容器定义显示资源及最低含量、不消费和采蜜槽要求，移除误导的普通花朵输入；AE2 元件在对应键桥和兼容存储可用时展示实际库存，气体桶／化学品罐／对应能力容器按内容识别；普通蜜蜂布局保持 PB 原规则。JEI 目标方法签名不兼容时跳过该可选布局注入，不阻止客户端启动。Container flowering JEI pages show the actual resource requirements instead of ordinary flowers; the optional layout injection skips safely when its target signature is absent.
+- **ProjectE 直接入账与 FTB 收款人**：EMC 默认自动入账在线机主，无需 ME 存储或 EMC-ME 扩展；同时安装 ProjectE 和 FTB Teams 时才显示收款人按钮，机主／管理员可从资源窗口切换同队在线收款玩家，空库存也可切换。离线、退队和能力不可用时保留 EMC，未知写入隔离，界面同步重试不重复加钱；本地存档保存收款 UUID，资源菜单协议更新至 4。EMC credits online ProjectE accounts directly, with persistent FTB teammate selection, retained offline output and no replay after synchronization failures.
+- **直接资源生产与等级暂存**：修复蜂笼／刷怪蛋入箱的可配置蜜蜂使用 `entity` 字段、却被直接资源准入仅按 `id` 拒绝的问题，FE、高压和极高压可正常生产。机械资源暂存为每种资源 `100 万 × 实际输出槽倍率`；旧默认额度按当前等级扩容，保留余额。Direct resource production now accepts the real bee-cage entity format, and pending-output capacity follows the actual output tier while preserving saved balances.
+- **资源离心批量调度**：修复离心机容量除以基础等级倍率而过小的问题；资源与普通蜜脾共用虚拟 tick、并行上限顺序和批量能耗计算。保留容量、能量、已付进度及未知结果保管，满载不丢输入；高产量蜜脾块仍可能受资源暂存限制。Resource and ordinary combs now share batch scheduling and energy costs, with full output-tier capacity and retained backpressure.
+- **EMC 大数适配**：同一资源账户使用精确整数，EMC 的生产、倍率、四份蜜脾块、暂存、存档、菜单及恢复支持最多 4096 位十进制数。注册 Project Expansion 的 BigInteger 能力；普通 ProjectE 单次按 long 范围输出并保留余量，未知接收继续隔离。其他资源保留 long 数量上限，旧 long 存档兼容；资源协议更新，客户端／服务端需同步更新。EMC supports exact BigInteger amounts and Project Expansion capabilities, bounded ProjectE batches and preserved uncertain transfers.
+- **生产准备成本**：资源蜂槽共享每刻升级快照，未变蜂笼数据复用生产准备；普通离心产物转换按升级／配方失效缓存，万象加权整批可接收时省去重复容量预检。数量、概率、费用和拒收保管规则保留。Production preparation reuses unchanged snapshots and conversion results; no measured MSPT improvement is claimed for this change.
+
+
+- **普通产物与读档修复**：资源账户异常不再误阻机械蜂箱已经生成的普通物品与蜂蜜；未知普通输出仍由独立保管请求暂停。蜂蜜库存读档与等级升级按快照还原，避免父类和自存字段重复加载同一份流体。
+- **输入过滤匹配成本**：按完整 AEItemKey 缓存黑／白名单、蜂种模糊及忽略 NBT 模式的命中槽位，每种模式最多保留 128 个候选；配置、键解析和精确模式变化使缓存失效。限额与库存保留线仍逐次计算；已解析的精确白名单在没有库存策略时不刷新全网库存，标签与模糊模式继续扫描候选目录。
+- **扩展资源自动取料保护**：保留缺依赖蜂种与配方的存档身份；对应资源不可用，或 ME 拒收且没有相邻原生接收方时，机械离心机自动跳过该蜜脾，避免堵住普通加工。组合配方要求全部资源都有可用出口；探测仅模拟，不扣料、不创建账户。每网每真实刻最多四次新探测，宿主按等待顺序轮转；接收／拒收结果短时缓存，换网、开关变化和重载失效，卸载释放登记。
+
+- **扩展资源兼容提示**：带有 Genesis 直接生产或资源离心配方的蜂种，在蜂笼、刷怪蛋、蜜脾／蜜脾块和机械蜂箱蜂槽中默认显示双语说明，无需按 Shift。明确额外资源暂未适配 PB 原版蜂箱／离心机，应使用 Genesis 机械设备，相关问题反馈给 Genesis；普通 PB 产物不受此说明限制。提示按服务器配方目录更新，不按蜂种命名空间硬编码。
+- **上游原生生产与物流兼容**：Useless 1.21.1-2.4.6 使用已有原生配方／通用键 API，确定性资源离心按自身规则加工与回网。JDTE 0.6.4.3 的本地 API v3 补丁仅匹配扩展蜂：Genesis 只提供配方产物，费用与周期暂存由生物工厂负责，通过已有 AE 输出升级回网；普通生产不分配资源事件或新增资源 NBT。六类资源、拒收／部分接收／断网／重载，以及外部接收后抛错的未知隔离已有限定运行证据。旧桥保留兼容，正式 JDTE PR 留待 Genesis 发布后提交。
+
+- **缺依赖后的输入配置恢复**：暂时移除 AE2 时保留完整过滤器原文，再装回后恢复白名单、限额、无限拉取和库存保留设置。加载前校验版本、字段类型与重复／越界槽位；坏配置暂停新取料并拒绝界面编辑，支持 `status` 诊断与 `retry-data` 重读，已有暂存物品和未知交接继续独立保管。离心机／蜂箱升级分别保存配置与交接快照，缺依赖时也不重置配置或输出开关。
+
+- **无限拉取公平与开销**：性能基准改为离心机开启无限拉取、由真实 ME 自动续料。已占槽计入类型份额；补齐轮在其他类型仍有待供需求时保留其空槽，修复高倍率下慢耗料资源／熔炼挤掉普通蜜脾的问题。提前剪枝无法分配的空槽，复用完整组件匹配和提取探针，减少无效配方校验与临时状态分配。成功但慢的提取按调用成本短延迟，不累积拒收指数；真实拒收仍退避。 输入与输出分别使用网络共享成本预算和活跃宿主轮转，避免输出尖峰耗尽预算后阻塞健康续料；慢提取仍受全网限额约束。配对输出引起的临时槽拒收不再触发整类物品退避；慢输出后的输入保留 2ms 累计额度，避免只补上一种原料。补料优先回到同一完整物品键最近占用的车道，减少配对输出未清空时换槽拒收；槽替换、缩容和卸载清除偏好，保留真实校验与公平份额。
+- **输入交接保管与重试**：ME 提取、源槽扣出、输入交付及回网在调用前登记请求；抛错或非法返回保留已知余量与当前未知交付，暂停加工且不盲目重投。新增 `resolve-input` 管理员核验入口，坏 NBT 原文保持；连续拒收跨交接与正常重启保留指数退避历史，数量溢出时拒绝结算并保留请求。
+
+- **1.1.0 满载与升级验证**：补齐九台离心机全部 162 槽持续满供料的 256 倍专服场景，包含 81 槽熔炼；普通蜜脾与熔炼实际加工量均达到普通档的 256 倍。验证 1.0.10 完整检查点在 1.1.0 中恢复机器、账户及 ME 库存后继续生产；当时旧异常世界的 12 个账户按旧规则保持隔离。该会话标记规则已由下述恢复重构取代，未知请求与损坏原文继续保管。短窗口验证不替代长期压力或任意断电原子恢复。
+
+- **扩展资源恢复重构**：取消 `.session` 文件判据，残留标记不再使所有机器停产。读档保留真实未决记录：未知资源生产只隔离原蜂槽或加工车道，未知输出只隔离对应资源；其他资源、槽位与普通已付产物继续工作。旧请求身份与精确数量保留，恢复容量仍被预留，真实存档损坏和保存故障继续保管。停服时即使账户库尚未初始化，也会撤销区块加载期间创建的输出接口。Removed session-marker isolation; unresolved production is confined to its bee slot or processing lane and unresolved output to its resource, without replaying unknown amounts or blocking healthy work. Loaded output handles are now invalidated at shutdown even when the account store was never opened. Separate world and mod stores still do not commit atomically.
+- **缺依赖蜜脾与返还**：万象蜂和万象蜜脾共用候选池，排除当前不可用的扩展资源；蜂箱直连、管道与各级离心机输入共用依赖准入。已进入的不可处理蜜脾保留完整组件，转入持久化返还缓冲释放输入槽，ME 断线时继续保管，回网后返还；无 ME 时使用本机冻结物品缓冲，输出满载保留。Unavailable resource combs are excluded from the Myriad pool and rejected at machine inputs; existing inputs move to durable return custody instead of occupying processing slots.
+- **EMC 数量显示**：安装 Project Expansion 时，资源窗口、提示、Jade 和 JEI 使用其短格式，不再展开超长十进制数字；存档、网络和结算继续使用精确整数。EMC displays use Project Expansion's short formatter while storage and transfers remain exact.
+
+- **资源容器花源**：Genesis 机械蜂箱及工厂支持在蜂种 JSON 中用 `flowerResource` 声明流体、化学品、FE 或完整 AEKey 最低含量；旧 `flowerFluid` 同步支持流体能力物品。按单件容器的单个内部储槽或真实 ME 元件完整键判断，不合并物品堆叠或采蜜槽，不消耗内容；空容器、错误资源、非法／冲突定义拒绝工作。禁用、槽变化与重载使匹配失效，原位内容变化最迟下一真实 tick 重验。新增四份数据包示例、双语名称与指南，PB／JDTE 不放行新花源。
+
+- **扩展资源作者示例与翻译**：示例拆分为数据包和客户端语言资源包，开发运行同时加载两者；28 只示例蜂补齐中英文名称，每份定义标注 PB 名称键。新增铜锭花源的直接 FE／蜜脾 FE 两条独立路线及可选 KubeJS 获取配方。新增示例校验和独立 ZIP 打包任务，发布 JAR 继续排除示例。中英 README、GuideME、Patchouli 提供 GitHub 链接、安装位置、改名及资源重载步骤，明确通用 AEKey 可注册其他模组的有效自定义资源。
+- **GuideME 作者页排版**：配置页与扩展资源教程改用短段落和分步列表，完整 JSON／脚本通过仓库链接查看，移除造成整页越界的宽表格和异常断行的代码块。
+
+- **扩展资源窗口重绘**：参考 QIO／AE2 的 18×18 槽位与原生 16×16 图标排布，整宽目录配底部紧凑详情；独立窗口、按钮与 MEK 侧页签材质统一明暗倒角，保留所有资源原始渲染器。顶部常驻说明这里只展示无法直接进入背包的非物品／流体产物，数量改标“待输出”，不提供额外存储。搜索可一键清空，过滤／排序重置滚动位置，完整数量与输出暂存上限可悬停查看。
+
+- **扩展资源开箱即用**：机械蜂箱、离心机和各级工厂在命中资源配方后沿用机器拥有者自动建立资源存储，并使用本机 ME 连接输出，不再要求先绑定机器资源输出。化学品原生能力直接挂在机器上；余额与未决请求继续保管。旧开发存档中的接口开关无法确认时先关闭，由资源窗口重新开启。
+- **资源显示与指南**：机器新增 MEK 侧面资源 TAB 与原生风格窗口，化学品使用 GuiChemicalGauge，配套弹空及 ME 开关，拒收余量保留；蜂槽提示显示基础扩展产物。资源图标不可取到背包。GuideME 的万象页面按组件筛选，只关联万象蜂的蛋、蜜脾和蜜脾块，切换同物品不同蜂种时刷新。
+- **作者教程**：中英 README、GuideME、Patchouli 改为从氢气完整实例开始，说明两种生产路线、字段、接线、KubeJS 和排错；数据包使用合法 JSON 的 `_comment` 说明，脚本补充双语注释。
+
+- **开发示例蜂与示例范围**：runClient 通过独立开发 sourceSet 自动加载资源蜜蜂示例，发布 JAR 禁止包含示例命名空间。公开数据包、KubeJS 示例及双语教程移除数据能源专属资源；通用 AEKey 示例仍可使用钻石。
+
+- **机械花源与动态产物结算**：复用原花源匹配、消费开关、尝试预算和 pollinates 周期占用；资源叠加多花源、WannaBee、万象时仍走已有生成算法。产物交给共享已付余量和即时直输，拒收保持背压，未知交接与资源请求共同暂停；正常重启不重抽、不重复付费。
+- **可选宿主公共接口**：JDTE 的自然／合并加速周期保留本机费用与完成点，公共 API 与旧 0.6.1.0 过渡桥互斥。早期 Useless 2.4.5.13 保管原型不进入待提交 PR；仅在旧接口存在时保留其管理员核验命令，防止遗留资产失去诊断入口。新版 Useless 兼容只注册原生配方，不改造上游普通加工、AE 任务或恢复机制。
+
+- **普通离心与扩展资源组合**：资源配方新增显式 `include_pb_outputs`，默认关闭；开启后复用实际 PB 配方、稳定性、副产物过滤、精华后粗矿转换和输出路由，共用周期、输入与一次费用。冻结具体配方及完整组件，块资源与物品各计一次；多于三种物品保留有界已付余量，旧 pending 先排空，未知交接共同暂停。补齐存档／升级恢复、超大批量数量保护、JEI／Jade 提示及数据包、KubeJS、Java 和双语教程示例。
+- **普通生产与物流保管**：满缓冲不再淘汰旧产物；已付周期逐蜂种结算，已生成余量冻结保留。普通物品／流体、离心直连与 ME 执行结果未知时独立保管并暂停外送，保存、升级和原文重读保留状态；增加管理员核验命令。严格校验已付批次、数量、请求及外层存档字段，错误类型或未知字段保留原文并暂停，避免被读成空库存或截断数量。统一机械菜单的当前实体、权限与限频检查，空资源机器拆除可安全释放空账户额度。
+- **共享批次成本**：大批概率资源使用二项分布采样，保留独立概率和共享轮数相关性；小批沿原序列采样。资格和执行复用同批计划但重新检查当前容量；缓冲原地轮转，扫描及外部尝试共用 32 组预算。算法基准与正式批次入口已核验，不据此宣称完整 MSPT 改善。
+
+- **机械生产流程收敛**：普通与扩展资源批次共用物品生成、基因采样及升级处理，保留原概率、属性、类型／满纯度插件和倍率。精华转化复用既有索引；容量涵盖余料与成品，满载保留已付进度，未知写入暂停且不重放。纯资源蜂不因采样器额外产蜂蜜。
+
+- **资源蜂标签与物品花源**：静态资源／混合生产支持有效的方块或物品标签及具体物品花源，复用机械蜂箱与 JDTE 的实际匹配，不消费花源。重载使准入与宿主缓存失效；空标签、非法 ID、反向花源及任意采后回调保持拒绝；机械消费转化和既有动态蜂种按专门结算入口处理。提供 mixed_tag 示例与双语说明。
+
+- **JDTE 生物工厂混合产物**：0.6.1.0 的静态物品与资源共用周期、增产轮数和费用边界，完整检查启用输出槽及资源容量后才扣费。生命流体、生产力基因与蜜脾块升级保持原规则；满载保留完成进度，扣费或部分物品写入异常保存快照并跨重启冻结，不自动重投。公共宿主 API 支持按唯一抽样准备本地快照；现有纯资源入口保持兼容。
+
+- **资源宿主范围收敛**：优先支持 Genesis 机械蜂箱、离心机及各级工厂；停用 PB 原版蜂箱／离心机的四个扩展资源生产拦截，保留其普通生产和旧开发账户识别、核验与迁移。已有 JDTE 0.6.1.0 受限过渡桥保留，其他宿主不作为机械主线前置。
+
+- **机械蜂箱混合产物**：静态物品配方与扩展资源可按同周期生产，先检查物品槽、蜂蜜罐和资源账户的整批容量，再扣费结算。共享生产力轮数，保留物品基因和蜜脾块转换；异常冻结本地前后快照并阻止重试。新增 mixed 数据包示例与双语教程；特殊副作用仍未开放。同时修复蜂蜜罐在读档时被基础库存与兼容快照重复追加的问题，重复加载同一快照不再增加库存。
+
+- **资源配方与余额展示**：新增 JEI 资源生产／离心类别，展示服务端合并后的数据包与 Java 默认配方，支持重载替换及退出清理。资源保持完整身份、精确数量、每份概率和蜜脾块四份语义；历史与书签保留 NBT 数字类型，缺翻译蜂种回退为 ID，资源条目不可作弊取物。图标复用所属模组渲染器，原生资源在没有 ME 桥时仍显示对应贴图或模型；材质重载清理缓存。Jade 显示接口状态、ME 开关与有权限玩家的有限余额摘要，不发送账户标识或故障原文；双语教程同步更新。
+
+- **经验与闪电资源**：新增 ExperienceLib 经验点数、AE2 Lightning Tech 高压／极高压闪电配方、只出不入原生能力及 ME 输出。两种电压严格分离，原生口与 ME 共用精确余额，失效接口撤销提取权限。双语教程与示例说明单位、依赖和存储边界；独立专服已验证生产、原生能力、实际元件满载／续传与正常重启。
+
+- **空气、EMC 与通用 AEKey 资源**：新增 PneumaticCraft 原生邻接供气、Applied Pneumatics 的 ME 空气键、ProjectE 原生只出不入 EMC 能力及邻接主动输出。空气生产仅需 PneumaticCraft，按接收方安全压力限量；不确定接收冻结请求，重启保留余额。通用堆栈保留完整注册类型、资源身份、组件与精确数量，支持 AE2 包裹模板和 ME 输出；缺依赖保留原始数据，拒绝 Missing Content 与有损回读。配方、双语教程及数据包／KubeJS 示例同步更新。
+
+- **灵魂资源蜜蜂**：新增 Industrial Foregoing Souls 的同质灵魂配方、原生只出不入能力和 Soulplied Energistics ME 键桥；直接生产与蜜脾离心共享精确数量和四份规则。单次外部交接限制在 int 范围，长整数余量保留；缺依赖、未知身份和未决交接保持隔离。同步数据包、KubeJS 示例和中英教程，明确 ME 存储需要支持该灵魂键。
+
+- **魔源资源蜜蜂**：新增 Ars Nouveau 魔源产物声明，直接生产与蜜脾离心沿用精确长整数和四份蜜脾块规则。资源接口通过只出不入的原生魔源能力供中继拉取，Ars Énergistique 可选桥支持 ME 魔源元件。缺少 Ars 时保留余额并阻止生产、原生及公共 API 导出；未知身份不转为其它资源。共享标量视图保留模拟、分段提取与旧能力失效，补齐数据包、KubeJS 示例及中英教程。
+
+- **FE 资源蜜蜂**：新增精确 FE 产物声明，蜂箱直接生产和蜜脾／蜜脾块离心共用类型化账户与份数规则。资源接口提供独立的只出不入 FE 能力，通用线缆可拉取；Applied Flux 可选桥支持 ME 自动输出，产物不混入机器运行电池。保存保留大整数和未知身份，旧能力随接口切换失效；数据包、KubeJS 示例及中英教程同步更新。
+
+- **ME 化学品自动输出**：机器资源输出可通过 Applied Mekanistics 将原账户化学品送入 ME；受支持第三方宿主使用自己的节点，Genesis 机械蜂箱／离心机复用机器节点。支持持久化的 资源 TAB 内的 ME 开关、真实游戏刻去重、共享预算和拒收退避；网络异常保留未决量，重启等待核验。节点加载后重新核对账户所有者，旧接口及实体替换立即撤销访问。
+
+- **资源账户主动输出事务**：新增 `ResourceHostApi.transfer` 与不可变输出请求；先隔离请求量，再按接收方真实返回结算，已知余量精确归还。异常、非法返回及回调期间的实体替换保留未决量，阻止原生口和重入重复提取；重启继续暂停，管理员确认实际接收量后恢复。Java 化学品输出示例和中英说明同步更新；自动 ME 输出从机器本身接入。
+
+- **扩展资源账户与直接生产**：独立资源配方、完整身份和精确 long 数量由世界账户保管；机械蜂箱在容量允许后才付费并推进进度。机器资源输出只保存源引用，提供原生／ME 输出，失效后撤销旧访问。公开注册支持 Java 默认与数据包同 ID 覆盖；错误代际等待重载。已记录未决结果在正常保存／重启后保持暂停；强制崩溃下账户、区块与外部库存的原子性仍未验收。
+- **资源蜜脾离心与恢复**：Genesis 基础机及 Mekanism／EM、ME、EME 工厂通过现有接口处理资源蜜脾，块为四份。资源配方独立处理输入，不自动追加 PB 离心物品／流体。补齐高等级工厂识别、升级引用交接及旧熔炼缓存执行门，防止重复消费。恢复确认检查原未决输入槽，清理该 lane 工作后只结算一次，其余槽位继续生产。
+- **第三方资源宿主 API 与示例**：提供真实类型注册、玩家绑定、只读状态和同步预约／提交，复用资源账户与输出。Java、数据包和 KubeJS 示例及双语 README／GuideME／Patchouli 说明现行机械宿主范围；JDTE 仅启用已核验版本，Useless 正式付费和恢复链继续开发。
+- **JDTE 生物工厂资源生产**：适配 0.6.1.0 的实际完成周期，静态纯资源蜂在容量预约成功后才扣除能量、时间及生命流体，满载保留完成进度；原蜜脾继续走物品路线。蜂种重载刷新花源资格；未知消费冻结并暂停，绑定检查机器所有者。资源适配限定已验证版本，并在注入前核对实际字段、方法签名及自然周期入口；旧合并加速兼容独立保留。
+- **Useless 公开 API 候选示例**：新增独立于发布包的固定化学品离心转换示例，使用公开适配器注册与构建器；共享蜂种匹配、四份蜜脾块及精确数量规则。真实依赖验证覆盖配方查找、大整数、组件与显式重载失效；随机转换和整机异常恢复仍待完成，未自动启用生产兼容。
+
+### 修复
+
+- **CI 可选 API 编译依赖**：补齐 JDTE 0.6.1.0、Useless、ProjectE、Ars Nouveau、Industrial Foregoing Souls、ExperienceLib、AE2LT 与 PneumaticCraft 的编译期 JAR，并校验 Useless 和 ExperienceLib 下载摘要；不改变模组运行时依赖声明。
+- **资源离心大批扣料**：修复高并行／高倍率下批次超过物品单组上限时，离心机已拉入原料却始终无法加工的问题。内部配方扣料沿用普通离心链的批量缩减接口，保留完整组件、模拟不修改库存、实际数量核验及异常结果保管。
+- **PB 离心 JEI 产物重叠**：普通／热能离心与 Genesis 分类共用三列换行布局，第四个及后续输出不再回到第一行；流体使用独立槽位和罐渲染，保留热能分类的蜂蜡过滤。资源离心分类更名为“扩展资源离心”。
+- **未决资源的等级安装器拒绝**：机械蜂箱、离心机及工厂在提供升级数据前检查资源账户；有未决请求、无效引用或存档故障时保留原机器和资产，安全拒绝安装器操作。核验后可正常升级，避免异常从升级数据入口传播。
+- **离心机工作声与消音升级**：基础机及 Mekanism／EM、ME、EME 工厂改用服务端一次性工作声，避免拆除机器后客户端循环声残留并恢复满音量。基础音量降至 0.4，保留消音升级的递减效果与满级静音；同一游戏刻只尝试播放一次，时间加速不增加声音密度。
+- **AE2 慢插入日志阈值**：修正纳秒换算毫秒时的整数截断，慢插入警告正确显示 `>0.5ms`，不再误显示 `>0ms`；实际判定阈值和退避策略不变。
+- **配置卡关闭熔炼后的输入回收**：统一按钮、配置卡批量粘贴和升级恢复的关闭逻辑；目标机器的回收请求不再被来源卡片的状态覆盖。重复粘贴关闭配置、加载旧存档时也补查一次不可处理输入，修复超级融合卡粘贴后熔炼原料滞留的问题；可处理蜜脾和目标机器已有待返还物品仍按原有归属保留。
+- **配置卡实测确认**：用户于 2026-10-08 确认，超级融合卡批量关闭熔炼后的自动返还正常工作。
+- **AE2 空槽拉取容量**：按实际候选物品计算空槽接收量，修复空栈上限将首批拉取错误压低、或与低堆叠物品实际容量不符的问题；候选选定前的总配额不再被空栈上限截断。带 `MAX_STACK_SIZE` 修改的物品绕过仅按 Item 缓存的槽位上限，保留分等级堆叠倍率与实际插入约束。
+- **Mek Energistics 样板槽位误暴露**：关闭通用机械离心机、蜂箱及全部工厂等级从 Mekanism 基类继承的样板供应器入口。接入 AE2／闪电科技无线网络后不再向样板管理终端暴露默认 72 槽，拒绝通过这些继承入口执行样板；保留本模组正常的 AE2 输入、输出和外部样板发配目标。新增守卫独立门控，既有安装器兼容处理、加载条件和可选依赖声明保持原样。
+- **精华转化黑名单**：排除 `exdeorum:bone_crook`，防止骷髅蜜蜂的骨头被自动合成为不可分解的骨钩；同时排除原版 `minecraft:music_disc_5` 和整合包配方 `kubejs:kjs/music_disc_5`，保留幽匿蜜蜂产出的唱片 5 残片。仅限制精华转化升级，正常工作台合成不受影响。
+- **玩家环境复测**：用户于 2026-10-07 在原反馈的 Infinity Legacy II 整合包中确认，机器不再显示样板槽位，WCWT 也不再提供对应的供应器 UI 按钮，原断连触发路径已消除。
+
+### 性能
+
+- **高倍加速银行与预算**：虚拟 tick 银行由固定 4096 改为默认 8192、可配置 1024–32768；每真实刻兑现预算由默认／最高 1024 改为默认 2048、最高 4096，继续按 MSPT 降额。既有显式配置不覆盖；调低银行容量保留已有挂账，停止加速后的残留仍有界。
+- **资源离心与账户快照**：复用有界、随重载失效的冻结配方及各处理槽已付工作，减少重复 NBT 编解码；生产阶段共享已封闭证据，只读容量检查不再构建合并余额。保留完整组件、唯一抽样、输入扣除、冻结旧配方和未知结果隔离。
+- **满载混合加工成本**：组合离心复用容量探针及按配方／升级失效的资源计划，确定性资源直接批量计算；请求证据不再复制随后丢弃的普通配方。宿主复用位置绑定信息，每次仍校验实体、代际和账户；普通物品／流体成功交付仅在查询、保存或失败时生成恢复 ID，执行中保存与异常保管保持完整。
+- **ME 慢插入调度**：物品、流体及扩展资源只计量实际 ME 插入调用，不把本地账本／保管算为网络成本。成功的慢调用按成本短延迟，不累积拒收指数；持续拒收继续退避。共享机器／网络预算，换网清理成本与旧存储引用，未知接收结果继续保管并禁止重试。
+- **ME 调度恢复与公平性**：健康调用按实际成本余量恢复网络状态，避免轻微尖峰导致长时间单宿主轮转；普通输出与扩展资源使用同一机器的调度身份。资源开关不注销仍在工作的普通输出，预算耗尽后健康度恢复也不能在同刻继续工作。
+- **60 槽蜂箱实体预览**：界面使用有界材质缓冲合并重复提交，透明排序和特殊几何保持顺序回退，保留动态颜色、纹理与模型表现。实体缓存保持 256 项并逐项淘汰，资源包／数据重载与换世界均失效，关闭界面释放原生缓冲。
+- **输入校验工作集**：输入有效性缓存改为有界 64 条 LRU 哈希查找，覆盖 19 进程工厂最多 38 种 AE2 候选，减少原 20 条缓存的循环驱逐、线性查找与数组搬移；保留有效期、熔炼开关失效和现有配方判定，清理期间的旧校验结果不再写回。
+- **网络协调器重复登记**：同一宿主同刻连续输出重试只登记一次活跃状态；宿主表在既有状态锁下使用原始 long 映射，减少重复并发映射写入和装箱。每次调用仍检查最新成本预算，保留网络隔离、轮转、卸载清理和同刻重新登记。
+- **万象稀疏容量搜索**：按事务内的真实模板容量建立有序可接收槽位索引，二分试算跳过无关蜂种、满槽和拒收槽；临时状态由六组数组缩减为数量与归属两组，正式计划再从原快照求增量。仍逐槽模拟内部接收，保留完整组件、原槽位优先级与共享模板归属。
+- **待输出缓存命中路径**：精华／粗矿转换升级启用时，直接用实际 pending 模板规划，省去未参与规划的原配方输出表查询；PB 输出表和粗矿转换缓存命中先执行只读查询，避免重复进入 `computeIfAbsent`。产出概率、数量、输入扣除和部分接收规则不变。
+- **普通蜜脾待输出直推**：AE2 与邻居直通分开传递物品模板和数量，取消预算、开关或目标检查之前的请求栈复制；AE2 直接使用完整物品键与请求量，邻居路径仅在实际提交时创建独立栈。保留部分接收、余量挂起及输入只扣一次的结算顺序。
+- **重试中的标签判定**：粗矿转换缓存普通产物的否定结果；蜂蜡副产物使用只包含注册表物品的不可变标签快照，减少高并行配方累积和待输出重试中的重复标签查询。标签重载和停服清理缓存，转换规则、升级开关及数量余数不变。
+- **万象模拟探针复用**：同一事务内，相同模板和请求数量的容量探针跨输出槽复用，减少派生组件初始化；仍逐槽调用内部插入模拟，保留各槽权限与实际容量约束。
+- **混养蜂箱输出索引**：使用物品与 `bee_type` 分桶，并按库存内容版本与堆叠倍率版本复用输出索引，减少多蜂种逐组产出时的重复扫描及派生组件哈希；自身写入增量维护索引，外部库存变更、槽位列表替换、倍率变更或异常会使索引失效。桶内仍精确比较完整组件，满槽余量继续保留。
+- **AE2 输出指纹延迟编码与共享**：输出扫描只收集条目，实际预留账本前才查询指纹；相同注册表与重载代际内，多台机器共享按条目数及字符数限制的 LRU 缓存，停服清空。被预算、退避或直连优先跳过的条目不提前编码，超大指纹仍完整交付，保留先记账再写入网络的顺序。
+- **多候选输入校验**：工厂输入/输出兼容性由单条缓存改为有界多条缓存，减少熔炼与蜜脾候选交替时的重复配方查询；完整物品组件、输入数量及三个输出槽均参与匹配，世界或配方重载变化时失效，校验期间发生失效时禁止写回旧代际结果，修复仅按 Item 与蜂种匹配可能复用错误组件结果的问题。
+- **高负载 AE2 输入拉取**：中等及高成本抽取接入既有网络轮转和预算，调度顺延不记为拉取失败；保持单次请求数量、过滤与库存保留规则。
+- **创造容器批量抽取**：本模组同步 AE2 拉取命中 Mekanism Bin 或 Create 创造板条箱时，按请求批量返回，减少逐组构造物品栈；保留 ME 路由、原有提取权限、有限库存扣减和创造容器不消耗标记库存的语义，退出或异常立即清理作用域。
+- **无限元件固定键复用**：MEInfinityCell 的固定物品/流体供应商按数据重载代际复用 AE2 键，避免高频注册表解析和组件构造；任意脚本动态供应商与列表变更仍实时生效。Create 和 MEInfinityCell 均按可选依赖独立门控。
+- **万象与待输出重试**：万象容量搜索复用事务内临时数组，先检验整批和最小批次，减少全接收/完全阻塞时的二分试算；容量判定共用正式规划的分配逻辑，不构造执行计划，并复用原有非空槽已经完成的组件匹配。每种候选前缀的分配顺序、真实模板及模板间匹配仅在事务内准备一次，后续试算只更新数量数组，保持原分配余数和槽位优先级。粗矿转换在无可转换产物时保留原 pending，在有转换时减少中间栈复制，保留余数和超大数量。
+- **离心机输入优先级与自动回收**：保留熔炼配方优先级，按各自游标轮转熔炼候选；只有本轮没有足够可用熔炼候选时才以蜜脾补位。关闭单机熔炼适配时触发一次不可处理输入检测；网络暂时拒收时保留在输入槽或持久化待返还队列，已知待处理物即使新输入拉取关闭仍会继续回收；AE2 写入结果未知时隔离数量且不盲目重试。
+
+### English
+
+- **CI optional API compile classpath**: restore the exact compile-only JARs for JDTE 0.6.1.0, Useless, ProjectE, Ars Nouveau, Industrial Foregoing Souls, ExperienceLib, AE2LT and PneumaticCraft, with Useless and ExperienceLib checksums. This leaves the mod runtime dependency metadata unchanged.
+- **Extended resource production monitoring**: the window defaults to actual successful production rates over five seconds and can switch to pending stock. Observed resources remain visible with no stock or after rejected combs return to ME; stopped rates reach zero. Bounded deltas synchronize only while the window is open, closing releases sessions, and Jade receives no rates. Display text and tooltips are cached. Recipient help explicitly names the EMC account, and Jade labels refer to extended resource outputs.
+- **Large ME transfers**: removes the incorrect universal 2.1G batch cap from air and ordinary generic AEKeys while preserving long acceptance, native limits and shared network budgets. Souls and their generic key retain overflow protection for Soulplied Energistics 1.0.3's direct long-to-int external-storage cast.
+
+- **Resource centrifuge scheduling and capacity**: resource and ordinary PB combs share virtual ticks, parallel limits and batch energy costs. Mechanical pending-output capacity is `1,000,000 x actual output-slot multiplier`, without dividing by the BASIC tier. Old default limits expand while preserving balances, explicit small limits and unresolved custody. High-yield comb blocks still apply backpressure when resource capacity is insufficient.
+- **Ordinary output and loading fixes**: resource-account session isolation no longer blocks ordinary items and honey already generated by mechanical apiaries; uncertain ordinary transfers remain suspended by their separate custody records. Honey loading and tier upgrades restore the inventory snapshot without adding the same fluid again through both superclass and compatibility fields.
+- **Input filter matching cost**: cache matching slots for blacklists, whitelists, fuzzy bee types and ignore-NBT mode by the complete AEItemKey, bounded to 128 candidates per mode. Configuration, resolved-key and precise-mode changes invalidate the cache. Limits and stock reserves remain live; resolved precise whitelists avoid a network inventory refresh when no stock policy needs it, while tag and fuzzy modes retain candidate-directory scanning.
+- **Extended-resource input protection**: preserve bee and recipe identities while dependencies are absent. Mechanical centrifuges skip combs whose resources are unavailable, or whose ME output is rejected without a neighboring native receiver, keeping ordinary processing supplied. Every resource in a combined recipe needs an available route. Probes only simulate, without consuming input or creating accounts. Each network allows at most four new probes per real tick in waiting-host order; short acceptance/rejection caches invalidate on network, switch and reload changes, with registration released on unload.
+
+- **Extended-resource compatibility notice**: bees with Genesis production or resource-centrifuging recipes show a localized notice on cages, spawn eggs, combs / comb blocks and mechanical apiary bee slots without Shift. It directs extended outputs to Genesis machines and extension issues to Genesis, clarifies that PB's own hives / centrifuges are not adapted yet, and does not restrict ordinary PB output. Notices follow the server recipe catalog instead of hardcoded namespaces.
+- **Native upstream production and logistics compatibility**: Useless 1.21.1-2.4.6 uses its existing recipe/generic-key API to process and return deterministic resource outputs under its own rules. The local JDTE 0.6.4.3 API v3 patch selects extended bees: Genesis supplies recipe results, the Bio Factory owns fees and its existing pending-cycle buffer, and the existing AE output upgrade returns resources. Ordinary production allocates no resource event or additional resource NBT. Limited runtime evidence covers six resource types, rejection/partial acceptance/disconnection/reload, and unknown-result isolation after a receiver writes then throws. Legacy bridges remain compatible; the JDTE PR is planned after the Genesis release.
+
+- **Unlimited input fairness and cost**: performance scenarios now use real ME automatic replenishment with unlimited input enabled. Occupied lanes count toward each type's share, and the fill pass preserves lanes for types with unmet demand, preventing slower resource or smelting inputs from displacing ordinary combs under acceleration. Prune unavailable lane allocations before recipe validation and reuse component matches and extraction probes. Successful slow extractions use a short cost-based delay without accumulating the rejection exponent; actual rejections retain backoff. Input and output use separate network-wide cost budgets and active-worker rotation, so output spikes cannot stall healthy replenishment while expensive extraction remains bounded across machines. Temporary lane rejection caused by paired outputs no longer delays the entire item key; a bounded 2ms input allowance after slow output lets healthy batches replenish multiple input types. Replenishment prefers the last lane used by the same complete item key, avoiding paired-output conflicts caused by lane rotation. Slot replacement, shrinking and unloading discard preferences; live validation and fair allocation remain in force.
+- **Input configuration recovery across missing dependencies**: retain the complete filter data while AE2 is absent and restore whitelists, limits, unlimited input and stock reserves when it returns. Validate versions, field types and duplicate or out-of-range slots before loading. Invalid configuration pauses new pulls and rejects filter edits, with `status` diagnostics and `retry-data` support; pending items and unresolved transfers retain their separate ownership. Centrifuge and apiary upgrades carry separate configuration and custody snapshots without resetting settings or output switches while dependencies are absent.
+- **Input transfer custody and retry**: register ME extraction, source-slot withdrawal, input delivery and network returns before external mutation. Exceptions or invalid counts retain known remainders and the current uncertain offer, suspend processing and prevent automatic replay. Adds the audited `resolve-input` command, raw invalid-NBT retention, persistent exponential retry history and overflow-safe reconciliation.
+
+- **1.1.0 saturated-load and upgrade verification**: adds the 256x dedicated-server case with all 162 processing lanes continuously supplied across nine centrifuges, including 81 smelting lanes. Ordinary comb and smelting consumption both reach 256 times the normal-speed case. A complete 1.0.10 checkpoint restores machine, account and ME inventories under 1.1.0 and resumes production; all 12 accounts in the old unclean world remain isolated without receiver calls or account-file overwrites. These short runs do not establish long-term stress or arbitrary power-loss atomic recovery.
+
+- **Acceleration bank and budget**: replace the fixed 4096-tick bank with a default of 8192, configurable from 1024 to 32768. The per-real-tick processing budget defaults to 2048 and supports up to 4096, with MSPT scaling retained. Existing explicit settings are preserved; lowering bank capacity keeps already credited work, and post-acceleration backlog remains bounded.
+- **Resource centrifuge and account snapshots**: reuse bounded, reload-aware frozen recipes and paid lane work to avoid repeated NBT encoding and decoding. Production transitions share owned immutable evidence, and capacity checks avoid constructing merged balances. Exact components, single sampling and consumption, old paid recipes and uncertain-outcome isolation are preserved.
+- **Saturated mixed processing cost**: combined centrifuges reuse capacity probes and resource plans invalidated by recipe or upgrade changes, and batch deterministic resources directly. Request evidence no longer copies an ordinary recipe only to discard it. Hosts reuse physical binding data while rechecking entity identity, generation and account access. Successful item/fluid transfers generate recovery IDs only when queried, saved or failed, preserving in-flight saves and uncertain-outcome custody.
+- **Slow ME insert scheduling**: items, fluids and extended resources measure actual ME insert calls separately from local custody and ledger work. Successful slow calls receive cost-based short delays without increasing the rejection exponent; rejected calls retain backoff. Machine/network budgets remain shared, network changes clear learned costs and retained storage, and unknown outcomes remain held without retry.
+- **ME scheduling recovery and fairness**: healthy calls contribute their actual cost headroom so minor spikes do not cause prolonged single-host rotation. Ordinary output and extended resources share one machine scheduling identity. Disabling resource output preserves active ordinary output registration; health recovery cannot reopen an exhausted budget in the same tick.
+- **Large resource centrifuge batches**: fix stalled processing after ME input retrieval when parallel or accelerated batches exceed an item's normal stack size. Internal recipe consumption uses the ordinary centrifuge's bulk decrement operation, preserving exact components, non-mutating simulation, actual-count checks and custody of uncertain outcomes.
+- **Unclean resource-session isolation**: persist a session marker before the first account access and remove it only after an orderly stop, completed world close and successful final account save. Tick crashes, final-save exceptions, chunk-save failures and swallowed world-close errors retain isolation. Older asynchronous write completions and save retries cannot unlock it. Normal upgrades/recovery retain assets; unsafe sessions require a consistent complete-world backup, without claiming atomic rollback across files.
+
+- **Resource container flowers**: Genesis mechanical apiaries and factories accept `flowerResource` in bee definitions for minimum fluid, chemical, FE or complete AEKey contents. Existing `flowerFluid` also accepts fluid-capability items. Checks use one item and one internal tank, or a real ME cell's exact key, without pooling stack counts or feeder slots and without consumption. Empty, incorrect, conflicting or malformed definitions cannot qualify; disabling, slot changes and reloads invalidate matches, while in-place content changes are checked by the next real tick. Four translated examples and bilingual tutorials document the mechanical-only scope; PB/JDTE do not accept the new flowers.
+
+- **Author examples and names**: separate datapack and client resourcepack, complete Chinese/English names for 28 example bees, per-definition PB translation-key hints, validation and installable ZIP tasks. Adds copper-ingot flowers for separate direct-FE and comb-to-FE bees, with optional KubeJS acquisition recipes. Development runs load both packs; release JARs exclude examples. Bilingual guides link to GitHub, explain installation and renaming, and document generic registration of valid AEKeys from other mods.
+- **GuideME author-page layout**: replace oversized tables and broken code blocks with short paragraphs and steps, linking full JSON and scripts in the repository.
+- **PB centrifuge JEI overlap**: ordinary, heated and Genesis categories share a three-column layout. Later outputs and fluids occupy separate slots; heated wax filtering is preserved. Rename the resource category to Extended resource centrifuging.
+
+- **Extended resource window redesign**: QIO/AE2-style 18×18 slots hold original 16×16 resource icons, with a full-width directory and compact selection bar. Dedicated window, button and MEK side-tab textures use matching bevels. Persistent help explains that these are outputs beyond inventory items/fluids, labels their amounts as awaiting output, and provides no extra storage. Search has a clear button; filtering/sorting resets scrolling. Exact amounts and output buffer limits remain available on hover. Resource renderers and textures are preserved.
+- **Direct resource production and export**: apiaries, centrifuges and factories create resource storage lazily under the machine owner and export through their existing ME node, without requiring an output-interface binding. Native chemical capabilities belong to the machine. Balances and unknown transfers remain held; ambiguous switches from old development interfaces start disabled and can be enabled in the resource window.
+- **Resource display and guide links**: a MEK side tab and native window use chemical gauges, paired Eject buttons and an ME toggle while retaining rejected resources; bee tooltips show base resource output. Resource icons cannot become inventory items. GuideME links shared egg/comb items to Myriad only when their bee components match and refreshes when switching bee types.
+- **Author walkthrough**: bilingual README, GuideME and Patchouli start with a complete hydrogen example, then explain direct production, editable fields, wiring, KubeJS and troubleshooting. Datapack examples contain valid JSON `_comment` explanations; scripts have bilingual comments.
+
+- **Development examples**: runClient loads resource-bee examples from a separate development source set; release artifacts reject the example namespace. Removes dedicated Data Energistics resources from public datapack/KubeJS examples and bilingual guides while retaining the generic AEKey diamond example.
+- **60-slot apiary previews**: bounded material buffers combine repeated draw submissions while preserving ordered fallbacks for transparent and special geometry. Entity caching remains capped at 256 with individual eviction; data/resource reloads and world changes invalidate it, and closing the screen releases native buffers.
+- **Pending-resource tier upgrades**: mechanical apiaries, centrifuges and factories reject installers before preparing upgrade data when resource requests, invalid references or persistence faults remain unresolved. Machines and assets stay in place; upgrades resume after review instead of propagating an exception.
+- **Mechanical flower and dynamic output settlement**: reuse flower matching, consumption switches, attempt budgets and pollinates cycle occupancy. Resource overlays for multi-flower, WannaBee and Myriad retain the existing generators. Shared paid remainders and immediate routes preserve backpressure, suspend unknown output together with the resource request, and resume normal saves without rerolling or duplicate fees.
+- **Public optional-host interfaces**: JDTE natural/coalesced cycles retain the host's fees and completion point, mutually exclusive with the old 0.6.1.0 fallback. The earlier Useless custody prototype is excluded from the planned PR; its operator commands remain available only when the legacy API exists. Current Useless compatibility registers native recipes without rewriting ordinary processing, AE tasks or recovery.
+- **Combined ordinary and resource centrifuging**: resource recipes can explicitly enable `include_pb_outputs`, defaulting to false. Reuses the actual PB recipe, stability, byproduct filtering, Essence Conversion followed by Raw Ore Smelting, and output routes with shared cycles, input and one payment. Frozen recipe selections retain complete components and apply block yields once per channel. Bounded paid remainders support more than three item types; old pending output drains first and unknown transfers pause jointly. Includes save/upgrade recovery, large-batch quantity protection, JEI/Jade hints, datapack/KubeJS/Java examples and bilingual guides.
+- **Centrifuge work sounds and Muffling Upgrades**: base centrifuges and Mekanism/EM, ME and EME factories now play one-shot work sounds from the server, preventing a removed machine's client loop from persisting at full volume. Base volume is reduced to 0.4 while retaining progressive muffling and full-upgrade silence. Sound attempts run once per real game tick, so time acceleration does not increase their frequency.
+- **AE2 slow-insert threshold in logs**: use fractional milliseconds instead of truncated integer division so warnings correctly display `>0.5ms` instead of `>0ms`. The actual threshold and backoff policy are unchanged.
+- **Ordinary production and output custody**: full buffers retain existing items; paid cycles settle by bee type and generated remainders remain frozen. Unknown neighbor, centrifuge and ME item/fluid transfers are held separately and suspend output across normal saves and upgrades. Strict validation of paid batches, counts, requests and outer save fields preserves malformed or unknown data instead of treating it as empty inventory or truncating amounts. Adds audited recovery commands and raw-data retry, unified current-menu/entity/access checks, and safe empty-account retirement after machine removal.
+- **Shared batch cost**: large resource batches use binomial sampling while retaining probabilities and shared-round correlations; small batches retain their original random sequence. Eligibility and execution reuse one batch plan while rechecking current capacity. Buffer rotation bounds both scanning and external attempts to 32 groups. Algorithm benchmarks and real batch entry points were checked; this is not a full MSPT claim.
+
+- **Shared mechanical production**: ordinary and resource batches reuse item generation, existing gene sampling and upgrades, preserving probabilities, attributes, plugins and multipliers. Essence Conversion uses the existing index; capacity covers remainders and results. Full buffers retain paid progress and uncertain writes pause without replay. Samplers do not give resource-only bees default honey.
+
+- **Resource-bee tag and item flowers**: static resource/mixed batches reuse mechanical-apiary and JDTE matching for valid block/item tags and concrete flowers. Reloads invalidate admission and host caches. Empty, invalid or inverse flowers and arbitrary post-pollination callbacks remain gated; mechanical conversions and existing dynamic bees use their dedicated settlement entry. Includes mixed_tag examples and bilingual guides.
+
+- **Mixed JDTE bio-factory output**: version 0.6.1.0 shares cycles, yield rounds and fees across static items and resources. Active output slots and resource capacity are checked before payment; life-fluid bonuses, productivity genes and comb blocks retain their rules. Full output holds progress. Debit or partial-write failures retain snapshots and freeze across restarts without replay. The public host API can prepare local snapshots from a single sampled result while preserving its existing resource-only entry point.
+
+- **Resource host scope**: prioritize Genesis apiaries, centrifuges and factory tiers. Disable four native-PB resource production interceptors while retaining ordinary PB production and old development-account review/migration. Keep the limited JDTE 0.6.1.0 bridge; additional hosts are independent of the mechanical production milestone.
+
+- **Mixed mechanical apiary output**: static PB items and extended resources share a production batch, with complete item, honey and resource capacity checks before payment. Productivity rounds are shared while item genes and comb-block conversion remain intact. Exceptions freeze local before/after snapshots and prevent retries. Includes a mixed datapack example and bilingual guides; special side effects remain gated. Also fixes honey duplication when loading both the base inventory and its compatibility snapshot; repeated loads no longer add another inventory.
+
+- **Resource recipes and balances**: adds JEI production/centrifuging categories for the server's merged datapack and Java-default recipes, with reload replacement and logout cleanup. Resources retain full identities, exact quantities, per-portion probabilities and four-portion comb blocks. History and bookmarks preserve NBT numeric types; untranslated bees fall back to IDs, and resources cannot be granted through cheat mode. Icons reuse the owning mod's renderer or native textures/models without an ME bridge; resource-pack reloads clear the visual cache. Jade shows interface state, the ME toggle and bounded balances for authorized players without account IDs or diagnostic details. Bilingual guides are updated.
+
+- **Experience and lightning resources**: adds ExperienceLib XP points, AE2 Lightning Tech high/extreme-high voltage recipes, extract-only native capabilities and ME output. Voltage identities remain separate; native and ME exports share exact balances and stale interfaces lose access. Bilingual guides and examples describe units, dependencies and storage boundaries. Dedicated-server checks cover production, native capabilities, actual cell pause/resume and normal restart.
+
+- **Air, EMC and generic AEKey resources**: adds native PneumaticCraft neighbor delivery, Applied Pneumatics air keys for ME output, and extract-only ProjectE EMC capabilities with active neighbor delivery. Air production requires only PneumaticCraft and respects receiver safe pressure; uncertain acceptance freezes the request and balances survive restart. Generic stacks retain registered types, full identities/components and exact quantities, with AE2 wrapped templates and ME export. Missing dependencies preserve raw data; Missing Content and lossy round trips are rejected. Includes recipes, bilingual guides and datapack/KubeJS examples.
+
+- **Soul resource bees**: adds Industrial Foregoing Souls recipes, extract-only native capabilities and a Soulplied Energistics ME key bridge. Direct production and comb centrifuging share exact quantities and four-portion blocks. External soul offers fit in an int while long remainders remain saved; missing dependencies, unknown identities and uncertain transfers stay isolated. Datapack/KubeJS examples and bilingual guides describe compatible ME storage.
+
+- **Source resource bees**: adds Ars Nouveau Source declarations for direct production and comb centrifuging with exact long quantities and four portions per block. Extract-only native capabilities support Ars relays; the optional Ars Energistique bridge exports to ME Source cells. Missing Ars retains balances while blocking production, native extraction and public API export; unknown identities are never reinterpreted. Shared scalar views retain simulation, segmented extraction and stale-handle invalidation. Includes datapack/KubeJS examples and bilingual guides.
+
+- **FE resource bees**: adds exact FE declarations for direct hive production and typed comb/block centrifuging. Machine resource capabilities expose extract-only FE separately from operating power, with native cable extraction and optional Applied Flux ME output. Long quantities and unresolved identities survive saves; stale capabilities are revoked when the interface changes. Datapack/KubeJS examples and both guide languages are updated.
+
+- **Automatic ME chemical output**: bound Machine resource capabilities can export account chemicals through Applied Mekanistics. Supported third-party hosts use their own node; Genesis apiaries/centrifuges reuse their existing node. Includes a saved resource-window ME toggle, one attempt per real tick, shared budgets and refusal backoff. Unknown reception stays unresolved across restarts, node ownership is revalidated after NBT loading, and stale interfaces or replaced hosts lose access.
+- **Resource accounts and direct production**: independent recipes, complete identities and exact long balances are stored in world accounts. Mechanical apiaries check capacity before payment/progress. Output interfaces retain source references only and export through native/ME routes. Public registration supports Java defaults and datapack overrides. Saved unresolved outcomes remain paused after normal restarts; atomicity across accounts, chunks and external stores after forced crashes remains unverified.
+- **Resource centrifuging and recovery**: Genesis base machines and Mekanism/EM, ME and EME factories use their existing interfaces; comb blocks contain four portions. Resource recipes do not automatically add PB item/fluid outputs. Complete factory recognition, upgrade reference transfer and cached-smelting execution guards prevent competing consumption. Recovery checks every input lane and clears the unresolved lane's old work before a single settlement.
+- **Resource account output transactions**: added `ResourceHostApi.transfer` and immutable offers. Reserve before the external callback and settle only its actual accepted amount, returning known remainders exactly. Exceptions, invalid returns and entity replacement retain an unresolved request, block native/reentrant extraction and stay paused across restarts until operator confirmation. Includes a Java chemical-output example and bilingual instructions; automatic ME output is provided by the machine resource output.
+- **Third-party resource host API and examples**: register actual machine types, bind through real players, inspect immutable status, and reserve/commit synchronous production. Unused reservations can be cancelled; callback failures retain frozen results, and entity replacement revokes stale generations. A compilable Java consumer and tested datapack/KubeJS comb-to-chemical examples accompany bilingual README, GuideME, and Patchouli instructions. Useless production integration remains in development.
+- **JDTE bio-factory resource production**: integrated the real completion boundary in 0.6.1.0. Static resource-only bees reserve capacity before energy and time/life-fluid debits; full buffers hold completed progress, while ordinary combs retain the item route. Bee reloads refresh flowering eligibility, uncertain debits freeze and pause production, and binding checks machine ownership. The resource adapter is limited to the verified version and checks actual fields, method signatures and natural-cycle entry points before injection; existing coalesced acceleration compatibility remains separate.
+- **Useless public-API candidate**: a standalone fixed-chemical centrifuging example uses public adapter registration and the recipe builder, sharing bee matching, four-portion comb blocks and exact quantities. Real-dependency checks cover lookup, large quantities, components and explicit reload invalidation. Random conversion and complete machine recovery remain unfinished; production compatibility is not enabled automatically.
+- **Input-validation working set**: a bounded 64-entry LRU hash cache covers up to 38 AE2 candidates across a 19-process factory, reducing cyclic eviction from the previous 20-entry cache, linear searches and array shifts. TTL, smelting-toggle invalidation and recipe rules remain intact; invalidated in-flight results cannot repopulate the cache.
+- **Repeated network-worker registration**: consecutive calls from the same worker in one tick register activity once. A primitive long map uses the existing state lock, avoiding redundant concurrent-map writes and boxing. Every call still checks current cost budgets, with independent networks, fair rotation, unloading and same-tick re-registration preserved.
+- **Sparse Myriad capacity searches**: transaction-local, ordered eligible-slot indices skip unrelated templates, full slots and rejected slots during binary search. Scratch state uses count and owner arrays instead of six arrays, deriving committed increments from the original snapshot. Per-slot internal simulation, exact components, physical slot priority and shared-template ownership remain intact.
+- **Pending-output cache hits**: essence/raw-ore conversion upgrades plan from actual pending templates without querying an unused recipe-output map. PB output and raw-ore conversion cache hits use a read lookup before `computeIfAbsent`; probabilities, quantities, input consumption and partial acceptance are unchanged.
+- **Input recovery after configuration-card smelting changes**: buttons, bulk configuration pastes and tier restoration now share the same disable behavior. A source card cannot overwrite the target's recovery request. Reapplying an off configuration or loading an older save schedules a check for unprocessable inputs, fixing smelting ingredients left behind by Super Fusion Card pastes while retaining processable combs and existing pending ownership.
+- **Configuration-card runtime confirmation**: on 2026-10-08, the user confirmed that automatic input recovery works after bulk disabling smelting with the Super Fusion Card.
+- **Direct flushing of ordinary comb outputs**: AE2 and neighbor output paths pass templates and quantities separately, avoiding request-stack copies before budget, switch and target checks. AE2 receives the exact key and amount; neighbor requests are copied only for actual insertion. Partial acceptance, retained remainders and one-time input consumption keep their existing order.
+- **Tag checks during retries**: raw-ore conversion caches negative results for ordinary outputs, and wax filtering shares an immutable registry-item tag snapshot. Tag reload and server shutdown invalidate these caches; conversion rules, upgrade switches and remainders are preserved.
+- **Myriad simulation probes**: reuse equal-template, equal-amount probes across slots within a transaction while still simulating internal insertion separately for every slot and respecting its permissions and capacity.
+- **AE2 empty-slot input capacity**: calculate empty-slot capacity from the actual candidate and avoid capping the preliminary machine quota by the empty stack's limit. Explicit `MAX_STACK_SIZE` changes bypass item-only slot-limit caches, preserving tier multipliers and actual insertion limits.
+- **Mixed-bee apiary output indexing**: bucket by item and `bee_type`, and reuse the index while inventory and stack-multiplier versions match. Own writes update it incrementally; external inventory changes, slot-list replacement, multiplier changes and exceptions invalidate it. Full component comparison still separates variants, and overflow remains retained.
+- **Deferred and shared AE2 output fingerprints**: encode only when reserving a ledger entry, and share results across machines within the same registry and reload generation using an LRU bounded by entries and characters. Server shutdown clears the cache. Skipped entries avoid encoding, oversized fingerprints remain intact, and ledger reservation still precedes the network write.
+- **Multiple input candidates**: a bounded multi-entry factory compatibility cache avoids repeated recipe lookups as smelting and comb candidates alternate. Matching covers full components, input count and all three output slots, with world/reload invalidation and rejection of stale in-flight cache writes, fixing incorrect reuse between component variants sharing an item and bee type.
+- **High-load AE2 input pulling**: moderate and expensive extracts participate in existing per-network rotation and budgets. Scheduling deferrals no longer count as failed pulls; request amounts, filters and reserve rules remain intact.
+- **Bulk extraction from creative containers**: Genesis AE2 pulls request batches from Mekanism bins and Create creative crates, avoiding per-stack allocation loops while retaining ME routing, extraction rules, finite-stock accounting and creative templates. The synchronous scope is cleared on return and failure.
+- **Fixed keys for infinity cells**: MEInfinityCell fixed item/fluid suppliers reuse AE2 keys until data reload, while arbitrary dynamic script suppliers and list mutations remain live. Create and MEInfinityCell integrations are independently guarded as optional dependencies.
+- **Myriad planning and pending output retries**: capacity probes share transaction-local arrays and check the full and minimum batch before binary search. Capacity-only probes use the same allocation rules without building execution plans and reuse component matches already established for occupied slots. Allocation order, actual templates and pairwise template matches are prepared once per candidate prefix within the transaction; subsequent probes update primitive counts while preserving allocation remainders and slot priority. Raw-ore conversion avoids copying unchanged pending outputs and reduces intermediate copies for actual conversions while preserving remainders and large counts.
+- **Centrifuge input priority and automatic recovery**: smelting priority is preserved, with an independent rotating cursor for each class; combs fill only the candidate slots left after no further usable smelting candidates are found. Turning off per-machine smelting compatibility schedules a one-time scan for inputs the machine cannot process. Temporary network rejection keeps them in the input slots or a persistent pending queue. Known pending assets continue recovery even when new input pulling is disabled. An unknown AE2 write result is quarantined and never blindly retried.
+- **Unintended Mek Energistics pattern slots**: disabled the pattern-provider entry points inherited from Mekanism by the addon's centrifuges, apiaries and all factory tiers. Connecting through AE2 or Lightning Tech wireless networks no longer exposes the default 72 slots in pattern-management terminals, and inherited pattern execution is rejected. The addon's AE2 input/output integration and external pattern delivery targets remain available. The new guard has a separate loading condition; existing installer compatibility, loading conditions and optional dependency declarations are unchanged.
+- **Essence Conversion exclusions**: excluded `exdeorum:bone_crook` so Skeleton Bee bones are not automatically crafted into non-reversible bone crooks. Also excluded vanilla `minecraft:music_disc_5` and the pack recipe `kubejs:kjs/music_disc_5`, preserving Sculk Bee disc fragments. These exclusions apply only to the Essence Conversion Upgrade; normal crafting remains available.
+- **Player environment validation**: on 2026-10-07, the user confirmed in the original Infinity Legacy II pack that the machines no longer expose pattern slots or corresponding provider UI buttons in WCWT, eliminating the reported disconnection trigger.
+
+### 验证 / Validation
+
+- **扩展资源 R0/R1 验证**：41 项 NeoForge 初始化测试全部通过；无 AE2 专服验证了真实 PB 普通／模拟周期、满载暂停、取消与故障隔离、实体替换／强制移除、旧引用拒绝及账户重启恢复。命令权限和距离使用专服 FakePlayer 探针验证，尚无真实客户端操作证据。真实加压管道把 10 个 PB 周期产生的 1,000 mB 氢气完整送入基础化学罐，逐刻核对账户、管道和罐的总量；另一专服进程验证来源／接口／罐重启恢复后继续生产和原生提取。普通测试 704 项（702 通过、2 跳过），`build verifyReleaseArtifact` 通过；机械蜂箱、ME 输出、PB 13.13.5 整包和 256x 吞吐仍待验收。
+- **Resource R0/R1 validation**: all 41 NeoForge-initialized tests passed. Isolated servers without AE2 verified actual PB normal/simulated cycles, full-buffer pauses, cancellation and failure isolation, replacement/removal, stale-reference rejection and host/account restart recovery. Command ownership and reach checks used server FakePlayers; no actual client interaction was tested. Real pressurized tubes transferred all 1,000 mB of hydrogen from ten PB cycles into a basic chemical tank, with per-tick account/tube/tank conservation checks. A second server process verified source/interface/tank restoration, further production and native extraction. The 704 plain tests had 702 passes and two skips; build and artifact verification passed. Genesis apiaries, ME output, the full PB 13.13.5 runtime and 256x throughput remain unverified.
+- **2026-10-08 三组复测**：Spark [CrlVBcZEyz](https://spark.lucko.me/CrlVBcZEyz)、[vnVWmkKEQA](https://spark.lucko.me/vnVWmkKEQA)、[LXaKXT2VC4](https://spark.lucko.me/LXaKXT2VC4) 分别对应“关闭熔炼、排除万象”“开启熔炼、排除万象”“关闭熔炼、启用万象”。均为 NeoForge 21.1.234、120 秒服务器线程采样，最近一分钟平均/P95 MSPT 分别为 87.51/131.82、89.45/127.66、87.26/124.70 ms。配对 Observable [8HNn](https://observable.tas.sh/p/8HNn)、[JCAP](https://observable.tas.sh/p/JCAP)、[ksx3](https://observable.tas.sh/p/ksx3) 均有 79 台离心机与 37 台蜂箱，本模组总耗时分别为 42.111、42.874、41.780 ms/tick。报告用于定位本轮热点，尚无本轮修改后的同场景采样，不宣称新的 MSPT 或吞吐提升比例。
+- **Profile scope**: the three paired reports cover the previous test JAR, with identical addon machine counts but different smelting/Myriad settings. They identify this round's hotspots; post-change runtime performance and throughput remain unmeasured.
+- **本轮自动验证**：维护 worktree 普通测试 704 项（702 通过、2 跳过），NeoForge 21.1.234 完整初始化测试 164 项（147 通过、17 项按可选依赖条件跳过）；另带 Create 6.0.10、MEInfinityCell 2.0.0 等依赖的定向测试 25 项全部通过，包含新增的 57 槽稀疏万象分配回归。验证 38 种候选 × 19 槽 × 256 轮仅调用 38 次校验器，以及 38 台宿主 × 76 刻 × 256 次调用的公平轮转与预算边界。`build verifyReleaseArtifact` 通过；未运行本轮新包的真实玩家存档性能复测。
+- **Automated validation**: 704 plain tests (702 passed, 2 skipped), 164 NeoForge-initialized tests (147 passed, 17 conditional skips), plus 25 passing focused tests with Create/MEInfinityCell loaded. These cover candidate-cache reuse, accelerated worker fairness, sparse-slot placement, exact components and item conservation. Build and artifact verification pass; these checks do not establish an in-game speedup.
 ## [1.0.10] - 2026-09-28
 
 - **Productive Bees 13.14.0 兼容热修复**：保留 PB 13.13.5+ 的运行时兼容范围；针对 13.14.0 热能离心机改为从动力离心机继承 `canOperate()` 的变化，按目标类字节码条件应用旧版专用 Mixin，保留两代版本的能量门控、万象蜜脾产物空间检查与输入守恒。
@@ -1414,7 +1909,7 @@
 > **首个正式版**：模组内部版本、构建版本和 CurseForge 正式版本统一为 `1.0.0`，上传同一个
 > `productivebeesgenesis-1.0.0.jar`。
 
-本版本汇总 `2.0.9` 后的所有开发批次，并参考本地 AE2 Lightning Tech、Data Energistics、JDTE、
+本版本汇总 `2.0.9` 后的所有开发批次，并参考本地 AE2 Lightning Tech、JDTE、
 NeoECOAEExtension、UselessMod、Mek-Energistics、Mekanism 与 Productive Bees 源码，对机器处理、蜂箱生产、
 AE2 交互、持久化、兼容性和发布流程进行了系统优化。
 

@@ -130,6 +130,23 @@ class EssenceConversionUpgradeHelperTest {
 	}
 
 	@Test
+	@DisplayName("骨钩及原版和整合包唱片 5 配方不参与精华转化，保留同模组其它配方")
+	void excludesBoneCrookAndMusicDiscRecipes() {
+		assertTrue(EssenceConversionRecipeIndex.isRecipeExcluded(
+				ResourceLocation.fromNamespaceAndPath("exdeorum", "bone_crook")));
+		assertTrue(EssenceConversionRecipeIndex.isRecipeExcluded(
+				ResourceLocation.fromNamespaceAndPath("minecraft", "music_disc_5")));
+		assertTrue(EssenceConversionRecipeIndex.isRecipeExcluded(
+				ResourceLocation.fromNamespaceAndPath("kubejs", "kjs/music_disc_5")));
+		assertFalse(EssenceConversionRecipeIndex.isRecipeExcluded(
+				ResourceLocation.fromNamespaceAndPath("exdeorum", "porcelain_clay")));
+		assertFalse(EssenceConversionRecipeIndex.isRecipeExcluded(
+				ResourceLocation.fromNamespaceAndPath("minecraft", "bone_meal")));
+		assertFalse(EssenceConversionRecipeIndex.isRecipeExcluded(
+				ResourceLocation.fromNamespaceAndPath("kubejs", "kjs/iron_ingot")));
+	}
+
+	@Test
 	@DisplayName("配方扫描结果冻结为不可变快照，运行时只做映射查询")
 	void publishesImmutableRuntimeLookupSnapshot() throws Exception {
 		String helper = Files.readString(Path.of(

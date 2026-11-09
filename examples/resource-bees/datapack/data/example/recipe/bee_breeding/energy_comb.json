@@ -1,0 +1,20 @@
+{
+  "type": "productivebees:bee_breeding",
+  "parent1": "example:energy",
+  "parent2": "example:pb_tag",
+  "offspring": "example:energy_comb",
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:energy"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_tag"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:energy_comb"
+    }
+  ]
+}

@@ -4,6 +4,8 @@ import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
 import mekanism.common.block.attribute.AttributeUpgradeSupport;
 import mekanism.common.tile.base.TileEntityMekanism;
+import mekanism.common.tile.interfaces.IUpgradeTile;
+import mekanism.common.util.MekanismUtils;
 import mekanism.common.util.UpgradeUtils;
 import net.minecraft.network.chat.Component;
 
@@ -66,7 +68,7 @@ public final class MekUpgradeSupport {
 	 * 获取蜂箱专用升级支持属性
 	 * <br/>
 	 * 蜂箱支持原版SPEED/ENERGY/MUFFLING + MEKExtras的CREATIVE升级（若加载）+
-	 * MekanismEmpowered的输出机器升级（若加载）。
+	 * MekanismEmpowered／Unleashed 的全部六种升级（若加载），包含蜂笼与小食的快速输入。
 	 * <p>
 	 * 与{@link #forMachine()}的差异：STACK升级始终排除（2^n次产出倍率对蜂箱产量体系过高）。
 	 * CREATIVE升级的历史TPS风险已被产出管线的20-tick批量聚合消除
@@ -74,7 +76,7 @@ public final class MekUpgradeSupport {
 	 * 每 tick 产出仅累积计数，产出物品按批次合并插入。
 	 * 离心机仍使用{@link #forMachine()}保留STACK/CREATIVE支持。
 	 *
-	 * @return 包含SPEED/ENERGY/MUFFLING + 可选CREATIVE/MekEmp输出升级的AttributeUpgradeSupport实例
+	 * @return 包含 SPEED/ENERGY/MUFFLING + 可选 CREATIVE/MekEmp 升级的支持属性
 	 */
 	public static AttributeUpgradeSupport forApiary() {
 		List<Upgrade> base = new ArrayList<>(4);
@@ -85,9 +87,9 @@ public final class MekUpgradeSupport {
 		if (MekCompatHooks.isMekanismExtrasLoaded()) {
 			MekExtraUpgradeSupport.collectCreativeUpgrade(base);
 		}
-		// 追加 MekanismEmpowered 输出机器升级（若加载）
+		// 蜂笼、小食输入与产物输出共用完整的 MekEmp 升级集合。
 		if (MekCompatHooks.isMekanismEmpoweredLoaded()) {
-			return MekEmpUpgradeSupport.createItemOutputMachineUpgrades(base);
+			return MekEmpUpgradeSupport.createItemInOutMachineUpgrades(base);
 		}
 		return AttributeUpgradeSupport.create(base.toArray(new Upgrade[0]));
 	}
@@ -110,6 +112,50 @@ public final class MekUpgradeSupport {
 			MekExtraUpgradeSupport.collectExtraUpgrades(base);
 		}
 		return base;
+	}
+
+	/**
+	 * 从运行时 Mekanism 公式取得生产时间倍率，包含已安装附属的速度加成。
+	 *
+	 * @param tile 使用 Mekanism 升级组件的宿主
+	 * @return 正有限时间倍率，最多为 1
+	 */
+	public static float getSpeedTimeMultiplier(IUpgradeTile tile) {
+		// 大基数保留亚 tick 精度，也避免 Unleashed 的整数化吞掉普通速度加成。
+		int sampleBase = Integer.MAX_VALUE;
+		return speedTimeMultiplier(MekanismUtils.getTicksD(tile, sampleBase), sampleBase);
+	}
+
+	static float speedTimeMultiplier(double scaledTicks, int sampleBase) {
+		if (sampleBase <= 0 || !Double.isFinite(scaledTicks) || scaledTicks == 0.0D) {
+			return 1.0f;
+		}
+		// Unleashed 以负倒数编码每 tick 操作数；先还原耗时，再除采样基数。
+		double ticks = scaledTicks < 0.0D ? -1.0D / scaledTicks : scaledTicks;
+		return SaturatingMath.positiveFiniteFloat(Math.min(1.0D, ticks / sampleBase), 1.0f);
+	}
+
+	/**
+	 * 刷新普通／强化速度和能量变更后的真实耗电，包含解锁前置变动。
+	 * ME／EME 工厂未调用原版能量重算，不能依赖 Empowered 只注入原版的分流。
+	 *
+	 * @param context 持有唯一机器能量容器的宿主
+	 * @param upgrade 本次数量变更的升级
+	 */
+	public static void refreshEmpoweredEnergy(PbRecipeContext context, Upgrade upgrade) {
+		if (!MekCompatHooks.isMekanismEmpoweredLoaded()
+				|| !MekEmpUpgradeSupport.affectsEnergyUsage(upgrade)) {
+			return;
+		}
+		var container = context.energyContainer();
+		if (container != null) {
+			container.updateEnergyPerTick();
+		}
+	}
+
+	static int getEmpoweredEnergyUpgrades(IUpgradeTile tile) {
+		return MekCompatHooks.isMekanismEmpoweredLoaded()
+				? MekEmpUpgradeSupport.getEmpoweredEnergyUpgrades(tile) : 0;
 	}
 
 	/**

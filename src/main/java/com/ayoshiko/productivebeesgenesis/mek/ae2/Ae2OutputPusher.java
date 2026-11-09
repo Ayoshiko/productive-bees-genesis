@@ -48,6 +48,8 @@ public final class Ae2OutputPusher {
 	 * @param host 输出宿主（离心机/蜂箱方块实体）
 	 */
 	public static void pushOutputs(IAe2OutputHostBase host) {
+		// 非物品资源有独立开关与余额，不受物品槽是否为空或物品输出开关限制。
+		Ae2ResourceOutput.tickMachine(host);
 		// Spark 优化：缓存 holder 和 pushState，消除后续 9 次冗余 getAe2StateHolder() 接口分发
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return;
@@ -146,9 +148,14 @@ public final class Ae2OutputPusher {
 	 * @return 实际推送数量；0 表示未推送或完全失败
 	 */
 	public static int pushItemStack(IAe2OutputHostBase host, ItemStack stack) {
-		if (stack == null || stack.isEmpty()) return 0;
+		return pushItemStack(host, stack, stack == null ? 0 : stack.getCount());
+	}
+
+	/** 生成物已有稳定模板，无需在节点/预算检查前复制派生组件。 */
+	public static int pushItemStack(IAe2OutputHostBase host, ItemStack template, int amount) {
+		if (template == null || template.isEmpty() || amount <= 0) return 0;
 		Ae2DirectItemPushSession session = prepareDirectItemPush(host);
-		return session == null ? 0 : session.applyAsInt(stack);
+		return session == null ? 0 : session.push(template, amount);
 	}
 
 	/** Resolves the AE target once so a bounded buffer drain does not repeat host/grid lookups per group. */
@@ -179,6 +186,7 @@ public final class Ae2OutputPusher {
 			buffers.directItemPushSession.reset(holder, meStorage, keyBackoff, gameTick,
 					buffers.insertCostTracker);
 		}
+		buffers.directItemPushSession.custody = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(host);
 		return buffers.directItemPushSession;
 	}
 

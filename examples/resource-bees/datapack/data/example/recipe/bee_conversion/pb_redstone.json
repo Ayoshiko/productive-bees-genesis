@@ -1,0 +1,19 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:pb_copper",
+  "result": "example:pb_redstone",
+  "chance": 1,
+  "item": {
+    "item": "minecraft:redstone_block"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_copper"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_redstone"
+    }
+  ]
+}

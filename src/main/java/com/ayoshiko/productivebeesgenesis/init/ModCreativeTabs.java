@@ -45,6 +45,7 @@ public final class ModCreativeTabs {
 						output.accept(com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.WIRELESS_CENTRIFUGE.get());
 						output.accept(com.ayoshiko.productivebeesgenesis.apiculture.core.NetworkContent.WIRELESS_COMBINED.get());
 						com.ayoshiko.productivebeesgenesis.multiblock.world.MachineContent.registeredBlocks().forEach(output::accept);
+						output.accept(ModItems.BEE_DESIGNER.get());
 						output.accept(ModItems.BYPRODUCT_DESTRUCTION_UPGRADE.get());
 						output.accept(ModItems.ESSENCE_CONVERSION_UPGRADE.get());
 						output.accept(ModItems.RAW_ORE_SMELTING_UPGRADE.get());

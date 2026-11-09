@@ -1,0 +1,20 @@
+{
+  "type": "productivebeesgenesis:resource_centrifuging",
+  "bee": "example:combined",
+  "include_pb_outputs": true,
+  "processing_time": 20,
+  "outputs": [
+    {
+      "kind": "energy",
+      "energy_type": "FE",
+      "amount": "1000",
+      "chance": 1
+    }
+  ],
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:combined"
+    }
+  ]
+}

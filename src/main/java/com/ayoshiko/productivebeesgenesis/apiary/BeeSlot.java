@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -83,6 +84,10 @@ public class BeeSlot {
 	 * -1 表示未缓存，0 到 3 对应 normal 到 very_high。蜜蜂更换时重置。
 	 */
 	private volatile int cachedProductivityLevel = -1;
+	private volatile @Nullable ResourceLocation cachedBeeTypeKey;
+	private volatile boolean cachedBeeTypeResolved;
+	private volatile int cachedContainerFlowerVersion = Integer.MIN_VALUE;
+	private volatile boolean cachedContainerFlower;
 
 	/** 基因采样属性快照；蜜蜂 NBT 变化后失效，避免每次批量产出重复解析五个字符串。 */
 	private volatile @Nullable GeneSampleProfile cachedGeneSampleProfile;
@@ -151,10 +156,41 @@ public class BeeSlot {
 		if (this.beeData != null && beeData != null && this.beeData.equals(beeData)) return;
 		this.beeData = beeData;
 		this.cachedProductivityLevel = -1;
+		this.cachedBeeTypeKey = null;
+		this.cachedBeeTypeResolved = false;
+		this.cachedContainerFlowerVersion = Integer.MIN_VALUE;
 		this.cachedFlowerValidVersion = Integer.MIN_VALUE;
 		this.cachedGeneSampleProfile = null;
 		this.cachedGeneSampleSource = null;
 		this.dirty = true;
+	}
+
+	/** 已付快照沿用原蜜蜂的派生值；data 必须是该蜜蜂的封闭 NBT 副本。 */
+	void setProductionSnapshot(CompoundTag data, BeeSlot source) {
+		setBeeData(data);
+		cachedBeeTypeKey = source.getBeeTypeKey();
+		cachedBeeTypeResolved = true;
+		cachedProductivityLevel = source.getProductivityLevel();
+		cachedGeneSampleProfile = source.getGeneSampleProfile();
+		cachedGeneSampleSource = data;
+	}
+
+	public @Nullable ResourceLocation getBeeTypeKey() {
+		if (!cachedBeeTypeResolved) {
+			cachedBeeTypeKey = BeeNbtHelper.resolveBeeTypeKey(beeData);
+			cachedBeeTypeResolved = true;
+		}
+		return cachedBeeTypeKey;
+	}
+
+	@Nullable
+	Boolean cachedContainerFlower(int version) {
+		return cachedContainerFlowerVersion == version ? cachedContainerFlower : null;
+	}
+
+	void cacheContainerFlower(int version, boolean container) {
+		cachedContainerFlower = container;
+		cachedContainerFlowerVersion = version;
 	}
 
 	public int getTicksInHive() {
@@ -333,6 +369,9 @@ public class BeeSlot {
 		this.state = BeeState.IDLE;
 		this.progress = 0.0f;
 		this.cachedProductivityLevel = -1;
+		this.cachedBeeTypeKey = null;
+		this.cachedBeeTypeResolved = false;
+		this.cachedContainerFlowerVersion = Integer.MIN_VALUE;
 		this.cachedFlowerValidVersion = Integer.MIN_VALUE;
 		this.cachedGeneSampleProfile = null;
 		this.cachedGeneSampleSource = null;

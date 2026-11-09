@@ -16,6 +16,13 @@ final class ApiaryFlowerValidation {
 
 	static boolean check(BeeSlot slot, ResourceLocation beeTypeKey, int cacheVersion,
 			FeederSlotManager feederManager) {
+		// 花源类型随既有版本失效；容器内容仍由管理器在每个真实 tick 重新核验。
+		Boolean containerFlower = slot.cachedContainerFlower(cacheVersion);
+		if (containerFlower == null) {
+			containerFlower = feederManager.hasContainerFlower(beeTypeKey);
+			slot.cacheContainerFlower(cacheVersion, containerFlower);
+		}
+		if (containerFlower) return feederManager.hasValidFlower(beeTypeKey);
 		Boolean flowerValid = slot.consumeCachedFlowerValid(cacheVersion);
 		if (flowerValid == null) {
 			flowerValid = feederManager.hasValidFlower(beeTypeKey);

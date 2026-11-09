@@ -1,0 +1,20 @@
+{
+  "type": "productivebees:bee_breeding",
+  "parent1": "example:pb_water",
+  "parent2": "productivebees:ashy_mining_bee",
+  "offspring": "example:soul",
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "industrialforegoingsouls"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_water"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:soul"
+    }
+  ]
+}

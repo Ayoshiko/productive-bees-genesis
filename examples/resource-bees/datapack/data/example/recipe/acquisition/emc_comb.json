@@ -1,0 +1,37 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {
+      "item": "productivebees:bee_cage"
+    },
+    {
+      "item": "productivebees:honey_treat"
+    },
+    {
+      "item": "projecte:alchemical_coal"
+    },
+    {
+      "item": "productivebees:wax"
+    }
+  ],
+  "result": {
+    "id": "productivebees:spawn_egg_configurable_bee",
+    "count": 1,
+    "components": {
+      "minecraft:entity_data": {
+        "id": "productivebees:configurable_bee",
+        "type": "example:emc_comb"
+      }
+    }
+  },
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "projecte"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:emc_comb"
+    }
+  ]
+}

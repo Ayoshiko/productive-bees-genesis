@@ -43,7 +43,46 @@ public enum BeeState {
 	WAITING_RAIN(0x42A5F5),
 
 	/** 天气耐受基因不适应雷暴 — 深蓝色 */
-	WAITING_THUNDER(0x5C6BC0);
+	WAITING_THUNDER(0x5C6BC0),
+
+	/** 已付蜂蜜仍有后缀未进入储罐或网络。 */
+	WAITING_FLUID(0xE6A23C),
+
+	/** 已生成批次仍保有未交出的物品或流体。 */
+	WAITING_FROZEN_OUTPUT(0xE6A23C),
+
+	/** 原蜜蜂的已付周期尚未结清，不能混入改变基因后的新周期。 */
+	WAITING_PREVIOUS_BEE(0xC792EA),
+
+	/** 仅命中扩展资源配方的蜂种等待其账户、容量或配方恢复。 */
+	WAITING_RESOURCE(0xD49A45),
+
+	/** 已付生产结果未知或保存数据无效，必须保留并核验。 */
+	PRODUCTION_SUSPENDED(0xEF5350),
+
+	/** 外部接收结果未知，保管请求等待核验。 */
+	OUTPUT_SUSPENDED(0xEF5350),
+
+	/** 输出缓冲原文尚未成功解码。 */
+	OUTPUT_DATA_INVALID(0xEF5350),
+
+	/** 有界物品缓冲已达到组数上限。 */
+	WAITING_OUTPUT_BUFFER(0xE6A23C),
+
+	/** 蜂种已停用；实体、物品和已付周期保留以便恢复。 */
+	RETIRED_BEE(0x90A4AE),
+
+	/** 万象创世总开关关闭；原蜜蜂、进度和已付周期保留。 */
+	MYRIAD_DISABLED(0x90A4AE),
+
+	/** 新配方代际正在发布，完成后自动恢复。 */
+	WAITING_RELOAD(0x90A4AE),
+
+	/** 扩展重载失败只影响声明资源产出的蜂种。 */
+	WAITING_RESOURCE_RELOAD(0xD49A45),
+
+	/** 扩展配方或对应资源依赖不可用，等待成功重载。 */
+	WAITING_RESOURCE_RECIPE(0xD49A45);
 
 	/** 状态颜色 RGB int 值（供 GUI 状态灯渲染） */
 	private final int color;
@@ -59,5 +98,9 @@ public enum BeeState {
 	 */
 	public int getColor() {
 		return color;
+	}
+
+	public String translationKey() {
+		return "gui.productivebeesgenesis.bee_state." + name().toLowerCase(java.util.Locale.ROOT);
 	}
 }

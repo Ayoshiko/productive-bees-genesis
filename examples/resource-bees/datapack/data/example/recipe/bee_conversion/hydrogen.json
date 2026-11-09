@@ -1,0 +1,19 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:pb_water",
+  "result": "example:hydrogen",
+  "chance": 1,
+  "item": {
+    "item": "minecraft:iron_ingot"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_water"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:hydrogen"
+    }
+  ]
+}

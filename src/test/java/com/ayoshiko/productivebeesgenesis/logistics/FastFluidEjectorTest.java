@@ -40,16 +40,7 @@ class FastFluidEjectorTest {
 				"相邻能力必须缓存，不能逐刻重新查询方块实体能力");
 	}
 
-	@Test
-	void executeMismatchReturnsFluidToSource() throws Exception {
-		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/logistics/"
-				+ "FastFluidEjector.java");
-		assertTrue(source.contains("target.fill(available, IFluidHandler.FluidAction.SIMULATE)"));
-		assertTrue(source.contains("returnToSource(source, extracted)"),
-				"目标实际写入抛异常时也必须先归还已抽取流体");
-		assertTrue(source.contains("source.insert(rejected, Action.EXECUTE, AutomationType.INTERNAL)"),
-				"目标违反模拟/执行一致性时不得丢失已抽取流体");
-	}
+	// 执行异常与正常余量由 OutputCustodyMinecraftTest 验证真实能力行为。
 
 	@Test
 	void apiaryVanillaFallbackIsAlsoUnlimited() throws Exception {

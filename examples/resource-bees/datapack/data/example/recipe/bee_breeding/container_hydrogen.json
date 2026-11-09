@@ -1,0 +1,20 @@
+{
+  "type": "productivebees:bee_breeding",
+  "parent1": "example:hydrogen",
+  "parent2": "example:pb_water",
+  "offspring": "example:container_hydrogen",
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:hydrogen"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_water"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:container_hydrogen"
+    }
+  ]
+}

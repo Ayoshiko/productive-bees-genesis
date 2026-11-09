@@ -1,0 +1,19 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:energy",
+  "result": "example:container_water",
+  "chance": 1,
+  "item": {
+    "item": "minecraft:water_bucket"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:energy"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:container_water"
+    }
+  ]
+}

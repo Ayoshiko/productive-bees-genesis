@@ -1,0 +1,34 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {
+      "item": "productivebees:bee_cage"
+    },
+    {
+      "item": "productivebees:honey_treat"
+    },
+    {
+      "item": "minecraft:experience_bottle"
+    }
+  ],
+  "result": {
+    "id": "productivebees:spawn_egg_configurable_bee",
+    "count": 1,
+    "components": {
+      "minecraft:entity_data": {
+        "id": "productivebees:configurable_bee",
+        "type": "example:experience"
+      }
+    }
+  },
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "experiencelib"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:experience"
+    }
+  ]
+}

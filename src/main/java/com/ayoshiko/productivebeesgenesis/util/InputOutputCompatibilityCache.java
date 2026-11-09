@@ -1,86 +1,27 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
-import cy.jdkdigital.productivebees.init.ModItems;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.Nullable;
 
-import javax.annotation.Nullable;
-
+import java.util.Map;
 import java.util.function.Supplier;
 
 /**
-	 * 输入-输出兼容性校验结果缓存
-	 * <br/>
-	 * Mekanism 工厂的 {@code inputProducesOutput} 在 sortInventory / 输入槽构造函数中被频繁调用，
-	 * 用于判断某个输入能否放入当前已有产物的进程。每次调用都要查 SMELTING + PB 配方并比对输出槽内容，
-	 * 在 SFM / AE2 等自动化模组高速探测时成为热点。
-	 * <p>
-	 * 此缓存按"输入物品 + 主输出槽 + 副输出槽 + tick 窗口"复用结果，输出槽内容变化时自动失效，
-	 * 避免同一状态下反复进行配方查找和 {@link ItemStack#hashItemAndComponents(ItemStack)}。
-	 * <p>
-	 * 缓存键使用 {@link SlotFingerprint}（Item + beeType，不含 count），替代完整 {@link ItemStack} 副本：
-	 * <ul>
-	 *   <li>与原 {@link ItemStack#isSameItemSameComponents} 语义一致（不比较 count），避免输出槽数量变化时的误失效</li>
-	 *   <li>消除完整 {@link ItemStack#hashItemAndComponents} 的组件哈希开销（3 次 → 3 次 fingerprint equals）</li>
-	 *   <li>内存占用更低（不缓存完整 ItemStack 副本）</li>
-	 * </ul>
-	 * 缓存有效期默认 20 tick（约 1 秒）。线程安全：方块实体在服务端单线程执行，无需同步锁。
-	 *
-	 * @author ayoshiko
-	 */
-public class InputOutputCompatibilityCache {
-
-	/** 默认缓存有效期（tick） */
+ * 工厂输入与三个输出栈的兼容性缓存。多候选交替时保留有界工作集，避免单条缓存反复失效。
+ * 完整组件与输入数量参与匹配，输出数量不影响堆叠兼容性。只在所属机器的服务器线程使用。
+ */
+public final class InputOutputCompatibilityCache {
 	public static final int DEFAULT_TTL = 20;
-
-	/**
-	 * 输出槽指纹 — Item + beeType，不含 count
-	 * <br/>
-	 * 与原 {@link ItemStack#isSameItemSameComponents} 语义一致（不比较 count），
-	 * 避免输出槽数量变化时误触发缓存失效。{@link Item} 为注册单例，identity equals；
-	 * {@link ResourceLocation} equals 为值比较。
-	 */
-	private record SlotFingerprint(Item item, @Nullable ResourceLocation beeType) {
-		static final SlotFingerprint EMPTY = new SlotFingerprint(Items.AIR, null);
-
-		/** 从 ItemStack 提取指纹（空栈返回 EMPTY 常量） */
-		static SlotFingerprint of(ItemStack stack) {
-			if (stack.isEmpty()) {
-				return EMPTY;
-			}
-			Item item = stack.getItem();
-			// configurable_honeycomb / configurable_comb_block 提取 bee_type 作为身份的一部分（缓存物品引用，避免每次 DeferredHolder.value）
-			if (item == PbCombItemRefs.honeycomb() || item == PbCombItemRefs.combBlock()) {
-				return new SlotFingerprint(item, stack.get(PbDataComponents.beeType()));
-			}
-			return new SlotFingerprint(item, null);
-		}
-	}
+	private static final int MAX_ENTRIES = 128;
 
 	private final int ttlTicks;
-
-	/** 上次缓存的输入/输出指纹（替代 ItemStack 副本，降低内存与哈希开销） */
-	private SlotFingerprint cachedInputFp = SlotFingerprint.EMPTY;
-	private SlotFingerprint cachedOutputFp = SlotFingerprint.EMPTY;
-	private SlotFingerprint cachedSecondaryFp = SlotFingerprint.EMPTY;
-	private SlotFingerprint cachedTertiaryFp = SlotFingerprint.EMPTY;
-
-	/**
-	 * 上次缓存的输入/输出原引用（identity 短路用）
-	 * <br/>
-	 * 自动化模组高频探测同一组槽位时往往传入同一组 ItemStack 实例，
-	 * 此时直接返回缓存结果，跳过 {@link SlotFingerprint#of(ItemStack)} 的组件读取。
-	 */
-	private ItemStack cachedInputIdentity = ItemStack.EMPTY;
-	private ItemStack cachedOutputIdentity = ItemStack.EMPTY;
-	private ItemStack cachedSecondaryIdentity = ItemStack.EMPTY;
-	private ItemStack cachedTertiaryIdentity = ItemStack.EMPTY;
-
-	private boolean cachedResult = false;
-	private long cachedAt = -1L;
+	private final Map<StateKey, Entry> entries = BoundedLruMap.accessOrdered(MAX_ENTRIES);
+	private final StateKey lookup = new StateKey();
+	private Level cachedLevel;
+	private long recipeVersion = Long.MIN_VALUE;
+	private long generation;
 
 	public InputOutputCompatibilityCache() {
 		this(DEFAULT_TTL);
@@ -90,80 +31,98 @@ public class InputOutputCompatibilityCache {
 		this.ttlTicks = ttlTicks;
 	}
 
-	/**
-	 * 获取缓存结果，过期或任一输入/输出状态变更时调用 validator 重新计算
-	 *
-	 * @param level     世界（用于获取当前游戏刻），为 null 时直接走校验
-	 * @param input     待投入输入槽的物品
-	 * @param output    主输出槽当前内容
-	 * @param secondary 副输出槽当前内容（可为空）
-	 * @param validator 实际校验逻辑
-	 * @return 校验结果
-	 */
 	public boolean get(@Nullable Level level, @Nullable ItemStack input,
-			@Nullable ItemStack output, @Nullable ItemStack secondary,
-			Supplier<Boolean> validator) {
+			@Nullable ItemStack output, @Nullable ItemStack secondary, Supplier<Boolean> validator) {
 		return get(level, input, output, secondary, ItemStack.EMPTY, validator);
 	}
 
-	/** 获取缓存结果（含第三物品输出槽指纹）。 */
 	public boolean get(@Nullable Level level, @Nullable ItemStack input,
 			@Nullable ItemStack output, @Nullable ItemStack secondary,
 			@Nullable ItemStack tertiary, Supplier<Boolean> validator) {
-		if (level == null || input == null || output == null) {
-			return validator.get();
+		if (level == null || input == null || output == null || ttlTicks <= 0) return validator.get();
+		long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
+		if (cachedLevel != level || recipeVersion != version) {
+			clear();
+			cachedLevel = level;
+			recipeVersion = version;
 		}
 		long now = level.getGameTime();
-		ItemStack normalizedTertiary = tertiary == null ? ItemStack.EMPTY : tertiary;
-		// identity 短路，同一引用组且未过期时直接返回缓存结果
-		boolean identityMatch = input == cachedInputIdentity
-				&& output == cachedOutputIdentity
-				&& secondary == cachedSecondaryIdentity
-				&& normalizedTertiary == cachedTertiaryIdentity;
-		if (cachedAt >= 0 && now - cachedAt < ttlTicks && identityMatch) {
-			return cachedResult;
+		lookup.set(input, output, normalize(secondary), normalize(tertiary));
+		Entry cached = entries.get(lookup);
+		if (cached != null && now >= cached.tick && now - cached.tick < ttlTicks) return cached.result;
+
+		// 仅未命中时复制组件快照；先准备独立键，validator 异常或重入不能污染已缓存状态。
+		StateKey key = lookup.snapshot();
+		long validationGeneration = generation;
+		boolean result = validator.get();
+		// 清空后即使重入恢复了相同世界/配方版本，旧校验也不能覆盖新代际的结果。
+		if (generation == validationGeneration && cachedLevel == level
+				&& recipeVersion == version && version == ProductiveBeesGenesis.RECIPE_VERSION.get()) {
+			entries.put(key, new Entry(now, result));
 		}
-		// 指纹比对（不含 count，与原 isSameItemSameComponents 语义一致）
-		SlotFingerprint inputFp = SlotFingerprint.of(input);
-		SlotFingerprint outputFp = SlotFingerprint.of(output);
-		SlotFingerprint secondaryFp = SlotFingerprint.of(secondary == null ? ItemStack.EMPTY : secondary);
-		SlotFingerprint tertiaryFp = SlotFingerprint.of(normalizedTertiary);
-		if (cachedAt >= 0 && now - cachedAt < ttlTicks
-				&& inputFp.equals(cachedInputFp)
-				&& outputFp.equals(cachedOutputFp)
-				&& secondaryFp.equals(cachedSecondaryFp)
-				&& tertiaryFp.equals(cachedTertiaryFp)) {
-			// 指纹命中时也更新 identity 引用，加速下次 identity 短路
-			cachedInputIdentity = input;
-			cachedOutputIdentity = output;
-			cachedSecondaryIdentity = secondary;
-			cachedTertiaryIdentity = normalizedTertiary;
-			return cachedResult;
-		}
-		// 未命中 — 重新校验并缓存指纹
-		cachedInputFp = inputFp;
-		cachedOutputFp = outputFp;
-		cachedSecondaryFp = secondaryFp;
-		cachedTertiaryFp = tertiaryFp;
-		cachedInputIdentity = input;
-		cachedOutputIdentity = output;
-		cachedSecondaryIdentity = secondary;
-		cachedTertiaryIdentity = normalizedTertiary;
-		cachedResult = validator.get();
-		cachedAt = now;
-		return cachedResult;
+		return result;
 	}
 
-	/** 清空缓存（配方重载、输出槽内容变更等场景调用） */
 	public void clear() {
-		cachedInputFp = SlotFingerprint.EMPTY;
-		cachedOutputFp = SlotFingerprint.EMPTY;
-		cachedSecondaryFp = SlotFingerprint.EMPTY;
-		cachedTertiaryFp = SlotFingerprint.EMPTY;
-		cachedInputIdentity = ItemStack.EMPTY;
-		cachedOutputIdentity = ItemStack.EMPTY;
-		cachedSecondaryIdentity = ItemStack.EMPTY;
-		cachedTertiaryIdentity = ItemStack.EMPTY;
-		cachedAt = -1L;
+		generation++;
+		entries.clear();
+		lookup.set(ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY);
+		cachedLevel = null;
+		recipeVersion = Long.MIN_VALUE;
+	}
+
+	private static ItemStack normalize(@Nullable ItemStack stack) {
+		return stack == null || stack.isEmpty() ? ItemStack.EMPTY : stack;
+	}
+
+	private record Entry(long tick, boolean result) {}
+
+	/** 查询键可复用；存入映射的键持有写时复制的组件快照，绝不引用调用方可变栈。 */
+	private static final class StateKey {
+		private ItemStack input = ItemStack.EMPTY;
+		private ItemStack output = ItemStack.EMPTY;
+		private ItemStack secondary = ItemStack.EMPTY;
+		private ItemStack tertiary = ItemStack.EMPTY;
+		private int inputCount;
+		private int hash;
+
+		void set(ItemStack input, ItemStack output, ItemStack secondary, ItemStack tertiary) {
+			this.input = normalize(input);
+			this.output = normalize(output);
+			this.secondary = normalize(secondary);
+			this.tertiary = normalize(tertiary);
+			inputCount = this.input.getCount();
+			hash = 31 * (31 * (31 * coarseHash(this.input) + coarseHash(this.output))
+					+ coarseHash(this.secondary)) + coarseHash(this.tertiary);
+			hash = 31 * hash + inputCount;
+		}
+
+		StateKey snapshot() {
+			StateKey copy = new StateKey();
+			copy.input = input.copy();
+			copy.output = output.copyWithCount(1);
+			copy.secondary = secondary.copyWithCount(1);
+			copy.tertiary = tertiary.copyWithCount(1);
+			copy.inputCount = inputCount;
+			copy.hash = hash;
+			return copy;
+		}
+
+		private static int coarseHash(ItemStack stack) {
+			if (stack.isEmpty()) return 0;
+			var beeType = stack.get(PbDataComponents.beeType());
+			return 31 * System.identityHashCode(stack.getItem()) + (beeType == null ? 0 : beeType.hashCode());
+		}
+
+		@Override public int hashCode() { return hash; }
+
+		@Override public boolean equals(Object object) {
+			if (object == this) return true;
+			return object instanceof StateKey other && hash == other.hash && inputCount == other.inputCount
+					&& ItemStack.isSameItemSameComponents(input, other.input)
+					&& ItemStack.isSameItemSameComponents(output, other.output)
+					&& ItemStack.isSameItemSameComponents(secondary, other.secondary)
+					&& ItemStack.isSameItemSameComponents(tertiary, other.tertiary);
+		}
 	}
 }

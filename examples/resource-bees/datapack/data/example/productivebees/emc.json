@@ -1,0 +1,15 @@
+{
+  "primaryColor": "#FFD34D",
+  "secondaryColor": "#FFFFFF",
+  "createComb": false,
+  "flowerItem": "projecte:alchemical_coal",
+  "breedingItem": "projecte:alchemical_coal",
+  "breedingItemCount": 1,
+  "selfbreed": true,
+  "conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "projecte"
+    }
+  ]
+}

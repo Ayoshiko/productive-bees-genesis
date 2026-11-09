@@ -15,7 +15,6 @@ import mekanism.common.content.blocktype.FactoryType;
 import mekanism.common.content.blocktype.Machine;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.registration.impl.TileEntityTypeRegistryObject;
-import mekanism.common.registries.MekanismSounds;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -117,7 +116,7 @@ public final class MekCentrifugeMEBlockType {
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
 				.withGui(() -> MEMenuTypeRegistration.ME_CENTRIFUGE_FACTORY)
-				.withSound(MekanismSounds.ENERGIZED_SMELTER)
+				// 不添加 withSound：工作声改由 MekCentrifugeSoundHandler 服务端播放（降噪 + 破坏后不残留满音量循环）
 				.with(new ExtraAttributeTier<>(tier));
 
 		// 移除ME Mixin注入的ExtraAttributeUpgradeable（指向ME原版工厂，不是离心机）

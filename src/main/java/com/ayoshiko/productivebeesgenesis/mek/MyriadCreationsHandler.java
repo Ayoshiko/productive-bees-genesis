@@ -119,6 +119,10 @@ public class MyriadCreationsHandler {
 			pbProcessing[processIndex] = false;
 			return false;
 		}
+		if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) {
+			pbProcessing[processIndex] = false;
+			return false;
+		}
 		// Task 3 性能优化：每 tick 缓存流体槽满载状态
 		fluidOutputHandler.initFluidTankFullCache();
 
@@ -409,14 +413,7 @@ public class MyriadCreationsHandler {
 		// 固定本次事务的变体，容量二分、降级重试及最终插入不得重新随机。
 		Map<ResourceLocation, ItemStack> templateByType = MyriadBeeTypeCache.snapshot()
 				.selectTemplates(selectedTypes, isCombBlock, level.getRandom());
-		int maxBatch = MyriadBatchPlanner.planOrFindMaxBatch(
-				snapshot, baseItem, outputPerOperation, selectedTypes, effectiveBatchSize, templateByType);
-		if (maxBatch <= 0) {
-			logger.logOutputBlocked(processIndex, batchSize, false);
-			return 0;
-		}
-
-		int currentBatch = maxBatch;
+		int currentBatch = effectiveBatchSize;
 		// 修复：产量需要乘以productivityModifier，原实现遗漏导致产量升级在批量模式下无效
 		// productivityMod 已在上方 Task 2 修复中提前计算（用于流体空间约束）
 		int totalCount = SaturatingMath.saturatingToInt(
@@ -429,6 +426,21 @@ public class MyriadCreationsHandler {
 			activeWeights);
 
 		MyriadBatchPlanner.Plan plan = MyriadBatchPlanner.plan(snapshot, baseItem, allocation, templateByType);
+		if (!plan.isSuccess()) {
+			currentBatch = MyriadBatchPlanner.planOrFindMaxBatch(
+					snapshot, baseItem, outputPerOperation, selectedTypes, effectiveBatchSize, templateByType);
+			if (currentBatch <= 0) {
+				logger.logOutputBlocked(processIndex, batchSize, false);
+				return 0;
+			}
+			totalCount = SaturatingMath.saturatingToInt(
+					SaturatingMath.saturatingMultiply(currentBatch, multiplier, productivityMod));
+			typesToUse = Math.min(selectedTypes.size(), Math.max(1, Math.min(totalCount, OUTPUT_SLOT_COUNT)));
+			activeTypes = selectedTypes.subList(0, typesToUse);
+			activeWeights = WeightedTypeSelector.getInstance().getWeightsFor(activeTypes);
+			allocation = WeightedAllocation.allocateByWeight(totalCount, activeTypes, activeWeights);
+			plan = MyriadBatchPlanner.plan(snapshot, baseItem, allocation, templateByType);
+		}
 		// v9-L3 修复：逐步降级重试（MAX_DEGRADATION_ATTEMPTS 次，每次减半），替代原先仅尝试一次的保守降级
 		int degradationAttempts = 0;
 		while (!plan.isSuccess() && currentBatch > 1 && degradationAttempts < MAX_DEGRADATION_ATTEMPTS) {

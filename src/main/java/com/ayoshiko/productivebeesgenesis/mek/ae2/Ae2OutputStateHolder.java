@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
@@ -21,6 +22,11 @@ public final class Ae2OutputStateHolder {
 
 	/** AEItemKey 缓存（AeItemKeyCache，AE2 未安装时为 null） */
 	private volatile Object aeItemKeyCache;
+
+	/** 资源推送只持有当前宿主引用；卸载时由节点生命周期关闭。 */
+	private Object resourceOutput;
+	Object getResourceOutput() { return resourceOutput; }
+	void setResourceOutput(Object value) { resourceOutput = value; }
 
 	/** 节点是否待创建（clearRemoved 时置 true，首个 server tick 时执行 connectNode） */
 	private volatile boolean ae2NodePending;
@@ -134,6 +140,8 @@ public final class Ae2OutputStateHolder {
 
 	/** per-tile 输入过滤器实例（懒初始化，避免 AE2 未加载时创建） */
 	private volatile Ae2InputFilter aeInputFilter;
+	/** 缺依赖或配置无法完整读取时保留原文，不以默认过滤器覆盖。 */
+	private Tag deferredInputFilter;
 
 	/**
 	 * per-tile smelt 输入标签过滤（白/黑名单表达式）。
@@ -148,6 +156,11 @@ public final class Ae2OutputStateHolder {
 
 	/** 上次候选扫描的最后一个 AEItemKey；Object 保持 AE2 可选隔离。 */
 	private volatile Object inputCandidateCursor;
+	/** Independent cursors keep smelting and comb candidates moving through their bounded lists. */
+	private volatile Object inputSmeltingCandidateCursor;
+	private volatile Object inputCombCandidateCursor;
+	/** Persisted one-shot scan scheduled when per-tile smelting compatibility is turned off. */
+	private volatile boolean unprocessableInputReturnCheckPending;
 
 	/** 离心机 per-tile 电力熔炼炉配方兼容开关（默认 false，与全局总开关 AND 关系） */
 	private volatile boolean smeltingCompatEnabled = false;
@@ -230,11 +243,15 @@ public final class Ae2OutputStateHolder {
 		tickAccelTracker.reset();
 		// 重置过滤器实例，方块重建后通过懒初始化重新创建
 		aeInputFilter = null;
+		deferredInputFilter = null;
 		// 重置标签过滤表达式（与字段默认值一致）
 		aeTagFilter.reset();
 		// 重置类型轮转索引，方块重建后从 0 开始轮转
 		typeRotationIndex = 0;
 		inputCandidateCursor = null;
+		inputSmeltingCandidateCursor = null;
+		inputCombCandidateCursor = null;
+		unprocessableInputReturnCheckPending = false;
 		// Task 21：清空 PendingBatchBuffer（若存在），避免方块重建后残留旧累积量
 		if (pendingBatchBuffer instanceof Ae2PendingBatchBuffer batchBuffer) {
 			batchBuffer.reset();
@@ -304,11 +321,17 @@ public final class Ae2OutputStateHolder {
 	/** 获取 per-tile 熔炉配方兼容开关 */
 	public boolean isSmeltingCompatEnabled() { return smeltingCompatEnabled; }
 
-	/** 设置 per-tile 熔炉配方兼容开关 */
-	public void setSmeltingCompatEnabled(boolean enabled) { this.smeltingCompatEnabled = enabled; }
+	/** 显式应用关闭状态也安排一次检查，修复旧版配置卡留下的未标记输入。 */
+	public void setSmeltingCompatEnabled(boolean enabled) {
+		smeltingCompatEnabled = enabled;
+		unprocessableInputReturnCheckPending = !enabled;
+		if (!enabled) pushState.getReturnBackoff().reset();
+	}
 
-	/** 取反 per-tile 熔炉配方兼容开关 */
-	public void toggleSmeltingCompatEnabled() { this.smeltingCompatEnabled = !this.smeltingCompatEnabled; }
+	/** 按钮、配置卡、升级恢复共用相同的关闭语义。 */
+	public void toggleSmeltingCompatEnabled() {
+		setSmeltingCompatEnabled(!smeltingCompatEnabled);
+	}
 
 	public boolean isCentrifugeDirectAeOutputEnabled() { return centrifugeDirectAeOutputEnabled; }
 	public void setCentrifugeDirectAeOutputEnabled(boolean enabled) { centrifugeDirectAeOutputEnabled = enabled; }
@@ -395,8 +418,28 @@ public final class Ae2OutputStateHolder {
 	public void setReusableBuffers(Object buffers) { this.reusableBuffers = buffers; }
 
 	/** 失效 AE2 网格/存储缓存（gridChanged 回调触发） */
+	public void onResourceOutputRecovered() {
+		pushState.getInputBackoff().reset();
+		inputPullCooldown.reset();
+		inputPullInitialized = false;
+		Object registry = pushState.getInputKeyBackoffRegistry();
+		if (registry instanceof Ae2KeyBackoffRegistry<?> keys) keys.clear();
+	}
+
+	/** 节点供电、频道和启动状态改变只失效展示／出口判断，不触碰世界或重建网格。 */
+	public void onNodeStateChanged() {
+		pushState.invalidateNodeStateCache();
+		if (reusableBuffers instanceof Ae2PushBuffers buffers) buffers.resourceInputGate.clear();
+		pushState.getReturnBackoff().reset();
+		onResourceOutputRecovered();
+	}
+
+	/** 失效 AE2 网格/存储缓存（gridChanged 回调触发） */
 	public void onGridChanged() {
 		releaseNetworkCoordination();
+		if (cachedMeStorage != null && Ae2IntegrationLoader.isAe2Loaded()) {
+			Ae2NetworkCandidateDirectory.invalidate(cachedMeStorage);
+		}
 		cachedGrid = null;
 		cachedStorage = null;
 		cachedMeStorage = null;
@@ -406,6 +449,8 @@ public final class Ae2OutputStateHolder {
 			// 网格变化说明可能换接到另一个 ME 网络：旧网络的 insert 成本均值不得
 			// 继续限制新网络的推送配额，否则从病态网络拆到健康网络后仍被降频。
 			buffers.insertCostTracker.reset();
+			buffers.measuredStorage.clear();
+			buffers.directItemPushSession = null;
 			// 输入成本同样随换网重置。
 			buffers.extractBudget.reset();
 		}
@@ -416,6 +461,7 @@ public final class Ae2OutputStateHolder {
 		pushState.getFluidBackoff().reset();
 		pushState.getReturnBackoff().reset();
 		inputPullCooldown.reset();
+		pushState.getInputBackoff().reset();
 		lastPullCounter = 0L;
 		inputPullInitialized = false;
 		Object inputRegistry = pushState.getInputKeyBackoffRegistry();
@@ -455,10 +501,30 @@ public final class Ae2OutputStateHolder {
 				coordinatedStateFor(networkIdentity), networkWorkerId, gameTick);
 	}
 
+	/** 新资源取料探测复用宿主令牌与换网／卸载注销。 */
+	boolean tryAcquireResourceProbe(Object networkIdentity, long gameTick) {
+		if (networkIdentity == null) return false;
+		return Ae2NetworkWorkCoordinator.tryAcquireResourceProbe(
+				coordinatedStateFor(networkIdentity), networkWorkerId, gameTick);
+	}
+
 	/** 将一次网络操作成本反馈给当前网络级协调器。 */
 	public void recordNetworkCost(Object networkIdentity, long gameTick, long costNanos, long thresholdNanos) {
 		if (networkIdentity == null) return;
 		Ae2NetworkWorkCoordinator.recordResolvedCost(
+				coordinatedStateFor(networkIdentity), gameTick, costNanos, thresholdNanos);
+	}
+
+	/** 输入独立协调，避免输出预算耗尽后饿死健康取料。 */
+	public boolean tryAcquireNetworkExtract(Object networkIdentity, long gameTick) {
+		if (networkIdentity == null) return false;
+		return Ae2NetworkWorkCoordinator.tryAcquireExtractResolved(
+				coordinatedStateFor(networkIdentity), networkWorkerId, gameTick);
+	}
+
+	public void recordNetworkExtractCost(Object networkIdentity, long gameTick, long costNanos, long thresholdNanos) {
+		if (networkIdentity == null) return;
+		Ae2NetworkWorkCoordinator.recordResolvedExtractCost(
 				coordinatedStateFor(networkIdentity), gameTick, costNanos, thresholdNanos);
 	}
 
@@ -539,7 +605,7 @@ public final class Ae2OutputStateHolder {
 	 * @return true 表示输入拉取已启用
 	 */
 	public boolean isInputPullEnabled() {
-		return configCache.isInputPullEnabled() && aeItemInputEnabled;
+		return configCache.isInputPullEnabled() && aeItemInputEnabled && deferredInputFilter == null;
 	}
 
 	/** 获取 per-tile AE2 输入拉取开关 */
@@ -638,6 +704,15 @@ public final class Ae2OutputStateHolder {
 
 	public Object getInputCandidateCursor() { return inputCandidateCursor; }
 	public void setInputCandidateCursor(Object cursor) { inputCandidateCursor = cursor; }
+	public Object getInputSmeltingCandidateCursor() { return inputSmeltingCandidateCursor; }
+	public void setInputSmeltingCandidateCursor(Object cursor) { inputSmeltingCandidateCursor = cursor; }
+	public Object getInputCombCandidateCursor() { return inputCombCandidateCursor; }
+	public void setInputCombCandidateCursor(Object cursor) { inputCombCandidateCursor = cursor; }
+
+	public boolean isUnprocessableInputReturnCheckPending() { return unprocessableInputReturnCheckPending; }
+	public void setUnprocessableInputReturnCheckPending(boolean pending) {
+		unprocessableInputReturnCheckPending = pending;
+	}
 
 	/** 获取输入过滤器实例(懒初始化,DCL 保证多线程下仅创建一个) */
 	public Ae2InputFilter getOrCreateInputFilter() {
@@ -657,6 +732,22 @@ public final class Ae2OutputStateHolder {
 	/** 包私有 — 仅读取现有过滤器（不创建），供 NBT 编解码使用 */
 	Ae2InputFilter getAeInputFilter() {
 		return aeInputFilter;
+	}
+
+	Tag getDeferredInputFilter() {
+		return deferredInputFilter;
+	}
+
+	void setDeferredInputFilter(Tag tag) {
+		deferredInputFilter = tag;
+	}
+
+	public boolean hasDeferredInputFilter() {
+		return deferredInputFilter != null;
+	}
+
+	public boolean retryInputFilterData() {
+		return Ae2PerTileStateNbtCodec.restoreInputFilter(this);
 	}
 
 	/** 获取 per-tile smelt 输入标签过滤（永不为 null）。 */

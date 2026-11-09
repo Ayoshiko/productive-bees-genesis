@@ -9,6 +9,7 @@ import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.HolderLookup;
@@ -147,6 +148,9 @@ public final class StaticApiaryAdapter {
 	}
 	private static StaticBeePlan compilePlan(ServerLevel level, Profile profile, CompoundTag slot, long recipeRevision, long capabilityRevision) {
 		var data = slot.getCompound("entity_data"); var type = BeeNbtHelper.resolveBeeTypeKey(data);
+		if (ResourceRuntime.pbCatalog(level).get(type) != null) {
+			throw new IllegalArgumentException("Resource bee production requires its independent account");
+		}
 		var generator = DynamicBeeAdapter.generator(type);
 		if (generator != BeeGenerator.STATIC) {
 			boolean configurable = generator == BeeGenerator.WANNA_BEE || generator == BeeGenerator.MYRIAD;

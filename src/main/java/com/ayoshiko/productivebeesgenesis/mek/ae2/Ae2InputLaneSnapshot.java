@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
+import appeng.api.stacks.AEItemKey;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.core.component.DataComponentType;
@@ -7,6 +8,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -32,15 +34,16 @@ import java.util.List;
 final class Ae2InputLaneSnapshot {
 
 	private IInventorySlot[] slots = new IInventorySlot[0];
+	/** 每车道仅保留最近实际内容的完整键；空槽续料沿用，替换槽位时失效。 */
+	private AEItemKey[] preferredKeys = new AEItemKey[0];
 	/** 槽内物品（空槽为 null）— 用于零虚调用的身份剪枝 */
 	private Item[] items = new Item[0];
 	/** 槽内栈引用 — 组件匹配需要（值比较，引用仅用于记忆表命中） */
 	private ItemStack[] stacks = new ItemStack[0];
+	private ItemStack[] requiredInputs = new ItemStack[0];
 	private int[] counts = new int[0];
 	/** 非空槽对「自身内容」的可插入上限；空槽恒为 0 */
 	private long[] limits = new long[0];
-	/** 空槽的可插入上限（{@code getLimit(EMPTY)}）；非空槽恒为 0 */
-	private long[] emptyLimits = new long[0];
 	/**
 	 * 非空槽的组件补丁数量；空槽恒为 0。
 	 * <p>
@@ -73,35 +76,70 @@ final class Ae2InputLaneSnapshot {
 	 * @param laneCount  参与规划的车道数（通常等于进程数）
 	 */
 	void capture(List<IInventorySlot> inputSlots, int laneCount) {
+		capture(inputSlots, laneCount, null);
+	}
+
+	void capture(List<IInventorySlot> inputSlots, int laneCount, net.minecraft.world.level.block.entity.BlockEntity host) {
 		this.source = inputSlots == null ? List.of() : inputSlots;
+		int previousSize = this.size;
 		this.size = Math.max(0, laneCount);
 		if (slots.length < size) {
 			int length = Math.max(size, slots.length << 1);
-			slots = new IInventorySlot[length];
+			slots = Arrays.copyOf(slots, length);
+			preferredKeys = Arrays.copyOf(preferredKeys, length);
 			items = new Item[length];
 			stacks = new ItemStack[length];
+			requiredInputs = new ItemStack[length];
 			counts = new int[length];
 			limits = new long[length];
-			emptyLimits = new long[length];
 			patchSizes = new int[length];
 			beeTypes = new ResourceLocation[length];
 		}
+		for (int i = size; i < previousSize; i++) {
+			slots[i] = null;
+			preferredKeys[i] = null;
+			items[i] = null;
+			stacks[i] = null;
+			beeTypes[i] = null;
+		}
 		for (int i = 0; i < size; i++) {
+			requiredInputs[i] = host == null ? null
+					: com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.requiredLaneInput(host, i);
 			refresh(i);
 		}
+	}
+
+	boolean acceptsRequiredInput(int lane, ItemStack input) {
+		var required = requiredInputs[lane];
+		return required == null || !required.isEmpty() && ItemStack.isSameItemSameComponents(required, input);
+	}
+
+	/** 只调整遍历起点，后续仍检查全部车道的实际容量与配对输出。 */
+	int preferredStart(AEItemKey key, int fallback) {
+		if (size == 0) return 0;
+		int start = Math.floorMod(fallback, size);
+		for (int offset = 0; offset < size; offset++) {
+			int index = (start + offset) % size;
+			if (key.equals(preferredKeys[index])) return index;
+		}
+		return start;
+	}
+
+	void remember(AEItemKey key, int index) {
+		if (index >= 0 && index < size) preferredKeys[index] = key;
 	}
 
 	/** 重新读取单条车道（我方插入之后必须调用，其余时刻内容不会变化）。 */
 	void refresh(int index) {
 		if (index < 0 || index >= size) return;
 		IInventorySlot slot = index < source.size() ? source.get(index) : null;
+		if (slots[index] != slot) preferredKeys[index] = null;
 		slots[index] = slot;
 		if (slot == null) {
 			items[index] = null;
 			stacks[index] = ItemStack.EMPTY;
 			counts[index] = 0;
 			limits[index] = 0L;
-			emptyLimits[index] = 0L;
 			patchSizes[index] = 0;
 			beeTypes[index] = null;
 			return;
@@ -112,15 +150,16 @@ final class Ae2InputLaneSnapshot {
 			items[index] = null;
 			counts[index] = 0;
 			limits[index] = 0L;
-			emptyLimits[index] = safeLimit(slot, ItemStack.EMPTY);
 			patchSizes[index] = 0;
 			beeTypes[index] = null;
 		} else {
+			if (preferredKeys[index] == null || !preferredKeys[index].matches(stack)) {
+				preferredKeys[index] = AEItemKey.of(stack);
+			}
 			Item item = stack.getItem();
 			items[index] = item;
 			counts[index] = stack.getCount();
 			limits[index] = safeLimit(slot, stack);
-			emptyLimits[index] = 0L;
 			int patchSize = stack.getComponentsPatch().size();
 			patchSizes[index] = patchSize;
 			beeTypes[index] = singleBeeType(stack, item, patchSize);
@@ -147,7 +186,7 @@ final class Ae2InputLaneSnapshot {
 
 
 	/** 与 {@code getSlotRemainingCapacity} 一致：上限查询异常视为不可插入。 */
-	private static long safeLimit(IInventorySlot slot, ItemStack probe) {
+	static long safeLimit(IInventorySlot slot, ItemStack probe) {
 		try {
 			return Math.max(0, slot.getLimit(probe));
 		} catch (RuntimeException e) {
@@ -180,11 +219,6 @@ final class Ae2InputLaneSnapshot {
 	/** 读取非空车道的可插入上限（空槽为 0）。 */
 	long limit(int index) {
 		return index >= 0 && index < size ? limits[index] : 0L;
-	}
-
-	/** 读取空车道的可插入上限（非空槽为 0）。 */
-	long emptyLimit(int index) {
-		return index >= 0 && index < size ? emptyLimits[index] : 0L;
 	}
 
 	/** 读取车道栈的组件补丁数（空槽为 0）。 */

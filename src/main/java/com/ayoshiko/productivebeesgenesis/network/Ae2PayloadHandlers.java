@@ -18,6 +18,8 @@ import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import mekanism.common.tile.base.TileEntityMekanism;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -74,6 +76,17 @@ final class Ae2PayloadHandlers {
 					serverPlayer.getName().getString(),
 					tileContainer.getTileEntity().getBlockPos(),
 					targetPos);
+			return false;
+		}
+		return true;
+	}
+
+	static boolean validateInputFilterAvailable(ServerPlayer player,
+			BlockPos pos, String logKey) {
+		if (!validateContainerMatch(player, pos, logKey)) return false;
+		if (player.level().getBlockEntity(pos) instanceof IAe2InputHost host
+				&& host.productivebeesgenesis$getAe2StateHolder().hasDeferredInputFilter()) {
+			player.displayClientMessage(Component.translatable("command.productivebeesgenesis.output.input_filter"), true);
 			return false;
 		}
 		return true;
@@ -256,7 +269,7 @@ final class Ae2PayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击
-		if (!validateContainerMatch(serverPlayer, payload.pos(), "ae2_input_filter_mode_pos_mismatch")) {
+		if (!validateInputFilterAvailable(serverPlayer, payload.pos(), "ae2_input_filter_mode_pos_mismatch")) {
 			return;
 		}
 		// 频次限制：防止恶意客户端高频触发 syncFilterToClients 广播（流量放大攻击）

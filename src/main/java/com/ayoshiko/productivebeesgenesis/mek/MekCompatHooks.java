@@ -73,7 +73,8 @@ public final class MekCompatHooks {
 			evolvedMekanismLoaded = modList.isLoaded("evolvedmekanism");
 			mekanismExtrasLoaded = modList.isLoaded("mekanism_extras");
 			evolvedMekanismExtrasLoaded = modList.isLoaded("emextras");
-			mekanismEmpoweredLoaded = modList.isLoaded("mekanism_empowered");
+			mekanismEmpoweredLoaded = modList.isLoaded("mekanism_empowered")
+					|| modList.isLoaded("mekanism_empowered_unleashed");
 		}
 	}
 
@@ -102,7 +103,7 @@ public final class MekCompatHooks {
 		return Holder.INSTANCE.evolvedMekanismExtrasLoaded;
 	}
 
-	/** 检测MekanismEmpowered是否加载 */
+	/** 检测 MekanismEmpowered 或其合并版 MekanismEmpoweredUnleashed 是否加载。 */
 	public static boolean isMekanismEmpoweredLoaded() {
 		return Holder.INSTANCE.mekanismEmpoweredLoaded;
 	}

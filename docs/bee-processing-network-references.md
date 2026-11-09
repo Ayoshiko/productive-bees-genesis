@@ -1,8 +1,22 @@
 # 蜂业网络参考实现与采用边界
 
+**当前架构学习入口（2026-11-06）：[13.36](#s13-36)。** 用户指定重点为 ECO、AE2LT Reborn、DataEnergistics、OmniSequence、Useless；EAE、AAE、Mekanism、AE2 仅核对实际依赖 API，不作为架构学习来源。MekEnergistics 降为低优先级历史对照；其它模组按具体问题补充。下文早期版本／分支记录保留历史范围，不代表当前最新或执行优先级。
+
 [主设计入口与维护规则](bee-processing-network-design.md) · [实施路线与当前状态](bee-processing-network-roadmap.md#current)
 
 本文件维护固定版本、源码入口和采用／拒绝的原则；行为合同与验证结果分别回到主设计或视觉合同、验收记录。历史研究结论保留原版本口径。
+
+### PBG 美术技能采用（2026-11-03）
+
+已审读并适配 [Roxio-sketch/minecraft-agent-skills](https://github.com/Roxio-sketch/minecraft-agent-skills) 的全部29个入口，固定commit `fa467398c391ac9211b7f3d75cb4f7de07a7fc2e`。完整1844个配套文件及上游／子资源许可保留在本机技能目录；原始入口按原字节保留。采用总表与真实消费者见 [PBG 美术制作技能](E:/ChatGPT/Codex/skills/pbg-visual-authoring/SKILL.md) 和 [29项采用表](E:/ChatGPT/Codex/skills/pbg-visual-authoring/references/skill-map.md)。本机路径不是远端构建依赖。
+
+采用方向：模型最终姿态／表面采样、颜色组件与物品材质、局部宇宙场与子场景、折射／边缘光／选定对象Bloom、历史尾迹／多层束、有限能量与雾、程序粒子／护罩破碎、裂隙／闪电、蓝图构件与四向变换、状态灯光和GPU覆盖预算。每项已有对应入口与必要参考，使用时按当前功能选择；原作者Forge1.20.1工作台、启动器、MCP端口和既有截图不作为NeoForge认证。
+
+网络实际消费者保持 `StructureTemplate/StructureTransform`、`MachineCoreScene/CoreFrameBudget/MachineActivityEvent`、`MachineCoreMesh/MachineBeeMesh/MachineActivityClient/CombinedApiaryRenderer`。尺寸、角色与动画同源；既定六布局、控制器局部(3,1,0)、正十二面蜂蜜琥珀蜂巢与五条莫比乌斯轨道继续复用。外观不改变吞吐、FE、库存、归属、generation/capabilityRevision；BLOCK/AIR/IGNORE与玩家通路不从省略格推断。
+
+另外创建 [Photon 当前版本技能](E:/ChatGPT/Codex/skills/minecraft-photon-authoring/SKILL.md)，基于NeoForge1.21.1／Photon2.1.4／LDLib2.2.24准确API、资源链与Visual Lab调用。原Photon自动化入口存在但目标1.1.17／Forge1.20.1；当前不在网络生产代码新增库依赖。建筑导出工具实际加入1.21.1→3955，已用1060项真实注册表完成方向属性、导出回读与非法值拒绝；不据此声称网络实机碰撞或成形已验。
+
+技能入口格式、入口引用和配套文件完整性已检查；历史参考里的作者本机路径／缺失证据保留并标明。Visual Lab源码、当前游戏画面与网络阶段验收分别取证；M06c2c的1／16／64台性能与兼容门继续开放。整包记录在Visual Lab `build/research/myriad-m2-2026-11-01/photon-polish-20261103/skill-validation.json`，实际作品与运行证据回到Visual Lab交接，不据学习资料关闭网络待验收门。
 
 <a id="s13"></a>
 ## 13. 参考实现与证据边界
@@ -13,6 +27,8 @@ R1 普通生产复核本网络 worktree 的 `StaticApiaryAdapter`、`StaticFeedi
 
 <a id="s13-1"></a>
 ### 13.1 本仓库源码入口
+
+**A0 正式基础整合（2026-11-07）。** 采用维护 `e27ed48`／1.2.3 的 ApiaryProductionState、ApiaryRetainedCycles、OutputCustody、ResourceHiveHost／ResourceAccounts 和离心预生成结果保管；网络 `acb06d8` 保留共享数量／费用内核和接管协议。实际修正包括新旧蜂箱快照优先级、单份静态周期封存、不可读／未知资产拒绝接管，以及 PbRecipeCompleter 向共享采样器传递固定随机源。正式资源蜂和已有独立资源账户暂留独立机，统一接管见 A1。工具入口为 [network-dev.ps1](../gradle/network-dev.ps1) 与 [场景清单](../gradle/network-scenarios.json)，原始命令、依赖摘要和结果在本包 `build/network-dev` 下。实际专服仍沿原 Gradle 运行依赖：Mekanism Extras 1.4.0，编译为 1.4.1；EME 1.2.1 的缺失工厂配方告警已记录，当前普通／组合生产场景不声明这些工厂配方均可用。外部学习清单沿 13.36，本包未更新参考仓库或据参考数字宣称性能收益。
 
 **R3 动态生产来源（2026-10-15）。** 基于本分支 BeeProduceProcessor、WannaBeeAmberAdapter／WannaBeeLootSelection、MultiFlowerBeeAdapter、AmberEntityFlowerHelper 与 PB 13.14.0。对应 JAR 的 `data/productivebees/productivebees/wanna.json` 和 ModEntities 注册表明确 WannaBee 属于可配置蜂，三种多花蜂为原生实体；不能把显示名推导成 `wanna_bee` 注册项。复用单事件战利品候选、PB 黑名单、花源标签及染料映射；旧独立 sampleBatches 的聚合上限／异常处理不用于网络。Minecraft 1.21.1 的铁傀儡表给出铁锭 3–5、虞美人 0–2，作为真实非空池夹具；凋灵表为空，不能把其实体死亡额外掉落当作战利品表输出。共享生成请求、池续算和格式入口分别为 DynamicBeeAdapter、BeeGeneration／GeneratedBeeSampler、BeeGenerationCodec；宿主接入 NetworkBeeService、CombinedNetworkService、MachineProduction。范围与实际结果见[10.175](bee-processing-network-evidence-current.md#s10-175)，不复用旧 Spark 数值推断本包性能。
 
@@ -55,7 +71,7 @@ D23a（2026-10-13）复核本项目 PortAccess、NetworkPortMenu、PortRecordCod
 
 RF-B 进一步读取 [MachineAssets](../src/main/java/com/ayoshiko/productivebeesgenesis/multiblock/world/MachineAssets.java)、[MachineOwnershipEndpoint](../src/main/java/com/ayoshiko/productivebeesgenesis/multiblock/world/MachineOwnershipEndpoint.java)、[MachineNetworkAccess](../src/main/java/com/ayoshiko/productivebeesgenesis/multiblock/world/MachineNetworkAccess.java) 和 [CombinedNetworkService](../src/main/java/com/ayoshiko/productivebeesgenesis/multiblock/world/CombinedNetworkService.java)。采用单机文件实际保存回执、单活动连接位、托管时关闭独立 IO、原根凭据及原冻结样本减 delivered；复用现有所有权状态机，不复制维护工作区资源引擎。完整工作进度可冻结保存后恢复；同能力候选分组已接入；R2 的管理／供给与条件能力联合另见最新包级证据，不用 RF-B 的旧记录代替新入口验证。
 
-**维护扩展接入的本地基线（2026-10-12，只读核对）。** 维护 worktree 为 `productive-bees-addon-maintenance`、HEAD `96b8664`；其[扩展资源主设计 v3.1](../../productive-bees-addon-maintenance/docs/bee-extended-output-types-design.md#execution)的 §0／§4 记录 M2 包已验证、M3A 组合离心仍待实施，源码和构建文件仍有大量未提交差异。本轮没有复跑该 worktree 的测试，也没有把其文档记载的验证当成本次运行。采用的语义输入包括 §2.7–2.8 的共享准备／唯一提交与全面重构边界、§3 的实际类型清单、§2.5 的跨文件原子性缺口；具体 API／格式以维护任务最终可验证提交为准。网络完整接入合同见[7.4](bee-processing-network-design.md#s7-4)，授权和系统审查范围见[路线 14.5](bee-processing-network-roadmap.md#s14-5)。该链接是本地 worktree 导航，不表示维护设计已入库或随 JAR 发布。
+**维护扩展接入的本地基线（2026-10-12，只读核对）。** 维护 worktree 为 `productive-bees-addon-maintenance`、HEAD `96b8664`；其[扩展资源主设计 v3.1](E:/mczuixin/MCkaifa/1.21.1kaifa/ziyuanmifeng/productive-bees-addon-maintenance/docs/bee-extended-output-types-design.md#execution)的 §0／§4 记录 M2 包已验证、M3A 组合离心仍待实施，源码和构建文件仍有大量未提交差异。本轮没有复跑该 worktree 的测试，也没有把其文档记载的验证当成本次运行。采用的语义输入包括 §2.7–2.8 的共享准备／唯一提交与全面重构边界、§3 的实际类型清单、§2.5 的跨文件原子性缺口；具体 API／格式以维护任务最终可验证提交为准。网络完整接入合同见[7.4](bee-processing-network-design.md#s7-4)，授权和系统审查范围见[路线 14.5](bee-processing-network-roadmap.md#s14-5)。该链接是本地 worktree 导航，不表示维护设计已入库或随 JAR 发布。
 
 <a id="s13-2"></a>
 ### 13.2 本地其他模组参考
@@ -75,6 +91,8 @@ D15b1 于同日再次检查边界与工作树后，对本步使用的两个仓�
 D16b2c3b 于 2026-09-22 使用当前系统代理再次 `pull --ff-only`，DataEnergistics 快进至 `7416267860ee446bf45bceb1bd0aeb43d848ebf4`，版本仍为 3.3.0，工作树干净。恢复候选及动作代际两个参考类与上述提交无差异；本步采用范围与测试对应关系见 [10.37](bee-processing-network-evidence-production.md#s10-37)，未宣称审查全部上游新增功能。
 
 复用已固定版本时直接引用已读入口，不把每轮联网拉取当作前置；只有任务需要更新上游或现有 API／行为发生变化时，先确认独立仓库边界、工作树和上游，再执行 `pull --ff-only`；若有本地改动或不能快进，保留现场并记录原因，不自动 stash／reset。PB 13.13.5、Mekanism 10.7.19.85 的版本源码、`.tmp_gtnh_src`／`.tmp_gtceu_src` 摘录与 Thunderbolt JAR 没有可拉取的独立 Git 元数据，不能报为已更新；固定依赖 API 继续以实际编译 JAR 为准。第 5.4 节保留存储算法原审查提交，最新工作副本与本轮新增核对范围以本节为准。
+
+2026-10-28 按用户要求对 33 个本地参考副本统一 `fetch --prune origin` 后 `merge --ff-only`：20 个副本快进（涉及 19 个独立上游，BiggerAE2 有两份工作副本）、11 个已是最新、1 个远端分支已被上游删除（`neoecoaeextension-v21.1.2-source` 的 `v21.1.2` 报 `couldn't find remote ref`，本地跟踪引用因此陈旧，不能算作已确认最新；`1cae738ad9` 快照原样保留，不 reset／rebase）、1 个游离 HEAD 只 fetch 不切分支（维护 worktree 的 `.tmp_eco_current`）。EvolvedMekanism、EvolvedMekanismExtras、Mekanism、productive-bees、Productive-Bees-Genesis-1.20.1 五个副本仍带用户本地改动，本轮只做快进，未 stash、未 reset。各副本新旧 HEAD、本轮实际采用项与不采用项见[13.35](#s13-35)；本节及 13.3 的旧提交号是各自读取时刻的历史口径，不因本次更新改写。
 
 AE2LT 参考源码使用 NeoForge 21.1.220，EAEP 使用 21.1.238，ECO 使用 21.1.233、Useless 使用 21.1.249；这些是历史参考快照的 API 基线；本项目当前开发基线为 21.1.216、发布最低为 21.1.214，不因参考它们而自动升级依赖。涉及具体生命周期 API 时以本项目编译基线重新验证。
 
@@ -546,3 +564,74 @@ D18j1 读取本地 NeoForge 21.1.216／Minecraft 1.21.1 源码的 AbstractContai
 D18j2a 继续读取本地固定 AE2 19.2.17 的 `StorageHelper.poweredExtraction`、`KeyCounter.findFuzzy`、`VariantCounter`、`IActionSource.context` 与本项目 `MeBridgeStorage`。采用物品主键索引定位完整组件变体、玩家来源与原生耗能提取；KeyCounter 的变体集合是索引视图，无序变体不会为每次查询复制全库。poweredExtraction 在真实提取后还执行统计回调，因此异常不能证明零提取，接收账户在调用前保留未决请求。当前请求 context 只排除本次已经由内部事务使用的同一 NetworkSavedData，模拟与执行一致，不修改其它网络或长期自动化来源。未引入新运行依赖或后台世界访问；真实 API／部分返回／异常和恢复结果按[当前证据](bee-processing-network-evidence-current.md)登记。
 
 D18j2b1 复用上述版本，补读 StorageHelper.poweredInsert 的模拟、能量扣除、实际存入和统计回调顺序，继续使用 KeyCounter 及 ICraftingService.getCraftables 合并存储／合成目录。模拟不代表保证接受，实际存入后的统计异常也不代表零接收，因此存入请求先从可操作鼠标物品中移出，已知拒收余量与未知请求分别保管；提取采用相同的逐玩家有限接收合同。库存／查询快照扩展既有 AeMeCatalogue 缓存，40 tick 共享、每代最多八个查询、弱网格键和停服清理，不在缓存值反向保存网格／世界。Name 使用服务器解析名称，排序以完整键作为稳定次序；客户端仍只接收八项与既有字节预算。没有采用第三方库存容器掉落回退或新增全表客户端下载。
+
+<a id="s13-35"></a>
+### 13.35 上游参考批量更新与可借鉴项（2026-10-28）
+
+本轮按用户要求把本地参考副本拉到各自上游最新，并逐仓库检查新增提交。执行口径：先确认独立 Git 根，`fetch --prune origin` 后只做 `merge --ff-only`；不 stash、不 reset、不 rebase，不改参考副本工作树内容。下面只记录已读到的提交与源码；未运行任何上游测试，未编译本项目，未修改业务代码。
+
+| 本地副本 | 更新前 → 更新后 | 新增提交 | 与本项目的关系 |
+| --- | --- | --- | --- |
+| `.tmp_neoccoaeextension_src`（ECO，main） | `1723bf0665` → `6dfbee3a35` | 288 | AE2 存储／终端／多方块，P5、D18、M01 参考 |
+| `extendedae-plus-1.21.1-source` | `93a08b673e` → `594e5f0793` | 442 | 无限存储、样板供应器与性能取舍 |
+| `AE2-Lightning-Tech-Reborn` | `7115c317a1` → `15cf88b0a8` | 142 | 天枢大数派发、过载 IO、多方块预览 |
+| `Thunderbolt-Core-Reborn` | `42e0e7d2dc` → `8301d7fcf0` | 58 | 存储后端、规划器、守恒压测范式 |
+| `dataenergistics-1.21-source` | `7416267860` → `9ce6a71a6f` | 58 | 三位一体大数、终端库存维持 |
+| `.tmp_dataenergistics_src` | `ddef032e7c` → `9ce6a71a6f` | 48 | 同上（另一份工作副本） |
+| `.tmp_useless_src` | `1ad014cf6e` → `ed1766cf07` | 36 | 大数产物整批交付、合金炉 |
+| `.tmp_jdte_src` | `1641f9771e` → `77b081e49a` | 22 | 合并接口、D26 参考 |
+| `.tmp_omnisequence_src` | `5f763d5b97` → `14b832dc32` | 20 | 客户端瞬态状态与成型渲染 |
+| `.tmp_biggerae2_src`、`temp-BiggerAE2` | `0369c9e147` → `ad9c6a74b5` | 12 | 大数显示与存储元件渲染 |
+| `.tmp_eae_gitsrc`（ExtendedAE） | `8d07e4c2f9` → `1f86f92755` | 12 | 矩阵缓存进度、样板供应器 |
+| `.tmp_ae2crystalscience_src` | `bb599989e1` → `3916c00198` | 28 | 末影发信器、谐振机器（玩法内容，未采用） |
+| `.tmp_ae2omnicells_src` | `73ec280cfb` → `b026932af8` | 1 | 格式化提交 |
+| `EvolvedMekanism` | `370cdf578f` → `849940e0ca` | 42 | D24 工厂等级对照 |
+| `Mekanism-MoreMachine` | `95672c3769` → `c23bc11c6c` | 6 | 进阶工厂基准时长一致性 |
+| `.research-GregTech-Modern-1.21` | `d2ef26f86f` → `ee4a1d2db9` | 55 | T 系列科技线 |
+| `Productive-Bees-Genesis-1.20.1` | `10bac826f8` → `3f355a5e0c` | 1 | 下游把 `db6794d` 移植为 1.20.1 |
+| `adorable-armory`、`Iron-Elden-Ring-Particle-library` | `4cfb40a24b`→`edf96b00f7`、`b365fb78e8`→`dde8431630` | 10、6 | 1.20.1 美术／粒子，与本项目无接口关系 |
+
+已是最新、无需处理：EvolvedMekanismExtras、Mekanism（1.21.x）、Mekanism-Extras-1.21.1、Mek-Energistics-main 与 `.tmp_mekenergistics_git`、KubeJS、productive-bees（PB `dev-1.21.0`）、`.tmp_aae_gitsrc`、`AE2LT-Packaged-Pattern-Provider`、`ae2lt-src-2.1.0-beta.5`、`Thunderbolt-Core-1.20.1`。`neoecoaeextension-v21.1.2-source` 无法快进，原因见 13.2；后续 ECO 参考统一用 `.tmp_neoccoaeextension_src`（main）与固定版本 JAR，不再依赖已删除的 `v21.1.2` 分支。
+
+**可借鉴项，按与本项目开放门的距离排序。**
+
+1. **AE2 每 tick 全量重建网络缓存，是本项目桥接必须自己承担的常数。** ECO `978656455`（`mixins/ae2/storage/StorageServiceMixin.java` 类注释写明“AE2 rebuilds the whole cached network inventory every tick while any watcher exists”）改为在 `updateCachedStacks` 头部接管：逐挂载列举、按键增量、`StorageListingVersion` 未变即跳过；`previous` 记录刷新前值，异常时 `revert` 本轮增量并退回原版路径；超 long 的总量另存 `oversized` BigInteger，对外 `Long.MAX_VALUE` 饱和，数量回落时恢复准确投影；每 200 次刷新全量重建以修复外部改写；非服务器线程或特殊作用域直接失效。对应本项目 [MeBridgeStorage](../src/main/java/com/ayoshiko/productivebeesgenesis/apiculture/compat/ae2/MeBridgeStorage.java) 与 [Ae2NetworkStorageAggregationMixin](../src/main/java/com/ayoshiko/productivebeesgenesis/mixin/ae2/Ae2NetworkStorageAggregationMixin.java)：我们目前每次 `getAvailableStacks` 都遍历 `MeStorageProjection.view()` 并逐键读权威账本，隔离方案 [SafeStorageAggregation](../src/main/java/com/ayoshiko/productivebeesgenesis/apiculture/compat/ae2/SafeStorageAggregation.java) 为每个提供者新建一个 `KeyCounter`，且一旦出现负值就 `pbg$invalid` 永久降级。可采纳三点：①把数量随 `MeStorageProjection` 一起发布为不可变快照，调用只读快照；②同一 tick 内重复列举复用结果；③异常时回滚本轮增量并退回原版，而不是永久关闭隔离。不采纳其 Mixin 注入点与 ECO 类型依赖——本项目是附属，不能常驻引用。
+
+2. **桥接列举存在跨线程读权威账本的风险。** 同一条 ECO 提交在 `updateCachedStacks` 头部先判断 `ServerLifecycleHooks.getCurrentServer().isSameThread()`，非服务器线程直接失效并退回原版；其注释给出的理由是“crafting calculations may read the cached inventory from a worker thread”。本项目 `MeBridgeStorage.getAvailableStacks` 在调用线程直接读 `ledger.available(...)`。这条路径是否真会发生，须按固定 AE2 19.2.17 的实际调用点核对：13.31 已确认 `beginCraftingCalculation` 的库存捕获在主线程，不能只凭上游注释断定工作线程会读到账本，也不能因为主线程捕获就假定没有别的读取入口。核对结论出来前，这条按“潜在违反权威资产线程归属”记录，不作为已复现缺陷。
+
+3. **基准时长必须取机器自身的 base，不能取升级后的值。** Mekanism-MoreMachine `c23bc11c`：进阶工厂沿用父类 10 秒基准，而对应单方块机器是 5 秒（化学溶解、营养液化、氧化／色素提取）或配方自带时长（加压反应）；修法是新增 `getBaseTicksRequired()`（构造期即被调用，因此覆写不得依赖 super 之后才初始化的字段），PRC 另存 `baseTicksRequired`，因为 `getTicksRequired()` 已经是升级后的值，用它和配方时长比较会反复触发 `recalculateUpgrades`。对应本项目 `SealedCentrifugeProfile`／`FactoryApiaryConfig` 与固定 Mekanism 10.7.19.85 的 `MekanismUtils.getTicks`：封存能力必须从宿主真实 base 推导，且“配置是否变化”的比较不能用升级后的 `ticksRequired`。EM／ME／EME 工厂若覆写基准，本项目的等级表要按宿主实际值而不是默认 200 记录。
+
+4. **合成派发不要复制整份库存。** ECO `62e10637e`：外部 CPU 快路径先筛可用提供器，再用虚拟扣减解析样板材料，移除每次尝试的 `KeyCounter.addAll` 全库存复制；调度器与外部 CPU 分别复用输入／输出／返还缓冲，重置调度状态时保留正在结算的局部缓冲，已提交批次继续使用独立快照。作者给出的局部基准是 10,000 个无关键 118.310 µs → 0.871 µs、单次分配 204,048 B → 3,104 B，并自述不代表整服 TPS。本项目对应 `FairServiceBudget` 与候选／资产分离：可核对“重置或取消时是否误清结算中的缓冲”，但不要转写其数字为我们的性能结论。
+
+5. **成员完整性用每次入口求值的访问条件，而不是只靠缓存失效。** ECO `35d6107c4`：把“全部已登记成员在位”纳入无限域访问条件，任一成员缺失立即停止插入、提取、枚举与精确读取；成员变化时同步刷新主机访问状态与驱动提供者，使已缓存视图立即停用；异域盘不能恢复权限，原成员放回其它槽位可恢复同一存储域与数据。与本项目“失联时撤销候选、规则与账本根”同构，差别在于它把完整性做成动态条件而非一次性事件，可在成员删除／能力更换的现有实现上复核是否留有空窗。
+
+6. **同步锁只保护真实并发共享。** ECO `1da5a8a46`：可变处理器列表改为 volatile 不可变数组，注册时在同步区内复制并发布新数组；服务端线程独占的无限域管理入口直接删掉 `synchronized`；客户端取库存视图时跳过服务端唯一性登记。可作为本项目并发口径的对照复核，不引入新容器类型。
+
+7. **滞回必须在到达上限才解除。** DataEnergistics `01741600`：原实现用 `stored > lower` 判断是否继续补货，导致停在 lower 与 upper 之间就停止；修法是用 (resource, grid, frequency) 记录进行中的补货周期，只有 `stored >= upper` 才清除，条目禁用／关闭时清理。本项目当前没有库存维持功能，此条记为实施 D08／D22 类补货时的必守规则。
+
+8. **守恒与保存的验证范式。** Thunderbolt `bbd8a95` 及 `docs/benchmarks/indexed-cell-review-20261019.md`：独立 `BigInteger[]` 账本核对每次返回值与受影响键，四个固定种子共 1,000,000 次混合操作；372 次真实 NBT 压缩解压保存重载；阻塞 I/O worker 后排入 12 代、24 次真实文件写入，期间强制删除三分之二键触发压缩并继续复用 ID，最后逐历史文件与独立账本一致；另给出按 N、S、C、D、H、B、W、M 的复杂度表和“不支持并发写、后台只读已交接快照”的维护约束。P7／D29 可照此结构组织故障验证，不照抄其 16,384 位上限。
+
+9. **精确大数的分层表示是可选优化，不是合同变更。** ECO `a5f3a80df`：新增两个 long 组成的无符号 126 位整数，数量按 long／U126／BigInteger 三档保存，超出 126 位才进任意精度，展示与持久化边界再转 BigInteger。本项目统一使用 BigInteger，引入 U126 等于第二套数值合同，本轮不采纳，仅作为终端排序与规划热路径的后续优化候选记录。
+
+10. **多方块预览的交互细节。** ECO `feb27ea13`：标题、结构场景、控件、材料分行，场景自适应剩余空间；长度与层数左键下一项、右键上一项并在边界循环；调整尺寸时退出成型预览；仅选中非空气方块时显示物品槽。AE2LT `256e76ca`、`1d78ba21` 给 JEI 多方块预览做自适应布局。两者均自述未做游戏内验收，可作 M01／M02／M06 的界面参照，不作已实现证据。
+
+11. **已确认方向一致、无需动作。** ①`Productive-Bees-Genesis-1.20.1` 的 `3f355a5` 是把本项目上游 `db6794d`（万象创世改用蜂箱配方的真实蜜脾模板）移植到 1.20.1；`db6794d` 已是本网络分支祖先，无需再改。②ExtendedAE-Plus `c3932ac` 用 `SuperAssemblerMatrixPatternInputHandler` 避免暴露真实库存后 AE2 插入时逐槽扫描，本项目 [CentrifugePatternProviderTarget](../src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/CentrifugePatternProviderTarget.java) 的 `containsPatternInput` + 提交次数预算已是同类做法。③ExtendedAE-Plus `1e1ff3c` 去掉吞异常的 `try/catch` 让保存失败暴露，与本项目“不吞异常继续提交”规则一致。
+
+**明确不采用。** ECO 的 U126／`HugeAmount` 作为本项目数量类型；直接注入并 cancel AE2 `StorageService.updateCachedStacks`（作为附属会与 ECO 及其它存储附属争同一条 tick 路径，本项目继续在 `NetworkStorage.getAvailableStacks` 侧做显示隔离，把成本问题放在自己的列举上解决）；EAE 的全局翻倍限制、超级矩阵、吞噬盘等自身玩法内容；上游各自的测试计数（1,620／2,063／1,516 项等）与基准数值，它们不是本项目的正确性或性能证据。
+
+<a id="s13-36"></a>
+### 13.36 架构优先评估与重点参考（2026-11-06）
+
+**范围。** 本次结合网络 `3f922e9`、远端网络 `acb06d8` 与维护 `e27ed48`／1.2.3，读取生产、账本／存档、调度、拓扑、ME 查询、选择会话和验证工具。GitHub 分支／发布信息通过官方 API 核实，具体实现通过固定 SHA 的官方原始源码读取；web 搜索工具未返回可用内容，不据其声称验证。未拉取或修改参考 worktree，未升级本项目依赖，未运行上游或本项目代码。本表区分发布版本、开发提交与本地副本；北京时间 2026-11-06 的核对不意味着未来仍为最新。
+
+| 重点来源 | 当前官方基线／本地副本 | 本次已读实现与可采用原则 | 需要保留的限制 |
+| --- | --- | --- | --- |
+| [ECO](https://github.com/DancingSnow0517/NeoECOAEExtension) | 1.21.1 正式版 [21.2.15](https://github.com/DancingSnow0517/NeoECOAEExtension/releases/tag/21.2.15)，2026-11-05 23:36；main `54f69e83c111` 已含发布后修复。本地 .tmp_neoccoaeextension_src 为 `bd5871590fdf`（11 月 2 日） | [KeyCounterSnapshots](https://github.com/DancingSnow0517/NeoECOAEExtension/blob/737d0913fc60c6937ae0db6417dc5de06279f389/src/main/java/cn/dancingsnow/neoecoae/crafting/display/terminal/KeyCounterSnapshots.java)：按变化主键组共享不可变分片，稀疏变化只复制对应桶，密集变化走原生复制；[StorageReturnBudget](https://github.com/DancingSnow0517/NeoECOAEExtension/blob/f9e648f5fb9f478e3eddc85170d62e31130df905/src/main/java/cn/dancingsnow/neoecoae/storage/StorageReturnBudget.java)：同网格返还共用操作数／时间预算，弱键值不回持网格；存储私有缓存提交 `292dec2b98a0` 的文件范围已核对 | 快照依赖 ECO 自己的 KeyCounter Mixin；本项目优先改自有投影，不能直接接管 AE2 全局缓存。原生全量列举仍有输出成本；2 ms／2048 等数值是上游参数，不直接作为本项目预算 |
+| [AE2LT Reborn](https://github.com/AE2-Lightning-Tech-Reborn/AE2-Lightning-Tech-Reborn) | 1.21.1 正式版 2.1.3（北京时间 10 月 31 日），最新测试版 2.1.4-beta2（11 月 5 日）；main `ecc518fc570095789d19236fbd373eb580a62e42`。本地 Reborn 为 `743877e5f0533`，旧 ae2lt-src-2.1.0-beta.5 不再作为当前主参考 | [ProductiveDispatchScheduler](https://github.com/AE2-Lightning-Tech-Reborn/AE2-Lightning-Tech-Reborn/blob/ecc518fc570095789d19236fbd373eb580a62e42/src/main/java/com/moakiee/ae2lt/crafting/timewheel/ProductiveDispatchScheduler.java)：先发现能推进的候选，再按量子轮转使用剩余成功派发额度；对实际额度返回值做边界检查 | 首轮遍历全部 candidates，成功额度不限制检查成本。PBG 需另外预算候选发现、跨网公平及昂贵外部调用；不能原样替换现有调度就宣称有界。需要研究存储／时间轮时再读取 Reborn 对应 Thunderbolt 依赖 |
+| [DataEnergistics](https://github.com/ModularMCLib/DataEnergistics) | 1.21 正式版 [v3.4.0-1.21](https://github.com/ModularMCLib/DataEnergistics/releases/tag/v3.4.0-1.21)，2026-11-05；分支 `0fec325950df1c922b4355c7a5bf556fb18a1f61` 含后续视觉调整。本地 `9ce6a71a6f53` | [TrinityPlanningInventorySnapshot](https://github.com/ModularMCLib/DataEnergistics/blob/0fec325950df1c922b4355c7a5bf556fb18a1f61/src/main/java/com/fish_dan_/data_energistics/common/crafting/trinity/planning/inventory/TrinityPlanningInventorySnapshot.java)：服务器线程捕获相关完整键，区分有限 BigInteger 与确认的无限来源，发布脱离实时库存的冻结计划；失败包含具体键，不用缓存哨兵推断真实资产 | 同物品策略仍可能枚举完整外部库存；相关键捕获也需要本项目预算。只读计划不是所有权转移，执行时重新确认实际量。旧 detached／恢复研究只在版本和入口仍适用时复用 |
+| [OmniSequence-Transfinite](https://github.com/AyaYumi/OmniSequence-Transfinite) | 只用 1.21.1-neoforge；当前 `11d067e6e10da7720ad69de2af50c674bf302efc`（11 月 5 日），本地 `14b832dc3246`。不从 1.20.1 或同名分支推导 API | [AEKeyTransferScheduler](https://github.com/AyaYumi/OmniSequence-Transfinite/blob/11d067e6e10da7720ad69de2af50c674bf302efc/src/main/java/com/atir/molecularmanipulator/integration/ae2/AEKeyTransferScheduler.java)：按键轮转、共享本次搬运预算、连续零接收提前停止，实际接收后才扣余额 | snapshotKeys 在搬运前仍全表扫描；Math.clamp 会隐藏非法返回值，源容器内的非正条目会被清除。本项目只采用轮转／退避思想，非法或未知接收须保管诊断，不能照搬。多方块结构／渲染本轮只定位入口，未全面审读 |
+| [Useless](https://github.com/SorrowMist/UselessMod) | 1.21 分支正式版 [1.21.1-2.4.6.5](https://github.com/SorrowMist/UselessMod/releases/tag/1.21.1-2.4.6.5)，2026-11-05；当前 `4f0c2ecb4b2d2b98d02c382554042722f5b2c0ce`，本地 `ed1766cf07d0` | [AlloyFurnaceBigIntegerCpuAdapter](https://github.com/SorrowMist/UselessMod/blob/4f0c2ecb4b2d2b98d02c382554042722f5b2c0ce/src/main/java/com/sorrowmist/useless/api/crafting/bigint/cpu/AlloyFurnaceBigIntegerCpuAdapter.java)：落网前按键接收完整 BigInteger 批次，只把未接收余量走 long 接口；接收即承担资产所有权，取消后也由接收者保管 | 接口约定回调不得抛异常，异常记录并吞掉可能使归属不一致；本轮读取的是协议，不是证明全部调用方安全。PBG 需保留幂等收据／未知结果，不能异常即零接收重放，也不沿用上游注释中的性能数字 |
+
+**映射到本项目。** A1 统一中性资源与单一资产域，A2 让共享生成和已付工作服务所有宿主，A3 将变化键快照、候选发现、成功批次与外部 IO 预算分开，A4 才在这些基础上提高产能。ECO／AE2LT 的经验说明应减少重复工作并扩大一次可完成的有效批次；DataEnergistics／Useless 提供计划快照和整批所有权边界；OmniSequence 提供轮转搬运与多方块实现的进一步阅读方向。不同模组的具体容器、数值上限、依赖和失败政策不构成本项目合同。
+
+**后续读取约束。** 每包只补当前职责涉及的实现及其调用方、失败恢复和失效路径；记录固定 SHA。API 核对可以读取 AE2／Mekanism 等实际依赖，但不把它们重新列为架构学习对象。EAE、AAE 不进入学习队列，MekEnergistics 不承担关键架构依据。历史已读证据不重复下载，新的文件／行为差异才触发补读。

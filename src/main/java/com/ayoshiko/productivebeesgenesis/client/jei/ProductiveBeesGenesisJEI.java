@@ -71,7 +71,6 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 				com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenu::craftingState, com.ayoshiko.productivebeesgenesis.multiblock.world.MachineMenu::wireless,
 				registration.getTransferHelper(), () -> terminalRuntime), RecipeTypes.CRAFTING);
 	}
-	@Override public void onRuntimeUnavailable() { terminalRuntime = null; com.ayoshiko.productivebeesgenesis.apiculture.client.TerminalSearchSync.connect(null); }
 
 	/** JEI插件ID */
 	private static final ResourceLocation PLUGIN_ID =
@@ -432,6 +431,7 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 	public void registerGuiHandlers(IGuiHandlerRegistration registration) {
 		registration.addGuiContainerHandler(com.ayoshiko.productivebeesgenesis.apiculture.client.NetworkTerminalScreen.class,
 				new NetworkTerminalJeiGuiHandler(registration.getJeiHelpers().getIngredientManager()));
+		DesignerJeiGuiHandler.register(registration);
 		registration.addGenericGuiContainerHandler(GuiMekApiary.class,
 				new ApiaryJeiGuiHandler(registration.getJeiHelpers().getIngredientManager()));
 	}
@@ -453,6 +453,25 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 			public void text(String value) { runtime.getIngredientFilter().setFilterText(value); }
 			public boolean focused() { return runtime.getIngredientListOverlay().hasKeyboardFocus(); }
 		});
+		com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient.recipeViewer((id, output) -> {
+			ResourceLocation recipeId = ResourceLocation.tryParse(id);
+			for (var category : runtime.getRecipeManager().createRecipeCategoryLookup().get().toList()) {
+				if (showDesignerRecipe(runtime, category, recipeId)) {
+					return "designer.jei_recipe_opened";
+				}
+			}
+			if (!output.isEmpty()) {
+				var focus = runtime.getJeiHelpers().getFocusFactory().createFocus(
+						mezz.jei.api.recipe.RecipeIngredientRole.OUTPUT, mezz.jei.api.constants.VanillaTypes.ITEM_STACK, output);
+				runtime.getRecipesGui().show(focus);
+				return "designer.jei_draft_help";
+			}
+			return "designer.jei_recipe_missing";
+		});
+		var materials = runtime.getIngredientManager();
+		com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient.externalIngredients(() ->
+				materials.getRegisteredIngredientTypes().stream()
+						.flatMap(type -> materials.getAllIngredients(type).stream()).iterator());
 		// 检查配置是否加载以及万象创世是否被禁用
 		if (!ModConfig.areServerSpecsLoaded()) {
 			return;
@@ -493,6 +512,29 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 					f[0], f[1],
 					PBConstants.MYRIADCREATIONS_TYPE_STRING);
 		}
+	}
+
+	@Override
+	public void onRuntimeUnavailable() {
+		terminalRuntime = null;
+		com.ayoshiko.productivebeesgenesis.apiculture.client.TerminalSearchSync.connect(null);
+		MyriadJeiOutputs.clear();
+		com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient.recipeViewer((id, stack) -> "designer.jei_unavailable");
+		com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient.externalIngredients(java.util.Collections::emptyIterator);
+	}
+
+	private static <T> boolean showDesignerRecipe(IJeiRuntime runtime, mezz.jei.api.recipe.category.IRecipeCategory<T> category,
+			ResourceLocation id) {
+		if (id == null) {
+			return false;
+		}
+		var recipes = runtime.getRecipeManager().createRecipeLookup(category.getRecipeType()).get()
+				.filter(recipe -> id.equals(category.getRegistryName(recipe))).limit(1).toList();
+		if (recipes.isEmpty()) {
+			return false;
+		}
+		runtime.getRecipesGui().showRecipes(category, recipes, java.util.List.of());
+		return true;
 	}
 
 	/**

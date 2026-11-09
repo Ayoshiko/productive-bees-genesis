@@ -1,0 +1,11 @@
+{
+  "primaryColor": "#4977F5",
+  "secondaryColor": "#232B3D",
+  "particleColor": "#5E94E0",
+  "flowerFluid": "minecraft:water",
+  "createComb": true,
+  "waterproof": true,
+  "breedingItem": "minecraft:honey_bottle",
+  "breedingItemCount": 1,
+  "selfbreed": true
+}

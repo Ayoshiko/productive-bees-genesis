@@ -1,0 +1,24 @@
+{
+  "type": "productivebees:bee_breeding",
+  "parent1": "example:soul",
+  "parent2": "example:pb_tag",
+  "offspring": "example:soul_comb",
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "industrialforegoingsouls"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:soul"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_tag"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:soul_comb"
+    }
+  ]
+}

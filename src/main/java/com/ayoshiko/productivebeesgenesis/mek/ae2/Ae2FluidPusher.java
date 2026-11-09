@@ -168,6 +168,7 @@ public final class Ae2FluidPusher {
 		// 自适应成本记账器与物品路径共用：流体与物品经过同一个 ExternalStorageFacade 门面，
 		// 决定 tick 成本的是 insert 调用次数（样板解码/WAL fsync 与 amount 无关），故共享同一份 EWMA。
 		Ae2InsertCostTracker costTracker = Ae2OutputPusher.getReusableBuffers(holder, host).insertCostTracker;
+		costTracker.useNetwork(meStorage);
 		if (costTracker.isExhausted(gameTick)) return 0L;
 		Ae2PushStateHolder pushState = holder.getPushState();
 		// 满存储/病态网络专项（与物品直推路径同构）：真实 insert 被拒时记入**按 key**退避，
@@ -186,30 +187,24 @@ public final class Ae2FluidPusher {
 				return 0L;
 			}
 		}
-		long insertStart = System.nanoTime();
+		var measured = Ae2OutputPusher.getReusableBuffers(holder, host).measuredStorage
+				.prepare(meStorage, gameTick, costTracker);
 		try {
-			long accepted = SaturatingMath.clampToRequest(
-					meStorage.insert(key, requested, action, ActionSourceHolder.INSTANCE), requested);
-			long insertCost = System.nanoTime() - insertStart;
-			Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
-			holder.recordNetworkCost(meStorage, gameTick, insertCost,
-					Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
-			costTracker.record(gameTick, insertCost);
+			long accepted = modulate
+                    ? com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(host)
+                        .handoffFluid(template, requested, "ae2-generated-fluid",
+                            () -> measured.insert(key, requested, action, ActionSourceHolder.INSTANCE))
+                    : SaturatingMath.clampToRequest(measured.insert(key, requested, action, ActionSourceHolder.INSTANCE), requested);
 			if (modulate) {
 				if (accepted > 0L) {
-					keyBackoff.recordSuccess(key);
+					keyBackoff.recordSuccess(key, System.nanoTime(), costTracker.successDelayNanos());
 				} else {
 					keyBackoff.recordFailure(key, System.nanoTime());
 				}
 			}
 			return accepted;
 		} catch (Exception e) {
-			// 抛异常的 insert 同样入账全服预算，防止病态网络下每 tick 重复昂贵遍历
-			long insertCost = System.nanoTime() - insertStart;
-			Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
-			holder.recordNetworkCost(meStorage, gameTick, insertCost,
-					Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
-			costTracker.record(gameTick, insertCost);
+			// 真实调用已由 measured 在 finally 中计量，保管层仍负责未知结果。
 			if (modulate) {
 				keyBackoff.recordFailure(key, System.nanoTime());
 			}
@@ -378,6 +373,7 @@ public final class Ae2FluidPusher {
 		Ae2InsertCostTracker costTracker = Ae2OutputPusher.getReusableBuffers(holder, host).insertCostTracker;
 
 		for (Object2LongMap.Entry<AEFluidKey> entry : pendingMap.object2LongEntrySet()) {
+			costTracker.useNetwork(meStorage);
 			AEFluidKey fluidKey = entry.getKey();
 			long amount = entry.getLongValue();
 			long tankTotal = tankTotals.getLong(fluidKey);
@@ -406,7 +402,7 @@ public final class Ae2FluidPusher {
 					continue;
 				}
 
-				long inserted = batchPush(holder, meStorage, fluidKey, pushed, gameTick, costTracker);
+				long inserted = batchPush(host, holder, meStorage, fluidKey, pushed, gameTick, costTracker);
 				if (inserted <= 0) {
 					// 完全失败：不触碰 tank，触发按 key 退避，并登记余量等窗口重试
 					if (firstFailedKey == null) firstFailedKey = fluidKey;
@@ -415,7 +411,7 @@ public final class Ae2FluidPusher {
 					rejectedCount = SaturatingMath.saturatingAdd(rejectedCount, 1L);
 					continue;
 				}
-				keyBackoff.recordSuccess(fluidKey);
+				keyBackoff.recordSuccess(fluidKey, System.nanoTime(), costTracker.successDelayNanos());
 				anySuccess = true;
 				allFailed = false;
 				// 按实际接收量从 tank 精确扣除。inserted ≤ pushed ≤ tankTotal，
@@ -563,7 +559,7 @@ public final class Ae2FluidPusher {
 	 * @param costTracker   自适应成本记账器（与物品路径共享同一 ME 网络的 EWMA）
 	 * @return 实际推送总量(mB);0 表示完全失败
 	 */
-	private static long batchPush(Ae2OutputStateHolder holder, MEStorage meStorage, AEFluidKey fluidKey,
+	private static long batchPush(IAe2OutputHostBase host, Ae2OutputStateHolder holder, MEStorage meStorage, AEFluidKey fluidKey,
 			long amount, long gameTick, Ae2InsertCostTracker costTracker) {
 		// 单次请求尽量大（int 上限），一轮推空槽内流体；只有网络连续足额接收才会继续下一轮。
 		long remaining = Math.max(0L, amount);
@@ -572,24 +568,11 @@ public final class Ae2FluidPusher {
 			// The first call is admitted by the caller; later calls remain bounded by cost.
 			if (costTracker.isExhausted(gameTick)) break;
 			long request = Math.min(remaining, MAX_FLUID_BATCH_REQUEST_MB);
-			long insertStart = System.nanoTime();
-			long inserted;
-			try {
-				inserted = SaturatingMath.clampToRequest(
-						meStorage.insert(fluidKey, request, Actionable.MODULATE, ActionSourceHolder.INSTANCE), request);
-			} catch (RuntimeException error) {
-				long insertCost = System.nanoTime() - insertStart;
-				Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
-				holder.recordNetworkCost(meStorage, gameTick, insertCost,
-						Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
-				costTracker.record(gameTick, insertCost);
-				throw error;
-			}
-			long insertCost = System.nanoTime() - insertStart;
-			Ae2GlobalInsertBudget.recordCost(gameTick, insertCost);
-			holder.recordNetworkCost(meStorage, gameTick, insertCost,
-					Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
-			costTracker.record(gameTick, insertCost);
+			var measured = Ae2OutputPusher.getReusableBuffers(holder, host).measuredStorage
+					.prepare(meStorage, gameTick, costTracker);
+			long inserted = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(host)
+                        .handoffFluid(fluidKey.toStack(1), request, "ae2-tank",
+                            () -> measured.insert(fluidKey, request, Actionable.MODULATE, ActionSourceHolder.INSTANCE));
 			if (inserted <= 0L) break;
 			insertedTotal = SaturatingMath.saturatingAdd(insertedTotal, inserted);
 			remaining -= inserted;

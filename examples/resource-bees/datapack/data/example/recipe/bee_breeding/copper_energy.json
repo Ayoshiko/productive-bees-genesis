@@ -1,0 +1,20 @@
+{
+  "type": "productivebees:bee_breeding",
+  "parent1": "example:pb_copper",
+  "parent2": "productivebees:redstone",
+  "offspring": "example:copper_energy",
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_copper"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "productivebees:redstone"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:copper_energy"
+    }
+  ]
+}

@@ -3,12 +3,172 @@
   "icon": "minecraft:comparator",
   "category": "productivebeesgenesis:automation",
   "pages": [
-    { "type": "patchouli:text", "title": "Keep defaults first", "text": "A first playthrough does not require editing configuration files or memorising raw option names. Open the mod list, select Productive Bees Genesis, and choose Configure. The translated screen groups everyday choices into Gameplay, Machines, Capacity, and Client Settings." },
-    { "type": "patchouli:text", "title": "Machine settings", "text": "Use the Apiary or Centrifuge Basic Settings pages for power use, processing time, and fluid capacity. PB Upgrade Limits controls how many bee upgrades fit. Keep Multi-fluid Tanks enabled unless a modpack has a specific reason to combine fluids. Test changes on one normal machine before a factory." },
-    { "type": "patchouli:text", "title": "All-source production", "text": "Gameplay's apiaryProduceAllFlowers defaults to off and is enabled by Paradox Infinity. Each cycle produces every distinct valid feeder source; empty or disabled slots and duplicates add no runs. Independent fluids are not multiplied. To edit this rule separately, switch and save as Custom first; that transition inherits the active preset's values." },
-    { "type": "patchouli:text", "title": "Per-apiary treat restocking", "text": "AE2 gene-treat restocking is saved per apiary and defaults to off. Put a sample in the dedicated treat slot and enable R below it. The online network supplies only the same item with identical components, including genes, values, purity and name. R is independent of balance presets, A output and centrifuge I input." },
-    { "type": "patchouli:text", "title": "AE2 and performance", "text": "Item output, fluid output, and network power normally work well at their defaults. Centrifuge auto-input is also enabled per machine from its AE2 Input window. If a large network stutters, lower the pull amount or increase the pull interval instead of maximizing every speed and parallel setting." },
-    { "type": "patchouli:text", "title": "Change settings safely", "text": "Leave the world or stop the server normally, back up the world and configuration, then change one related group and record the old value. Re-enter with one test machine and check power, speed, items, and fluids. Restore that group if behavior is unexpected." },
-    { "type": "patchouli:text", "title": "Raw files are advanced", "text": "Raw option names are useful only for pack distribution, scripting, or migration. World gameplay, machine, and capacity settings live in the world's server configuration directory; client visuals and custom window positions affect only the local player. Prefer the current screen labels and generated comments over old file examples." }
+    {
+      "type": "patchouli:text",
+      "title": "Resource output faces",
+      "text": "Open Mekanism side configuration. Chemicals sit below ENERGY on the left; other resources open from the right-side tab with square icons. Choose output faces and auto-eject. Native ENERGY input charges operating power, while output exports produced FE."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Cards and upgrades",
+      "text": "Settings survive saves and machine upgrades. Shift-right-click a Mekanism configuration card to copy, then right-click a compatible machine to paste faces and auto-eject."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Keep defaults first",
+      "text": "A first playthrough does not require editing configuration files or memorising raw option names. Open the mod list, select Productive Bees Genesis, and choose Configure. The translated screen groups everyday choices into Gameplay, Machines, Capacity, and Client Settings."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Machine settings",
+      "text": "Use the Apiary or Centrifuge Basic Settings pages for power use, processing time, and fluid capacity. PB Upgrade Limits controls how many bee upgrades fit. Keep Multi-fluid Tanks enabled unless a modpack has a specific reason to combine fluids. Test changes on one normal machine before a factory."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "All-source production",
+      "text": "Gameplay's apiaryProduceAllFlowers defaults to off and is enabled by Paradox Infinity. Each cycle produces every distinct valid feeder source; empty or disabled slots and duplicates add no runs. Independent fluids are not multiplied. To edit this rule separately, switch and save as Custom first; that transition inherits the active preset's values."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Acceleration budget",
+      "text": "Process 2048 virtual ticks per real tick by default, up to 4096. Bank capacity defaults to 8192, up to 32768. A larger bank buffers bursts without raising the processing rate. High MSPT reduces the budget. Existing settings keep their values."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Per-apiary treat restocking",
+      "text": "AE2 gene-treat restocking is saved per apiary and defaults to off. Put a sample in the dedicated treat slot and enable R below it. The online network supplies only the same item with identical components, including genes, values, purity and name. R is independent of balance presets, A output and centrifuge I input."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "AE2 and performance",
+      "text": "Item output, fluid output, and network power normally work well at their defaults. Centrifuge auto-input is also enabled per machine from its AE2 Input window. If a large network stutters, lower the pull amount or increase the pull interval instead of maximizing every speed and parallel setting."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Change settings safely",
+      "text": "Leave the world or stop the server normally, back up the world and configuration, then change one related group and record the old value. Re-enter with one test machine and check power, speed, items, and fluids. Restore that group if behavior is unexpected."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Raw files are advanced",
+      "text": "Raw option names are useful only for pack distribution, scripting, or migration. World gameplay, machine, and capacity settings live in the world's server configuration directory; client visuals and custom window positions affect only the local player. Prefer the current screen labels and generated comments over old file examples."
+    },
+    {
+      "type": "patchouli:link",
+      "url": "https://github.com/Ayoshiko/productive-bees-genesis/releases/download/resource-bee-examples-1.1.0/resource-bees-all.zip",
+      "link_text": "Download all examples",
+      "text": "For MC 1.21.1, PB 13.14 and Genesis 1.1.0. Includes runnable data, names, KubeJS and annotated files. Example bees are excluded from the mod JAR."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Create your own bee",
+      "text": "PB JSON defines colors, flowers, breeding food and acquisition. Genesis adds FE, chemicals, Source and other outputs. Extended bees support the same PB breeding, conversion, nest spawning and fishing recipes."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Try copper energy",
+      "text": "Craft the egg with an empty cage, honey treat and copper ingot. Use empty cages only. Put the bee in a powered Genesis mechanical apiary with a copper-ingot flower. It produces FE directly; the flower is reusable."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Choose an example",
+      "text": "All 32 bees have egg recipes. All 28 extended bees also have breeding and conversion recipes. pb_copper, pb_redstone, pb_water and pb_tag show ordinary PB settings. EXAMPLES.json lists each bee's files and materials."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Install data and names",
+      "text": "Put the datapack ZIP in the world's datapacks folder. Put the name pack in resourcepacks and enable it. Reopen for new bees; /reload updates recipes and F3+T reloads names. Missing optional mods disable their examples."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Comments cannot run",
+      "text": "The reference-only .jsonc files contain // comments and cannot load as game JSON. Renaming them is not enough. Read them while editing the plain .json files in datapack."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "1. Define the bee",
+      "text": "In data/example/productivebees, change primaryColor and secondaryColor, flowerItem for pollination and breedingItem for breeding food. selfbreed allows same-type breeding. The two foods may differ."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "2. Breeding and conversion",
+      "text": "bee_breeding uses parent1, parent2 and offspring; feed each parent its own food. bee_conversion uses source, result, item and chance. Use the item on the source bee. Extended and ordinary bees share these formats."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "3. Nests and fishing",
+      "text": "bee_spawning uses a nest ingredient, bee results and biomes. bee_fishing uses bee, biomes and chance. Copper energy includes nest spawning; the water-container bee includes river fishing."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "4. Resource output",
+      "text": "resource_production produces directly; resource_centrifuging processes combs. Customize bee, kind, resource id and amount. amount must be a quoted positive integer; chance is a number from 0 to 1."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "5. Names and renaming",
+      "text": "Names live in assets/productivebees/lang. example:copper_energy uses entity.productivebees.copper_energy_bee. Rename the definition path, all recipe bee IDs, loading conditions and name keys together."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Full PB settings",
+      "text": "pb_copper shows pollen color, initial genes, size, speed, attack, breeding, water and fire protection. Choose one flowerBlock, flowerItem, flowerFluid or flowerTag. Extended bees accept these same fields."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "The comb route",
+      "text": "hydrogen uses iron ingots as flowers. Keep the bee definition, honeycomb and centrifuging recipes. createComb enables the comb appearance but still needs a hive recipe. Preserve the matching bee_type component."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Centrifuge time and amount",
+      "text": "Hydrogen uses kind chemical, id mekanism:hydrogen and quoted amount 100. processing_time 20 is about one second. Ordinary PB centrifuging uses processingTime instead."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Other resources",
+      "text": "Source uses Source gems; souls use soul sand; air uses pressure gauges; EMC uses alchemical coal; XP uses enchanting bottles; lightning uses collapse matrices. ae_key produces diamonds. Install the corresponding mods."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Mixed outputs",
+      "text": "mixed keeps a PB hive recipe and a direct resource recipe. combined uses include_pb_outputs: true with a matching PB centrifuge recipe to produce items and FE together."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Container flowers",
+      "text": "Replace other flower fields with flowerResource. kind chemical, id mekanism:hydrogen and quoted amount 1000 require at least 1000 mB hydrogen. Use a filled chemical tank; empty tanks do not qualify."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Reusable contents",
+      "text": "Pollination consumes neither container nor contents. Water uses a bucket, FE a charged container, and the ME example a real item cell with at least 16 diamonds. Multiple containers or slots are not added together."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "KubeJS installation",
+      "text": "Copy the bundle's kubejs directory: data contains bees/tags, assets names, and the complete server_scripts file registers acquisition and outputs. Choose either the datapack or complete script to avoid duplicates."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Machines and output",
+      "text": "Use Genesis mechanical apiaries, centrifuges and factories for extended outputs. FE uses ENERGY. Chemicals sit below ENERGY on the left; other resources use the right-side tab. The panel shows production and pending stock."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "ME and EMC",
+      "text": "ME needs AE2, power, a channel, resource bridges and storage. Use Applied Mekanistics for chemicals and Applied Flux for FE. EMC automatically credits the owner's ProjectE account."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Troubleshooting",
+      "text": "Missing bee: check mods, paths and datapack enablement, then reopen. No pollination: check flowers and power. No breeding/conversion: check IDs, food and conditions. Raw name keys: enable the pack and press F3+T."
+    },
+    {
+      "type": "patchouli:link",
+      "url": "https://github.com/Ayoshiko/productive-bees-genesis/blob/main-neo/1.21.1/README.md#extended-resource-bees",
+      "link_text": "Full registration tutorial",
+      "text": "The README provides copyable JSON, resource fields and file links. Annotated examples explain the editable settings."
+    }
   ]
 }

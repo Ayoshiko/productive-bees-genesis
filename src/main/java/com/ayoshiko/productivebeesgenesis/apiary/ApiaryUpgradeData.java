@@ -38,6 +38,16 @@ import java.util.List;
 	 * </ul>
 	 */
 public class ApiaryUpgradeData extends MachineUpgradeData {
+	/** 配置独立于可选依赖保存，资产仍走原有一次性交接。 */
+	@Nullable
+	public CompoundTag aePerTileState;
+	/** 升级专用的 AE 交接记录，与可复制配置分开保存。 */
+	@Nullable
+	public CompoundTag aePendingState;
+
+	/** 服务器内存中的一次性资源账户交接；不复制资源余额，也不进入物品 NBT。 */
+	@Nullable
+	com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.Upgrade resourceUpgrade;
 
 	/** 蜜蜂槽数组 NBT（由 ApiarySlotManager.saveBeeSlots 序列化） */
 	public final CompoundTag beeSlotsNbt;

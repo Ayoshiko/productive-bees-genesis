@@ -1,0 +1,15 @@
+{
+  "primaryColor": "#AA66EE",
+  "secondaryColor": "#FFFFFF",
+  "createComb": false,
+  "flowerItem": "ae2lt:lightning_collapse_matrix",
+  "breedingItem": "ae2lt:lightning_collapse_matrix",
+  "breedingItemCount": 1,
+  "selfbreed": true,
+  "conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2lt"
+    }
+  ]
+}

@@ -50,4 +50,39 @@ public final class ItemPushHelper {
 		if (target == null || stack.isEmpty()) return stack;
 		return ItemHandlerHelper.insertItemStacked(target, stack, false);
 	}
+
+	/** 每个能力调用独立结算；后续槽位异常不能抹掉之前已知的接收量。 */
+	public static ItemStack insert(IItemHandler target, ItemStack stack, OutputCustody custody, String destination) {
+		ItemStack remaining = stack.copy();
+		int slots;
+		try { slots = target.getSlots(); } catch (RuntimeException e) { return remaining; }
+		for (int pass = 0; pass < 2 && !remaining.isEmpty() && !custody.blocked(); pass++) {
+			for (int i = 0; i < slots && !remaining.isEmpty() && !custody.blocked(); i++) {
+				ItemStack current;
+				try { current = target.getStackInSlot(i); } catch (RuntimeException e) { return remaining; }
+				if (pass == 0 ? current.isEmpty() || !ItemStack.isSameItemSameComponents(current, remaining) : !current.isEmpty()) continue;
+				int slot = i;
+				int requested = remaining.getCount();
+				int handed = (int) custody.handoffItem(remaining, requested, destination + "/" + slot, () -> {
+					ItemStack rest = target.insertItem(slot, remaining.copy(), false);
+					return accepted(remaining, rest);
+				});
+				remaining.shrink(handed);
+			}
+		}
+		return remaining;
+	}
+
+	public static int accepted(ItemStack offered, ItemStack rest) {
+		return accepted(offered, offered.getCount(), rest);
+	}
+
+	/** 请求量独立于模板；接收方只得到副本，回执仍核对完整身份与原请求上限。 */
+	public static int accepted(ItemStack template, int requested, ItemStack rest) {
+		if (requested < 0 || rest == null || (!rest.isEmpty()
+				&& (!ItemStack.isSameItemSameComponents(template, rest) || rest.getCount() > requested))) {
+			throw new IllegalStateException("Invalid item receipt");
+		}
+		return requested - (rest.isEmpty() ? 0 : rest.getCount());
+	}
 }

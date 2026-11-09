@@ -50,7 +50,7 @@ final class Ae2FilterPayloadHandlers {
 				|| payload.amount() > (payload.reserve()
 						? Ae2InputFilter.MAX_DIRECT_RESERVE_AMOUNT : Ae2InputFilter.getMaxDirectAmount())) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
-		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
 				"ae2_input_filter_amount_pos_mismatch")) return;
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_filter_amount",
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
@@ -80,7 +80,7 @@ final class Ae2FilterPayloadHandlers {
 		if (payload.amount() < 0L || payload.amount() > (payload.reserve()
 				? Ae2InputFilter.MAX_DIRECT_RESERVE_AMOUNT : Ae2InputFilter.getMaxDirectAmount())) return;
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
-		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
 				"ae2_input_all_amount_pos_mismatch")) return;
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_all_amount",
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
@@ -108,7 +108,7 @@ final class Ae2FilterPayloadHandlers {
 	static void handleToggleAllAeInputFilterUnlimited(ToggleAllAeInputFilterUnlimitedPayload payload,
 			IPayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
-		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
 				"ae2_input_all_unlimited_pos_mismatch")) return;
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_all_unlimited",
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
@@ -129,7 +129,7 @@ final class Ae2FilterPayloadHandlers {
 	static void handleToggleAllAeInputFilterNetworkStock(
 			ToggleAllAeInputFilterNetworkStockPayload payload, IPayloadContext context) {
 		if (!(context.player() instanceof ServerPlayer serverPlayer) || serverPlayer.level() == null) return;
-		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
 				"ae2_input_all_network_stock_pos_mismatch")) return;
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, "ae_input_all_network_stock",
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
@@ -164,7 +164,7 @@ final class Ae2FilterPayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击（特别重要：CLEAR 操作可清空他人过滤器）
-		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
 				"ae2_input_filter_entry_pos_mismatch")) {
 			return;
 		}
@@ -277,7 +277,7 @@ final class Ae2FilterPayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击
-		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
 				"ae2_input_precise_mode_pos_mismatch")) {
 			return;
 		}
@@ -329,7 +329,7 @@ final class Ae2FilterPayloadHandlers {
 			return;
 		}
 		// 强制容器一致性校验：防止 IDOR 攻击
-		if (!Ae2PayloadHandlers.validateContainerMatch(serverPlayer, payload.pos(),
+		if (!Ae2PayloadHandlers.validateInputFilterAvailable(serverPlayer, payload.pos(),
 				"ae2_input_config_pos_mismatch")) {
 			return;
 		}

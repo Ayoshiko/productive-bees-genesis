@@ -1,0 +1,16 @@
+{
+  "type": "productivebees:bee_spawning",
+  "ingredient": {
+    "item": "productivebees:gravel_nest"
+  },
+  "results": [
+    "example:copper_energy"
+  ],
+  "biomes": "#productivebees:is_beach_or_river",
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:copper_energy"
+    }
+  ]
+}

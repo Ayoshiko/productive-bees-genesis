@@ -5,6 +5,7 @@ import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.mek.TickBatchSkipState;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
 /**
@@ -54,6 +55,7 @@ class ApiaryTickHandler {
 	/** 蜜蜂槽位 tick 处理器 — 推进生产计时/批量产出/能量扣除 */
 	private final BeeSlotTickProcessor beeSlotProcessor;
 	void savePendingCycles(net.minecraft.nbt.CompoundTag tag) { beeSlotProcessor.savePendingCycles(tag); }
+	void saveOwnershipCycles(net.minecraft.nbt.CompoundTag tag) { beeSlotProcessor.saveOwnershipCycles(tag); }
 	void loadPendingCycles(net.minecraft.nbt.CompoundTag tag) { beeSlotProcessor.loadPendingCycles(tag); }
 	boolean pendingCyclesReadable() { return beeSlotProcessor.pendingCyclesReadable(); }
 	void clearTransferredCycles() { beeSlotProcessor.clearTransferredCycles(); }
@@ -226,6 +228,9 @@ class ApiaryTickHandler {
 		tile.productivebeesgenesis$injectAe2Energy(batchMultiplier);
 		// 调用 super 处理能量填充和 ejector tick
 		boolean sendUpdatePacket = tile.callSuperOnUpdateServer();
+		if (tile.getLevel() instanceof ServerLevel level) {
+			tile.getOutputBuffer().tickRecovery(level);
+		}
 
 		if (!skipBeeProcessing) {
 			beeSlotProcessor.setTickMultiplier(batchMultiplier);

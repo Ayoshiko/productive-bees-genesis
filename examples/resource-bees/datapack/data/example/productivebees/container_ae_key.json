@@ -1,0 +1,23 @@
+{
+  "primaryColor": "#66FFDD",
+  "secondaryColor": "#FFFFFF",
+  "flowerResource": {
+    "kind": "ae_key",
+    "type": "ae2:i",
+    "id": "minecraft:diamond",
+    "data": {
+      "id": "minecraft:diamond"
+    },
+    "amount": "16"
+  },
+  "createComb": false,
+  "breedingItem": "minecraft:diamond",
+  "breedingItemCount": 1,
+  "selfbreed": true,
+  "conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:pb_tag",
+  "result": "example:air",
+  "chance": 1,
+  "item": {
+    "item": "pneumaticcraft:pressure_gauge"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "pneumaticcraft"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_tag"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:air"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "primaryColor": "#66C5C7",
+  "secondaryColor": "#24473A",
+  "createComb": true,
+  "flowerItem": "minecraft:soul_sand",
+  "breedingItem": "minecraft:soul_sand",
+  "breedingItemCount": 1,
+  "selfbreed": true,
+  "conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "industrialforegoingsouls"
+    }
+  ]
+}

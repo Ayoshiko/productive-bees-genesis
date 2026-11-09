@@ -1,0 +1,18 @@
+{
+  "type": "productivebeesgenesis:resource_production",
+  "bee": "example:container_water",
+  "outputs": [
+    {
+      "kind": "energy",
+      "energy_type": "FE",
+      "amount": "1000",
+      "chance": 1
+    }
+  ],
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:container_water"
+    }
+  ]
+}

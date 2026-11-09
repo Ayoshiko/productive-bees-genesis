@@ -15,6 +15,7 @@ import com.ayoshiko.productivebeesgenesis.client.screen.CustomConfigScreenFactor
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifuge;
 import com.ayoshiko.productivebeesgenesis.client.screen.GuiMekCentrifugeFactory;
+import com.ayoshiko.productivebeesgenesis.client.screen.authoring.BeeDesignerClient;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEMenuTypeRegistration;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.client.gui.GuiEMExtraMekCentrifugeFactory;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEMenuTypeRegistration;
@@ -38,6 +39,7 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
@@ -54,6 +56,10 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 public final class ProductiveBeesGenesisClient {
 
 	public ProductiveBeesGenesisClient(IEventBus eventBus, ModContainer container) {
+		BeeDesignerClient.initialize();
+		eventBus.addListener((RegisterClientReloadListenersEvent event) ->
+				event.registerReloadListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener)
+						manager -> BeeEntityCache.clearCache()));
 		// 注册自定义配置屏幕 — 替代 NeoForge 默认 ConfigurationScreen
 		// 原因：默认 ConfigurationScreen 不支持空列表添加项，自定义屏幕提供完整的过滤列表编辑功能
 		// 直接传递实例避免 registerExtensionPoint 重载歧义

@@ -1,0 +1,25 @@
+{
+  "type": "productivebees:advanced_beehive",
+  "ingredient": "example:source_comb",
+  "results": [
+    {
+      "item": {
+        "item": "productivebees:configurable_honeycomb",
+        "components": {
+          "productivebees:bee_type": "example:source_comb"
+        }
+      },
+      "chance": 1
+    }
+  ],
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ars_nouveau"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:source_comb"
+    }
+  ]
+}

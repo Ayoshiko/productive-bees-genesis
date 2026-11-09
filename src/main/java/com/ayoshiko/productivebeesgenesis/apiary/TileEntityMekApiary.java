@@ -143,6 +143,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		// 注入 per-tile 转化开关查询：关闭时「转化原料算有效花朵」通路失效，
 		// 避免只放转化原料（如末影龙蜜蜂的黑曜石）也被判定为有花朵而照常采蜜
 		feederSlotManager.setConversionEnabledSupplier(this::isFeederConversionEnabled);
+		feederSlotManager.setRegistryLookup(() -> getLevel() == null ? null : getLevel().registryAccess());
 		upgradeHandler = new ApiaryUpgradeHandler(this);
 		produceProcessor = new BeeProduceProcessor(upgradeHandler, this);
 		tickHandler = new ApiaryTickHandler(this, slotManager, produceProcessor, upgradeHandler, feederSlotManager);
@@ -166,6 +167,8 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	/** F4: 获取产物溢出缓冲区 — 供同包组件（NbtSerializer/TickHandler/SlotTickProcessor）访问 */
 	ApiaryOutputBuffer getOutputBuffer() { return outputBuffer; }
+	public ApiaryProductionState productionState() { return produceProcessor.production; }
+	public void retryOutputData() { outputBuffer.retryQuarantined(getLevel().registryAccess()); }
 	int pushGeneratedItemToAe(ItemStack stack) { return ae2HostAdapter.pushGeneratedItem(stack); }
 	long pushGeneratedFluidToAe(FluidStack stack, long amount) {
 		return ae2HostAdapter.pushGeneratedFluid(stack, amount);
@@ -252,6 +255,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		}
 		upgradeHandler.invalidateUpgradeCache();
 		MekCentrifugeEnergyScaling.normalizeCapacity(this);
+		MekUpgradeSupport.refreshEmpoweredEnergy(this, upgrade);
 	}
 
 	/**
@@ -380,6 +384,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	/** Called when item-side routing changes, so same-tick direct-eject caches cannot stay stale. */
 	void onDirectEjectRoutingChanged() {
 		directEjectHandler.onRoutingConfigChanged();
+		if (produceProcessor != null) produceProcessor.onOutputRoutingChanged();
 	}
 
 	/** Called by every physical output slot, including changes made by external automation. */
@@ -535,10 +540,10 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	 * 产物剩余入缓冲区（离心机优先协调入口）
 	 * <br/>
 	 * hold 物品（蜜脾）缓冲区满时不淘汰 — 超出输出上限的溢出部分推送 AE2；
-	 * AE 也拒收时回退普通 offer（FIFO 淘汰兜底，物品守恒不丢失）。
+	 * 正式生产由冻结批次保留未接收余量；本旧入口只供兼容分发使用。
 	 * <br/>
 	 * 溢出保底受 AE 输出总开关（isAeItemOutputEnabled，经 prepareDirectItemPush 检查）控制：
-	 * 即使"直输 AE"子开关关闭，极端溢出场景下蜜脾仍会经本保底进入 AE（优于 FIFO 淘汰丢弃）。
+	 * 即使"直输 AE"子开关关闭，蜜脾溢出仍可尝试已启用的 AE 输出；缓冲不淘汰资产。
 	 *
 	 * @param leftovers distributeToOutput 未成功插入输出槽的剩余产物
 	 */
@@ -612,7 +617,7 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		// no-op：基础蜂箱无 sorting 字段
 	}
 
-	@NotNull @Override
+	@Nullable @Override
 	public ApiaryUpgradeData getUpgradeData(HolderLookup.Provider provider) {
 		return ApiaryTilePersistence.getUpgradeData(this, provider);
 	}
@@ -779,6 +784,8 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	@Override public void clearRemoved() { super.clearRemoved(); ae2HostAdapter.prepareForLoad(); }
 	@Override public void setRemoved() {
+		outputBuffer.stopRecovery();
+		produceProcessor.outputEvidence.clear();
 		super.setRemoved();
 		// 模块 2 修复（v2.4 最终版）：移除 outputBuffer.dumpToWorld 调用
 		// v2.3 的 dumpToWorld 是项目中唯一的 Block.popResource 源，导致创造模式/镐子破坏时
@@ -788,7 +795,12 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		// onRemove 中的 saveAllItemsForDrop 仍保留，作为防御性措施清空槽位，防止未来引入新的 popResource 路径。
 		ae2HostAdapter.destroyForRemoval();
 	}
-	@Override public void onChunkUnloaded() { super.onChunkUnloaded(); ae2HostAdapter.destroyForChunkUnload(); }
+	@Override public void onChunkUnloaded() {
+		outputBuffer.stopRecovery();
+		produceProcessor.outputEvidence.clear();
+		super.onChunkUnloaded();
+		ae2HostAdapter.destroyForChunkUnload();
+	}
 	@Override public MekAe2LifecycleHandler productivebeesgenesis$getAe2LifecycleHandler(
 	) {
 		return ae2HostAdapter.getAe2LifecycleHandler();

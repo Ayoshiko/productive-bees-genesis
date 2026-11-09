@@ -30,6 +30,7 @@ final class RuntimeBeeProbe {
 		UUID member;
 		int physicalTicker;
 		long cost;
+		long suppliedFe;
 		boolean joined;
 		Fixture(BlockPos position) { this.position = position; }
 		BeeRecord bee() { return data.checkpoint().ownedMachines().get(member).bees().bee(0); }
@@ -41,6 +42,7 @@ final class RuntimeBeeProbe {
 		void charge(ServerLevel level, long amount) {
 			var port = level.getCapability(Capabilities.EnergyStorage.BLOCK, position, Direction.UP);
 			require(port != null && port.receiveEnergy(Math.toIntExact(amount), false) == amount, "Runtime FE input failed");
+			suppliedFe = Math.addExact(suppliedFe, amount);
 		}
 	}
 	private static final Fixture[] FIXTURES = {new Fixture(new BlockPos(40, 150, 4)), new Fixture(new BlockPos(40, 150, 10))};
@@ -164,6 +166,17 @@ final class RuntimeBeeProbe {
 				require(f.bee().plan().fluidPerCycle() == 250 && f.bee().plan().fluidOutput() != null
 						&& f.data.checkpoint().ledger().balances().get(f.bee().plan().fluidOutput()).longSaturated() == f.cycles() * 250,
 						"Independent apiary honey was lost or multiplied by productivity");
+				var baseline = new JsonObject();
+				baseline.addProperty("bee", f.bee().plan().beeType());
+				baseline.addProperty("cycles", f.cycles());
+				baseline.addProperty("items", f.output());
+				baseline.addProperty("honeyMb", f.data.checkpoint().ledger().balances().get(f.bee().plan().fluidOutput()).toString());
+				baseline.addProperty("suppliedFe", f.suppliedFe);
+				baseline.addProperty("remainingFe", f.data.checkpoint().energy().stored());
+				baseline.addProperty("pendingCycles", f.bee().pendingCycles());
+				baseline.addProperty("progressTicks", f.bee().progress());
+				baseline.addProperty("frozenOutput", f.bee().hasFrozen());
+				report.add("baseline_" + f.bee().plan().beeType().replace(':', '_'), baseline);
 				f.core.setProductionRunning(false); f.hive.setControlType(RedstoneControl.HIGH); require(f.core.ownership().command(false), "Runtime return failed");
 			}
 			phase = 10; return false;

@@ -65,7 +65,7 @@ public final class CentrifugeUpgradeDataHelper {
 	 * {@link mekanism.common.upgrade.MachineUpgradeData} 承载，
 	 * 额外字段（PB 升级/AE2 设置）由 {@link CentrifugeUpgradeData} 扩展。
 	 * <p>
-	 * AE2 未加载时使用默认值 false/0/空，与 ApiaryUpgradeData 模式一致。
+	 * 当前安装器无条件保存统一配置快照，旧字段仅供没有快照的历史数据回退。
 	 *
 	 * @param provider           注册表访问器
 	 * @param redstone           红石控制状态
@@ -177,7 +177,7 @@ public final class CentrifugeUpgradeDataHelper {
 		ae2StateHolder.getAeTagFilter().save(aeTagFilterNbt);
 		if (aeTagFilterNbt.isEmpty()) aeTagFilterNbt = null;
 
-		return new CentrifugeUpgradeData(provider, redstone, controlType,
+		CentrifugeUpgradeData data = new CentrifugeUpgradeData(provider, redstone, controlType,
 				energyContainer, progress, energySlot, inputSlots, outputSlots,
 				sorting, components,
 				pbUpgrades,
@@ -193,6 +193,11 @@ public final class CentrifugeUpgradeDataHelper {
 				energyItem,
 				aeInputFilterNbt,
 				aeTagFilterNbt);
+		data.aePerTileState = new CompoundTag();
+		ae2StateHolder.savePerTileState(data.aePerTileState);
+		data.aePendingState = new CompoundTag();
+		ae2StateHolder.savePendingItems(data.aePendingState);
+		return data;
 	}
 
 	/**
@@ -300,7 +305,9 @@ public final class CentrifugeUpgradeDataHelper {
 		} else {
 			ae2StateHolder.getAeTagFilter().reset();
 		}
-		if (Ae2IntegrationLoader.isAe2Loaded()) {
+		if (data.aePerTileState != null) {
+			ae2StateHolder.loadPerTileState(data.aePerTileState.copy());
+		} else if (Ae2IntegrationLoader.isAe2Loaded()) {
 			ae2StateHolder.setCentrifugeDirectAeOutputEnabled(data.centrifugeDirectAeOutputEnabled);
 			ae2StateHolder.setAeItemInputEnabled(data.aeItemInputEnabled);
 			ae2StateHolder.setAeInputNbtIgnore(data.aeInputNbtIgnore);
@@ -313,6 +320,10 @@ public final class CentrifugeUpgradeDataHelper {
 			} else {
 				restoreLegacyFilterData(data, filter);
 			}
+		}
+
+		if (data.aePendingState != null) {
+			ae2StateHolder.loadPendingItems(data.aePendingState.copy());
 		}
 
 		// Task 5: 恢复多流体槽 — 等级升级持久化与扳手拆卸/区块存档一致

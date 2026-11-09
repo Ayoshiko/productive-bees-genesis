@@ -1,0 +1,24 @@
+name: Repository policy tests
+
+on:
+  push:
+    branches: ['main-neo/1.21.1', 'codex/repository-protection']
+    paths: ['.github/scripts/**', '.github/workflows/**']
+  pull_request:
+    branches: ['main-neo/1.21.1']
+    paths: ['.github/scripts/**', '.github/workflows/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Repository policy tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v

@@ -1,0 +1,24 @@
+{
+  "type": "productivebees:bee_breeding",
+  "parent1": "example:source",
+  "parent2": "example:pb_tag",
+  "offspring": "example:source_comb",
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ars_nouveau"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:source"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_tag"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:source_comb"
+    }
+  ]
+}

@@ -59,6 +59,7 @@ public final class FactoryUpgradeStateHelper {
 				MekExtrasUpgradeSemantics.operationsPerTick(
 						MekUpgradeSupport.hasCreativeUpgrade(factory), maxOps, speedAdjustedOps));
 		MekCentrifugeEnergyScaling.normalizeCapacity(factory);
+		MekUpgradeSupport.refreshEmpoweredEnergy(factory, upgrade);
 	}
 
 	/**

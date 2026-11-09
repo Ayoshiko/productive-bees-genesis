@@ -14,7 +14,6 @@ import mekanism.common.content.blocktype.FactoryType;
 import mekanism.common.content.blocktype.Machine;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.registration.impl.BlockRegistryObject;
-import mekanism.common.registries.MekanismSounds;
 import mekanism.common.tier.FactoryTier;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -62,7 +61,7 @@ public final class MekCentrifugeBlockType {
 			.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 			.with(Attributes.SECURITY)
 			.withGui(() -> ModMenuTypes.MEK_CENTRIFUGE)
-			.withSound(MekanismSounds.ENERGIZED_SMELTER)
+			// 不添加 withSound(ENERGIZED_SMELTER)：工作声改由 MekCentrifugeSoundHandler 服务端播放（降噪 + 破坏后不残留满音量循环）
 			.with(new AttributeUpgradeable(wrapAsBlockRegistryObject(ModBlocks.BASIC_MEK_CENTRIFUGE_FACTORY)))
 			// 替换默认升级支持：MEKExtras加载时额外支持STACK/CREATIVE，始终支持SPEED/ENERGY/MUFFLING
 			.with(MekUpgradeSupport.forMachine())
@@ -119,7 +118,7 @@ public final class MekCentrifugeBlockType {
 				.withSideConfig(TransmissionType.ITEM, TransmissionType.FLUID, TransmissionType.ENERGY)
 				.with(Attributes.SECURITY)
 				.withGui(() -> ModMenuTypes.MEK_CENTRIFUGE_FACTORY)
-				.withSound(MekanismSounds.ENERGIZED_SMELTER)
+				// 不添加 withSound：工作声改由 MekCentrifugeSoundHandler 服务端播放（降噪 + 破坏后不残留满音量循环）
 				.with(new AttributeTier<>(tier));
 
 		// 移除FactoryMachine构造器添加的原版AttributeUpgradeable

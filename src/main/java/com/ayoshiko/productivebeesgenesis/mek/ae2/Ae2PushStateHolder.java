@@ -27,8 +27,9 @@ public final class Ae2PushStateHolder {
 	private final Ae2PushBackoff itemBackoff = new Ae2PushBackoff(50_000_000L, 1_000_000_000L);
 	/** Overflow-buffer inserts use a separate backoff so a blocked buffer cannot hammer ME storage. */
 	private final Ae2PushBackoff bufferedItemBackoff = new Ae2PushBackoff(50_000_000L, 1_000_000_000L);
-	/** 输入回送退避状态（Task 10：仅用于 Ae2InputPuller 回送失败） */
+	/** 回送拒收与新取料独立，健康抽取不能清除满载回送的退避。 */
 	private final Ae2PushBackoff returnBackoff = new Ae2PushBackoff();
+	private final Ae2PushBackoff inputBackoff = new Ae2PushBackoff();
 	/**
 	 * 能量注入退避状态 — ME 网络无能量时跳过 SIMULATE 探测（每次均为完整网络遍历）。
 	 * <p>
@@ -92,6 +93,7 @@ public final class Ae2PushStateHolder {
 
 	/** 获取输入回送退避状态（Task 10） */
 	public Ae2PushBackoff getReturnBackoff() { return returnBackoff; }
+	public Ae2PushBackoff getInputBackoff() { return inputBackoff; }
 
 	/** 获取能量注入退避状态（ME 网络无能量时跳过探测） */
 	public Ae2PushBackoff getEnergyBackoff() { return energyBackoff; }
@@ -259,6 +261,7 @@ public final class Ae2PushStateHolder {
 		itemBackoff.reset();
 		bufferedItemBackoff.reset();
 		returnBackoff.reset();
+		inputBackoff.reset();
 		inputKeyBackoffRegistry = null;
 		outputKeyBackoffRegistry = null;
 		fluidKeyBackoffRegistry = null;

@@ -1,0 +1,28 @@
+{
+  "primaryColor": "#C97852",
+  "secondaryColor": "#82452F",
+  "particleColor": "#C97852",
+  "flowerBlock": "minecraft:copper_block",
+  "attributes": {
+    "weather_tolerance": "weather_tolerance.none",
+    "temper": "temper.passive",
+    "behavior": "behavior.diurnal",
+    "endurance": "endurance.normal",
+    "productivity": "productivity.normal"
+  },
+  "createComb": true,
+  "size": 0.7,
+  "speed": 1,
+  "attack": 2,
+  "breedingItem": "minecraft:copper_ingot",
+  "breedingItemCount": 1,
+  "selfbreed": true,
+  "waterproof": false,
+  "fireproof": false,
+  "conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "productivebees"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "type": "productivebees:bee_fishing",
+  "bee": "example:pb_water",
+  "biomes": [
+    "minecraft:river"
+  ],
+  "chance": 0.05,
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:pb_water"
+    }
+  ]
+}

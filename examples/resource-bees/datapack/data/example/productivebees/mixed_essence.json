@@ -1,0 +1,9 @@
+{
+  "primaryColor": "#C6C6C6",
+  "secondaryColor": "#FFD34D",
+  "createComb": false,
+  "flowerItem": "minecraft:iron_nugget",
+  "breedingItem": "minecraft:iron_nugget",
+  "breedingItemCount": 1,
+  "selfbreed": true
+}

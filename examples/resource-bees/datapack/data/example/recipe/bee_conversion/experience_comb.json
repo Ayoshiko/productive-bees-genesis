@@ -1,0 +1,23 @@
+{
+  "type": "productivebees:bee_conversion",
+  "source": "example:experience",
+  "result": "example:experience_comb",
+  "chance": 1,
+  "item": {
+    "item": "productivebees:wax"
+  },
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "experiencelib"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:experience"
+    },
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:experience_comb"
+    }
+  ]
+}

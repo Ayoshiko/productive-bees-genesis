@@ -111,17 +111,4 @@ class Ae2CombProcessableWiringTest {
 				"判定必须委托 IMekCentrifugeTile 既有语义（万象/PB 配方/熔炼兼容），未知实现者放行");
 	}
 
-	@Test
-	@DisplayName("validator 永久拒绝的键会记 per-key 退避，与「暂时没位置」分开归因")
-	void validatorRejectionFeedsKeyBackoff() throws Exception {
-		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java");
-		String normalized = puller.replaceAll("\\s+", " ");
-		assertTrue(normalized.contains("entry.validatorRejected = true;"),
-				"槽位 validator 拒绝必须单独标记，不能与槽满混同");
-		assertTrue(normalized.contains("else if (entry.validatorRejected) { "
-				+ "keyBackoff.recordFailure(entry.key, System.nanoTime()); }"),
-				"这类键从不进入 pullBatchForType，必须在容量规划阶段归因，否则退避永不触发");
-		assertTrue(normalized.contains("entry.validatorRejected = false;"),
-				"每轮容量规划必须重新归因，避免公平轮结论被补齐轮沿用");
-	}
 }

@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import mekanism.api.Upgrade;
 import mekanism.common.block.attribute.AttributeUpgradeSupport;
+import mekanism.common.tile.interfaces.IUpgradeTile;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
@@ -52,10 +53,25 @@ final class MekEmpUpgradeSupport {
 
 	private MekEmpUpgradeSupport() {}
 
+	private static final class EnergyUpgradeHolder {
+		private static final Upgrade SPEED = invokeGetUpgrade("getEMPOWERED_SPEED", "EMPOWERED_SPEED");
+		private static final Upgrade ENERGY = invokeGetUpgrade("getEMPOWERED_ENERGY", "EMPOWERED_ENERGY");
+	}
+
+	static int getEmpoweredEnergyUpgrades(IUpgradeTile tile) {
+		Upgrade upgrade = EnergyUpgradeHolder.ENERGY;
+		return upgrade == null ? 0 : tile.getComponent().getUpgrades(upgrade);
+	}
+
+	static boolean affectsEnergyUsage(Upgrade upgrade) {
+		return upgrade == Upgrade.SPEED || upgrade == Upgrade.ENERGY
+				|| upgrade == EnergyUpgradeHolder.SPEED || upgrade == EnergyUpgradeHolder.ENERGY;
+	}
+
 	/**
 	 * 创建包含 MekEmp 物品输入输出机器升级的 AttributeUpgradeSupport
 	 * <br/>
-	 * 适用于离心机（有物品输入和输出）：全部 6 种 MekEmp 升级。
+	 * 适用于蜂箱与离心机的合法物品输入输出：全部 6 种 MekEmp 升级。
 	 * 合并基础原版升级（SPEED/ENERGY/MUFFLING）+ MEKExtras（STACK/CREATIVE，若加载）+ MekEmp 全部升级。
 	 *
 	 * @param baseUpgrades 基础升级列表（原版 + 可选 MEKExtras），不可为 null
@@ -68,26 +84,6 @@ final class MekEmpUpgradeSupport {
 			if (!combined.contains(u)) {
 				combined.add(u);
 			}
-		}
-		return AttributeUpgradeSupport.create(combined.toArray(new Upgrade[0]));
-	}
-
-	/**
-	 * 创建包含 MekEmp 物品输出机器升级的 AttributeUpgradeSupport
-	 * <br/>
-	 * 适用于蜂箱（有物品输出，无管道输入）：机器基础 + FAST_ITEM_EJECT。
-	 *
-	 * @param baseUpgrades 基础升级列表，不可为 null
-	 * @return 包含 MekEmp 输出机器升级的 AttributeUpgradeSupport 实例，反射失败时返回 baseUpgrades
-	 */
-	static AttributeUpgradeSupport createItemOutputMachineUpgrades(List<Upgrade> baseUpgrades) {
-		List<Upgrade> combined = new ArrayList<>(baseUpgrades);
-		// 机器基础升级
-		addMachineBaseUpgrades(combined);
-		// 物品输出额外升级
-		Upgrade fastItemEject = invokeGetUpgrade("getFAST_ITEM_EJECT", "FAST_ITEM_EJECT");
-		if (fastItemEject != null && !combined.contains(fastItemEject)) {
-			combined.add(fastItemEject);
 		}
 		return AttributeUpgradeSupport.create(combined.toArray(new Upgrade[0]));
 	}

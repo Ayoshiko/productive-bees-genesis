@@ -1,0 +1,26 @@
+{
+  "type": "productivebees:advanced_beehive",
+  "ingredient": "example:mixed_essence",
+  "results": [
+    {
+      "item": {
+        "item": "minecraft:iron_nugget"
+      },
+      "min": 10,
+      "max": 10,
+      "chance": 1
+    },
+    {
+      "item": {
+        "item": "minecraft:honeycomb"
+      },
+      "chance": 1
+    }
+  ],
+  "neoforge:conditions": [
+    {
+      "type": "productivebees:bee_exists",
+      "bee": "example:mixed_essence"
+    }
+  ]
+}

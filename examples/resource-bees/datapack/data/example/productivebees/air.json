@@ -1,0 +1,15 @@
+{
+  "primaryColor": "#FFD34D",
+  "secondaryColor": "#FFFFFF",
+  "createComb": false,
+  "flowerItem": "pneumaticcraft:pressure_gauge",
+  "breedingItem": "pneumaticcraft:pressure_gauge",
+  "breedingItemCount": 1,
+  "selfbreed": true,
+  "conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "pneumaticcraft"
+    }
+  ]
+}

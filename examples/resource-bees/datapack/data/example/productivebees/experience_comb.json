@@ -1,0 +1,15 @@
+{
+  "primaryColor": "#88DD44",
+  "secondaryColor": "#FFFFFF",
+  "createComb": true,
+  "flowerItem": "minecraft:experience_bottle",
+  "breedingItem": "minecraft:experience_bottle",
+  "breedingItemCount": 1,
+  "selfbreed": true,
+  "conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "experiencelib"
+    }
+  ]
+}

@@ -141,7 +141,7 @@ final class Ae2InputFilterQuerySupport {
 		return compiled;
 	}
 
-	private static boolean matchesFuzzyEntry(FuzzyEntry configured, ResourceLocation candidateBeeType,
+	static boolean matchesFuzzyEntry(FuzzyEntry configured, ResourceLocation candidateBeeType,
 			boolean candidateBlock, boolean precise) {
 		return configured != null && configured.beeType().equals(candidateBeeType)
 				&& (!precise || configured.block() == candidateBlock);
@@ -311,15 +311,27 @@ final class Ae2InputFilterQuerySupport {
 			long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
 			boolean unlimitedAll, boolean tagFilterActive, boolean hasConfiguredEntries,
 			boolean globalNetworkStock, long globalReserve, int[] hitSlots, Ae2PullDecision decision) {
+		return matchedPullLimit(visibleStock, mode, null, amounts, reserves, unlimited, networkStock,
+				unlimitedAll, tagFilterActive, hasConfiguredEntries, globalNetworkStock, globalReserve,
+				hitSlots, decision);
+	}
+
+	static long matchedPullLimit(long visibleStock, FilterMode mode, String[] slots,
+			long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
+			boolean unlimitedAll, boolean tagFilterActive, boolean hasConfiguredEntries,
+			boolean globalNetworkStock, long globalReserve, int[] hitSlots, Ae2PullDecision decision) {
+		if (decision != null) decision.set(false, false, false, -1L);
+		boolean matched = hitSlots != null && hitSlots.length > 0;
+		if (matched && mode == FilterMode.BLACKLIST) return Ae2InputFilter.PULL_DISALLOWED;
 		boolean directFound = false;
 		boolean liveStock = false;
 		boolean unlimitedPull = false;
 		long requested = 0L;
 		long reserve = 0L;
 		if (hitSlots != null) {
-			if (mode == FilterMode.BLACKLIST) return Ae2InputFilter.PULL_DISALLOWED;
-			directFound = true;
 			for (int i : hitSlots) {
+				if (slots != null && !Ae2InputFilter.isDirectFingerprint(slots[i])) continue;
+				directFound = true;
 				if (i < networkStock.length && networkStock[i]) {
 					liveStock = true;
 					if (i < reserves.length) reserve = Ae2PullAmountMath.addConfigured(reserve, reserves[i]);
@@ -328,10 +340,9 @@ final class Ae2InputFilterQuerySupport {
 				if (i < amounts.length) requested = Ae2PullAmountMath.addConfigured(requested, amounts[i]);
 			}
 		}
-		// BLACKLIST 命中已在上面提前返回；走到这里时 directFound 必为 false。
 		boolean admitted = Ae2FilterPullPolicy.isAdmitted(
-				mode, directFound, tagFilterActive, hasConfiguredEntries);
-		if (decision != null) decision.set(admitted, mode == FilterMode.WHITELIST && directFound,
+				mode, matched, tagFilterActive, hasConfiguredEntries);
+		if (decision != null) decision.set(admitted, mode == FilterMode.WHITELIST && matched,
 				unlimitedPull || unlimitedAll, Ae2FilterPullPolicy.effectiveReserveFloor(
 						liveStock, reserve, globalNetworkStock, globalReserve));
 		return Ae2FilterPullPolicy.effectiveLimit(admitted, directFound, requested, visibleStock,

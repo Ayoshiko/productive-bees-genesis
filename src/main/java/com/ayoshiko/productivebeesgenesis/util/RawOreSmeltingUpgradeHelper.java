@@ -6,6 +6,7 @@ import com.ayoshiko.productivebeesgenesis.init.ModItems;
 import cy.jdkdigital.productivelib.common.block.entity.InventoryHandlerHelper.BlockEntityItemStackHandler;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
 import mekanism.common.recipe.MekanismRecipeType;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
@@ -29,8 +30,8 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 粗矿熔炼升级的判定、配方缓存和输出转换工具。
  * <p>
- * 只有同时满足 raw_materials/raw_ores 标签、Mekanism 或原版熔炼配方以及 ingots 输出标签的物品才会转换。
- * 这样不会把食物、木炭或其他普通可熔炼物误当作粗矿；整合包缺少标签时仍可通过补充 common/forge 标签兼容。
+ * 只有带 raw_materials/raw_ores 标签且拥有 Mekanism 或原版熔炼配方的物品才会转换；普通产物仍要求
+ * ingots 输出标签，Powah 粗品质铀矿的非锭产物仅对其精确配方配对开放。
  * <p>
  * 服务端 tick 只访问本类的不可变快照和并发缓存；配方重载时由主类调用 {@link #invalidateCache()}。
  */
@@ -42,6 +43,8 @@ public final class RawOreSmeltingUpgradeHelper {
 	private static final TagKey<Item> FORGE_RAW_ORES = itemTag("forge", "raw_ores");
 	private static final TagKey<Item> COMMON_INGOTS = itemTag("c", "ingots");
 	private static final TagKey<Item> FORGE_INGOTS = itemTag("forge", "ingots");
+	private static final ResourceLocation POWAH_RAW_URANINITE = ResourceLocation.fromNamespaceAndPath("powah", "uraninite_raw");
+	private static final ResourceLocation POWAH_URANINITE = ResourceLocation.fromNamespaceAndPath("powah", "uraninite");
 
 	private static final List<TagKey<Item>> RAW_TAGS = List.of(
 			COMMON_RAW_MATERIALS, COMMON_RAW_ORES, FORGE_RAW_MATERIALS, FORGE_RAW_ORES);
@@ -64,18 +67,46 @@ public final class RawOreSmeltingUpgradeHelper {
 
 	/** 将 pending 输出按熔炼配方转换；无变化时返回 false。 */
 	public static boolean convertPendingOutputs(Level level, Map<ItemStack, Integer> outputs) {
+		return convertPendingOutputs(level, outputs, false);
+	}
+
+	/** 转换上界包含零到最大输入之间可能留下的粗矿余料。 */
+	public static boolean maximumPendingOutputs(Level level, Map<ItemStack, Integer> outputs) {
+		return convertPendingOutputs(level, outputs, true);
+	}
+
+	private static boolean convertPendingOutputs(Level level, Map<ItemStack, Integer> outputs, boolean maximum) {
 		if (level == null || outputs == null || outputs.isEmpty()) return false;
-		List<ItemStack> source = new ArrayList<>(outputs.size());
+		boolean hasConversion = false;
 		for (Map.Entry<ItemStack, Integer> entry : outputs.entrySet()) {
 			int count = Math.max(0, entry.getValue());
-			if (count > 0) source.add(entry.getKey().copyWithCount(count));
+			Conversion conversion = findConversion(level, entry.getKey(), count).orElse(null);
+			if (conversion != null && count >= conversion.inputCount()) {
+				hasConversion = true;
+				break;
+			}
 		}
-		if (source.isEmpty()) return false;
-		List<ItemStack> converted = convert(level, source);
-		if (sameStacks(source, converted)) return false;
+		// 待输出重试通常只剩锭/普通产物/不足一组的粗矿，不再为无变化的结果复制所有栈。
+		if (!hasConversion) return false;
+		List<ItemStack> converted = new ArrayList<>(outputs.size());
+		for (Map.Entry<ItemStack, Integer> entry : outputs.entrySet()) {
+			int count = Math.max(0, entry.getValue());
+			if (count <= 0) continue;
+			ItemStack template = entry.getKey();
+			Conversion conversion = findConversion(level, template, count).orElse(null);
+			if (conversion == null) {
+				addAmount(converted, template, count);
+			} else {
+				long crafts = count / (long) conversion.inputCount();
+				addAmount(converted, conversion.result(), crafts * conversion.result().getCount());
+				addAmount(converted, template, maximum ? Math.min(count, conversion.inputCount() - 1L)
+						: count % conversion.inputCount());
+			}
+		}
+		// 所有转换与合并完成后才提交；异常时原 pending 仍完整持有资产。
 		outputs.clear();
 		for (ItemStack stack : converted) {
-			if (!stack.isEmpty()) outputs.put(stack.copyWithCount(stack.getCount()), stack.getCount());
+			outputs.put(stack, stack.getCount());
 		}
 		return true;
 	}
@@ -136,9 +167,19 @@ public final class RawOreSmeltingUpgradeHelper {
 	}
 
 	private static Optional<Conversion> findConversion(Level level, ItemStack stack) {
-		if (level == null || stack == null || stack.isEmpty() || !isRawMaterial(stack)) return Optional.empty();
+		return findConversion(level, stack, stack == null ? 0 : stack.getCount());
+	}
+
+	private static Optional<Conversion> findConversion(Level level, ItemStack stack, int count) {
+		if (level == null || count <= 0 || stack == null || stack.isEmpty()) return Optional.empty();
 		Item key = stack.getItem();
-		return CONVERSIONS.computeIfAbsent(key, ignored -> resolveConversion(level, stack));
+		Optional<Conversion> cached = CONVERSIONS.get(key);
+		if (cached != null) return cached;
+		// 普通产物也缓存否定结果，避免每次 pending 重试都检查四个粗矿标签。
+		// Item 键的保留范围受注册表限制；既有重载/停服入口同时清理这些结果。
+		return CONVERSIONS.computeIfAbsent(key,
+				ignored -> isRawMaterial(stack)
+						? resolveConversion(level, stack.copyWithCount(count)) : Optional.empty());
 	}
 
 	private static Optional<Conversion> resolveConversion(Level level, ItemStack input) {
@@ -164,7 +205,16 @@ public final class RawOreSmeltingUpgradeHelper {
 	private static boolean isValidOutput(ItemStack input, ItemStack output) {
 		return output != null && !output.isEmpty()
 				&& !ItemStack.isSameItemSameComponents(input, output)
-				&& isIngot(output);
+				&& (isIngot(output) || isPowahUraniniteSmelting(input, output));
+	}
+
+	private static boolean isPowahUraniniteSmelting(ItemStack input, ItemStack output) {
+		return isPowahUraniniteSmelting(
+				BuiltInRegistries.ITEM.getKey(input.getItem()), BuiltInRegistries.ITEM.getKey(output.getItem()));
+	}
+
+	static boolean isPowahUraniniteSmelting(ResourceLocation input, ResourceLocation output) {
+		return POWAH_RAW_URANINITE.equals(input) && POWAH_URANINITE.equals(output);
 	}
 
 	private static boolean isRawMaterial(ItemStack stack) {

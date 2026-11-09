@@ -46,7 +46,7 @@ class GeneSamplerTest {
 	@Test
 	void produceProcessorReusesPerBeeProfilesAndClearsBatch() throws Exception {
 		String source = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeProduceProcessor.java"));
+				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeProductionGenerator.java"));
 
 		assertTrue(source.contains("geneSampleBatch.add(slot.getGeneSampleProfile(), count)"));
 		assertTrue(source.contains("allItems, geneSampleBatch, beeTypeKey, geneSamplerCount, level"));
@@ -60,7 +60,7 @@ class GeneSamplerTest {
 		String snapshot = Files.readString(Path.of(
 				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/ApiaryBatchUpgradeSnapshot.java"));
 		String processor = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeProduceProcessor.java"));
+				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeProductionGenerator.java"));
 
 		assertTrue(sampler.contains("boolean typeOnly, boolean fullPurity"));
 		assertTrue(sampler.contains("? GeneAttribute.TYPE : ATTRIBUTES[random.nextInt(ATTRIBUTES.length)]"));

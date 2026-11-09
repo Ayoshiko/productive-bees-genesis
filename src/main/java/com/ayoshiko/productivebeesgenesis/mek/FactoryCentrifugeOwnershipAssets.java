@@ -29,7 +29,7 @@ public final class FactoryCentrifugeOwnershipAssets implements MachineAssetSecti
 	@Override public boolean prepared() {
 		// 旧独立周期没有固定的并行数与费用快照，必须在冻结前由原机结清。
 		for (int value : progress) if (value != 0) return false;
-		return !processor.hasOwnershipProgress();
+		return processor.ownershipStateReadable() && !processor.hasOwnershipProgress();
 	}
 	@Override public CompoundTag capture(HolderLookup.Provider registries) {
 		var tag = new CompoundTag();

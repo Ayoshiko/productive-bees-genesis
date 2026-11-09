@@ -13,6 +13,10 @@ import net.minecraft.world.item.crafting.RecipeManager;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import net.minecraft.resources.ResourceLocation;
+import com.google.gson.JsonParser;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMyriad;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
@@ -46,6 +50,7 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 
 	private final RecipeIngredientFactory ingredientFactory;
 	private final MyriadRecipeProcessor recipeProcessor;
+	private Set<ResourceLocation> customRecipes = Set.of();
 
 	/**
 	 * @param recipeManager 配方管理器（来自 ReloadableServerResources）
@@ -66,9 +71,40 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			ProfilerFiller reloadProfiler,
 			Executor backgroundExecutor,
 			Executor gameExecutor) {
-		// 准备阶段无操作，仅在 apply 阶段（主线程）执行配方覆盖
-		return barrier.wait(CompletableFuture.completedFuture(null))
-				.thenRunAsync(this::overrideRecipes, gameExecutor);
+		return CompletableFuture.supplyAsync(() -> customRecipes(resourceManager), backgroundExecutor)
+				.thenCompose(barrier::wait).thenAcceptAsync(recipes -> {
+					customRecipes = recipes;
+					overrideRecipes();
+				}, gameExecutor);
+	}
+
+	private static Set<ResourceLocation> customRecipes(ResourceManager resources) {
+		var source = resources.getResource(ResourceLocation.parse("productivebeesgenesis:bee_designer/index.json"));
+		if (source.isEmpty()) {
+			return Set.of();
+		}
+		try (var stream = source.get().open()) {
+			// 与编辑器受管包的总预算一致，损坏的归属文件不能无界分配或静默丢失配方保护。
+			int limit = 8 * 1024 * 1024;
+			byte[] bytes = stream.readNBytes(limit + 1);
+			if (bytes.length > limit) {
+				throw new IllegalArgumentException("Myriad recipe ownership exceeds the managed pack budget");
+			}
+			var index = JsonParser.parseString(new String(bytes, java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+			var entry = index.getAsJsonObject(PBConstants.MYRIADCREATIONS_TYPE_STRING);
+			if (entry == null) {
+				return Set.of();
+			}
+			Set<ResourceLocation> recipes = new java.util.HashSet<>();
+			for (var recipe : entry.getAsJsonObject("recipes").entrySet()) {
+				if (BeeDesignerMyriad.customRecipe(recipe.getValue().getAsJsonObject())) {
+					recipes.add(ResourceLocation.parse(recipe.getKey()));
+				}
+			}
+			return Set.copyOf(recipes);
+		} catch (java.io.IOException failure) {
+			throw new java.io.UncheckedIOException("Cannot read Myriad recipe ownership", failure);
+		}
 	}
 
 	/**
@@ -79,8 +115,9 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 	 */
 	public static void onServerTick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {
 		// 延迟重试时通过 BiConsumer 回调重建 BeeRecipeReloader 实例并执行配方覆盖
-		RecipeReloadRetryManager.onServerTick((recipeManager, registryAccess) -> {
-			BeeRecipeReloader reloader = new BeeRecipeReloader(recipeManager, registryAccess);
+		RecipeReloadRetryManager.onServerTick(context -> {
+			BeeRecipeReloader reloader = new BeeRecipeReloader(context.recipeManager(), context.registryAccess());
+			reloader.customRecipes = context.customRecipes();
 			reloader.overrideRecipesInternal();
 		});
 	}
@@ -92,13 +129,13 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 		try {
 			// 配置未加载时安排延迟重试（首次进入世界时常见）
 		if (!ModConfig.areServerSpecsLoaded()) {
-			RecipeReloadRetryManager.scheduleRetry(this.recipeManager, this.registryAccess);
+			RecipeReloadRetryManager.scheduleRetry(this.recipeManager, this.registryAccess, customRecipes);
 			return;
 		}
 			overrideRecipesInternal();
-		} catch (Exception e) {
-			// 任何异常都不应导致整体崩溃
+		} catch (RuntimeException e) {
 			ProductiveBeesGenesis.LOGGER.error("重载万象创世蜜蜂配方时发生错误", e);
+			throw e;
 		}
 	}
 
@@ -119,7 +156,7 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 			// 避免配方永远不被替换。使用 rescheduleRetry 而非 scheduleRetry，
 			// 让 retryCount 累积，达到 MAX_RETRY_COUNT 后放弃，避免无限重试。
 			// 此场景常见于首次进入世界时 PB 注册顺序晚于本模组的 reload listener。
-			RecipeReloadRetryManager.rescheduleRetry(this.recipeManager, this.registryAccess);
+			RecipeReloadRetryManager.rescheduleRetry(this.recipeManager, this.registryAccess, customRecipes);
 			return;
 		}
 		List<RecipeHolder<?>> sourceRecipes = new ArrayList<>(recipeManager.getRecipes());
@@ -128,7 +165,7 @@ public final class BeeRecipeReloader implements PreparableReloadListener {
 		boolean modified = false;
 
 		for (RecipeHolder<?> holder : sourceRecipes) {
-			RecipeHolder<?> processed = recipeProcessor.processRecipe(holder);
+			RecipeHolder<?> processed = recipeProcessor.processRecipe(holder, customRecipes);
 			if (processed == null) {
 				// processRecipe 返回 null 表示移除该配方
 				modified = true;

@@ -14,6 +14,18 @@ import org.junit.jupiter.api.Test;
 class Ae2InputPullerTest {
 
 	@Test
+	void disablingSmeltingCompatSchedulesOneShotInputReturnCheck() {
+		Ae2OutputStateHolder holder = new Ae2OutputStateHolder();
+
+		holder.toggleSmeltingCompatEnabled();
+		assertFalse(holder.isUnprocessableInputReturnCheckPending(), "开启熔炼兼容不应触发扫描");
+		holder.toggleSmeltingCompatEnabled();
+		assertTrue(holder.isUnprocessableInputReturnCheckPending(), "关闭熔炼兼容应安排一次扫描");
+		holder.setUnprocessableInputReturnCheckPending(false);
+		assertFalse(holder.isUnprocessableInputReturnCheckPending(), "完成扫描后应清除请求");
+	}
+
+	@Test
 	void accelerationShortensConfiguredIntervalWithoutDroppingBelowOneGameTick() {
 		assertEquals(10, Ae2PullFairnessPolicy.effectiveInterval(10, 1));
 		assertEquals(5, Ae2PullFairnessPolicy.effectiveInterval(10, 2));
@@ -224,6 +236,40 @@ class Ae2InputPullerTest {
 	}
 
 	@Test
+	void boundedCandidateScanPrioritizesSmeltingBeforeCombFallback() {
+		List<String> out = new ArrayList<>();
+		var seen = new java.util.HashSet<String>();
+
+		int smeltingSelected = Ae2CursorScan.collectPrioritizedRotating(out, seen,
+				List.of("smelt_a", "smelt_b", "smelt_c"), List.of("comb_a", "comb_b"),
+				null, null, 2, key -> true);
+		assertEquals(2, smeltingSelected);
+		assertEquals(List.of("smelt_a", "smelt_b"), out,
+				"当熔炼候选填满有界窗口时蜜脾不能抢在熔炼前");
+
+		out.clear();
+		seen.clear();
+		smeltingSelected = Ae2CursorScan.collectPrioritizedRotating(out, seen,
+				List.of("smelt_a", "smelt_b"), List.of("comb_a", "comb_b", "comb_c"),
+				"smelt_a", "comb_a", 3, key -> true);
+		assertEquals(2, smeltingSelected);
+		assertEquals(List.of("smelt_b", "smelt_a", "comb_b"), out,
+				"蜜脾只能补足熔炼候选未占用的窗口");
+	}
+
+	@Test
+	void combFallbackCursorRotatesOnlyAfterNoSmeltingCandidateIsAccepted() {
+		List<String> out = new ArrayList<>();
+		var seen = new java.util.HashSet<String>();
+		int smeltingSelected = Ae2CursorScan.collectPrioritizedRotating(out, seen,
+				List.of("smelt_a", "smelt_b"), List.of("comb_a", "comb_b", "comb_c"),
+				"smelt_a", "comb_b", 3, key -> key.startsWith("comb"));
+		assertEquals(0, smeltingSelected);
+		assertEquals(List.of("comb_c", "comb_a", "comb_b"), out,
+				"熔炼键不再可用时蜜脾回退游标也应持续轮转");
+	}
+
+	@Test
 	void prioritizedScanFindsAllowedKeyAcrossPriorityGroups() {
 		List<String> out = new ArrayList<>();
 		Ae2CursorScan.collectPrioritized(out, new ArrayList<>(),
@@ -250,6 +296,11 @@ class Ae2InputPullerTest {
 		// 槽少于类型数时向上取整为 1，否则少数类型永远拿不到槽（饿死）
 		assertEquals(1, Ae2InputLaneFairness.emptyLaneBudget(3, 8));
 		assertEquals(0, Ae2InputLaneFairness.emptyLaneBudget(0, 4));
+		assertEquals(0, Ae2InputLaneFairness.remainingLaneBudget(1, 1));
+		assertEquals(0, Ae2InputLaneFairness.remainingLaneBudget(1, 2));
+		assertEquals(1, Ae2InputLaneFairness.remainingLaneBudget(1, 0));
+		assertEquals(2, Ae2InputLaneFairness.remainingLaneBudget(8, 6));
+		assertEquals(Integer.MAX_VALUE, Ae2InputLaneFairness.remainingLaneBudget(Integer.MAX_VALUE, 18));
 	}
 
 	@Test
@@ -280,14 +331,15 @@ class Ae2InputPullerTest {
 		// 空槽车道上限与速率份额上限都只在公平轮生效；空槽判定改读车道快照（纯数组查询）
 		assertTrue(source.contains("Ae2InputLaneFairness.emptyLaneBudget(processCount, typeCount)"));
 		assertTrue(source.contains("Ae2InputLaneFairness.typeQuotaShare(normalQuota, typeCount)"));
-		assertTrue(source.contains("if (slotCapacity > 0L && fairPass && laneSnapshot.item(slotIdx) == null)"));
+		assertTrue(source.contains("if (protectLanes && emptyLane && newLanes >= newLaneBudget)"));
 		// 容量规划走车道快照：廉价身份剪枝是数组读取，不再逐对调用 slot.getStack()/getItem()
 		assertTrue(source.contains("long slotCapacity = Math.min(slotQuota,\n"
 				+ "\t\t\t\t\t\t\tlaneCapacity(laneSnapshot, slotIdx, keyItem, entry, slotProbe));"));
 		assertTrue(source.contains("if (laneItem != null && laneItem != keyItem) return 0;"));
 		// 快照必须每轮采集，且我方插入后即刻刷新，否则后续类型会读到过期车道
-		assertTrue(source.contains("laneSnapshot.capture(inputSlots, processCount);"));
-		assertTrue(source.contains("if (laneChanged && laneSnapshot != null) laneSnapshot.refresh(slotIdx);"));
+		assertTrue(source.contains("laneSnapshot.capture(inputSlots, processCount, host instanceof BlockEntity entity ? entity : null);"));
+		assertTrue(source.contains("if (inserted > 0 && laneSnapshot != null) {"));
+		assertTrue(source.contains("laneSnapshot.refresh(slotIdx);"));
 	}
 
 }
