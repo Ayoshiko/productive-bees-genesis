@@ -387,59 +387,65 @@ public final class MekCentrifugeFactoryHelper {
 		// Remaining PB energy budget for this tick; debit only actual consumption so
 		// a shared buffer cannot be over-committed across parallel lanes.
 		long remainingEnergy = Math.max(0L, energyContainer.getEnergy());
-		for (int processOffset = 0; processOffset < processes; processOffset++) {
-			int i = (processStart + processOffset) % processes;
-			ItemStack input = inputSlots.get(i).getStack();
-			pbProcessor.updateFactoryInputState(i, input.isEmpty());
-			if (input.isEmpty()) {
-				continue;
-			}
-			// PB配方短路 — 万象创世蜜脾/蜜脾块或有PB离心配方的物品跳过 SMELTING 检查
-			// 原因：modularbees 为 c:honeycombs tag 注册了熔炼配方，导致所有 PB 蜜脾被 hasSmeltingRecipe 误判
-			long processEnergyBudget = PbProcessFairness.energyBudget(
-					remainingEnergy, remainingInputLanes);
-			remainingInputLanes--;
-			boolean isMyriad = MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
-					|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
-			RecipeHolder<CentrifugeRecipe> preFoundRecipe = null;
-			if (!isMyriad) {
-				preFoundRecipe = pbProcessor.hasReservedPbRecipe(i, input)
-						? pbProcessor.getReservedPbRecipe(i)
-						: pbProcessor.findPbRecipe(input);
-			}
-			if (isMyriad || preFoundRecipe != null) {
+		pbProcessor.beginFactoryOutputBatch();
+		try {
+			for (int processOffset = 0; processOffset < processes; processOffset++) {
+				int i = (processStart + processOffset) % processes;
+				ItemStack input = inputSlots.get(i).getStack();
+				pbProcessor.updateFactoryInputState(i, input.isEmpty());
+				if (input.isEmpty()) {
+					continue;
+				}
+				// PB配方短路 — 万象创世蜜脾/蜜脾块或有PB离心配方的物品跳过 SMELTING 检查
+				// 原因：modularbees 为 c:honeycombs tag 注册了熔炼配方，导致所有 PB 蜜脾被 hasSmeltingRecipe 误判
+				long processEnergyBudget = PbProcessFairness.energyBudget(
+						remainingEnergy, remainingInputLanes);
+				remainingInputLanes--;
+				boolean isMyriad = MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
+						|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
+				RecipeHolder<CentrifugeRecipe> preFoundRecipe = null;
+				if (!isMyriad) {
+					preFoundRecipe = pbProcessor.hasReservedPbRecipe(i, input)
+							? pbProcessor.getReservedPbRecipe(i)
+							: pbProcessor.findPbRecipe(input);
+				}
+				if (isMyriad || preFoundRecipe != null) {
+					pbProcessor.setTickMultiplier(batchMultiplier);
+					long energyBeforeProcess = energyContainer.getEnergy();
+					if (pbProcessor.tryProcessPbRecipe(i, preFoundRecipe, processEnergyBudget)) {
+						context.setPbActiveState(true, i);
+					} else {
+						context.productivebeesgenesis$onProcessDeactivated(i);
+					}
+					remainingEnergy = Math.max(0L,
+							remainingEnergy - Math.max(0L, energyBeforeProcess - energyContainer.getEnergy()));
+					continue;
+				}
+				// 缓存SMELTING配方检查结果，输入变更时才重新查询
+				if (pbProcessor.hasSmeltingRecipe(i, input)) {
+					// SMELTING配方由super处理，跳过PB路径
+					// 修复：SMELTING 命中时必须重置 PB 状态，否则进度条显示旧 PB 进度而非 SMELTING 进度
+					// （与基础机器 MekCentrifugeTickHandler 对齐）
+					pbProcessor.resetPbState(i);
+					// Task 11: SMELTING 配方占用，PB 进程失活
+					context.productivebeesgenesis$onProcessDeactivated(i);
+					continue;
+				}
 				pbProcessor.setTickMultiplier(batchMultiplier);
 				long energyBeforeProcess = energyContainer.getEnergy();
-				if (pbProcessor.tryProcessPbRecipe(i, preFoundRecipe, processEnergyBudget)) {
+				if (pbProcessor.tryProcessPbRecipe(i, null, processEnergyBudget)) {
+					// setPbActiveState 同时更新激活计数和 Mekanism 状态。
 					context.setPbActiveState(true, i);
 				} else {
+					// Task 11: PB 处理失败，确保失活（pbProcessor 内部已 setPbActiveState(false)→onProcessDeactivated；此处状态守卫防重复）
 					context.productivebeesgenesis$onProcessDeactivated(i);
 				}
 				remainingEnergy = Math.max(0L,
 						remainingEnergy - Math.max(0L, energyBeforeProcess - energyContainer.getEnergy()));
-				continue;
 			}
-			// 缓存SMELTING配方检查结果，输入变更时才重新查询
-			if (pbProcessor.hasSmeltingRecipe(i, input)) {
-				// SMELTING配方由super处理，跳过PB路径
-				// 修复：SMELTING 命中时必须重置 PB 状态，否则进度条显示旧 PB 进度而非 SMELTING 进度
-				// （与基础机器 MekCentrifugeTickHandler 对齐）
-				pbProcessor.resetPbState(i);
-				// Task 11: SMELTING 配方占用，PB 进程失活
-				context.productivebeesgenesis$onProcessDeactivated(i);
-				continue;
-			}
-			pbProcessor.setTickMultiplier(batchMultiplier);
-			long energyBeforeProcess = energyContainer.getEnergy();
-			if (pbProcessor.tryProcessPbRecipe(i, null, processEnergyBudget)) {
-				// setPbActiveState 同时更新激活计数和 Mekanism 状态。
-				context.setPbActiveState(true, i);
-			} else {
-				// Task 11: PB 处理失败，确保失活（pbProcessor 内部已 setPbActiveState(false)→onProcessDeactivated；此处状态守卫防重复）
-				context.productivebeesgenesis$onProcessDeactivated(i);
-			}
-			remainingEnergy = Math.max(0L,
-					remainingEnergy - Math.max(0L, energyBeforeProcess - energyContainer.getEnergy()));
+
+		} finally {
+			pbProcessor.finishFactoryOutputBatch();
 		}
 
 		// Task 11: 整体激活 = SMELTING 激活（super 后 currentActive）|| PB 激活（计数器 O(1)，替代 O(processes) 遍历）

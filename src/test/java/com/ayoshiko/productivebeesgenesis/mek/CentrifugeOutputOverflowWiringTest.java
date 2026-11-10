@@ -80,9 +80,17 @@ class CentrifugeOutputOverflowWiringTest {
 				"处理新输入前必须先排空已付结果，拒收时暂停后续生产");
 		int freeze = processing.indexOf("completer.freezeCompletedBatch(input)");
 		int payment = processing.indexOf("completer.payForPlan(plan", freeze);
-		int delivery = processing.indexOf("if (completed > 0) PbRecipeFlushHelper.flushCompleted(", payment);
+		int delivery = processing.indexOf("if (completed > 0) completer.flushCompletedBatch(", payment);
 		assertTrue(freeze >= 0 && payment > freeze && delivery > payment,
 				"正常完成路径必须先冻结结果、再付款、最后交付，拒收后保持同一批次");
+		String completer = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/PbRecipeCompleter.java");
+		String completed = completer.substring(completer.indexOf("boolean flushCompletedBatch("),
+				completer.indexOf("boolean flushAfterFactoryAe("));
+		int inputCommit = completed.indexOf("if (!commitCompletedInput(processIndex)) return false;");
+		int defer = completed.indexOf("factoryOutputBatch.defer(this, processIndex)");
+		int fallback = completed.indexOf("return flushPendingPbOutputs(processIndex);");
+		assertTrue(inputCommit >= 0 && defer > inputCommit && fallback > defer,
+				"延后同机交付或直接回退都必须先交接原输入，产物仍由原进程保管");
 	}
 
 	@Test

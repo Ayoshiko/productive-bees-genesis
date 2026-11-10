@@ -1,6 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import appeng.api.stacks.AEItemKey;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
@@ -100,6 +103,84 @@ class Ae2InputCapacityMinecraftTest {
 		snapshot.capture(List.of(slot, other), 2);
 		assertEquals(1, snapshot.preferredStart(AEItemKey.of(Items.RAW_IRON), 1));
 		assertEquals(0, snapshot.preferredStart(AEItemKey.of(Items.RAW_GOLD), 1));
+	}
+
+	@Test
+	void indexedCandidatesPreserveComponentsAndRefreshAfterEachAcceptedInput() {
+		var first = BasicInventorySlot.at(null, 0, 0);
+		var second = BasicInventorySlot.at(null, 0, 0);
+		var empty = BasicInventorySlot.at(null, 0, 0);
+		var regular = new ItemStack(Items.HONEYCOMB);
+		var modified = regular.copy();
+		modified.set(DataComponents.MAX_STACK_SIZE, 16);
+		first.setStack(regular);
+		second.setStack(modified);
+		var regularKey = AEItemKey.of(regular);
+		var modifiedKey = AEItemKey.of(modified);
+		var snapshot = new Ae2InputLaneSnapshot();
+		snapshot.capture(List.of(first, second, empty), 3);
+		assertTrue(snapshot.isIndexed());
+		assertEquals(0b101L, snapshot.candidateLanes(regularKey));
+		assertEquals(0b110L, snapshot.candidateLanes(modifiedKey));
+		assertEquals(1, snapshot.occupiedLaneCount(regularKey));
+		assertEquals(1, snapshot.occupiedLaneCount(modifiedKey));
+		empty.setStack(modified.copy());
+		snapshot.remember(modifiedKey, 2);
+		snapshot.refresh(2);
+		assertEquals(0b001L, snapshot.candidateLanes(regularKey));
+		assertEquals(0b110L, snapshot.candidateLanes(modifiedKey));
+		assertEquals(2, snapshot.occupiedLaneCount(modifiedKey));
+		assertFalse(snapshot.hasEmptyLane());
+		second.setStack(ItemStack.EMPTY);
+		snapshot.refresh(1);
+		assertEquals(0b011L, snapshot.candidateLanes(regularKey));
+		assertEquals(1, snapshot.occupiedLaneCount(modifiedKey));
+		assertTrue(snapshot.hasEmptyLane());
+		assertEquals(1, snapshot.preferredStart(modifiedKey, 0));
+	}
+
+	@Test
+	void lastMaskBitAndLargerFactoriesRetainEveryEligibleLane() {
+		List<IInventorySlot> slots = new ArrayList<>();
+		for (int lane = 0; lane < 65; lane++) {
+			var slot = BasicInventorySlot.at(null, 0, 0);
+			slot.setStack(new ItemStack(Items.RAW_GOLD));
+			slots.add(slot);
+		}
+		slots.get(63).setStack(new ItemStack(Items.RAW_IRON));
+		var iron = AEItemKey.of(Items.RAW_IRON);
+		var gold = AEItemKey.of(Items.RAW_GOLD);
+		var snapshot = new Ae2InputLaneSnapshot();
+		snapshot.capture(slots.subList(0, 64), 64);
+		assertTrue(snapshot.isIndexed());
+		assertEquals(Long.MIN_VALUE, snapshot.candidateLanes(iron));
+		assertEquals(63, snapshot.preferredStart(iron, 0));
+		assertEquals(0, snapshot.preferredStart(gold, 63));
+		assertEquals(63, snapshot.occupiedLaneCount(gold));
+		snapshot.capture(slots, 65);
+		assertFalse(snapshot.isIndexed());
+		assertEquals(63, snapshot.preferredStart(iron, 64));
+		assertEquals(64, snapshot.occupiedLaneCount(gold));
+		slots.get(64).setStack(ItemStack.EMPTY);
+		snapshot.refresh(64);
+		assertTrue(snapshot.hasEmptyLane());
+		snapshot.capture(slots.subList(0, 64), 64);
+		assertTrue(snapshot.isIndexed());
+		assertFalse(snapshot.hasEmptyLane());
+		assertEquals(Long.MIN_VALUE, snapshot.candidateLanes(iron));
+	}
+
+	@Test
+	void customSlotsStayEligibleForTheirOwnSimulationRules() {
+		var slot = mock(IInventorySlot.class);
+		var stored = new ItemStack(Items.HONEYCOMB);
+		stored.set(DataComponents.MAX_STACK_SIZE, 16);
+		when(slot.getStack()).thenReturn(stored);
+		when(slot.getLimit(any())).thenReturn(64);
+		var snapshot = new Ae2InputLaneSnapshot();
+		snapshot.capture(List.of(slot), 1);
+		assertEquals(1L, snapshot.candidateLanes(AEItemKey.of(Items.HONEYCOMB)));
+		assertEquals(0, snapshot.occupiedLaneCount(AEItemKey.of(Items.HONEYCOMB)));
 	}
 
 	private static void assertCapacityMatchesInsertion(BasicInventorySlot slot, ItemStack template) throws Exception {

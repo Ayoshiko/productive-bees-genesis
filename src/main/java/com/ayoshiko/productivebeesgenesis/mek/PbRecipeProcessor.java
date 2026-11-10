@@ -74,6 +74,8 @@ public class PbRecipeProcessor {
 	private Tag invalidCommittedPending;
 	private Tag invalidPaidWork;
 	private final PbRecipeProcessorStateHelper.PaidWork[] paidWork;
+	private final PbPaidWorkCache paidWorkCache;
+	private final PbFactoryOutputBatch factoryOutputBatch;
 	private final boolean[] restoredLegacyProgress;
 	private final ItemStack[] legacyInputs;
 	private final PbPausedWorkBuffer pausedWork;
@@ -144,6 +146,7 @@ public class PbRecipeProcessor {
 		this.emptyFactoryProcesses = new boolean[processes];
 		this.pbProcessingTime = new int[processes];
 		this.paidWork = new PbRecipeProcessorStateHelper.PaidWork[processes];
+		this.paidWorkCache = new PbPaidWorkCache(processes);
 		this.restoredLegacyProgress = new boolean[processes];
 		this.legacyInputs = new ItemStack[processes];
 		this.pausedWork = new PbPausedWorkBuffer(processes);
@@ -162,6 +165,10 @@ public class PbRecipeProcessor {
 		this.recipeCompleters = new PbRecipeCompleter[processes];
 		for (int i = 0; i < processes; i++) {
 			this.recipeCompleters[i] = new PbRecipeCompleter(context);
+		}
+		this.factoryOutputBatch = new PbFactoryOutputBatch(context, recipeCompleters);
+		for (PbRecipeCompleter completer : recipeCompleters) {
+			completer.setFactoryOutputBatch(factoryOutputBatch);
 		}
 		this.myriadHandler = new MyriadCreationsHandler(context, logPrefix,
 				pbOperatingTicks, pbProcessing, pbProcessingTime, cachedPbRecipes, recipeFinder, recipeCompleters);
@@ -182,6 +189,14 @@ public class PbRecipeProcessor {
 		int multiplier = tickMultiplier;
 		tickMultiplier = 1;
 		return multiplier;
+	}
+
+	public void beginFactoryOutputBatch() {
+		factoryOutputBatch.begin();
+	}
+
+	public void finishFactoryOutputBatch() {
+		factoryOutputBatch.finish();
 	}
 
 	public int getAndAdvanceProcessStart(int processCount) {
@@ -249,6 +264,7 @@ public class PbRecipeProcessor {
 			lastCheckedGameTick = currentGameTime;
 		}
 		if (lastRecipeVersion != currentVersion) {
+			paidWorkCache.clear();
 			clearSmeltingCacheAll();
 			recipeFinder.clearCaches();
 			// 失效 ticksForBaseCache（配方重载可能伴随升级配置变化，强制下次重新计算）
@@ -502,7 +518,7 @@ public class PbRecipeProcessor {
 		if (myriad) {
 			if (!MyriadCreationsEventHandler.isMyriadCreationsEnabled()) return false;
 			if (work == null) {
-				work = PbRecipeProcessorStateHelper.PaidWork.myriad(input, context.baseTicksRequired());
+				work = paidWorkCache.get(processIndex, input, null, context.baseTicksRequired(), level.registryAccess());
 				if (restoredLegacyProgress[processIndex]) {
 					pausedWork.restoreReservation(processIndex, work, ItemStack.EMPTY, level.registryAccess());
 				} else if (!pausedWork.reserve(processIndex, work, level.registryAccess())) return false;
@@ -525,7 +541,7 @@ public class PbRecipeProcessor {
 			}
 			int baseTicks = pbRecipe.value().getProcessingTime();
 			if (baseTicks <= 0) baseTicks = context.baseTicksRequired();
-			work = PbRecipeProcessorStateHelper.PaidWork.create(input, pbRecipe, baseTicks, level.registryAccess());
+			work = paidWorkCache.get(processIndex, input, pbRecipe, baseTicks, level.registryAccess());
 			if (restoredLegacyProgress[processIndex]) {
 				pausedWork.restoreReservation(processIndex, work, ItemStack.EMPTY, level.registryAccess());
 				paidWork[processIndex] = work;
@@ -580,7 +596,7 @@ public class PbRecipeProcessor {
 		pbProcessing[processIndex] = true;
 		if (pbOperatingTicks[processIndex] == 0) releasePaidWork(processIndex);
 		context.productivebeesgenesis$markForSave();
-		if (completed > 0) PbRecipeFlushHelper.flushCompleted(completer, processIndex);
+		if (completed > 0) completer.flushCompletedBatch(processIndex);
 		cachedFluidTankFull = context.areAllFluidTanksFull() && !context.canAllocateNewFluidTank();
 		return true;
 	}
@@ -655,7 +671,9 @@ public class PbRecipeProcessor {
 	 * {@link PbRecipeProcessorStateHelper#resetPbState}).
 	 */
 	public void resetPbState(int processIndex) {
-		reconcileInputWork(processIndex, context.inputSlot(processIndex).getStack());
+		ItemStack input = context.inputSlot(processIndex).getStack();
+		if (input.isEmpty()) paidWorkCache.forget(processIndex);
+		reconcileInputWork(processIndex, input);
 		if (paidWork[processIndex] != null || restoredLegacyProgress[processIndex]) {
 			pbProcessing[processIndex] = false;
 			return;
@@ -748,6 +766,7 @@ public class PbRecipeProcessor {
 
 	/** Restores PB progress from NBT (implementation moved to {@link PbRecipeProcessorStateHelper#loadAdditional}). */
 	public void loadAdditional(CompoundTag nbt, HolderLookup.Provider provider) {
+		paidWorkCache.clear();
 		java.util.Arrays.fill(emptyFactoryProcesses, false);
 		PbRecipeProcessorStateHelper.loadAdditional(nbt, pbOperatingTicks, pbProcessing, pbProcessingTime);
 		myriadHandler.loadAdditional(nbt);

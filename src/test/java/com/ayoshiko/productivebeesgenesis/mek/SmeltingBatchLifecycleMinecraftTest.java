@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.recipes.cache.CachedRecipe;
+import mekanism.api.recipes.ItemStackToItemStackRecipe;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import mekanism.common.recipe.lookup.monitor.RecipeCacheLookupMonitor;
 import org.junit.jupiter.api.Tag;
@@ -15,6 +16,95 @@ import static org.mockito.Mockito.*;
 class SmeltingBatchLifecycleMinecraftTest {
     private static CachedRecipe<?> recipe() {
         return mock(CachedRecipe.class, withSettings().extraInterfaces(ICachedRecipeBatchAccel.class));
+    }
+
+    @Test
+    void realAcceleratedCycleChargesBeforeAFailingCompletionCallback() {
+        var fixture = new RealCacheFixture(100, 3, 1);
+        fixture.cache.failure = new IllegalStateException("completed output then failed");
+        assertSame(fixture.cache.failure, assertThrows(IllegalStateException.class, () -> fixture.run(6)));
+        assertEquals(1, fixture.cache.produced);
+        assertEquals(70, fixture.energy);
+        assertEquals(30, fixture.charged);
+        assertNull(BatchEnergyLedger.active());
+        assertTrue(((ICachedRecipeBatchAccel) fixture.cache).productivebeesgenesis$isBatchExhausted());
+    }
+
+    @Test
+    void energyLimitedBatchContinuesAcrossCompletedCyclesWhileItCanStillPay() {
+        var fixture = new RealCacheFixture(60, 3, 1);
+        fixture.run(10);
+        assertEquals(2, fixture.cache.produced);
+        assertEquals(0, fixture.energy);
+        assertEquals(60, fixture.charged);
+        assertEquals(0, fixture.cache.progress());
+    }
+
+    @Test
+    void lastAffordableSmallerParallelTickUsesTheRemainingEnergy() {
+        var fixture = new RealCacheFixture(50, 10, 2);
+        fixture.run(6);
+        assertEquals(0, fixture.cache.produced);
+        assertEquals(0, fixture.energy);
+        assertEquals(50, fixture.charged);
+        assertEquals(3, fixture.cache.progress());
+    }
+
+    private static final class RealCacheFixture {
+        final MachineEnergyContainer<?> container = mock(MachineEnergyContainer.class);
+        final RecipeCacheLookupMonitor<?> monitor = mock(RecipeCacheLookupMonitor.class);
+        final RealCache cache = new RealCache();
+        long energy;
+        long charged;
+
+        RealCacheFixture(long available, int requiredTicks, int operations) {
+            energy = available;
+            when(container.getEnergy()).thenAnswer(call -> energy);
+            when(container.extract(anyLong(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL))).thenAnswer(call -> {
+                long requested = call.getArgument(0);
+                long used = Math.min(energy, requested);
+                energy -= used;
+                charged += used;
+                return used;
+            });
+            cache.setEnergyRequirements(() -> 10, container);
+            cache.setRequiredTicks(() -> requiredTicks);
+            cache.setBaselineMaxOperations(() -> operations);
+            ((ICachedRecipeBatchAccel) cache).productivebeesgenesis$enableMarginalEnergyPricing();
+            doReturn(cache).when(monitor).getCachedRecipe(0);
+        }
+
+        void run(int ticks) {
+            MekCentrifugeFactoryHelper.runSmeltingBatch(new RecipeCacheLookupMonitor<?>[]{monitor},
+                    ticks, container, () -> {
+                        cache.process();
+                        return true;
+                    });
+        }
+    }
+
+    private static class RealCache extends CachedRecipe<ItemStackToItemStackRecipe> {
+        int produced;
+        RuntimeException failure;
+
+        RealCache() {
+            super(mock(ItemStackToItemStackRecipe.class), () -> false);
+        }
+
+        @Override
+        public boolean isInputValid() {
+            return true;
+        }
+
+        @Override
+        protected void finishProcessing(int operations) {
+            produced += operations;
+            if (failure != null) throw failure;
+        }
+
+        int progress() {
+            return getOperatingTicks();
+        }
     }
 
     @Test void fullTickReplacesCacheBeforeAccelerationAndChargesOneLedger() {

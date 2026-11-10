@@ -66,6 +66,7 @@ public class BeeProduceProcessor {
 	private int frozenRoutingFlags = -1;
 	/** 产物分发器（直写输出槽 + 分段流体注入，复用数组跨 tick 零扩容） */
 	private final BeeProduceOutputDispatcher outputDispatcher;
+	private final ApiaryFluidOutput fluidOutput;
 	private final MultiFlowerProductionCache multiFlowerProductionCache = new MultiFlowerProductionCache();
 	private final BeeProductionGenerator generator = new BeeProductionGenerator(this, multiFlowerProductionCache);
 	private final OrderedSlotIndex resourceIndex = new OrderedSlotIndex();
@@ -81,6 +82,7 @@ public class BeeProduceProcessor {
 	public BeeProduceProcessor(ApiaryUpgradeHandler upgradeHandler, TileEntityMekApiary apiary) {
 		this.upgradeHandler = upgradeHandler;
 		this.apiary = apiary;
+		this.fluidOutput = new ApiaryFluidOutput(apiary);
 		this.production = apiary == null ? null : new ApiaryProductionState(apiary.getBeeSlotCount(), apiary::setChanged);
 		resourceIndex.reset(1);
 		resourceIndex.add(0);
@@ -322,20 +324,14 @@ public class BeeProduceProcessor {
             // 后续路线异常也必须提交已接收前缀，原异常仍交给调用方处理。
             if (itemsChanged) production.itemsChanged();
         }
+        boolean fluidBudgetDeferred = false;
         if (production.fluidAmount() > 0 && !custody.blocked()) {
-            if (upgrades.directAeOutputEnabled())
-                production.debitFluid(apiary.pushGeneratedFluidToAe(production.fluid(), production.fluidAmount()));
-            if (production.fluidAmount() > 0 && !custody.blocked()) {
-                int amount = (int) Math.min(Integer.MAX_VALUE, production.fluidAmount());
-                FluidStack offered = production.fluid().copyWithAmount(amount);
-                long handed = custody.handoffFluid(offered, amount, "apiary-tank", () ->
-                        amount - apiary.getFluidTank().insert(offered.copy(), mekanism.api.Action.EXECUTE,
-                                mekanism.api.AutomationType.INTERNAL).getAmount());
-                production.debitFluid(handed);
-            }
+            var result = fluidOutput.flush(production.fluid(), production.fluidAmount(),
+                    upgrades.directAeOutputEnabled(), production::debitFluid);
+            fluidBudgetDeferred = result == ApiaryFluidOutput.Result.DEFERRED;
         }
         boolean completed = !production.hasFrozen() && !custody.blocked();
-        if (completed || itemsChanged || originalFluidAmount != production.fluidAmount()) {
+        if (completed || itemsChanged || originalFluidAmount != production.fluidAmount() || fluidBudgetDeferred) {
             frozenOutputBackoff.recordSuccess();
         } else if (!custody.blocked()) {
             frozenOutputBackoff.recordFailure(System.nanoTime());
@@ -370,22 +366,9 @@ public class BeeProduceProcessor {
 			apiary.clearPendingHoneyFluid();
 			return true;
 		}
-		long remaining = amount;
-		if (apiary.isDirectAeOutputEnabled()) {
-			long accepted = apiary.pushGeneratedFluidToAe(template, remaining);
-			remaining -= Math.min(remaining, Math.max(0L, accepted));
-		}
-		if (remaining > 0) {
-			remaining = outputDispatcher.injectFluid(apiary.getFluidTank(), template, remaining);
-		}
-		if (remaining <= 0) {
-			apiary.clearPendingHoneyFluid();
-			return true;
-		}
-		if (remaining != amount) {
-			apiary.setPendingHoneyFluid(remaining, template);
-		}
-		return false;
+		return fluidOutput.flush(template, amount, apiary.isDirectAeOutputEnabled(), handed ->
+				apiary.setPendingHoneyFluid(apiary.getPendingHoneyFluidAmount() - handed, template))
+				== ApiaryFluidOutput.Result.COMPLETE;
 	}
 
 	boolean hasPendingFluid() {

@@ -69,6 +69,7 @@ public class PbRecipeCompleter {
 	/** flush 执行器 — 持有 simStacks 等执行相关实例字段,与 completer 生命周期一致 */
 	private final PbRecipeFlusher flusher;
 	private final PendingTemplates pendingTemplates;
+	private PbFactoryOutputBatch factoryOutputBatch;
 
 	/**
 	 * 本 tick 尚未插入的 PB 配方输出(按 ItemStack key 累加数量)
@@ -508,6 +509,21 @@ public class PbRecipeCompleter {
 	 */
 	public boolean flushPendingPbOutputs(int processIndex) {
 		return flusher.flush(this, processIndex);
+	}
+
+	void setFactoryOutputBatch(PbFactoryOutputBatch batch) {
+		factoryOutputBatch = batch;
+	}
+
+	/** 新完成批次可留到同机循环末尾；旧积压仍按原入口先排空。 */
+	boolean flushCompletedBatch(int processIndex) {
+		if (!commitCompletedInput(processIndex)) return false;
+		if (factoryOutputBatch != null && factoryOutputBatch.defer(this, processIndex)) return true;
+		return flushPendingPbOutputs(processIndex);
+	}
+
+	boolean flushAfterFactoryAe(int processIndex) {
+		return flusher.flushAfterFactoryAe(this, processIndex);
 	}
 
 	/**

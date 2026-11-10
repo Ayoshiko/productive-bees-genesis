@@ -101,7 +101,7 @@ public class MyriadCreationsHandler {
 		}
 		pbProcessing[processIndex] = true;
 		context.productivebeesgenesis$markForSave();
-		if (completed > 0) PbRecipeFlushHelper.flushCompleted(completer, processIndex);
+		if (completed > 0) completer.flushCompletedBatch(processIndex);
 		fluidOutputHandler.refreshFluidTankFullCache();
 		return true;
 	}

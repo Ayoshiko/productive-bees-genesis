@@ -35,6 +35,27 @@ class Ae2EnergyMathMinecraftTest {
     }
 
     @Test
+    void exactRequestArithmeticMatchesDecimalReferenceAtLongAndRatioBoundaries() {
+        long[] shortfalls = {0, 1, 2, 3, 5, 99, 100, (1L << 53) + 1, Long.MAX_VALUE - 1, Long.MAX_VALUE};
+        double[] conversions = {1.0, 1.5, 2.5, 4.0, 12345.5, 0.1, 0.0001, Math.nextUp(2.5), Double.MAX_VALUE};
+        BigDecimal[] retained = {BigDecimal.ZERO, new BigDecimal("0.5"), new BigDecimal("0.75")};
+        for (long shortfall : shortfalls) {
+            for (double conversion : conversions) {
+                for (BigDecimal fraction : retained) {
+                    BigDecimal available = BigDecimal.valueOf(shortfall).subtract(fraction);
+                    long expected = available.signum() <= 0 ? 0L
+                            : available.divide(BigDecimal.valueOf(conversion), 0, java.math.RoundingMode.DOWN)
+                                    .min(BigDecimal.valueOf(Long.MAX_VALUE)).longValueExact();
+                    assertEquals(expected, Ae2EnergyMath.requestedFe(shortfall, fraction, conversion),
+                            () -> shortfall + " J, retained=" + fraction + ", ratio=" + conversion);
+                }
+            }
+        }
+        assertThrows(IllegalStateException.class, () -> Ae2EnergyMath.requestedFe(1, BigDecimal.ZERO, 0));
+        assertThrows(IllegalStateException.class, () -> Ae2EnergyMath.requestedFe(1, BigDecimal.ZERO, Double.NaN));
+    }
+
+    @Test
     void capacityAndBatchShortfallRemainInJoules() {
         assertEquals(9_000, Ae2EnergyMath.remainingCapacity(1_000, 10_000));
         assertEquals(Long.MAX_VALUE, Ae2EnergyMath.remainingCapacity(0, Long.MAX_VALUE));
@@ -172,6 +193,71 @@ class Ae2EnergyMathMinecraftTest {
         assertThrows(IllegalStateException.class, () -> transfer.extracted(-1L));
         assertThrows(IllegalStateException.class, () -> transfer.extracted(401L));
         assertTrue(transfer.requiresReconciliation());
+    }
+
+    @Test
+    void fullBatteryDoesNotBackOffBeforeConsumptionAndRefillsEveryBatch() {
+        try (var fixture = new Fixture(2.5, false)) {
+            fixture.energy = fixture.maximum;
+            when(fixture.nativeEnergy.extractAEPower(anyDouble(), eq(Actionable.MODULATE), eq(PowerMultiplier.ONE)))
+                    .thenAnswer(call -> call.getArgument(0));
+            long consumed = 0;
+            long injected = 0;
+            for (int tick = 0; tick < 600; tick++) {
+                assertEquals(0, Ae2EnergyInjector.injectEnergy(fixture.host, 1024, 0));
+                assertEquals(0, fixture.holder.getPushState().getEnergyBackoff().getBackoffExponent());
+                fixture.energy -= 200;
+                consumed += 200;
+                injected += Ae2EnergyInjector.injectEnergy(fixture.host, 1024, 0);
+                assertEquals(fixture.maximum, fixture.energy);
+            }
+            assertEquals(consumed, injected);
+            verify(fixture.nativeEnergy, times(600)).extractAEPower(eq(40D),
+                    eq(Actionable.MODULATE), eq(PowerMultiplier.ONE));
+            assertFalse(fixture.holder.getEnergyTransfer().isPresent());
+        }
+    }
+
+    @Test
+    void satisfiedBatchAndSubFeCapacityDoNotScheduleFailureBackoff() {
+        try (var fixture = new Fixture(2.5, false)) {
+            fixture.energy = 500;
+            when(fixture.host.productivebeesgenesis$usesSmeltingEnergyBudget()).thenReturn(true);
+            assertEquals(0, Ae2EnergyInjector.injectEnergy(fixture.host, 1024, 500));
+            assertEquals(0, fixture.holder.getPushState().getEnergyBackoff().getBackoffExponent());
+            fixture.energy = 999;
+            assertEquals(0, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
+            assertEquals(0, fixture.holder.getPushState().getEnergyBackoff().getBackoffExponent());
+            fixture.gridLookup.verifyNoInteractions();
+            verifyNoInteractions(fixture.nativeEnergy);
+        }
+    }
+
+    @Test
+    void positiveFractionalReceiptKeepsSupplyingUntilAnIntegerJouleCanBeCredited() {
+        try (var fixture = new Fixture(2.5, false)) {
+            when(fixture.nativeEnergy.extractAEPower(anyDouble(), eq(Actionable.MODULATE), eq(PowerMultiplier.ONE)))
+                    .thenReturn(0.1D);
+            assertEquals(0, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
+            assertEquals(0, fixture.holder.getPushState().getEnergyBackoff().getBackoffExponent());
+            assertEquals(1, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
+            assertEquals(1, fixture.energy);
+            assertFalse(fixture.holder.getEnergyTransfer().isPresent());
+            verify(fixture.nativeEnergy, times(2)).extractAEPower(anyDouble(), any(), any());
+        }
+    }
+
+    @Test
+    void realEmptySourceStillBacksOffWithoutCreatingOrLosingEnergy() {
+        try (var fixture = new Fixture(2.5, false)) {
+            assertEquals(0, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
+            assertEquals(1, fixture.holder.getPushState().getEnergyBackoff().getBackoffExponent());
+            assertTrue(fixture.holder.getPushState().getEnergyBackoff().getBackoffEndNanos() > 0);
+            assertEquals(0, fixture.energy);
+            assertFalse(fixture.holder.getEnergyTransfer().isPresent());
+            verify(fixture.nativeEnergy).extractAEPower(eq(200D),
+                    eq(Actionable.MODULATE), eq(PowerMultiplier.ONE));
+        }
     }
 
     private static final class Fixture implements AutoCloseable {

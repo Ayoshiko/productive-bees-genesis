@@ -114,19 +114,23 @@ final class Ae2InputExecution {
 				Item keyItem = entry.key.getItem();
 				int typeSlotStart = laneSnapshot.preferredStart(entry.key, slotStart);
 				long typeAvailable = 0L;
-				int occupiedLanes = 0;
-				if (protectLanes) {
-					for (int index = 0; index < processCount; index++) {
-						if (laneSnapshot.item(index) == keyItem
-								&& entry.matchesComponents(index, laneSnapshot.stack(index), slotProbe,
-										laneSnapshot.patchSize(index), laneSnapshot.beeType(index))) occupiedLanes++;
-					}
-				}
+				int occupiedLanes = protectLanes ? laneSnapshot.occupiedLaneCount(entry.key) : 0;
 				int newLaneBudget = Ae2InputLaneFairness.remainingLaneBudget(laneBudget, occupiedLanes);
 				int newLanes = 0;
 				boolean lanesSuppressed = false;
-				for (int slotOffset = 0; slotOffset < processCount; slotOffset++) {
-					int slotIdx = (typeSlotStart + slotOffset) % processCount;
+				Arrays.fill(inputSlotCapacities, 0, processCount, 0L);
+				boolean indexed = laneSnapshot.isIndexed();
+				long candidateLanes = laneSnapshot.candidateLanes(entry.key);
+				int slotOffset = 0;
+				while (indexed ? candidateLanes != 0L : slotOffset < processCount) {
+					int slotIdx;
+					if (indexed) {
+						long afterStart = candidateLanes & (-1L << typeSlotStart);
+						slotIdx = Long.numberOfTrailingZeros(afterStart == 0L ? candidateLanes : afterStart);
+						candidateLanes &= ~(1L << slotIdx);
+					} else {
+						slotIdx = (typeSlotStart + slotOffset++) % processCount;
+					}
 					boolean emptyLane = laneSnapshot.item(slotIdx) == null;
 					if (protectLanes && emptyLane && newLanes >= newLaneBudget) {
 						// 已用完份额的空槽不会被采用，无需再调用配方和槽位校验。
@@ -227,24 +231,9 @@ final class Ae2InputExecution {
 
 	/** 暂缓的类型仍保留空槽份额，补齐轮不能把短暂退避变成永久挤占。 */
 	static boolean hasUnassignedDemand(List<PullEntry> entries, Ae2InputLaneSnapshot lanes, int laneCount) {
-		boolean hasEmptyLane = false;
-		for (int index = 0; index < laneCount; index++) {
-			if (lanes.item(index) == null) {
-				hasEmptyLane = true;
-				break;
-			}
-		}
-		if (!hasEmptyLane) return false;
+		if (!lanes.hasEmptyLane()) return false;
 		for (PullEntry entry : entries) {
-			if (entry.remaining <= 0) continue;
-			boolean assigned = false;
-			for (int index = 0; index < laneCount; index++) {
-				if (entry.key.matches(lanes.stack(index))) {
-					assigned = true;
-					break;
-				}
-			}
-			if (!assigned) return true;
+			if (entry.remaining > 0 && lanes.occupiedLaneCount(entry.key) == 0) return true;
 		}
 		return false;
 	}

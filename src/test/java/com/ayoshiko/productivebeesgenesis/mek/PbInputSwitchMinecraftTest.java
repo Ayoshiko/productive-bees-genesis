@@ -254,6 +254,54 @@ class PbInputSwitchMinecraftTest {
 		assertTrue(fixture.save().getCompound(WORK).getList("entries", 10).isEmpty());
 	}
 
+	@Test
+	void completedCyclesRefreshSameIdRecipeWithoutChangingCostsOrInputIdentity() {
+		Fixture fixture = new Fixture(1);
+		ItemStack input = named(Items.HONEYCOMB, "stable identity");
+		RecipeHolder<CentrifugeRecipe> original = recipe("same_id", Items.DIAMOND);
+		fixture.inputs[0].setStack(input.copyWithCount(3));
+		assertTrue(fixture.run(0, original, 20));
+		assertTrue(fixture.run(0, original, 20));
+		assertEquals(2, fixture.outputs[0].getCount());
+		assertEquals(400, fixture.spent);
+		fixture.outputs[0].setStack(ItemStack.EMPTY);
+		assertTrue(fixture.run(0, recipe("same_id", Items.EMERALD), 20));
+		assertTrue(fixture.outputs[0].getStack().is(Items.EMERALD));
+		assertEquals(1, fixture.outputs[0].getCount());
+		assertEquals(600, fixture.spent);
+		assertTrue(fixture.inputs[0].isEmpty());
+		assertFalse(fixture.processor.hasRetainedInput(input));
+	}
+
+	@Test
+	void repeatedTemplateStillReservesEveryPausedCycleAndReleasesOnlyCompletedWork() {
+		ItemStack input = named(Items.HONEYCOMB, "large but valid component");
+		CompoundTag component = new CompoundTag();
+		component.putByteArray("payload", new byte[1_100_000]);
+		input.set(DataComponents.CUSTOM_DATA, CustomData.of(component));
+		var cache = new PbPaidWorkCache(1);
+		var selected = recipe("budget", Items.DIAMOND);
+		var first = cache.get(0, input, selected, 20, REGISTRIES);
+		var buffer = new PbPausedWorkBuffer(1);
+		assertTrue(buffer.reserve(0, first, REGISTRIES));
+		assertTrue(buffer.park(0, 7, 20));
+		var second = cache.get(0, input.copy(), selected, 20, REGISTRIES);
+		assertFalse(buffer.reserve(0, second, REGISTRIES));
+		assertEquals(1, buffer.save().size());
+		cache.clear();
+		var resumed = buffer.take(0, input);
+		assertNotNull(resumed);
+		assertEquals(7, resumed.progress);
+		assertNull(buffer.take(0, input));
+		buffer.release(0);
+		assertTrue(buffer.reserve(0, second, REGISTRIES));
+		assertTrue(buffer.park(0, 3, 20));
+		CompoundTag saved = buffer.save().getCompound(0);
+		saved.getCompound("work").getCompound("input").putInt("count", 99);
+		assertEquals(1, buffer.save().getCompound(0).getCompound("work").getCompound("input").getInt("count"));
+		assertEquals(3, buffer.save().getCompound(0).getInt("progress"));
+	}
+
 	private static ItemStack named(Item item, String name) {
 		ItemStack stack = new ItemStack(item);
 		stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));

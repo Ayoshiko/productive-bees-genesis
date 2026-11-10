@@ -6,6 +6,8 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.MekCreativeEnergyHelper;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
@@ -180,6 +182,15 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	int pushGeneratedItemToAe(ItemStack stack) { return ae2HostAdapter.pushGeneratedItem(stack); }
 	long pushGeneratedFluidToAe(FluidStack stack, long amount) {
 		return ae2HostAdapter.pushGeneratedFluid(stack, amount);
+	}
+
+	/** 蜂箱使用自己的直出开关；本地罐排空仍遵守 AE 流体开关、预算和保管协议。 */
+	@Override
+	public void productivebeesgenesis$onLocalFluidOutputCommitted() {
+		if (isDirectAeOutputEnabled() || hasInvalidFluidData() || !Ae2IntegrationLoader.isAe2Loaded()) {
+			return;
+		}
+		Ae2FluidPusher.pushLocalTankContentsNow(this);
 	}
 
 	long getPendingHoneyFluidAmount() {
