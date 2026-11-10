@@ -478,7 +478,7 @@ class Ae2HotPathCacheWiringTest {
 				"不得回退到 O(候选数 × 选中上限) 的线性去重");
 
 		String buffers = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2PushBuffers.java");
-		assertTrue(buffers.contains("final Set<AEItemKey> scanSeenKeys = new HashSet<>()"),
+		assertTrue(buffers.contains("final Set<AEItemKey> scanSeenKeys = new ObjectOpenHashSet<>()"),
 				"去重集合必须跨 tick 复用，避免每次拉取分配");
 
 		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputCandidatePolicy.java");
