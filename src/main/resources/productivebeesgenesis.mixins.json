@@ -18,6 +18,8 @@
     "accessor.TileEntityEMExtraFactoryAccessor",
     "accessor.TileEntityFactoryAccessor",
     "buildinggadgets.RenderBlockBeLoadFixMixin",
+    "compat.sophisticated.SophisticatedSimpleInserterSimulationMixin",
+    "compat.sophisticated.SophisticatedCachedInsertSimulationMixin",
     "jdte.JdteApiaryCoalescedMixin",
     "jdte.JdteBioFactoryResourceMixin",
     "jdte.JdteCentrifugeCoalescedMixin",

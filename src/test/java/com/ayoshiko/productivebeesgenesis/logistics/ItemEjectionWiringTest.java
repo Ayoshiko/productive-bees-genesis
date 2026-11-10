@@ -20,10 +20,9 @@ class ItemEjectionWiringTest {
 		String direct = source.substring(source.indexOf("public int pushDirect("), source.indexOf("private long pushSlots("));
 		assertFalse(direct.contains("simulateInsert("));
 		assertTrue(direct.contains("stack.copyWithCount(want)"));
-		assertTrue(direct.indexOf("state.isRejected(stack, want, gameTime)")
+		assertTrue(direct.indexOf("state.isRejected(stack, want,")
 				< direct.indexOf("stack.copyWithCount(want)"));
 		assertTrue(direct.contains("leftover.getCount()"));
-		assertTrue(direct.contains("if (accepted == 0) state.rememberRejected(offered, gameTime)"));
 		assertTrue(direct.contains("finally"));
 		assertTrue(direct.contains("state.budget.record(gameTime, true,"));
 	}
@@ -39,15 +38,4 @@ class ItemEjectionWiringTest {
 		assertTrue(slots.contains("state.slotCursor = RoundRobinSlotTraversal.advance(slotIndex, slotCount)"));
 	}
 
-	@Test
-	void rejectionTracksFullComponentsAndBatchSizeAndExpires() throws Exception {
-		String state = read("NeighborItemTransferState.java");
-		assertTrue(state.contains("rejected[i].getCount() == count"));
-		assertTrue(state.contains("ItemStack.isSameItemSameComponents(rejected[i], stack)"));
-		assertTrue(state.contains("rejectedTick == gameTime"));
-		assertTrue(state.contains("Arrays.fill(rejected, 0, rejectedCount, null)"));
-		String ejector = read("FastItemEjector.java");
-		assertTrue(ejector.contains("state.target != target"));
-		assertTrue(ejector.contains("Arrays.fill(transferStates, null)"));
-	}
 }

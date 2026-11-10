@@ -608,12 +608,14 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
+		pbProcessor.clearTransientCaches();
 		ae2Handler.handleRemove();
 	}
 	/** 区块卸载时委托 AE2 处理器销毁节点（幂等，与 setRemoved 重复调用安全） */
 	@Override
 	public void onChunkUnloaded() {
 		super.onChunkUnloaded();
+		pbProcessor.clearTransientCaches();
 		ae2Handler.handleChunkUnload();
 	}
 	/** 获取 AE2 生命周期处理器 — 供 IAe2OutputHostBase default 方法委托使用 */

@@ -258,6 +258,44 @@ class Ae2InputPullerTest {
 	}
 
 	@Test
+	void retainedCursorPositionsKeepTheSameSelectionAcrossRefreshAndAdmissionChanges() {
+		var prioritized = new ArrayList<>(List.of("smelt_a", "smelt_b", "smelt_c", "smelt_d"));
+		var fallback = new ArrayList<>(List.of("comb_a", "comb_b", "comb_c"));
+		var prioritizedPosition = new Ae2CursorScan.CursorPosition();
+		var fallbackPosition = new Ae2CursorScan.CursorPosition();
+		String prioritizedCursor = "smelt_c";
+		String fallbackCursor = "comb_b";
+		for (int round = 0; round < 6; round++) {
+			if (round == 3) {
+				prioritized.clear();
+				prioritized.addAll(List.of("smelt_e", "smelt_b", "smelt_d"));
+				fallback.clear();
+				fallback.addAll(List.of("comb_c", "comb_d", "comb_a"));
+				prioritizedPosition.clear();
+				fallbackPosition.clear();
+			}
+			if (round == 4) prioritizedCursor = "missing";
+			int phase = round;
+			java.util.function.Predicate<String> accepted = key ->
+					phase % 2 == 0 ? !key.equals("smelt_b") : !key.startsWith("smelt");
+			var expected = new ArrayList<String>();
+			var actual = new ArrayList<String>();
+			var expectedSeen = new java.util.HashSet<>(List.of("comb_a"));
+			var actualSeen = new java.util.HashSet<>(expectedSeen);
+			int expectedPriority = Ae2CursorScan.collectPrioritizedRotating(expected, expectedSeen,
+					prioritized, fallback, prioritizedCursor, fallbackCursor, 3, accepted);
+			int actualPriority = Ae2CursorScan.collectPrioritizedRotating(actual, actualSeen,
+					prioritized, fallback, prioritizedCursor, fallbackCursor, 3, accepted,
+					prioritizedPosition, fallbackPosition);
+			assertEquals(expected, actual);
+			assertEquals(expectedSeen, actualSeen);
+			assertEquals(expectedPriority, actualPriority);
+			if (actualPriority > 0) prioritizedCursor = actual.get(actualPriority - 1);
+			if (actual.size() > actualPriority) fallbackCursor = actual.getLast();
+		}
+	}
+
+	@Test
 	void combFallbackCursorRotatesOnlyAfterNoSmeltingCandidateIsAccepted() {
 		List<String> out = new ArrayList<>();
 		var seen = new java.util.HashSet<String>();

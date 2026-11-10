@@ -2,10 +2,15 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import appeng.api.config.Actionable;
+import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
+import appeng.api.storage.MEStorage;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,10 +18,14 @@ import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.inventory.slot.BasicInventorySlot;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -181,6 +190,58 @@ class Ae2InputCapacityMinecraftTest {
 		snapshot.capture(List.of(slot), 1);
 		assertEquals(1L, snapshot.candidateLanes(AEItemKey.of(Items.HONEYCOMB)));
 		assertEquals(0, snapshot.occupiedLaneCount(AEItemKey.of(Items.HONEYCOMB)));
+	}
+
+	@Test
+	void unmatchedCandidateCanEnterAsSoonAsItsLaneBecomesEmpty() {
+		var level = mock(Level.class);
+		when(level.getGameTime()).thenReturn(200L);
+		when(level.registryAccess()).thenReturn(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+		var host = mock(IAe2InputHost.class);
+		when(host.productivebeesgenesis$getAe2Level()).thenReturn(level);
+		when(host.productivebeesgenesis$getAe2BlockPos()).thenReturn(BlockPos.ZERO);
+		var holder = new Ae2OutputStateHolder();
+		var buffers = new Ae2PushBuffers();
+		var backoff = new Ae2KeyBackoffRegistry<AEItemKey>();
+		var fairness = new Ae2InputFairnessScheduler();
+		var iron = AEItemKey.of(Items.IRON_INGOT);
+		var storage = mock(MEStorage.class);
+		long[] available = {10};
+		when(storage.extract(eq(iron), anyLong(),
+				eq(Actionable.MODULATE), any())).thenAnswer(call -> {
+			long extracted = Math.min((long) call.getArgument(1), available[0]);
+			available[0] -= extracted;
+			return extracted;
+		});
+		var slot = BasicInventorySlot.at(null, 0, 0);
+		slot.setStack(new ItemStack(Items.GOLD_INGOT, 1));
+		List<IInventorySlot> slots = List.of(slot);
+		var entry = new Ae2InputExecution.PullEntry(iron, 10);
+		var candidates = new ArrayList<>(List.of(entry));
+		try {
+			fairness.roll(200);
+			var blocked = Ae2InputExecution.execute(host, holder, buffers, candidates, slots, storage,
+					backoff, fairness, 63, 10, 10, IActionSource.empty());
+			assertEquals(0, blocked.totalPulled());
+			assertEquals(10, available[0]);
+			assertEquals(10, entry.remaining);
+			assertTrue(slot.getStack().is(Items.GOLD_INGOT));
+
+			slot.setEmpty();
+			when(level.getGameTime()).thenReturn(201L);
+			fairness.roll(201);
+			var accepted = Ae2InputExecution.execute(host, holder, buffers, candidates, slots, storage,
+					backoff, fairness, 64, 10, 10, IActionSource.empty());
+			assertEquals(10, accepted.totalPulled());
+			assertEquals(0, available[0]);
+			assertEquals(0, entry.remaining);
+			assertTrue(slot.getStack().is(Items.IRON_INGOT));
+			assertEquals(10, slot.getCount());
+			assertFalse(holder.getPendingItemBuffer().isBlocked());
+			assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
+		} finally {
+			Ae2NetworkWorkCoordinator.clearAll();
+		}
 	}
 
 	private static void assertCapacityMatchesInsertion(BasicInventorySlot slot, ItemStack template) throws Exception {

@@ -109,6 +109,10 @@ final class Ae2InputExecution {
 					break;
 				}
 
+				boolean indexed = laneSnapshot.isIndexed();
+				long candidateLanes = laneSnapshot.candidateLanes(entry.key);
+				if (indexed && candidateLanes == 0L) continue;
+
 				// 每个候选只构造一个探针，并复用当前规划轮的完整组件匹配缓存。
 				ItemStack slotProbe = entry.key.toStack(1);
 				Item keyItem = entry.key.getItem();
@@ -118,9 +122,8 @@ final class Ae2InputExecution {
 				int newLaneBudget = Ae2InputLaneFairness.remainingLaneBudget(laneBudget, occupiedLanes);
 				int newLanes = 0;
 				boolean lanesSuppressed = false;
-				Arrays.fill(inputSlotCapacities, 0, processCount, 0L);
-				boolean indexed = laneSnapshot.isIndexed();
-				long candidateLanes = laneSnapshot.candidateLanes(entry.key);
+				if (!indexed) Arrays.fill(inputSlotCapacities, 0, processCount, 0L);
+				long deliveryLanes = 0L;
 				int slotOffset = 0;
 				while (indexed ? candidateLanes != 0L : slotOffset < processCount) {
 					int slotIdx;
@@ -145,6 +148,7 @@ final class Ae2InputExecution {
 					inputSlotCapacities[slotIdx] = slotCapacity;
 					if (slotCapacity > 0L) {
 						typeAvailable = SaturatingMath.saturatingAdd(typeAvailable, slotCapacity);
+						if (indexed) deliveryLanes |= 1L << slotIdx;
 					}
 				}
 				if (typeAvailable <= 0L) {
@@ -176,7 +180,7 @@ final class Ae2InputExecution {
 					BatchResult batchResult = pullBatchForType(level, holder, entry.key, toPull,
 							entry.reserveFloor, meStorage, actionSource,
 						inputSlots, inputSlotCapacities, laneSnapshot, slotProbe, typeSlotStart, pos, keyBackoff,
-						buffers.fingerprintCache, buffers.extractBudget);
+						buffers.fingerprintCache, buffers.extractBudget, deliveryLanes);
 					int pulled = batchResult.insertedCount();
 					entry.remaining -= pulled;
 					totalPulled += pulled;
@@ -320,13 +324,13 @@ final class Ae2InputExecution {
 		}
 	}
 
-	/** 单键一次抽取后按规划配额分发；外部结果未知时保留交接记录。 */
+	/** 单键抽取后只交付本轮正配额车道，保持圆环顺序；外部结果未知时保留交接记录。 */
 	static BatchResult pullBatchForType(Level level, Ae2OutputStateHolder holder, AEItemKey key, int amount,
 			long reserveFloor, MEStorage meStorage, IActionSource actionSource,
 			List<IInventorySlot> inputSlots, long[] inputSlotCapacities, Ae2InputLaneSnapshot laneSnapshot,
 			ItemStack slotProbe, int slotStart, BlockPos pos,
 			Ae2KeyBackoffRegistry<AEItemKey> keyBackoff, Ae2FingerprintCache fingerprintCache,
-			Ae2ExtractBudget extractBudget) {
+			Ae2ExtractBudget extractBudget, long deliveryLanes) {
 		long gameTick = level.getGameTime();
 		// 抽取前预留 pending 身份位；数量仍由真实槽容量决定。指纹仅在类型位已满时编码。
 		Ae2PendingItemBuffer pending = holder.getPendingItemBuffer();
@@ -417,8 +421,17 @@ final class Ae2InputExecution {
 		Ae2NetworkInventoryView.recordExtract(holder, gameTick, meStorage, key, extracted);
 		int insertedCount = 0;
 		int slotCount = inputSlots.size();
-		for (int offset = 0; offset < slotCount && transfer.knownAmount() > 0; offset++) {
-			int slotIdx = (slotStart + offset) % slotCount;
+		boolean indexed = slotCount <= Long.SIZE;
+		int slotOffset = 0;
+		while (transfer.knownAmount() > 0 && (indexed ? deliveryLanes != 0L : slotOffset < slotCount)) {
+			int slotIdx;
+			if (indexed) {
+				long afterStart = deliveryLanes & (-1L << slotStart);
+				slotIdx = Long.numberOfTrailingZeros(afterStart == 0L ? deliveryLanes : afterStart);
+				deliveryLanes &= ~(1L << slotIdx);
+			} else {
+				slotIdx = (slotStart + slotOffset++) % slotCount;
+			}
 			IInventorySlot slot = inputSlots.get(slotIdx);
 			int quota = SaturatingMath.saturatingToInt(inputSlotCapacities[slotIdx]);
 			if (slot == null || quota <= 0) continue;

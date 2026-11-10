@@ -74,7 +74,7 @@ class PbCombinedOutputMinecraftTest {
                     slot.setStack(new ItemStack(Items.DIAMOND, 64));
                 }
             }
-            when(context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyInt())).thenAnswer(call -> call.getArgument(1));
+            when(context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong())).thenAnswer(call -> call.getArgument(1));
             var output = new ChancedOutput(Ingredient.of(Items.IRON_INGOT), 1, 1, 1);
             var recipe = new CentrifugeRecipe(Ingredient.of(Items.HONEYCOMB), List.of(output), null, 20) {
                 @Override public FluidStack getFluidOutputs() { return FluidStack.EMPTY; }
@@ -84,7 +84,7 @@ class PbCombinedOutputMinecraftTest {
             assertTrue(owner.flushPendingPbOutputs(0));
             assertEquals(2, context.inputSlot(0).getCount());
             assertFalse(owner.hasPendingOutputs());
-            verify(context).productivebeesgenesis$pushGeneratedItemToAe(any(), eq(12));
+            verify(context).productivebeesgenesis$pushGeneratedItemToAe(any(), eq(12L));
             verify(context, never()).productivebeesgenesis$pushGeneratedItemToNeighbors(any(), anyInt());
             assertEquals(full ? 64 : 0, context.primaryOutputSlot(0).getCount());
         }
@@ -360,7 +360,7 @@ class PbCombinedOutputMinecraftTest {
         int[] calls = {0};
         var tile = new TileEntityMekCentrifuge(net.minecraft.core.Holder.direct(block), net.minecraft.core.BlockPos.ZERO, block.defaultBlockState()) {
             @Override public boolean productivebeesgenesis$isDirectAeOutputEnabled() { return true; }
-            @Override public int productivebeesgenesis$pushGeneratedItemToAe(ItemStack template, int amount) {
+            @Override public long productivebeesgenesis$pushGeneratedItemToAe(ItemStack template, long amount) {
                 calls[0]++;
                 throw new IllegalStateException("receiver wrote before failing");
             }
@@ -585,8 +585,8 @@ class PbCombinedOutputMinecraftTest {
     @Test void largePaidOutputKeepsExactLongAmountAcrossSaveAndPartialDrain() {
         var context = context();
         when(context.productivebeesgenesis$isDirectAeOutputEnabled()).thenReturn(true);
-        when(context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyInt()))
-                .thenAnswer(call -> call.getArgument(1));
+        when(context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))
+                .thenAnswer(call -> Math.min(2_500_000_000L, (long) call.getArgument(1)));
         for (var slot : List.of(context.primaryOutputSlot(0), context.secondaryOutputSlot(0), context.tertiaryOutputSlot(0))) {
             slot.setStack(new ItemStack(Items.STONE, 64));
         }
@@ -603,7 +603,7 @@ class PbCombinedOutputMinecraftTest {
         var restored = new PbRecipeCompleter(context);
         restored.loadCommittedPending(owner.saveCommittedPending(REGISTRIES), REGISTRIES);
         assertFalse(restored.flushPendingPbOutputs(0));
-        assertEquals(3_000_000_000L - Integer.MAX_VALUE, restored.pendingItemCount());
+        assertEquals(500_000_000L, restored.pendingItemCount());
         assertTrue(restored.flushPendingPbOutputs(0));
         assertEquals(0, restored.pendingItemCount());
         assertTrue(context.inputSlot(0).isEmpty());

@@ -10,16 +10,21 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Unit;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.AdditionalAnswers.delegatesTo;
@@ -71,7 +76,7 @@ class PbPaidWorkCacheMinecraftTest {
     }
 
     @Test
-    void alternatingInputsReuseRecentTemplatesButOlderUnreferencedInputsExpire() {
+    void alternatingInputsReuseRecentTemplatesAfterTheirLaneMovesOn() {
         var cache = new PbPaidWorkCache(1);
         var recipe = recipe();
         ItemStack firstInput = named("first");
@@ -83,11 +88,11 @@ class PbPaidWorkCacheMinecraftTest {
         assertSame(second, cache.get(0, secondInput, recipe, 20, REGISTRIES));
         cache.get(0, named("third"), recipe, 20, REGISTRIES);
         assertSame(second, cache.get(0, secondInput, recipe, 20, REGISTRIES));
-        assertNotSame(first, cache.get(0, firstInput, recipe, 20, REGISTRIES));
+        assertSame(first, cache.get(0, firstInput, recipe, 20, REGISTRIES));
     }
 
     @Test
-    void emptyLaneReleasesBothRootsWhileOtherLanesKeepTheirSharedTemplate() {
+    void emptyLanesReleaseTheirFastReferencesButKeepBoundedRecentTemplates() {
         var cache = new PbPaidWorkCache(2);
         var recipe = recipe();
         ItemStack sharedInput = named("shared");
@@ -99,13 +104,64 @@ class PbPaidWorkCacheMinecraftTest {
         cache.forget(0);
         cache.forget(0);
         assertSame(shared, cache.get(1, sharedInput, recipe, 20, REGISTRIES));
-        var recreatedLocal = cache.get(0, localInput, recipe, 20, REGISTRIES);
-        assertNotSame(local, recreatedLocal);
+        assertSame(local, cache.get(0, localInput, recipe, 20, REGISTRIES));
 
         cache.forget(1);
-        assertNotSame(shared, cache.get(0, sharedInput, recipe, 20, REGISTRIES));
+        assertSame(shared, cache.get(0, sharedInput, recipe, 20, REGISTRIES));
         cache.forget(0);
-        assertNotSame(recreatedLocal, cache.get(1, localInput, recipe, 20, REGISTRIES));
+        assertSame(local, cache.get(1, localInput, recipe, 20, REGISTRIES));
+    }
+
+    @Test
+    void rotatingWorkingSetReusesItsFrozenWorkAndEncodingAcrossEmptyLanes() {
+        int lanes = 18;
+        var cache = new PbPaidWorkCache(lanes);
+        var recipe = recipe();
+        List<ItemStack> inputs = new ArrayList<>();
+        List<PbRecipeProcessorStateHelper.PaidWork> work = new ArrayList<>();
+        List<PbPausedWorkBuffer.Entry> encoded = new ArrayList<>();
+        for (int index = 0; index < 96; index++) {
+            ItemStack input = named("rotation-" + index);
+            var template = cache.get(index % lanes, input, recipe, 20, REGISTRIES);
+            inputs.add(input);
+            work.add(template);
+            encoded.add(template.reservation(REGISTRIES));
+            cache.forget(index % lanes);
+        }
+        for (int round = 0; round < 3; round++) {
+            for (int index = 0; index < inputs.size(); index++) {
+                int lane = (index + round) % lanes;
+                var template = cache.get(lane, inputs.get(index).copyWithCount(64), recipe, 20, REGISTRIES);
+                assertSame(work.get(index), template);
+                assertSame(encoded.get(index), template.reservation(REGISTRIES));
+                cache.forget(lane);
+            }
+        }
+    }
+
+    @Test
+    void entryLimitScalesWithLanesAndNeverExceedsTwoHundredFiftySix() {
+        int[] laneCounts = {1, 18, 128};
+        int[] capacities = {32, 144, 256};
+        var recipe = recipe();
+        for (int scenario = 0; scenario < laneCounts.length; scenario++) {
+            int lanes = laneCounts[scenario];
+            int capacity = capacities[scenario];
+            var cache = new PbPaidWorkCache(lanes);
+            List<ItemStack> inputs = new ArrayList<>();
+            List<PbRecipeProcessorStateHelper.PaidWork> work = new ArrayList<>();
+            for (int index = 0; index < capacity; index++) {
+                ItemStack input = named("entry-" + index);
+                inputs.add(input);
+                work.add(cache.get(index % lanes, input, recipe, 20, REGISTRIES));
+                cache.forget(index % lanes);
+            }
+            assertSame(work.getFirst(), cache.get(0, inputs.getFirst(), recipe, 20, REGISTRIES));
+            cache.get(0, named("overflow"), recipe, 20, REGISTRIES);
+            assertSame(work.getFirst(), cache.get(0, inputs.getFirst(), recipe, 20, REGISTRIES));
+            assertSame(work.get(2), cache.get(0, inputs.get(2), recipe, 20, REGISTRIES));
+            assertNotSame(work.get(1), cache.get(0, inputs.get(1), recipe, 20, REGISTRIES));
+        }
     }
 
     @Test
@@ -201,6 +257,141 @@ class PbPaidWorkCacheMinecraftTest {
         assertTrue(buffer.save().isEmpty());
         buffer.release(0);
         assertEquals(11, second.progress);
+    }
+
+    @Test
+    void freshlyFrozenWorkMatchesTheOriginalCodecPathForProbabilitiesAndPlainFluid() {
+        ItemStack input = named("frozen input");
+        Map<ItemStack, ChancedOutput> outputs = new LinkedHashMap<>();
+        outputs.put(new ItemStack(Items.DIAMOND), new ChancedOutput(Ingredient.of(Items.DIAMOND), 2, 9, 0.375F));
+        outputs.put(new ItemStack(Items.EMERALD), new ChancedOutput(Ingredient.of(Items.EMERALD), 0, 7, -0.0F));
+        outputs.put(new ItemStack(Items.IRON_INGOT), new ChancedOutput(Ingredient.of(Items.IRON_INGOT), 3, 3, 1.0F));
+        FluidStack fluid = new FluidStack(Fluids.WATER, 875);
+        var selected = resolvedRecipe(outputs, fluid);
+        CompoundTag original = PbCentrifugeRecipeSnapshot.capture(selected, REGISTRIES);
+        var restored = PbCentrifugeRecipeSnapshot.restore(original, input, REGISTRIES);
+
+        var work = PbRecipeProcessorStateHelper.PaidWork.create(input, selected, 37, REGISTRIES);
+
+        assertEquals(original, work.recipeSnapshot);
+        assertEquals(37, work.baseTicks);
+        assertEquals(selected.id(), work.recipe.id());
+        assertFrozenOutputsEqual(restored.value(), work.recipe.value());
+        assertTrue(FluidStack.matches(restored.value().getFluidOutputs(), work.recipe.value().getFluidOutputs()));
+        assertEquals(work.save(REGISTRIES), PbRecipeProcessorStateHelper.PaidWork.load(work.save(REGISTRIES), REGISTRIES).save(REGISTRIES));
+        assertTrue(work.recipe.value().ingredient.test(input));
+    }
+
+    @Test
+    void componentOutputsKeepCodecNormalizationAndDoNotRetainMutableSourceStacks() {
+        ItemStack input = named("source input");
+        ItemStack output = new ItemStack(Items.DIAMOND);
+        output.set(DataComponents.CUSTOM_NAME, Component.literal("source output"));
+        CompoundTag originalData = new CompoundTag();
+        originalData.putInt("value", 7);
+        output.set(DataComponents.CUSTOM_DATA, CustomData.of(originalData));
+        output.set(DataComponents.CREATIVE_SLOT_LOCK, Unit.INSTANCE);
+        Map<ItemStack, ChancedOutput> outputs = new LinkedHashMap<>();
+        outputs.put(output, new ChancedOutput(Ingredient.of(output), 1, 4, 0.5F));
+        FluidStack fluid = new FluidStack(Fluids.WATER, 250);
+        fluid.set(DataComponents.CUSTOM_DATA, CustomData.of(originalData));
+        fluid.set(DataComponents.CREATIVE_SLOT_LOCK, Unit.INSTANCE);
+        var selected = resolvedRecipe(outputs, fluid);
+        CompoundTag original = PbCentrifugeRecipeSnapshot.capture(selected, REGISTRIES);
+        var restored = PbCentrifugeRecipeSnapshot.restore(original, input, REGISTRIES);
+
+        var work = PbRecipeProcessorStateHelper.PaidWork.create(input, selected, 20, REGISTRIES);
+        CompoundTag saved = work.save(REGISTRIES);
+        ItemStack frozenOutput = work.recipe.value().getRecipeOutputs().keySet().iterator().next();
+
+        assertFrozenOutputsEqual(restored.value(), work.recipe.value());
+        assertTrue(FluidStack.matches(restored.value().getFluidOutputs(), work.recipe.value().getFluidOutputs()));
+        assertFalse(frozenOutput.has(DataComponents.CREATIVE_SLOT_LOCK));
+        assertFalse(work.recipe.value().getFluidOutputs().has(DataComponents.CREATIVE_SLOT_LOCK));
+        assertEquals(7, frozenOutput.get(DataComponents.CUSTOM_DATA).copyTag().getInt("value"));
+        input.set(DataComponents.CUSTOM_NAME, Component.literal("changed input"));
+        output.set(DataComponents.CUSTOM_NAME, Component.literal("changed output"));
+        output.set(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+        output.setCount(64);
+        fluid.setAmount(1);
+        fluid.set(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+        FluidStack returnedFluid = work.recipe.value().getFluidOutputs();
+        returnedFluid.setAmount(99);
+        returnedFluid.set(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+
+        assertEquals(saved, work.save(REGISTRIES));
+        assertFrozenOutputsEqual(restored.value(), work.recipe.value());
+        assertTrue(FluidStack.matches(restored.value().getFluidOutputs(), work.recipe.value().getFluidOutputs()));
+        assertTrue(work.matches(named("source input")));
+        assertFalse(work.matches(input));
+    }
+
+    @Test
+    void freshlyFrozenWorkRetainsEmptyFluidAndRejectsTheSameInvalidProbability() {
+        var selected = recipe();
+        ItemStack input = new ItemStack(Items.HONEYCOMB);
+        var work = PbRecipeProcessorStateHelper.PaidWork.create(input, selected, 20, REGISTRIES);
+        assertTrue(work.recipe.value().getFluidOutputs().isEmpty());
+        assertFalse(work.recipeSnapshot.contains("fluid"));
+
+        Map<ItemStack, ChancedOutput> invalid = new LinkedHashMap<>();
+        invalid.put(new ItemStack(Items.DIAMOND), new ChancedOutput(Ingredient.of(Items.DIAMOND), 1, 1, Float.NaN));
+        var malformed = resolvedRecipe(invalid, FluidStack.EMPTY);
+        CompoundTag encoded = PbCentrifugeRecipeSnapshot.capture(malformed, REGISTRIES);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> PbCentrifugeRecipeSnapshot.restore(encoded, input, REGISTRIES));
+        assertThrows(IllegalArgumentException.class,
+                () -> PbRecipeProcessorStateHelper.PaidWork.create(input, malformed, 20, REGISTRIES));
+    }
+
+    @Test
+    void persistedWorkStillStrictlyRejectsMalformedOutputCountsAndUnknownFields() {
+        var work = PbRecipeProcessorStateHelper.PaidWork.create(
+                new ItemStack(Items.HONEYCOMB), recipe(), 20, REGISTRIES);
+        CompoundTag invalidCount = work.save(REGISTRIES);
+        CompoundTag item = invalidCount.getCompound("recipe").getList("items", net.minecraft.nbt.Tag.TAG_COMPOUND).getCompound(0);
+        item.getCompound("stack").putInt("count", 2);
+        CompoundTag unknownField = work.save(REGISTRIES);
+        unknownField.getCompound("recipe").putInt("unexpected", 1);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> PbRecipeProcessorStateHelper.PaidWork.load(invalidCount, REGISTRIES));
+        assertThrows(IllegalArgumentException.class,
+                () -> PbRecipeProcessorStateHelper.PaidWork.load(unknownField, REGISTRIES));
+    }
+
+    private static void assertFrozenOutputsEqual(CentrifugeRecipe expected, CentrifugeRecipe actual) {
+        var expectedEntries = new ArrayList<>(expected.getRecipeOutputs().entrySet());
+        var actualEntries = new ArrayList<>(actual.getRecipeOutputs().entrySet());
+        assertEquals(expectedEntries.size(), actualEntries.size());
+        for (int index = 0; index < expectedEntries.size(); index++) {
+            var left = expectedEntries.get(index);
+            var right = actualEntries.get(index);
+            assertTrue(ItemStack.isSameItemSameComponents(left.getKey(), right.getKey()));
+            assertEquals(left.getKey().getCount(), right.getKey().getCount());
+            assertEquals(left.getValue().min(), right.getValue().min());
+            assertEquals(left.getValue().max(), right.getValue().max());
+            assertEquals(Float.floatToRawIntBits(left.getValue().chance()),
+                    Float.floatToRawIntBits(right.getValue().chance()));
+        }
+    }
+
+    private static RecipeHolder<CentrifugeRecipe> resolvedRecipe(
+            Map<ItemStack, ChancedOutput> outputs, FluidStack fluid) {
+        var value = new CentrifugeRecipe(Ingredient.of(Items.HONEYCOMB), List.of(), null, 20) {
+            @Override
+            public Map<ItemStack, ChancedOutput> getRecipeOutputs() {
+                return outputs;
+            }
+
+            @Override
+            public FluidStack getFluidOutputs() {
+                return fluid;
+            }
+        };
+        return new RecipeHolder<>(ResourceLocation.fromNamespaceAndPath(
+                "productivebeesgenesis", "resolved_cache"), value);
     }
 
     private static ItemStack named(String name) {

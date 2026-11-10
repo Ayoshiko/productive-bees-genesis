@@ -421,12 +421,12 @@ public final class PbRecipeFlusher {
 		while (iterator.hasNext() && !outputBlocked(context)) {
 			Map.Entry<ItemStack, Long> entry = iterator.next();
 			long remaining = Math.max(0, entry.getValue());
-			int requested = (int) Math.min(Integer.MAX_VALUE, remaining);
+			long requested = remaining;
 			if (requested <= 0) {
 				iterator.remove();
 				continue;
 			}
-			int accepted = directItem(context, entry.getKey(), requested, true);
+			long accepted = directItemToAe(context, entry.getKey(), requested);
 			if (accepted <= 0) continue;
 			acceptedAny = true;
 			completer.consumePendingItemCount(accepted);
@@ -472,7 +472,7 @@ public final class PbRecipeFlusher {
 				iterator.remove();
 				continue;
 			}
-			int accepted = directItem(context, entry.getKey(), requested, false);
+			int accepted = directItemToNeighbors(context, entry.getKey(), requested);
 			if (accepted <= 0) continue;
 			acceptedAny = true;
 			completer.consumePendingItemCount(accepted);
@@ -485,16 +485,28 @@ public final class PbRecipeFlusher {
 		return acceptedAny;
 	}
 
-	static int directItem(PbRecipeContext context, ItemStack template, int amount, boolean ae) {
+	private static int directItemToNeighbors(PbRecipeContext context, ItemStack template, int amount) {
 		try {
-			int handed = ae ? context.productivebeesgenesis$pushGeneratedItemToAe(template, amount)
-					: context.productivebeesgenesis$pushGeneratedItemToNeighbors(template, amount);
+			int handed = context.productivebeesgenesis$pushGeneratedItemToNeighbors(template, amount);
 			if (handed < 0 || handed > amount) throw new IllegalStateException("Invalid direct output receipt");
 			return handed;
 		} catch (RuntimeException | LinkageError failure) {
 			var custody = custody(context);
 			if (custody == null || custody.blocked()) throw failure;
-			return (int) custody.handoffItem(template, amount, ae ? "centrifuge-direct-ae" : "centrifuge-direct-neighbor",
+			return (int) custody.handoffItem(template, amount, "centrifuge-direct-neighbor",
+					() -> { throw new IllegalStateException("Direct output outcome uncertain", failure); });
+		}
+	}
+
+	static long directItemToAe(PbRecipeContext context, ItemStack template, long amount) {
+		try {
+			long handed = context.productivebeesgenesis$pushGeneratedItemToAe(template, amount);
+			if (handed < 0 || handed > amount) throw new IllegalStateException("Invalid direct output receipt");
+			return handed;
+		} catch (RuntimeException | LinkageError failure) {
+			var custody = custody(context);
+			if (custody == null || custody.blocked()) throw failure;
+			return custody.handoffItem(template, amount, "centrifuge-direct-ae",
 					() -> { throw new IllegalStateException("Direct output outcome uncertain", failure); });
 		}
 	}

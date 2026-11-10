@@ -13,6 +13,7 @@ final class Ae2FilterMatchCache {
 	private final boolean precise;
 	private final Ae2InputFilterQuerySupport.FuzzyEntry[] fuzzyEntries;
 	final boolean hasConfiguredEntries;
+	final boolean hasFuzzyEntries;
 	private final Object2ObjectLinkedOpenHashMap<AEItemKey, int[]> exact = new Object2ObjectLinkedOpenHashMap<>();
 	private final Object2ObjectLinkedOpenHashMap<AEItemKey, int[]> ignoringNbt = new Object2ObjectLinkedOpenHashMap<>();
 
@@ -23,13 +24,17 @@ final class Ae2FilterMatchCache {
 		this.precise = precise;
 		this.fuzzyEntries = fuzzyEntries;
 		boolean configured = false;
+		boolean fuzzy = false;
 		for (int i = 0; i < slots.length; i++) {
-			if (Ae2InputFilter.isDirectFingerprint(slots[i]) || fuzzyEntries[i] != null) {
+			if (Ae2InputFilter.isDirectFingerprint(slots[i])) {
 				configured = true;
-				break;
+			} else if (fuzzyEntries[i] != null) {
+				configured = true;
+				fuzzy = true;
 			}
 		}
 		hasConfiguredEntries = configured;
+		hasFuzzyEntries = fuzzy;
 	}
 
 	boolean valid(String[] currentSlots, AEItemKey[] currentKeys, boolean currentPrecise) {

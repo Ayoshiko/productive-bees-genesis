@@ -292,6 +292,12 @@ public interface IAe2OutputHostBase extends PbRecipeContext {
 	}
 
 	@Override
+	default long productivebeesgenesis$pushGeneratedItemToAe(ItemStack template, long amount) {
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0L;
+		return Ae2OutputPusher.pushItemStack(this, template, amount);
+	}
+
+	@Override
 	default long productivebeesgenesis$pushGeneratedFluidToAe(FluidStack stack, long amount) {
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0L;
 		return Ae2FluidPusher.pushGeneratedFluid(this, stack, amount);

@@ -102,19 +102,21 @@ class Ae2PullDecisionMinecraftTest {
 		var iron = AEItemKey.of(Items.IRON_INGOT);
 		var gold = AEItemKey.of(Items.GOLD_INGOT);
 		decision.set(true, true, true, 1_000);
-		amounts.put(iron, 40, decision);
+		amounts.put(iron, 40, decision, Ae2ResourceInputGate.Decision.DEFERRED);
 		decision.set(true, false, false, -1);
-		amounts.put(gold, 60, decision);
+		amounts.put(gold, 60, decision, Ae2ResourceInputGate.Decision.ACCEPTED);
 		var entry = new Ae2InputExecution.PullEntry(iron, amounts.get(iron));
 		amounts.apply(iron, entry, true);
 		assertEquals(40, entry.remaining);
 		assertTrue(entry.unlimited);
 		assertTrue(entry.marked);
 		assertEquals(1_000, entry.reserveFloor);
+		assertTrue(entry.resourceDeferred);
 		amounts.apply(gold, entry, true);
 		assertFalse(entry.unlimited);
 		assertFalse(entry.marked);
 		assertEquals(-1, entry.reserveFloor);
+		assertFalse(entry.resourceDeferred);
 		amounts.clear();
 		assertEquals(0, amounts.get(iron));
 	}

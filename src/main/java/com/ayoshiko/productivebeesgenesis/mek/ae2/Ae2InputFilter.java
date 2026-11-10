@@ -713,7 +713,9 @@ public final class Ae2InputFilter {
 		Ae2FilterMatchCache matches = getMatchCache(currentSlots, currentKeys);
 		Ae2DirectKeyIndex<AEItemKey> index = getDirectKeyIndex(currentSlots, currentKeys);
 		int[] hitSlots;
-		if (!ignoreNbt && CombFuzzyMatcher.getBeeType(key) == null && index.isComplete()) {
+		// 精确模式且没有模糊条目时，带 bee_type 的蜜脾同样只可能按完整键命中。
+		if (!ignoreNbt && index.isComplete()
+				&& (preciseMode && !matches.hasFuzzyEntries || CombFuzzyMatcher.getBeeType(key) == null)) {
 			hitSlots = index.slotsFor(key);
 		} else {
 			hitSlots = matches.slotsFor(key, ignoreNbt);

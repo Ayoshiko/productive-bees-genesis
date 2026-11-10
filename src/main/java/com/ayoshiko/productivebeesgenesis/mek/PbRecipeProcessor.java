@@ -76,6 +76,8 @@ public class PbRecipeProcessor {
 	private final PbRecipeProcessorStateHelper.PaidWork[] paidWork;
 	private final PbPaidWorkCache paidWorkCache;
 	private final PbFactoryOutputBatch factoryOutputBatch;
+	private final boolean[] factoryPendingAttempted;
+	private boolean factoryPassActive;
 	private final boolean[] restoredLegacyProgress;
 	private final ItemStack[] legacyInputs;
 	private final PbPausedWorkBuffer pausedWork;
@@ -147,6 +149,7 @@ public class PbRecipeProcessor {
 		this.pbProcessingTime = new int[processes];
 		this.paidWork = new PbRecipeProcessorStateHelper.PaidWork[processes];
 		this.paidWorkCache = new PbPaidWorkCache(processes);
+		this.factoryPendingAttempted = new boolean[processes];
 		this.restoredLegacyProgress = new boolean[processes];
 		this.legacyInputs = new ItemStack[processes];
 		this.pausedWork = new PbPausedWorkBuffer(processes);
@@ -191,12 +194,50 @@ public class PbRecipeProcessor {
 		return multiplier;
 	}
 
-	public void beginFactoryOutputBatch() {
+	/** 卸载只释放近期模板保留根；已付、暂停和待交付资产仍由各自状态持有。 */
+	public void clearTransientCaches() {
+		paidWorkCache.clear();
+	}
+
+	public void beginFactoryOutputBatch(int processStart) {
+		if (factoryPassActive) throw new IllegalStateException("Factory processing pass already active");
+		factoryPassActive = true;
+		try {
+			drainFactoryPreparedPending(processStart);
+			factoryOutputBatch.begin();
+		} catch (RuntimeException | Error failure) {
+			factoryPassActive = false;
+			Arrays.fill(factoryPendingAttempted, false);
+			throw failure;
+		}
+	}
+
+	/** 旧产物在新生产前合并；未结清支付、未扣输入和旧格式继续走各进程原有恢复路径。 */
+	private void drainFactoryPreparedPending(int processStart) {
+		Level level = context.level();
+		if (level == null || level.isClientSide || !context.canFunction() || context.hasUnresolvedInput()
+				|| invalidCommittedPending != null || invalidPaidWork != null
+				|| myriadHandler.hasUnresolvedState()) return;
 		factoryOutputBatch.begin();
+		try {
+			for (int offset = 0; offset < recipeCompleters.length; offset++) {
+				int lane = (processStart + offset) % recipeCompleters.length;
+				PbRecipeCompleter owner = recipeCompleters[lane];
+				if (!owner.hasPaidPendingOutputs() || MekResourceCentrifuge.suspended(context, lane)) continue;
+				factoryPendingAttempted[lane] = factoryOutputBatch.defer(owner, lane);
+			}
+		} finally {
+			factoryOutputBatch.finish();
+		}
 	}
 
 	public void finishFactoryOutputBatch() {
-		factoryOutputBatch.finish();
+		try {
+			factoryOutputBatch.finish();
+		} finally {
+			factoryPassActive = false;
+			Arrays.fill(factoryPendingAttempted, false);
+		}
 	}
 
 	public int getAndAdvanceProcessStart(int processCount) {
@@ -342,12 +383,15 @@ public class PbRecipeProcessor {
 	public void reconcileInputWork() {
 		if (context.level() == null || context.level().isClientSide || context.hasUnresolvedInput()) return;
 		for (int lane = 0; lane < paidWork.length; lane++) {
+			// 前一车道可能刚停入缓冲，必须逐车道读取，不能固定整轮的空状态。
+			if (paidWork[lane] == null && !restoredLegacyProgress[lane] && !pausedWork.hasPausedWork()) continue;
 			reconcileInputWork(lane, context.inputSlot(lane).getStack());
 		}
 	}
 
 	/** 普通换料保管原周期后释放车道；未知付款和冻结未扣输入仍由原缓冲阻断。 */
 	private void reconcileInputWork(int lane, ItemStack input) {
+		if (paidWork[lane] == null && !restoredLegacyProgress[lane] && !pausedWork.hasPausedWork()) return;
 		if (context.level() == null || context.level().isClientSide
 				|| invalidPaidWork != null || invalidCommittedPending != null
 				|| recipeCompleters[lane].hasPaidPendingOutputs()
@@ -476,7 +520,8 @@ public class PbRecipeProcessor {
 		PbRecipeCompleter completer = recipeCompleters[processIndex];
 		if (MekResourceCentrifuge.suspended(context, processIndex)) return false;
 		if (completer.hasPaidPendingOutputs()
-				&& !PbRecipeFlushHelper.flushCompleted(completer, processIndex)) {
+				&& (factoryPendingAttempted[processIndex]
+						|| !PbRecipeFlushHelper.flushCompleted(completer, processIndex))) {
 			pbProcessing[processIndex] = false;
 			return false;
 		}
@@ -617,6 +662,7 @@ public class PbRecipeProcessor {
 		if (MekResourceCentrifuge.suspended(context, processIndex)) return false;
 		if (!myriadHandler.drainPendingOutputs(processIndex)) return false;
 		if (!completer.hasPaidPendingOutputs()) return false;
+		if (factoryPendingAttempted[processIndex]) return false;
 		return PbRecipeFlushHelper.flushCompleted(completer, processIndex);
 	}
 

@@ -25,7 +25,7 @@ final class Ae2PushExceptionLog {
 	private Ae2PushExceptionLog() {
 	}
 
-	static void handle(Exception e, int process, int slotIdx, ItemStack stack, int originalCount) {
+	static void handle(Exception e, int process, int slotIdx, ItemStack stack, long originalCount) {
 		long count = PUSH_EXCEPTION_COUNTER.incrementAndGet();
 		if (e instanceof NullPointerException) {
 			LogThrottle.error("ae2_push_npe_exception",

@@ -49,7 +49,7 @@ class PbTemplateFlushMinecraftTest {
 		completer.consumePendingFluid(Long.MAX_VALUE);
 		ItemStack template = completer.getPendingOutputs().keySet().iterator().next();
 		template.set(DataComponents.CUSTOM_NAME, Component.literal("preserve exact output"));
-		when(context.productivebeesgenesis$pushGeneratedItemToAe(same(template), eq(10))).thenReturn(3);
+		when(context.productivebeesgenesis$pushGeneratedItemToAe(same(template), eq(10L))).thenReturn(3L);
 		when(context.productivebeesgenesis$pushGeneratedItemToNeighbors(same(template), eq(7))).thenReturn(2);
 		assertFalse(completer.flushPendingPbOutputs(0));
 		assertEquals(4, input.getCount());
@@ -57,7 +57,7 @@ class PbTemplateFlushMinecraftTest {
 		assertEquals(5L, completer.getPendingOutputs().get(template));
 		assertEquals(1, template.getCount());
 		assertEquals(64, output.getCount());
-		when(context.productivebeesgenesis$pushGeneratedItemToAe(same(template), eq(5))).thenReturn(5);
+		when(context.productivebeesgenesis$pushGeneratedItemToAe(same(template), eq(5L))).thenReturn(5L);
 		assertTrue(completer.flushPendingPbOutputs(0));
 		assertEquals(4, input.getCount(), "pending drain must never charge the input a second time");
 		assertFalse(completer.hasPendingOutputs());
@@ -78,5 +78,21 @@ class PbTemplateFlushMinecraftTest {
 		}).when(context).productivebeesgenesis$pushGeneratedItemToAe(any(ItemStack.class));
 		assertEquals(23, context.productivebeesgenesis$pushGeneratedItemToAe(template, 4096));
 		assertEquals(1, template.getCount());
+	}
+
+	@Test
+	void legacyContextLimitsLongRequestToItsActualIntCapability() {
+		var context = mock(PbRecipeContext.class, CALLS_REAL_METHODS);
+		var template = new ItemStack(Items.DIAMOND);
+		doAnswer(call -> {
+			ItemStack request = call.getArgument(0);
+			assertNotSame(template, request);
+			assertEquals(Integer.MAX_VALUE, request.getCount());
+			return Integer.MAX_VALUE;
+		}).when(context).productivebeesgenesis$pushGeneratedItemToAe(any(ItemStack.class));
+		assertEquals(Integer.MAX_VALUE,
+				context.productivebeesgenesis$pushGeneratedItemToAe(template, 3_000_000_000L));
+		assertEquals(1, template.getCount());
+		verify(context).productivebeesgenesis$pushGeneratedItemToAe(any(ItemStack.class));
 	}
 }

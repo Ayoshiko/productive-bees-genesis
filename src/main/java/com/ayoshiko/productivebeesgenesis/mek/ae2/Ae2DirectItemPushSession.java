@@ -97,8 +97,12 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 		return push(stack, stack == null ? 0 : stack.getCount());
 	}
 
-	/** AEItemKey 不包含数量；请求量独立传递，绝不修改调用方的模板。 */
 	public int push(ItemStack stack, int amount) {
+		return SaturatingMath.saturatingToInt(push(stack, (long) amount));
+	}
+
+	/** AEItemKey 不包含数量；请求量独立传递，绝不修改调用方的模板。 */
+	public long push(ItemStack stack, long amount) {
 		if (stack == null || stack.isEmpty() || amount <= 0 || custody == null || custody.blocked()) return 0;
 		// 满存储/预算耗尽短路：不再发起 insert（即完整网络遍历），物品由调用方保留
 		if (spentInsertNanos >= Ae2PushLimits.INSERT_TIME_BUDGET_NANOS
@@ -143,7 +147,6 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 		if (keyBackoff != null) {
 			keyBackoff.recordSuccess(key, System.nanoTime(), costTracker == null ? 0 : costTracker.successDelayNanos());
 		}
-		return SaturatingMath.saturatingToInt(
-				SaturatingMath.clampToRequest(inserted, amount));
+		return SaturatingMath.clampToRequest(inserted, amount);
 	}
 }

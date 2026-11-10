@@ -113,7 +113,7 @@ class Ae2PerformanceRecoveryMinecraftTest {
         holder.getPushState().getReturnBackoff().recordFailure(System.nanoTime());
         Ae2InputExecution.pullBatchForType(level, holder, key, 5, -1, storage,
             IActionSource.empty(), List.of(slot), new long[] {5}, null, key.toStack(1), 0,
-            BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget());
+            BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget(), 1L);
         assertEquals(5, holder.getPendingItemBuffer().getTotalAmount());
         assertFalse(holder.getPendingItemBuffer().isBlocked());
         verify(storage, never()).insert(any(), anyLong(), any(), any());

@@ -56,6 +56,10 @@ final class PbPausedWorkBuffer {
 		return true;
 	}
 
+	boolean hasPausedWork() {
+		return !paused.isEmpty();
+	}
+
 	Entry take(int lane, ItemStack input) {
 		if (reserved[lane] != null || input.isEmpty()) return null;
 		List<Entry> candidates = paused.get(input.getItem());

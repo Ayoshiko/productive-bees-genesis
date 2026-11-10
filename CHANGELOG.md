@@ -43,7 +43,7 @@
 
 ### 修复
 
-- **机器性能**：减少多槽离心机重复准备相同工作的开销，合并同一批相同组件产物的 AE2 交付，并减少自动取料时无关槽位的检查。已付进度、随机结果、实际费用与部分交付继续独立保管，配方或输入变化后及时失效。
+- **机器性能**：减少多槽离心机轮换原料时重复准备相同工作的开销，合并相同组件产物及已冻结积压的 AE2 大批量交付，并减少自动取料时重复筛选和无关槽位检查。蜂箱向已满容器输出时复用未变化槽位的拒收结果，并使用精妙存储的库存索引减少容量检查，保留其过滤与锁定设置；容器恢复接收、能力失效或槽位变化后及时重试。已付进度、随机结果、实际费用与部分交付继续独立保管，配方、输入或机器生命周期变化后清理对应缓存。
 - **加速运行稳定性**：修复电池已满或无需补能时误触取电退避造成的储电波动；保持 FE／J 精确换算与未结回执保管。蜂箱启用 AE 流体输出时，大批蜂蜜可按原设置在同一游戏刻内有界连续转运，减少因本地小罐反复等待造成的停工。加速熔炼在周期完成后继续使用可支付的剩余时间，异常时也保留已发生的工作费用。
 - **Celeritas 启动兼容**：接受其内置的 Iris 1.8.0 版本声明，修复同时安装时被最低版本要求阻止启动的问题。着色器跳过注入按实际接口检查，缺少或不兼容时安全停用，光影阶段继续通过 Iris v0 API 查询。
 - **手册与槽位提示**：指南书合成只接受空蜂笼或空坚固蜂笼，保留命名等无关组件，避免消耗蜜蜂。未安装 AE2 时，Patchouli 保留通用过滤说明，不再因专属展示页而整本为空。小食与蜂笼空槽提示读取当前安装的 Productive Bees 纹理，资源包重载后更新，保留灰度、透明度及放入／取出方向。
@@ -82,7 +82,7 @@
 
 #### Fixed
 
-- **Machine performance**: reduced repeated preparation of identical work across centrifuge lanes, combined AE2 deliveries of products with matching components within a batch, and skipped unrelated slots during automatic input planning. Paid progress, random results, actual costs and partial transfers remain independently retained, with invalidation when recipes or inputs change.
+- **Machine performance**: reduced repeated work preparation as centrifuge lanes rotate inputs, combined large AE2 deliveries of matching products and frozen backlogs, and avoided duplicate filtering and unrelated slot checks during automatic input planning. Apiaries reuse rejection results for unchanged output slots facing full containers and use Sophisticated Storage's inventory index to reduce capacity checks while retaining its filters and locking settings. They retry when reception resumes, capabilities invalidate or slots change. Paid progress, random results, actual costs and partial transfers remain independently retained, while related caches clear when recipes, inputs or machine lifecycles change.
 - **Stable accelerated operation**: fixed unnecessary energy-input backoff when the battery is full or needs no refill, reducing stored-energy fluctuations while preserving exact FE/J conversion and unresolved receipts. With AE fluid output enabled, apiaries can move large honey batches through the existing local-tank route in bounded passes within one game tick, reducing stops caused by repeatedly waiting for a small tank. Accelerated smelting continues using affordable time after a cycle completes and retains charges for work already performed when a callback fails.
 - **Celeritas startup compatibility**: accepts its bundled Iris 1.8.0 version declaration, fixing startup being blocked by the minimum-version requirement when both mods are installed. Shader-skip injection checks the actual interface and safely stays disabled when it is absent or incompatible, while render-pass queries continue through the Iris v0 API.
 - **Guides and slot hints**: guide-book recipes accept only empty bee cages or empty sturdy bee cages, retaining unrelated components such as names and protecting contained bees. Without AE2, Patchouli keeps general filtering guidance instead of becoming empty because of AE2-specific display pages. Empty gene-treat and cage slots read textures from the installed Productive Bees version and update on resource-pack reloads, preserving grayscale, transparency and input/output directions.

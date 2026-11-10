@@ -149,15 +149,17 @@ final class Ae2InputCandidatePolicy {
 				? filter.getDirectEntries() : List.of();
 		if (!directEntries.isEmpty()) {
 			boolean unresolved = directEntries.stream().anyMatch(entry -> entry.key() == null);
-			if (unresolved) availableStacks = storageService.getCachedInventory();
-			var resolvedKeys = Ae2ItemFingerprint.resolve(
-					directEntries, availableStacks, level.registryAccess());
-			for (Ae2InputFilter.DirectEntry direct : directEntries) {
-				if (direct.key() != null) continue;
-				AEItemKey resolved = resolvedKeys.get(direct.fingerprint());
-				if (resolved != null) filter.resolveDirectKey(direct.index(), resolved);
+			if (unresolved) {
+				availableStacks = storageService.getCachedInventory();
+				var resolvedKeys = Ae2ItemFingerprint.resolve(
+						directEntries, availableStacks, level.registryAccess());
+				for (Ae2InputFilter.DirectEntry direct : directEntries) {
+					if (direct.key() != null) continue;
+					AEItemKey resolved = resolvedKeys.get(direct.fingerprint());
+					if (resolved != null) filter.resolveDirectKey(direct.index(), resolved);
+				}
+				directEntries = filter.getDirectEntries();
 			}
-			directEntries = filter.getDirectEntries();
 		}
 		Ae2PullDecision decision = buffers.pullDecision;
 		boolean stockPolicyActive = filter != null
@@ -333,8 +335,10 @@ final class Ae2InputCandidatePolicy {
 				// 此处不再为每次拉取重复查询候选类型。
 				int amount = SaturatingMath.saturatingToInt(limit < 0L ? available : Math.min(available, limit));
 				if (amount <= 0) return false;
-				if (buffers.resourceInputGate.decision(key) == Ae2ResourceInputGate.Decision.REJECTED) return false;
-				candidateAmounts.put(key, amount, decision);
+				var resourceDecision = buffers.resourceInputGate.decision(key);
+				if (resourceDecision == Ae2ResourceInputGate.Decision.REJECTED) return false;
+				// 同次收集未写入库存，沿用已经检查的三态，不重复扫描账户容量与出口。
+				candidateAmounts.put(key, amount, decision, resourceDecision);
 				return true;
 			};
 			AEItemKey smeltingCursor = holder.getInputSmeltingCandidateCursor() instanceof AEItemKey key
@@ -343,14 +347,13 @@ final class Ae2InputCandidatePolicy {
 					? key : null;
 			int smeltingSelected = Ae2CursorScan.collectPrioritizedRotating(selectedKeys, seenKeys,
 					smeltingCandidateKeys, candidateKeys, smeltingCursor, combCursor,
-					scanCap, acceptableCandidate);
+					scanCap, acceptableCandidate, buffers.scanSmeltingPosition, buffers.scanCombPosition);
 			for (int index = 0; index < selectedKeys.size(); index++) {
 				AEItemKey key = selectedKeys.get(index);
 				int amount = candidateAmounts.get(key);
 				if (amount > 0 && pullKeys.add(key)) {
 					Ae2InputExecution.PullEntry entry = buffers.borrowPullEntry(key, amount);
 					candidateAmounts.apply(key, entry, unlimitedMode);
-					entry.resourceDeferred = buffers.resourceInputGate.decision(key) == Ae2ResourceInputGate.Decision.DEFERRED;
 					entry.smelting = index < smeltingSelected;
 					entry.combBlock = CombFuzzyMatcher.isCombBlock(key);
 					pullList.add(entry);

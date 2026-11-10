@@ -3,11 +3,11 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 import appeng.api.networking.energy.IEnergySource;
 import appeng.api.stacks.AEItemKey;
 import it.unimi.dsi.fastutil.objects.Object2LongLinkedOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +65,7 @@ final class Ae2PushBuffers {
 	final List<Ae2InputExecution.PullEntry> pullList = new ArrayList<>();
 	final List<Ae2InputExecution.PullEntry> pullEntryPool = new ArrayList<>();
 	int pullEntryPoolCursor;
-	final Set<AEItemKey> pullKeys = new HashSet<>();
+	final Set<AEItemKey> pullKeys = new ObjectOpenHashSet<>();
 
 	/** Bounded wraparound prefix for the AE2 input cursor scan. */
 	final List<AEItemKey> scanPrefixKeys = new ArrayList<>();
@@ -79,7 +79,7 @@ final class Ae2PushBuffers {
 	 * 线性去重会使整轮扫描付出 O(候选数 × 选中上限) 次 {@code AEItemKey.equals}
 	 * （spark BkTP3d9oSc 中该方法自身 self 时间 1416ms / 2.36%）。
 	 */
-	final Set<AEItemKey> scanSeenKeys = new HashSet<>();
+	final Set<AEItemKey> scanSeenKeys = new ObjectOpenHashSet<>();
 	final Ae2PullCandidateAmounts scanCandidateAmounts = new Ae2PullCandidateAmounts();
 	final Ae2PullDecision pullDecision = new Ae2PullDecision();
 	/**
@@ -90,6 +90,8 @@ final class Ae2PushBuffers {
 	final List<AEItemKey> scanSmeltingCandidateKeys = new ArrayList<>();
 	/** Cached Productive Bees comb keys used as the lower-priority candidate group. */
 	final List<AEItemKey> scanCandidateKeys = new ArrayList<>();
+	final Ae2CursorScan.CursorPosition scanSmeltingPosition = new Ae2CursorScan.CursorPosition();
+	final Ae2CursorScan.CursorPosition scanCombPosition = new Ae2CursorScan.CursorPosition();
 	volatile Object scanCandidateSource;
 	volatile long scanCandidateRecipeVersion = Long.MIN_VALUE;
 	volatile boolean scanCandidateSmeltingEnabled;
@@ -206,6 +208,8 @@ final class Ae2PushBuffers {
 
 	void markScanCandidateRefresh(Object source, long directoryGeneration, long recipeVersion,
 			boolean smeltingEnabled, int tagGeneration) {
+		scanSmeltingPosition.clear();
+		scanCombPosition.clear();
 		scanCandidateSource = source;
 		scanCandidateDirectoryGeneration = directoryGeneration;
 		scanCandidateRecipeVersion = recipeVersion;

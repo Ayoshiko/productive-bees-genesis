@@ -387,7 +387,7 @@ public final class MekCentrifugeFactoryHelper {
 		// Remaining PB energy budget for this tick; debit only actual consumption so
 		// a shared buffer cannot be over-committed across parallel lanes.
 		long remainingEnergy = Math.max(0L, energyContainer.getEnergy());
-		pbProcessor.beginFactoryOutputBatch();
+		pbProcessor.beginFactoryOutputBatch(processStart);
 		try {
 			for (int processOffset = 0; processOffset < processes; processOffset++) {
 				int i = (processStart + processOffset) % processes;

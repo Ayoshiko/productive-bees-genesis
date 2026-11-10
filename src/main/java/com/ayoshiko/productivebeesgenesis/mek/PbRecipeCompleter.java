@@ -515,7 +515,7 @@ public class PbRecipeCompleter {
 		factoryOutputBatch = batch;
 	}
 
-	/** 新完成批次可留到同机循环末尾；旧积压仍按原入口先排空。 */
+	/** 新完成批次留到同机循环末尾；已冻结旧积压由处理器在生产前单独合并排空。 */
 	boolean flushCompletedBatch(int processIndex) {
 		if (!commitCompletedInput(processIndex)) return false;
 		if (factoryOutputBatch != null && factoryOutputBatch.defer(this, processIndex)) return true;

@@ -15,11 +15,9 @@ import java.util.Arrays;
  * <b>为什么只能覆盖精确命中</b>：{@code Ae2FilterEntryMatcher.matchesDirect} 除
  * {@code configured.equals(candidate)} 之外还有模糊路径 —— 非 precise 时按 bee_type 分组匹配，
  * ignoreNbt 时按同 base item 匹配。这些都无法用「键 → 槽位」哈希表表达，必须线性回退。
- * 因此索引只在<b>候选键无 bee_type 且未开启 ignoreNbt</b> 时启用：
- * 此条件下 matchesDirect 的两条模糊分支都要求 {@code ignoreNbt}，模糊条目又要求
- * {@code candidateBeeType != null}，故除精确相等外<b>不存在任何其他命中可能</b>，索引结果完备。
- * 大型 ME 网络里绝大多数候选是非蜜脾物品（熔炼输入、普通材料），正好落在这条快路径上；
- * 蜜脾候选照旧走线性匹配，语义完全不变。
+ * 未开启 ignoreNbt 且索引完整时，无 bee_type 的候选可以直接查询。
+ * 带 bee_type 的蜜脾在精确模式且没有模糊条目时也只可能命中完整键，复用同一索引；
+ * 其它情况由调用方回到完整匹配，保留蜂种分组与组件忽略规则。
  * <p>
  * <b>版本判定</b>：{@link Ae2InputFilter} 的所有写操作都是 clone→修改→发布（CopyOnWrite），
  * 因此<b>数组对象身份即版本号</b>。索引同时记录 {@code slots} 与 {@code keys} 两个数组的身份 ——
@@ -87,7 +85,7 @@ final class Ae2DirectKeyIndex<K> {
 	/**
 	 * 精确命中的槽位下标（按下标升序），无命中返回 null。
 	 * <p>
-	 * 仅在 {@link #isComplete()} 且候选键无 bee_type、未开启 ignoreNbt 时可作为完备结果使用。
+	 * 调用方确认索引完整且当前匹配规则仅允许精确键命中时，才可将此结果视为完备。
 	 */
 	int[] slotsFor(K key) {
 		return key == null ? null : keyToSlots.get(key);

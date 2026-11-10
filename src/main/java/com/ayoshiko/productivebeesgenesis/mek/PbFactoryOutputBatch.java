@@ -8,13 +8,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** 同一工厂本批新产物按完整组件合并直输；资产始终保存在原进程的已付缓冲。 */
+/** 同一工厂已冻结的产物按完整组件合并直输；资产始终保存在原进程的已付缓冲。 */
 final class PbFactoryOutputBatch {
     private final PbRecipeContext context;
     private final PbRecipeCompleter[] owners;
     private final boolean[] queued;
     private final int[] order;
-    private final Map<ItemIdentity, ItemGroup> items = new LinkedHashMap<>();
+    private final Map<ItemIdentity, List<ItemGroup>> items = new LinkedHashMap<>();
     private final List<FluidGroup> fluids = new ArrayList<>();
     private int count;
     private boolean active;
@@ -51,7 +51,7 @@ final class PbFactoryOutputBatch {
                 pushItems();
                 pushFluids();
             }
-            // 每个键本批只走一次 AE 路线；未接收的部分继续既有邻接和本地槽路线。
+            // 同键只在 long 总额溢出时分组；未接收的部分继续既有邻接和本地槽路线。
             for (int index = 0; index < count && !PbRecipeFlusher.outputBlocked(context); index++) {
                 int lane = order[index];
                 owners[lane].flushAfterFactoryAe(lane);
@@ -78,12 +78,17 @@ final class PbFactoryOutputBatch {
             PbRecipeCompleter owner = owners[order[index]];
             if (owner.invalidPending() || owner.paymentPending() || owner.getPendingInputShrink() != 0) continue;
             for (var entry : owner.getPendingOutputs().entrySet()) {
-                long offered = Math.min(Integer.MAX_VALUE, Math.max(0, entry.getValue()));
+                long offered = Math.max(0, entry.getValue());
                 if (offered == 0) continue;
                 var identity = new ItemIdentity(entry.getKey());
-                var group = items.computeIfAbsent(identity, key -> new ItemGroup(entry.getKey()));
+                var groups = items.computeIfAbsent(identity, key -> new ArrayList<>());
+                ItemGroup group = groups.isEmpty() ? null : groups.getLast();
+                if (group == null || offered > Long.MAX_VALUE - group.amount) {
+                    group = new ItemGroup(entry.getKey());
+                    groups.add(group);
+                }
                 group.sources.add(new ItemSource(owner, entry.getKey(), offered));
-                group.amount = Math.addExact(group.amount, offered);
+                group.amount += offered;
             }
             FluidStack fluid = owner.getPendingFluidTemplate();
             long amount = owner.getPendingFluidAmount();
@@ -106,20 +111,14 @@ final class PbFactoryOutputBatch {
     }
 
     private void pushItems() {
-        for (ItemGroup group : items.values()) {
-            int sourceIndex = 0;
-            while (group.amount > 0 && !PbRecipeFlusher.outputBlocked(context)) {
-                int requested = (int) Math.min(Integer.MAX_VALUE, group.amount);
-                int handed = PbRecipeFlusher.directItem(context, group.template, requested, true);
-                if (handed == 0) break;
+        for (List<ItemGroup> groups : items.values()) {
+            for (ItemGroup group : groups) {
+                if (PbRecipeFlusher.outputBlocked(context)) return;
+                long handed = PbRecipeFlusher.directItemToAe(context, group.template, group.amount);
                 long remaining = handed;
-                while (remaining > 0 && sourceIndex < group.sources.size()) {
-                    ItemSource source = group.sources.get(sourceIndex);
+                for (ItemSource source : group.sources) {
                     long debit = Math.min(remaining, source.remaining);
-                    if (debit == 0) {
-                        sourceIndex++;
-                        continue;
-                    }
+                    if (debit == 0) continue;
                     Map<ItemStack, Long> pending = source.owner.getPendingOutputs();
                     long previous = pending.getOrDefault(source.template, 0L);
                     if (debit > previous) throw new IllegalStateException("Factory output source changed during handoff");
@@ -128,10 +127,11 @@ final class PbFactoryOutputBatch {
                     source.owner.consumePendingItemCount(debit);
                     source.remaining -= debit;
                     remaining -= debit;
-                    if (source.remaining == 0) sourceIndex++;
+                    if (remaining == 0) break;
                 }
-                group.amount -= handed;
-                if (handed < requested) break;
+                if (remaining != 0) throw new IllegalStateException("Factory output receipt has no matching source");
+                // 同键的后续溢出组共享接收能力；部分或零接收后不能继续重复请求。
+                if (handed < group.amount) break;
             }
         }
     }
@@ -167,8 +167,10 @@ final class PbFactoryOutputBatch {
 
         @Override
         public boolean equals(Object other) {
+            // 交付保持完整资产身份，不沿第三方放宽后的堆叠规则替换产物组件。
             return other instanceof ItemIdentity key
-                    && ItemStack.isSameItemSameComponents(template, key.template);
+                    && template.getItem() == key.template.getItem()
+                    && template.getComponents().equals(key.template.getComponents());
         }
     }
 

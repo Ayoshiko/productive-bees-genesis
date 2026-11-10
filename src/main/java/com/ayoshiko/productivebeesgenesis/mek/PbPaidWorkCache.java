@@ -6,24 +6,24 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 
-/** 单机共享工作模板；每槽仅保留当前和上一模板，实际付款与进度仍由各次预留持有。 */
+/** 单机有界近期模板缓存；实际付款与进度仍由各次预留独立持有。 */
 final class PbPaidWorkCache {
+    private static final int MIN_RECENT_TEMPLATES = 32;
+    private static final int MAX_RECENT_TEMPLATES = 256;
+    private static final int RECENT_TEMPLATES_PER_LANE = 8;
+
     private final Template[] current;
-    private final Template[] previous;
-    private final Template[] pool;
+    private final int capacity;
+    private final LinkedHashMap<TemplateKey, Template> templates = new LinkedHashMap<>(16, 0.75F, true);
     private HolderLookup.Provider registryProvider;
-    private Template oldest;
-    private Template newest;
     private long retainedBytes;
 
     PbPaidWorkCache(int lanes) {
         current = new Template[lanes];
-        previous = new Template[lanes];
-        pool = new Template[Math.multiplyExact(lanes, 2)];
-        for (int index = 0; index < pool.length; index++) {
-            pool[index] = new Template();
-        }
+        capacity = (int) Math.min(MAX_RECENT_TEMPLATES,
+                Math.max(MIN_RECENT_TEMPLATES, (long) lanes * RECENT_TEMPLATES_PER_LANE));
     }
 
     PbRecipeProcessorStateHelper.PaidWork get(int lane, ItemStack input,
@@ -33,16 +33,14 @@ final class PbPaidWorkCache {
             registryProvider = provider;
         }
         Template template = current[lane];
-        if (template != null && template.matches(input, selected, baseTicks)) {
-            touch(template);
+        if (template != null && template.key.matches(input, selected, baseTicks)) {
+            templates.get(template.key);
             return template.work;
         }
-        for (template = newest; template != null; template = template.older) {
-            if (template.matches(input, selected, baseTicks)) {
-                remember(lane, template);
-                touch(template);
-                return template.work;
-            }
+        template = templates.get(new TemplateKey(input, selected, baseTicks));
+        if (template != null) {
+            current[lane] = template;
+            return template.work;
         }
 
         var created = selected == null
@@ -53,148 +51,81 @@ final class PbPaidWorkCache {
             forget(lane);
             return created;
         }
-
-        // 换料只留下上一个输入；其它槽的引用仍可保住被共享的模板。
-        Template discarded = previous[lane];
-        previous[lane] = null;
-        release(discarded);
-        while (bytes > PbPausedWorkBuffer.MAX_WORK_BYTES - retainedBytes) {
-            evict(oldest);
+        while (templates.size() >= capacity || bytes > PbPausedWorkBuffer.MAX_WORK_BYTES - retainedBytes) {
+            evictOldest();
         }
-        for (Template available : pool) {
-            if (available.work == null) {
-                available.work = created;
-                available.selectedRecipe = selected;
-                available.bytes = bytes;
-                retainedBytes += bytes;
-                append(available);
-                remember(lane, available);
-                return created;
-            }
-        }
-        throw new IllegalStateException("Paid work template pool has no free slot");
+        // PaidWork 已复制完整输入；该身份不会随源槽计数或组件变更而改变。
+        TemplateKey key = new TemplateKey(created.input, selected, baseTicks);
+        template = new Template(key, created, bytes);
+        templates.put(key, template);
+        retainedBytes += bytes;
+        current[lane] = template;
+        return created;
     }
 
-    /** 空槽撤销自身的全部保留根，不影响其它槽或已付缓冲对工作模板的引用。 */
+    /** 空槽只撤销自身快捷引用；近期轮换模板仍受整机条数与编码预算约束。 */
     void forget(int lane) {
-        Template last = current[lane];
-        Template earlier = previous[lane];
         current[lane] = null;
-        previous[lane] = null;
-        release(last);
-        release(earlier);
-        if (oldest == null) {
-            registryProvider = null;
-        }
     }
 
     void clear() {
         Arrays.fill(current, null);
-        Arrays.fill(previous, null);
-        for (Template template : pool) {
-            template.clear();
-        }
-        oldest = null;
-        newest = null;
+        templates.clear();
         registryProvider = null;
         retainedBytes = 0L;
     }
 
-    private void remember(int lane, Template template) {
-        Template last = current[lane];
-        if (last == template) {
-            return;
-        }
-        Template earlier = previous[lane];
-        if (earlier == template) {
-            previous[lane] = last;
-            current[lane] = template;
-            return;
-        }
-        previous[lane] = null;
-        release(earlier);
-        previous[lane] = last;
-        current[lane] = template;
-        template.references++;
-    }
-
-    private void release(Template template) {
-        if (template != null && --template.references == 0) {
-            remove(template);
-        }
-    }
-
-    /** 编码预算按共享模板计一次；淘汰只撤销缓存引用，不撤销实际工作的预留。 */
-    private void evict(Template template) {
+    /** 淘汰所有缓存保留根；已经付款或暂停的 Entry 仍独立拥有原工作。 */
+    private void evictOldest() {
+        var entries = templates.entrySet().iterator();
+        Template removed = entries.next().getValue();
+        entries.remove();
+        retainedBytes -= removed.bytes;
         for (int lane = 0; lane < current.length; lane++) {
-            if (current[lane] == template) {
-                current[lane] = null;
-            }
-            if (previous[lane] == template) {
-                previous[lane] = null;
-            }
-        }
-        remove(template);
-    }
-
-    private void remove(Template template) {
-        unlink(template);
-        retainedBytes -= template.bytes;
-        template.clear();
-    }
-
-    private void touch(Template template) {
-        if (newest != template) {
-            unlink(template);
-            append(template);
+            if (current[lane] == removed) current[lane] = null;
         }
     }
 
-    private void append(Template template) {
-        template.older = newest;
-        template.newer = null;
-        if (newest == null) {
-            oldest = template;
-        } else {
-            newest.newer = template;
-        }
-        newest = template;
-    }
+    private static final class TemplateKey {
+        private final ItemStack input;
+        private final RecipeHolder<CentrifugeRecipe> selectedRecipe;
+        private final int baseTicks;
+        private final int hash;
 
-    private void unlink(Template template) {
-        if (template.older == null) {
-            oldest = template.newer;
-        } else {
-            template.older.newer = template.newer;
+        private TemplateKey(ItemStack input, RecipeHolder<CentrifugeRecipe> selectedRecipe, int baseTicks) {
+            this.input = input;
+            this.selectedRecipe = selectedRecipe;
+            this.baseTicks = baseTicks;
+            // GeckoLib 可忽略动画身份参与组件相等；粗哈希不提前拆散实际等价的输入。
+            hash = 31 * (31 * System.identityHashCode(input.getItem())
+                    + System.identityHashCode(selectedRecipe)) + baseTicks;
         }
-        if (template.newer == null) {
-            newest = template.older;
-        } else {
-            template.newer.older = template.older;
+
+        private boolean matches(ItemStack candidate, RecipeHolder<CentrifugeRecipe> selected, int ticks) {
+            return selectedRecipe == selected && baseTicks == ticks
+                    && ItemStack.isSameItemSameComponents(input, candidate);
         }
-        template.older = null;
-        template.newer = null;
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof TemplateKey key && matches(key.input, key.selectedRecipe, key.baseTicks);
+        }
     }
 
     private static final class Template {
-        private PbRecipeProcessorStateHelper.PaidWork work;
-        private RecipeHolder<CentrifugeRecipe> selectedRecipe;
-        private long bytes;
-        private int references;
-        private Template older;
-        private Template newer;
+        private final TemplateKey key;
+        private final PbRecipeProcessorStateHelper.PaidWork work;
+        private final long bytes;
 
-        private boolean matches(ItemStack input, RecipeHolder<CentrifugeRecipe> selected, int baseTicks) {
-            return selectedRecipe == selected && work.baseTicks == baseTicks && work.matches(input);
-        }
-
-        private void clear() {
-            work = null;
-            selectedRecipe = null;
-            bytes = 0L;
-            references = 0;
-            older = null;
-            newer = null;
+        private Template(TemplateKey key, PbRecipeProcessorStateHelper.PaidWork work, long bytes) {
+            this.key = key;
+            this.work = work;
+            this.bytes = bytes;
         }
     }
 }

@@ -54,6 +54,39 @@ class Ae2TemplateDirectPushMinecraftTest {
 		assertEquals(0, session.push(stack, 4096));
 		verify(storage, times(1)).insert(any(), anyLong(), any(), any());
 	}
+
+	@Test
+	void longRequestAndPartialReceiptRemainExactAcrossTheSessionBoundary() {
+		MEStorage storage = mock(MEStorage.class);
+		long requested = 3L * Integer.MAX_VALUE + 7;
+		long accepted = 2L * Integer.MAX_VALUE + 3;
+		var template = new ItemStack(Items.HONEYCOMB);
+		template.set(DataComponents.CUSTOM_NAME, Component.literal("large exact variant"));
+		var key = AEItemKey.of(template);
+		when(storage.insert(eq(key), eq(requested), eq(Actionable.MODULATE), any())).thenReturn(accepted);
+		var session = new Ae2DirectItemPushSession(new Ae2OutputStateHolder(), storage, null, 502, null);
+		session.custody = new com.ayoshiko.productivebeesgenesis.logistics.OutputCustody(() -> {});
+		assertEquals(accepted, session.push(template, requested));
+		assertEquals(1, template.getCount());
+		assertEquals(key, AEItemKey.of(template));
+		assertFalse(session.custody.blocked());
+		verify(storage).insert(eq(key), eq(requested), eq(Actionable.MODULATE), any());
+	}
+
+	@Test
+	void unknownLongRequestIsHeldExactlyAndNeverInsertedAgain() {
+		MEStorage storage = mock(MEStorage.class);
+		when(storage.insert(any(), anyLong(), any(), any())).thenThrow(new IllegalStateException("unknown prefix"));
+		var session = new Ae2DirectItemPushSession(new Ae2OutputStateHolder(), storage, null, 503, null);
+		session.custody = new com.ayoshiko.productivebeesgenesis.logistics.OutputCustody(() -> {});
+		var template = new ItemStack(Items.HONEYCOMB);
+		long requested = 4_000_000_000L;
+		assertEquals(requested, session.push(template, requested));
+		assertTrue(session.custody.blocked());
+		assertEquals(requested, session.custody.amount());
+		assertEquals(0, session.push(template, requested));
+		verify(storage).insert(any(), eq(requested), eq(Actionable.MODULATE), any());
+	}
 	@Test
 	void explicitAmountAndExactComponentsReachStorageWithoutCopyingTemplate() {
 		ItemStack template = spy(new ItemStack(Items.HONEYCOMB));

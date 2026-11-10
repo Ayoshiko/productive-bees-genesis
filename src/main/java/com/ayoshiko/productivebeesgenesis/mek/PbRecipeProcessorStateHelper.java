@@ -197,9 +197,8 @@ final class PbRecipeProcessorStateHelper {
 
 		static PaidWork create(ItemStack input, RecipeHolder<CentrifugeRecipe> recipe, int baseTicks,
 				HolderLookup.Provider provider) {
-			CompoundTag snapshot = PbCentrifugeRecipeSnapshot.capture(recipe, provider);
-			return new PaidWork(input, false, baseTicks, snapshot,
-					PbCentrifugeRecipeSnapshot.restore(snapshot, input, provider));
+			var snapshot = PbCentrifugeRecipeSnapshot.capture(recipe, input, provider);
+			return new PaidWork(input, false, baseTicks, snapshot.tag(), snapshot.recipe());
 		}
 
 		static PaidWork myriad(ItemStack input, int baseTicks) {
