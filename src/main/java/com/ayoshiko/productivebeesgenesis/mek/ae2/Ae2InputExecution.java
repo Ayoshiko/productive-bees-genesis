@@ -84,135 +84,136 @@ final class Ae2InputExecution {
 		boolean fairPassTruncated = false;
 		// 预算跨公平轮与补齐轮累计，未提取的类型留待后续拉取。
 		boolean extractBudgetExhausted = false;
-		for (PullEntry entry : pullList) {
-			entry.beginComponentMatchCache(processCount);
-		}
-		for (int pass = 0; pass < passes && totalPulled < inputCapacity && !holder.getPendingItemBuffer().isBlocked(); pass++) {
-			boolean fairPass = pass == 0 && typeCount > 1;
-			boolean protectLanes = typeCount > 1 && (fairPass
-					|| hasUnassignedDemand(pullList, laneSnapshot, processCount));
-			// 补齐轮只在公平轮确实被上限截断时才跑：否则会为每个类型重复一遍
-			// 逐槽 SIMULATE 探测（processCount × typeCount 次），纯属浪费。
-			if (!Ae2InputLaneFairness.shouldRunPass(pass, fairPassTruncated)) break;
-			for (int typeOffset = 0; typeOffset < typeCount && totalPulled < inputCapacity && !holder.getPendingItemBuffer().isBlocked(); typeOffset++) {
-				PullEntry entry = pullList.get(typeOffset);
-				if (entry.remaining <= 0 || keyBackoff.shouldSkip(entry.key, nanoNow)) continue;
-				if (entry.resourceDeferred) {
-					networkWorkDeferred = true;
-					continue;
-				}
-
-				// 在逐槽规划前检查累计耗时，同时考虑本机本刻已发生的输出成本。
-				if (!buffers.extractBudget.canExtractNow(currentTick, typeCount,
-						buffers.insertCostTracker.tileSpentThisTickNanos(currentTick))) {
-					extractBudgetExhausted = true;
-					break;
-				}
-
-				boolean indexed = laneSnapshot.isIndexed();
-				long candidateLanes = laneSnapshot.candidateLanes(entry.key);
-				if (indexed && candidateLanes == 0L) continue;
-
-				// 每个候选只构造一个探针，并复用当前规划轮的完整组件匹配缓存。
-				ItemStack slotProbe = entry.key.toStack(1);
-				Item keyItem = entry.key.getItem();
-				int typeSlotStart = laneSnapshot.preferredStart(entry.key, slotStart);
-				long typeAvailable = 0L;
-				int occupiedLanes = protectLanes ? laneSnapshot.occupiedLaneCount(entry.key) : 0;
-				int newLaneBudget = Ae2InputLaneFairness.remainingLaneBudget(laneBudget, occupiedLanes);
-				int newLanes = 0;
-				boolean lanesSuppressed = false;
-				if (!indexed) Arrays.fill(inputSlotCapacities, 0, processCount, 0L);
-				long deliveryLanes = 0L;
-				int slotOffset = 0;
-				while (indexed ? candidateLanes != 0L : slotOffset < processCount) {
-					int slotIdx;
-					if (indexed) {
-						long afterStart = candidateLanes & (-1L << typeSlotStart);
-						slotIdx = Long.numberOfTrailingZeros(afterStart == 0L ? candidateLanes : afterStart);
-						candidateLanes &= ~(1L << slotIdx);
-					} else {
-						slotIdx = (typeSlotStart + slotOffset++) % processCount;
-					}
-					boolean emptyLane = laneSnapshot.item(slotIdx) == null;
-					if (protectLanes && emptyLane && newLanes >= newLaneBudget) {
-						// 已用完份额的空槽不会被采用，无需再调用配方和槽位校验。
-						inputSlotCapacities[slotIdx] = 0L;
-						lanesSuppressed = true;
+		try {
+			for (int pass = 0; pass < passes && totalPulled < inputCapacity && !holder.getPendingItemBuffer().isBlocked(); pass++) {
+				boolean fairPass = pass == 0 && typeCount > 1;
+				boolean protectLanes = typeCount > 1 && (fairPass
+						|| hasUnassignedDemand(pullList, laneSnapshot, processCount));
+				// 补齐轮只在公平轮确实被上限截断时才跑：否则会为每个类型重复一遍
+				// 逐槽 SIMULATE 探测（processCount × typeCount 次），纯属浪费。
+				if (!Ae2InputLaneFairness.shouldRunPass(pass, fairPassTruncated)) break;
+				for (int typeOffset = 0; typeOffset < typeCount && totalPulled < inputCapacity && !holder.getPendingItemBuffer().isBlocked(); typeOffset++) {
+					PullEntry entry = pullList.get(typeOffset);
+					if (entry.remaining <= 0 || keyBackoff.shouldSkip(entry.key, nanoNow)) continue;
+					if (entry.resourceDeferred) {
+						networkWorkDeferred = true;
 						continue;
 					}
-					long slotQuota = entry.unlimited ? Long.MAX_VALUE : perSlotQuota;
-					long slotCapacity = Math.min(slotQuota,
-							laneCapacity(laneSnapshot, slotIdx, keyItem, entry, slotProbe));
-					if (slotCapacity > 0L && protectLanes && emptyLane) newLanes++;
-					inputSlotCapacities[slotIdx] = slotCapacity;
-					if (slotCapacity > 0L) {
-						typeAvailable = SaturatingMath.saturatingAdd(typeAvailable, slotCapacity);
-						if (indexed) deliveryLanes |= 1L << slotIdx;
+
+					// 在逐槽规划前检查累计耗时，同时考虑本机本刻已发生的输出成本。
+					if (!buffers.extractBudget.canExtractNow(currentTick, typeCount,
+							buffers.insertCostTracker.tileSpentThisTickNanos(currentTick))) {
+						extractBudgetExhausted = true;
+						break;
+					}
+
+					boolean indexed = laneSnapshot.isIndexed();
+					long candidateLanes = laneSnapshot.candidateLanes(entry.key);
+					if (indexed && candidateLanes == 0L) continue;
+					if (!entry.componentMatchCacheActive) entry.beginComponentMatchCache(processCount);
+
+					// 每个候选只构造一个探针，并复用当前规划轮的完整组件匹配缓存。
+					ItemStack slotProbe = entry.key.toStack(1);
+					Item keyItem = entry.key.getItem();
+					int typeSlotStart = laneSnapshot.preferredStart(entry.key, slotStart);
+					long typeAvailable = 0L;
+					int occupiedLanes = protectLanes ? laneSnapshot.occupiedLaneCount(entry.key) : 0;
+					int newLaneBudget = Ae2InputLaneFairness.remainingLaneBudget(laneBudget, occupiedLanes);
+					int newLanes = 0;
+					boolean lanesSuppressed = false;
+					if (!indexed) Arrays.fill(inputSlotCapacities, 0, processCount, 0L);
+					long deliveryLanes = 0L;
+					int slotOffset = 0;
+					while (indexed ? candidateLanes != 0L : slotOffset < processCount) {
+						int slotIdx;
+						if (indexed) {
+							long afterStart = candidateLanes & (-1L << typeSlotStart);
+							slotIdx = Long.numberOfTrailingZeros(afterStart == 0L ? candidateLanes : afterStart);
+							candidateLanes &= ~(1L << slotIdx);
+						} else {
+							slotIdx = (typeSlotStart + slotOffset++) % processCount;
+						}
+						boolean emptyLane = laneSnapshot.item(slotIdx) == null;
+						if (protectLanes && emptyLane && newLanes >= newLaneBudget) {
+							// 已用完份额的空槽不会被采用，无需再调用配方和槽位校验。
+							inputSlotCapacities[slotIdx] = 0L;
+							lanesSuppressed = true;
+							continue;
+						}
+						long slotQuota = entry.unlimited ? Long.MAX_VALUE : perSlotQuota;
+						long slotCapacity = Math.min(slotQuota,
+								laneCapacity(laneSnapshot, slotIdx, keyItem, entry, slotProbe));
+						if (slotCapacity > 0L && protectLanes && emptyLane) newLanes++;
+						inputSlotCapacities[slotIdx] = slotCapacity;
+						if (slotCapacity > 0L) {
+							typeAvailable = SaturatingMath.saturatingAdd(typeAvailable, slotCapacity);
+							if (indexed) deliveryLanes |= 1L << slotIdx;
+						}
+					}
+					if (typeAvailable <= 0L) {
+						// 车道被压制导致本类型这轮完全拿不到槽：补齐轮必须再给它一次机会
+						if (lanesSuppressed) fairPassTruncated = true;
+						// 槽校验可能依赖配对输出状态，只表示本轮无容量，不能对整个 key 退避。
+						continue;
+					}
+					long entryQuota = entry.unlimited
+							? inputCapacity - totalPulled
+							: normalQuota - normalPulled;
+					boolean quotaClipped = false;
+					if (fairPass && !entry.unlimited && entryQuota > fairShare) {
+						entryQuota = fairShare;
+						quotaClipped = true;
+					}
+					int toPull = SaturatingMath.saturatingToInt(Math.min(
+							typeAvailable, Math.min(entry.remaining, Math.max(0L, entryQuota))));
+					if (toPull <= 0) {
+						if (lanesSuppressed || quotaClipped) fairPassTruncated = true;
+						continue;
+					}
+					if (!holder.tryAcquireNetworkExtract(meStorage, currentTick)) {
+						networkWorkDeferred = true;
+						break;
+					}
+					if (entry.unlimited) unlimitedAttempted = true;
+					try {
+						BatchResult batchResult = pullBatchForType(level, holder, entry.key, toPull,
+								entry.reserveFloor, meStorage, actionSource,
+							inputSlots, inputSlotCapacities, laneSnapshot, slotProbe, typeSlotStart, pos, keyBackoff,
+							buffers.fingerprintCache, buffers.extractBudget, deliveryLanes);
+						int pulled = batchResult.insertedCount();
+						entry.remaining -= pulled;
+						totalPulled += pulled;
+						if (!entry.unlimited) normalPulled += pulled;
+						if (entry.unlimited && pulled > 0) unlimitedSucceeded = true;
+						if (pulled > 0) fairness.recordServed(entry.key, pulled);
+						// 只有「确实被公平上限截断且本类型还想要更多」才需要补齐轮；
+						// 否则补齐轮会为每个类型白跑一遍逐槽 SIMULATE 探测。
+						if ((lanesSuppressed || quotaClipped) && entry.remaining > 0) {
+							fairPassTruncated = true;
+						}
+						slowExtractDetected |= batchResult.slowExtract();
+						degradedExtractDetected |= batchResult.degraded();
+						healthyExtractDetected |= batchResult.healthy();
+						maxSlowExtractCost = Math.max(maxSlowExtractCost, batchResult.extractCostNanos());
+					} catch (LinkageError | RuntimeException e) {
+						handlePullException(e, entry.key);
+						if (holder.getPendingItemBuffer().isBlocked()) {
+							var unresolved = holder.getPendingItemBuffer().transfer();
+							unresolved.fingerprint();
+							LogThrottle.error("ae2_input_transfer_unknown", "AE2 输入待核验 pos={} request={} target={} known={} offered={}: {}",
+									pos, unresolved.request(), unresolved.destination(), unresolved.knownAmount(), unresolved.offeredAmount(), e.toString());
+							host.productivebeesgenesis$markAe2StateChanged();
+						}
+						degradedExtractDetected = true;
 					}
 				}
-				if (typeAvailable <= 0L) {
-					// 车道被压制导致本类型这轮完全拿不到槽：补齐轮必须再给它一次机会
-					if (lanesSuppressed) fairPassTruncated = true;
-					// 槽校验可能依赖配对输出状态，只表示本轮无容量，不能对整个 key 退避。
-					continue;
-				}
-				long entryQuota = entry.unlimited
-						? inputCapacity - totalPulled
-						: normalQuota - normalPulled;
-				boolean quotaClipped = false;
-				if (fairPass && !entry.unlimited && entryQuota > fairShare) {
-					entryQuota = fairShare;
-					quotaClipped = true;
-				}
-				int toPull = SaturatingMath.saturatingToInt(Math.min(
-						typeAvailable, Math.min(entry.remaining, Math.max(0L, entryQuota))));
-				if (toPull <= 0) {
-					if (lanesSuppressed || quotaClipped) fairPassTruncated = true;
-					continue;
-				}
-				if (!holder.tryAcquireNetworkExtract(meStorage, currentTick)) {
-					networkWorkDeferred = true;
-					break;
-				}
-				if (entry.unlimited) unlimitedAttempted = true;
-				try {
-					BatchResult batchResult = pullBatchForType(level, holder, entry.key, toPull,
-							entry.reserveFloor, meStorage, actionSource,
-						inputSlots, inputSlotCapacities, laneSnapshot, slotProbe, typeSlotStart, pos, keyBackoff,
-						buffers.fingerprintCache, buffers.extractBudget, deliveryLanes);
-					int pulled = batchResult.insertedCount();
-					entry.remaining -= pulled;
-					totalPulled += pulled;
-					if (!entry.unlimited) normalPulled += pulled;
-					if (entry.unlimited && pulled > 0) unlimitedSucceeded = true;
-					if (pulled > 0) fairness.recordServed(entry.key, pulled);
-					// 只有「确实被公平上限截断且本类型还想要更多」才需要补齐轮；
-					// 否则补齐轮会为每个类型白跑一遍逐槽 SIMULATE 探测。
-					if ((lanesSuppressed || quotaClipped) && entry.remaining > 0) {
-						fairPassTruncated = true;
-					}
-					slowExtractDetected |= batchResult.slowExtract();
-					degradedExtractDetected |= batchResult.degraded();
-					healthyExtractDetected |= batchResult.healthy();
-					maxSlowExtractCost = Math.max(maxSlowExtractCost, batchResult.extractCostNanos());
-				} catch (LinkageError | RuntimeException e) {
-					handlePullException(e, entry.key);
-					if (holder.getPendingItemBuffer().isBlocked()) {
-						var unresolved = holder.getPendingItemBuffer().transfer();
-						unresolved.fingerprint();
-						LogThrottle.error("ae2_input_transfer_unknown", "AE2 输入待核验 pos={} request={} target={} known={} offered={}: {}",
-								pos, unresolved.request(), unresolved.destination(), unresolved.knownAmount(), unresolved.offeredAmount(), e.toString());
-						host.productivebeesgenesis$markAe2StateChanged();
-					}
-					degradedExtractDetected = true;
-				}
+				// 调用预算耗尽时，补齐轮也不再尝试。
+				if (extractBudgetExhausted || networkWorkDeferred) break;
 			}
-			// 调用预算耗尽时，补齐轮也不再尝试。
-			if (extractBudgetExhausted || networkWorkDeferred) break;
-		}
-		for (PullEntry entry : pullList) {
-			entry.clearComponentMatchCache();
+		} finally {
+			for (PullEntry entry : pullList) {
+				entry.clearComponentMatchCache();
+			}
 		}
 		// Update the whole-tile storage backoff once per pull pass. A slow key wins over
 		// a later healthy key in the same pass; otherwise a healthy pass clears the window
@@ -439,8 +440,7 @@ final class Ae2InputExecution {
 			int inserted = Ae2LeftoverReturner.insertIntoSlot(transfer, key, slot, amountForSlot, slotIdx);
 			insertedCount += inserted;
 			if (inserted > 0 && laneSnapshot != null) {
-				laneSnapshot.remember(key, slotIdx);
-				laneSnapshot.refresh(slotIdx);
+				laneSnapshot.refresh(slotIdx, key);
 			}
 		}
 		if (insertedCount > 0 && keyBackoff != null) {
@@ -504,6 +504,9 @@ final class Ae2InputExecution {
 		private boolean[] componentMatchResults = new boolean[0];
 		private int[] componentMatchGenerations = new int[0];
 		private int componentMatchGeneration;
+		private boolean componentMatchCacheActive;
+		private int[] touchedSlots = new int[0];
+		private int touchedSlotCount;
 		/** Validator predicates may capture a slot or process index. Cache by slot identity. */
 		private BasicInventorySlot[] validatorSlots = new BasicInventorySlot[0];
 		private byte[] validatorStates = new byte[0];
@@ -526,15 +529,17 @@ final class Ae2InputExecution {
 			this.resourceDeferred = false;
 			this.reserveFloor = -1L;
 			this.servedInWindow = 0L;
-			Arrays.fill(validatorSlots, null);
+			clearComponentMatchCache();
 		}
 
 		/** 开始一轮容量规划；数组按候选条目复用，避免每次比较分配临时映射。 */
 		void beginComponentMatchCache(int slotCount) {
+			clearComponentMatchCache();
 			if (slotCount > componentMatchStacks.length) {
 				componentMatchStacks = Arrays.copyOf(componentMatchStacks, slotCount);
 				componentMatchResults = Arrays.copyOf(componentMatchResults, slotCount);
 				componentMatchGenerations = Arrays.copyOf(componentMatchGenerations, slotCount);
+				touchedSlots = Arrays.copyOf(touchedSlots, slotCount);
 			}
 			if (slotCount > validatorSlots.length) {
 				validatorSlots = Arrays.copyOf(validatorSlots, slotCount);
@@ -544,7 +549,7 @@ final class Ae2InputExecution {
 				Arrays.fill(componentMatchGenerations, 0);
 				componentMatchGeneration = 1;
 			}
-			Arrays.fill(validatorSlots, null);
+			componentMatchCacheActive = true;
 			prepareKeyComponents();
 		}
 
@@ -566,11 +571,13 @@ final class Ae2InputExecution {
 		 * 同类槽位也可能绑定不同的 validator；只在同一规划轮内复用同一槽的结果。
 		 */
 		boolean acceptsProbe(int slotIndex, BasicInventorySlot slot, ItemStack probe) {
-			if (slotIndex >= 0 && slotIndex < validatorSlots.length && validatorSlots[slotIndex] == slot) {
+			boolean cacheable = componentMatchCacheActive && slotIndex >= 0 && slotIndex < validatorSlots.length;
+			if (cacheable && validatorSlots[slotIndex] == slot) {
 				return validatorStates[slotIndex] == 1;
 			}
 			boolean accepted = slot.isItemValidForInsertion(probe, AutomationType.INTERNAL);
-			if (slotIndex >= 0 && slotIndex < validatorSlots.length) {
+			if (cacheable) {
+				touchSlot(slotIndex);
 				validatorSlots[slotIndex] = slot;
 				validatorStates[slotIndex] = (byte) (accepted ? 1 : 0);
 			}
@@ -583,7 +590,7 @@ final class Ae2InputExecution {
 			// 记忆表优先：本轮（entry × 槽位）的结论只由「槽内栈对象 + 本条目 key」决定，
 			// 补齐轮与前一轮重复访问同一槽位时可直接命中。原先记忆只在完整比较的末尾写入、
 			// 且被前面的廉价快径挡住，导致蜜脾（走 bee_type 快径）每轮重算一遍。
-			boolean cacheable = slotIndex >= 0 && slotIndex < componentMatchStacks.length;
+			boolean cacheable = componentMatchCacheActive && slotIndex >= 0 && slotIndex < componentMatchStacks.length;
 			if (cacheable
 					&& componentMatchGenerations[slotIndex] == componentMatchGeneration
 					&& componentMatchStacks[slotIndex] == stack) {
@@ -607,6 +614,7 @@ final class Ae2InputExecution {
 		/** 写入（可选）本轮组件匹配记忆表并返回结论。 */
 		private boolean cacheComponentMatch(int slotIndex, ItemStack stack, boolean cacheable, boolean matches) {
 			if (cacheable) {
+				touchSlot(slotIndex);
 				componentMatchGenerations[slotIndex] = componentMatchGeneration;
 				componentMatchStacks[slotIndex] = stack;
 				componentMatchResults[slotIndex] = matches;
@@ -614,10 +622,24 @@ final class Ae2InputExecution {
 			return matches;
 		}
 
-		/** 清除槽位对象引用，避免复用池在两次拉取之间保留旧 ItemStack。 */
+		/** 组件和 validator 共用触碰表，同一槽位至多登记一次。 */
+		private void touchSlot(int slotIndex) {
+			if (componentMatchStacks[slotIndex] == null && validatorSlots[slotIndex] == null) {
+				touchedSlots[touchedSlotCount++] = slotIndex;
+			}
+		}
+
+		/** 仅释放本轮实际访问的槽引用；结束与异常退出共用该清理。 */
 		void clearComponentMatchCache() {
-			Arrays.fill(componentMatchStacks, null);
-			Arrays.fill(validatorSlots, null);
+			for (int index = 0; index < touchedSlotCount; index++) {
+				int slotIndex = touchedSlots[index];
+				componentMatchStacks[slotIndex] = null;
+				validatorSlots[slotIndex] = null;
+			}
+			touchedSlotCount = 0;
+			componentMatchCacheActive = false;
+			keyPatchSize = 0;
+			keyBeeType = null;
 		}
 	}
 }

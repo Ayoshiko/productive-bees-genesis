@@ -143,8 +143,9 @@ class Ae2HotPathCacheWiringTest {
 				"标准槽位必须保留 validator 和 AutomationType 语义");
 		assertTrue(source.contains("validatorSlots[slotIndex] == slot"),
 				"缓存命中必须校验槽位对象身份，不能只看实现类");
-		assertTrue(source.contains("Arrays.fill(validatorSlots, null);"),
-				"每轮规划和复用池归还时必须释放槽位引用");
+		assertTrue(source.contains("validatorSlots[slotIndex] = null;")
+				&& source.contains("index < touchedSlotCount"),
+				"每轮规划和复用池归还时必须释放实际触碰的槽位引用");
 		assertTrue(method.contains("slot.insertItem(probe, Action.SIMULATE, AutomationType.INTERNAL)"),
 				"非标准 IInventorySlot 必须保留完整模拟插入回退");
 		assertFalse(method.contains("key.matches(stack)"),
@@ -155,10 +156,14 @@ class Ae2HotPathCacheWiringTest {
 	@DisplayName("公平轮容量规划复用有界组件匹配缓存并及时释放栈引用")
 	void componentMatchCacheIsBoundedToPullEntriesAndOnePass() throws Exception {
 		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputExecution.java");
-		assertTrue(source.contains("entry.beginComponentMatchCache(processCount)"),
-				"每次容量规划必须为条目开启当前轮次缓存");
-		assertTrue(source.contains("entry.clearComponentMatchCache()"),
-				"容量规划结束后必须清除栈引用，避免复用池延长对象生命周期");
+		int skipEmptyCandidate = source.indexOf("if (indexed && candidateLanes == 0L) continue;");
+		int beginEntryCache = source.indexOf("entry.beginComponentMatchCache(processCount)");
+		assertTrue(skipEmptyCandidate >= 0 && beginEntryCache > skipEmptyCandidate,
+				"只有进入容量规划的候选才开启当前轮次缓存");
+		int finallyStart = source.indexOf("} finally {");
+		int clearEntryCache = source.indexOf("entry.clearComponentMatchCache()");
+		assertTrue(finallyStart >= 0 && clearEntryCache > finallyStart,
+				"正常结束和异常退出都必须清除栈引用，避免复用池延长对象生命周期");
 		assertTrue(source.contains("private ItemStack[] componentMatchStacks"),
 				"组件缓存必须按条目和槽位有界保存");
 		assertTrue(source.contains("componentMatchGenerations"),

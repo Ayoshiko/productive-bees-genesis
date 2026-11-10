@@ -533,7 +533,9 @@ public class PbRecipeProcessor {
 			clearPbState(processIndex);
 			return false;
 		}
-		if (MekResourceCentrifuge.hasWork(context, processIndex)) restoredLegacyProgress[processIndex] = false;
+		if (restoredLegacyProgress[processIndex] && MekResourceCentrifuge.hasWork(context, processIndex)) {
+			restoredLegacyProgress[processIndex] = false;
+		}
 		if (restoredLegacyProgress[processIndex]
 				&& !ItemStack.isSameItemSameComponents(legacyInputs[processIndex], input)) return false;
 		PbRecipeProcessorStateHelper.PaidWork work = paidWork[processIndex];
@@ -612,9 +614,10 @@ public class PbRecipeProcessor {
 			pbProcessing[processIndex] = false;
 			return false;
 		}
-		boolean outputBlocked = PbRecipeOutputChecker.isOutputBlocked(context, processIndex, recipeValue,
-				PbRecipeOutputChecker.hasItemOutput(context, recipeValue),
-				PbRecipeOutputChecker.hasFluidOutput(context, recipeValue), cachedFluidTankFull);
+		boolean outputBlocked = !context.productivebeesgenesis$isDirectAeOutputEnabled()
+				&& PbRecipeOutputChecker.isOutputBlocked(context, processIndex, recipeValue,
+						PbRecipeOutputChecker.hasItemOutput(context, recipeValue),
+						PbRecipeOutputChecker.hasFluidOutput(context, recipeValue), cachedFluidTankFull);
 		if (outputBlocked || resumePaidCycle[processIndex]) {
 			virtualTicks = Math.min(virtualTicks, Math.max(1, processingTime - pbOperatingTicks[processIndex]));
 		}

@@ -134,8 +134,7 @@ class Ae2InputCapacityMinecraftTest {
 		assertEquals(1, snapshot.occupiedLaneCount(regularKey));
 		assertEquals(1, snapshot.occupiedLaneCount(modifiedKey));
 		empty.setStack(modified.copy());
-		snapshot.remember(modifiedKey, 2);
-		snapshot.refresh(2);
+		snapshot.refresh(2, modifiedKey);
 		assertEquals(0b001L, snapshot.candidateLanes(regularKey));
 		assertEquals(0b110L, snapshot.candidateLanes(modifiedKey));
 		assertEquals(2, snapshot.occupiedLaneCount(modifiedKey));
@@ -146,6 +145,37 @@ class Ae2InputCapacityMinecraftTest {
 		assertEquals(1, snapshot.occupiedLaneCount(modifiedKey));
 		assertTrue(snapshot.hasEmptyLane());
 		assertEquals(1, snapshot.preferredStart(modifiedKey, 0));
+	}
+
+	@Test
+	void acceptedInputPreferenceSurvivesImmediateConsumptionButNotSlotReplacement() {
+		var first = BasicInventorySlot.at(null, 0, 0);
+		var second = BasicInventorySlot.at(null, 0, 0);
+		List<IInventorySlot> slots = new ArrayList<>(List.of(first, second));
+		var snapshot = new Ae2InputLaneSnapshot();
+		snapshot.capture(slots, 2);
+		var iron = AEItemKey.of(Items.IRON_INGOT);
+		var gold = AEItemKey.of(Items.GOLD_INGOT);
+
+		first.setStack(iron.toStack(4));
+		first.setEmpty();
+		snapshot.refresh(0, iron);
+		assertEquals(0, snapshot.preferredStart(iron, 1));
+		assertEquals(0b11L, snapshot.candidateLanes(gold));
+		assertEquals(0, snapshot.occupiedLaneCount(iron));
+
+		second.setStack(gold.toStack(2));
+		snapshot.refresh(1, gold);
+		assertEquals(0b01L, snapshot.candidateLanes(iron));
+		assertEquals(1, snapshot.occupiedLaneCount(gold));
+		slots.set(0, BasicInventorySlot.at(null, 0, 0));
+		snapshot.refresh(0, iron);
+		assertEquals(1, snapshot.preferredStart(iron, 1));
+
+		snapshot.capture(slots, 2);
+		assertEquals(0b01L, snapshot.candidateLanes(iron));
+		assertEquals(1, snapshot.occupiedLaneCount(gold));
+		assertEquals(1, snapshot.preferredStart(gold, 0));
 	}
 
 	@Test
@@ -238,6 +268,62 @@ class Ae2InputCapacityMinecraftTest {
 			assertTrue(slot.getStack().is(Items.IRON_INGOT));
 			assertEquals(10, slot.getCount());
 			assertFalse(holder.getPendingItemBuffer().isBlocked());
+			assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
+		} finally {
+			Ae2NetworkWorkCoordinator.clearAll();
+		}
+	}
+
+	@Test
+	void failedPlanningReleasesCachedPermissionBeforeTheNextExecution() {
+		var level = mock(Level.class);
+		when(level.getGameTime()).thenReturn(300L);
+		when(level.registryAccess()).thenReturn(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+		var host = mock(IAe2InputHost.class);
+		when(host.productivebeesgenesis$getAe2Level()).thenReturn(level);
+		when(host.productivebeesgenesis$getAe2BlockPos()).thenReturn(BlockPos.ZERO);
+		var holder = new Ae2OutputStateHolder();
+		var buffers = new Ae2PushBuffers();
+		var backoff = new Ae2KeyBackoffRegistry<AEItemKey>();
+		var fairness = new Ae2InputFairnessScheduler();
+		var iron = AEItemKey.of(Items.IRON_INGOT);
+		var storage = mock(MEStorage.class);
+		long[] available = {10};
+		when(storage.extract(eq(iron), anyLong(), eq(Actionable.MODULATE), any())).thenAnswer(call -> {
+			long extracted = Math.min((long) call.getArgument(1), available[0]);
+			available[0] -= extracted;
+			return extracted;
+		});
+		boolean[] firstAllowed = {false};
+		boolean[] failSecond = {true};
+		var first = BasicInventorySlot.at(stack -> true, stack -> firstAllowed[0], null, 0, 0);
+		var second = BasicInventorySlot.at(stack -> true, stack -> {
+			if (failSecond[0]) throw new IllegalStateException("planning failed before extraction");
+			return false;
+		}, null, 0, 0);
+		List<IInventorySlot> slots = List.of(first, second);
+		var entry = new Ae2InputExecution.PullEntry(iron, 10);
+		var candidates = new ArrayList<>(List.of(entry));
+		try {
+			fairness.roll(300);
+			assertThrows(IllegalStateException.class, () -> Ae2InputExecution.execute(host, holder,
+					buffers, candidates, slots, storage, backoff, fairness, 128, 10, 10, IActionSource.empty()));
+			assertEquals(10, available[0]);
+			assertTrue(first.isEmpty());
+			assertTrue(second.isEmpty());
+			assertFalse(holder.getPendingItemBuffer().isBlocked());
+
+			assertEquals(10, entry.remaining);
+			firstAllowed[0] = true;
+			failSecond[0] = false;
+			when(level.getGameTime()).thenReturn(301L);
+			fairness.roll(301);
+			var result = Ae2InputExecution.execute(host, holder, buffers, candidates, slots, storage,
+					backoff, fairness, 128, 10, 10, IActionSource.empty());
+			assertEquals(10, result.totalPulled());
+			assertEquals(10, first.getCount());
+			assertTrue(second.isEmpty());
+			assertEquals(0, available[0]);
 			assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
 		} finally {
 			Ae2NetworkWorkCoordinator.clearAll();

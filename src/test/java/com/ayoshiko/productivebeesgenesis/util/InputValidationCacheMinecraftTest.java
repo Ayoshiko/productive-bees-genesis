@@ -70,6 +70,40 @@ class InputValidationCacheMinecraftTest {
 	}
 
 	@Test
+	void nestedQueriesKeepTheOuterFingerprintAndComponentSnapshot() {
+		var level = mock(Level.class);
+		for (Item item : new Item[] {Items.IRON_INGOT, PbCombItemRefs.honeycomb()}) {
+			var cache = new InputValidationCache();
+			var first = new ItemStack(item);
+			first.set(DataComponents.CUSTOM_NAME, Component.literal("first"));
+			var original = first.copy();
+			var second = first.copy();
+			second.set(DataComponents.CUSTOM_NAME, Component.literal("second"));
+			var accepted = new InputValidationCache.ValidationResult(true, null, null, false);
+
+			assertSame(accepted, cache.getResult(level, first, () -> {
+				assertFalse(cache.get(level, second, () -> false));
+				first.set(DataComponents.CUSTOM_NAME, Component.literal("changed during validation"));
+				return accepted;
+			}));
+			assertSame(accepted, cache.getResult(level, original,
+					() -> fail("outer key must retain the input before nested validation")));
+			assertFalse(cache.getResult(level, second,
+					() -> fail("nested negative result must keep its own key")).valid());
+			assertFalse(cache.get(level, first, () -> false));
+			assertTrue(cache.get(level, original, () -> fail("later queries must not mutate a stored key")));
+
+			cache.clear();
+			assertTrue(cache.get(level, original, () -> {
+				assertFalse(cache.getResult(level, second, () -> InputValidationCache.ValidationResult.INVALID).valid());
+				return true;
+			}));
+			assertTrue(cache.get(level, original, () -> fail("boolean lookup must snapshot before reentry")));
+			assertFalse(cache.get(level, second, () -> fail("nested result must remain separate")));
+		}
+	}
+
+	@Test
 	void evictionPromotesRecentEntriesAndExpiryDoesNotExtendOnHits() {
 		var cache = new InputValidationCache(10, 2);
 		var tick = new AtomicLong(5);

@@ -153,6 +153,43 @@ class Ae2PullDecisionMinecraftTest {
 	}
 
 	@Test
+	void touchedCachesRevalidateSparseSlotsAfterClearAndEntryReuse() {
+		var iron = AEItemKey.of(Items.IRON_INGOT);
+		var entry = new Ae2InputExecution.PullEntry(iron, 8);
+		var probe = iron.toStack(1);
+		var stored = probe.copy();
+		boolean[] allowed = {true};
+		var slot = BasicInventorySlot.at(stack -> true, stack -> allowed[0], null, 0, 0);
+
+		entry.beginComponentMatchCache(65);
+		assertTrue(entry.matchesComponents(64, stored, probe, 0, null));
+		assertTrue(entry.acceptsProbe(64, slot, probe));
+		entry.clearComponentMatchCache();
+
+		allowed[0] = false;
+		stored.set(DataComponents.CUSTOM_NAME, Component.literal("changed"));
+		entry.beginComponentMatchCache(65);
+		assertFalse(entry.matchesComponents(64, stored, probe, 1, null));
+		assertFalse(entry.acceptsProbe(64, slot, probe));
+		entry.clearComponentMatchCache();
+
+		var gold = AEItemKey.of(Items.GOLD_INGOT);
+		entry.reset(gold, 5, false);
+		allowed[0] = true;
+		entry.beginComponentMatchCache(1);
+		assertTrue(entry.matchesComponents(0, gold.toStack(1), gold.toStack(1), 0, null));
+		assertTrue(entry.acceptsProbe(0, slot, gold.toStack(1)));
+		entry.clearComponentMatchCache();
+
+		entry.reset(iron, 3, false);
+		allowed[0] = false;
+		entry.beginComponentMatchCache(65);
+		assertFalse(entry.acceptsProbe(64, slot, probe));
+		assertFalse(entry.matchesComponents(64, stored, probe, 1, null));
+		entry.clearComponentMatchCache();
+	}
+
+	@Test
 	void legacyGhostlyCombEntrySurvivesLoadAndFilterModes() {
 		var oldEntries = new ListTag();
 		oldEntries.add(StringTag.valueOf("productivebees:ghostly"));

@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import com.ayoshiko.productivebeesgenesis.logistics.IndexedOutputSlots;
 import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
 import cy.jdkdigital.productivebees.common.item.HoneyTreat;
@@ -27,7 +28,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.IntSupplier;
 
@@ -110,8 +110,8 @@ public class ApiarySlotManager {
 
 	/** 输出槽列表（按行列排布，使用 TieredOutputInventorySlot 支持分等级堆叠倍率） */
 	private final List<BasicInventorySlot> outputSlots;
-	/** 输出槽只读视图缓存 — buildInventory 完成后构建，避免每次 getOutputSlots() 创建新包装对象（GC 压力） */
-	private List<BasicInventorySlot> cachedUnmodifiableOutputSlots;
+	/** 本机物理输出槽的保序索引，只由对应内容监听器标记变更。 */
+	private IndexedOutputSlots indexedOutputSlots;
 
 	/** 槽位上限 identity 缓存（委托至 {@link SlotLimitCache}，含版本号失效机制） */
 	private final SlotLimitCache slotLimitCache;
@@ -250,11 +250,13 @@ public class ApiarySlotManager {
 		// 使用 TieredOutputInventorySlot 支持分等级堆叠倍率，倍率由会话快照按等级提供
 		// Bug 10: 绑定 NO_SPACE_IN_OUTPUT 警告，输出槽满时在警告Tab显示
 		IntSupplier stackMultiplier = ApiaryTierMultiplierResolver.getStackMultiplierForTier(tile);
-		IContentsListener outputListener = () -> {
-			listener.onContentsChanged();
-			tile.onOutputSlotContentsChanged();
-		};
 		for (int index = 0; index < outputSlotCount; index++) {
+			int physicalSlot = index;
+			IContentsListener outputListener = () -> {
+				if (indexedOutputSlots != null) indexedOutputSlots.contentsChanged(physicalSlot);
+				listener.onContentsChanged();
+				tile.onOutputSlotContentsChanged();
+			};
 			int pageSlot = index % outputSlotsPerPage;
 			int row = pageSlot / outputCols;
 			int col = pageSlot % outputCols;
@@ -286,8 +288,8 @@ public class ApiarySlotManager {
 		tile.accessor().productivebeesgenesis$setOutputSlot(cageOutSlot);
 		tile.accessor().productivebeesgenesis$setEnergySlot(energySlot);
 
-		// 构建只读视图缓存，避免每次 getOutputSlots() 创建新包装对象
-		this.cachedUnmodifiableOutputSlots = Collections.unmodifiableList(outputSlots);
+		// 构造完成后物理槽集合固定；内容变化沿每槽监听更新候选与数量。
+		this.indexedOutputSlots = new IndexedOutputSlots(outputSlots);
 
 		return builder.build();
 	}
@@ -368,17 +370,12 @@ public class ApiarySlotManager {
 	// ===== AE2 集成支持 =====
 
 	/**
-	 * 检查输出槽是否有任意物品 — 供 AE2 推送器空输出短路
-	 * <br/>
-	 * 蜂箱输出槽数量有限（18-102，含两页物理库存），直接遍历足够高效，无需维护标志位。
+	 * 检查输出槽是否有任意物品；只刷新监听器标记的变更槽，供输出入口空载短路。
 	 *
 	 * @return true 如果任意输出槽有物品
 	 */
 	boolean hasOutputItems() {
-		for (int i = 0; i < outputSlots.size(); i++) {
-			if (!outputSlots.get(i).isEmpty()) return true;
-		}
-		return false;
+		return indexedOutputSlots != null && indexedOutputSlots.hasOutputItems();
 	}
 
 	/**
@@ -389,23 +386,14 @@ public class ApiarySlotManager {
 	 * @return 所有输出槽物品总数
 	 */
 	long outputItemCount() {
-		long count = 0;
-		for (int i = 0; i < outputSlots.size(); i++) {
-			ItemStack stack = outputSlots.get(i).getStack();
-			if (!stack.isEmpty()) {
-				count += stack.getCount();
-			}
-		}
-		return count;
+		return indexedOutputSlots == null ? 0L : indexedOutputSlots.outputItemCount();
 	}
 
 	/**
-	 * 刷新输出槽状态标志 — 蜂箱为 no-op
-	 * <br/>
-	 * 蜂箱直接遍历检查输出槽，无需标志位。仅为满足 PbRecipeContext 接口契约。
+	 * 内容监听已记录每个槽的变化；状态查询时刷新，无需额外扫描。
 	 */
 	void updateOutputSlotFlags() {
-		// no-op：蜂箱不使用标志位优化
+		// 保留 PbRecipeContext 入口；真实失效由物理槽监听覆盖。
 	}
 
 	// ===== Getters =====
@@ -442,7 +430,7 @@ public class ApiarySlotManager {
 
 	/** 获取输出槽列表（只读视图，防止外部修改内部结构；TieredOutputInventorySlot extends BasicInventorySlot） */
 	List<BasicInventorySlot> getOutputSlots() {
-		return cachedUnmodifiableOutputSlots;
+		return indexedOutputSlots;
 	}
 
 	/** 获取输出列数 — GUI布局用 */

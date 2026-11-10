@@ -119,7 +119,8 @@ final class Ae2InputLaneSnapshot {
 		for (int i = 0; i < size; i++) {
 			requiredInputs[i] = host == null ? null
 					: com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.requiredLaneInput(host, i);
-			refresh(i);
+			readLane(i, null);
+			indexLane(i);
 		}
 	}
 
@@ -145,15 +146,13 @@ final class Ae2InputLaneSnapshot {
 		return start;
 	}
 
-	void remember(AEItemKey key, int index) {
-		if (index < 0 || index >= size) return;
-		if (isIndexed()) removeLane(preferredLaneMasks, preferredKeys[index], 1L << index);
-		preferredKeys[index] = key;
-		if (isIndexed()) addLane(preferredLaneMasks, key, 1L << index);
-	}
-
 	/** 重新读取单条车道（我方插入之后必须调用，其余时刻内容不会变化）。 */
 	void refresh(int index) {
+		refresh(index, null);
+	}
+
+	/** 交付后的新偏好与实际库存一起更新，槽位替换仍撤销旧偏好。 */
+	void refresh(int index, AEItemKey acceptedKey) {
 		if (index < 0 || index >= size) return;
 		if (isIndexed()) {
 			long bit = 1L << index;
@@ -162,9 +161,19 @@ final class Ae2InputLaneSnapshot {
 			emptyLaneMask &= ~bit;
 			customLaneMask &= ~bit;
 		}
+		readLane(index, acceptedKey);
+		indexLane(index);
+	}
+
+	/** 整轮 capture 已清空索引，只读状态，不再逐槽删除旧位。 */
+	private void readLane(int index, AEItemKey acceptedKey) {
 		currentKeys[index] = null;
 		IInventorySlot slot = index < source.size() ? source.get(index) : null;
-		if (slots[index] != slot) preferredKeys[index] = null;
+		if (slots[index] != slot) {
+			preferredKeys[index] = null;
+		} else if (acceptedKey != null) {
+			preferredKeys[index] = acceptedKey;
+		}
 		slots[index] = slot;
 		if (slot == null) {
 			items[index] = null;
@@ -173,7 +182,6 @@ final class Ae2InputLaneSnapshot {
 			limits[index] = 0L;
 			patchSizes[index] = 0;
 			beeTypes[index] = null;
-			indexLane(index);
 			return;
 		}
 		ItemStack stack = slot.getStack();
@@ -197,7 +205,6 @@ final class Ae2InputLaneSnapshot {
 			patchSizes[index] = patchSize;
 			beeTypes[index] = singleBeeType(stack, item, patchSize);
 		}
-		indexLane(index);
 	}
 
 	/** 完整组件键索引仅保留当前槽与各槽最近输入；插入、换槽和重新采样都会更新。 */

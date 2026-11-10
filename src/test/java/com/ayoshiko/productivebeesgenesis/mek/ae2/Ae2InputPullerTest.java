@@ -371,13 +371,13 @@ class Ae2InputPullerTest {
 		assertTrue(source.contains("Ae2InputLaneFairness.typeQuotaShare(normalQuota, typeCount)"));
 		assertTrue(source.contains("if (protectLanes && emptyLane && newLanes >= newLaneBudget)"));
 		// 容量规划走车道快照：廉价身份剪枝是数组读取，不再逐对调用 slot.getStack()/getItem()
-		assertTrue(source.contains("long slotCapacity = Math.min(slotQuota,\n"
-				+ "\t\t\t\t\t\t\tlaneCapacity(laneSnapshot, slotIdx, keyItem, entry, slotProbe));"));
+		assertTrue(source.replaceAll("\\s+", " ").contains("long slotCapacity = Math.min(slotQuota, "
+				+ "laneCapacity(laneSnapshot, slotIdx, keyItem, entry, slotProbe));"));
 		assertTrue(source.contains("if (laneItem != null && laneItem != keyItem) return 0;"));
 		// 快照必须每轮采集，且我方插入后即刻刷新，否则后续类型会读到过期车道
 		assertTrue(source.contains("laneSnapshot.capture(inputSlots, processCount, host instanceof BlockEntity entity ? entity : null);"));
 		assertTrue(source.contains("if (inserted > 0 && laneSnapshot != null) {"));
-		assertTrue(source.contains("laneSnapshot.refresh(slotIdx);"));
+		assertTrue(source.contains("laneSnapshot.refresh(slotIdx, key);"));
 	}
 
 }
