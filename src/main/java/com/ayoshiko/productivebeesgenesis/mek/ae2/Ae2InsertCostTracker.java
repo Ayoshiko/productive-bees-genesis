@@ -84,6 +84,12 @@ final class Ae2InsertCostTracker {
 	 */
 	void record(long gameTick, long costNanos) {
 		if (costNanos < 0L) return;
+		recordTile(gameTick, costNanos);
+		refreshGlobal(gameTick);
+		globalSpentNanos += costNanos;
+	}
+
+	private void recordTile(long gameTick, long costNanos) {
 		lastCostNanos = costNanos;
 		samples = Math.min(4, samples + 1);
 		averageNanos = averageNanos <= 0L
@@ -92,8 +98,6 @@ final class Ae2InsertCostTracker {
 		refreshTile(gameTick);
 		tileSpentNanos += costNanos;
 		tileInsertsThisTick++;
-		refreshGlobal(gameTick);
-		globalSpentNanos += costNanos;
 	}
 
 	/**
@@ -166,6 +170,11 @@ final class Ae2InsertCostTracker {
 
 	void recordForNetwork(Object identity, long gameTick, long costNanos) {
 		if (networkIdentity == identity) record(gameTick, costNanos);
+	}
+
+	/** 同次网络调用的其他贡献机器只更新本机预算，全服成本已由执行机器登记。 */
+	void recordSharedForNetwork(Object identity, long gameTick, long costNanos) {
+		if (networkIdentity == identity && costNanos >= 0L) recordTile(gameTick, costNanos);
 	}
 
 	/** 当前是否判定所在 ME 网络为昂贵网络（诊断日志用） */

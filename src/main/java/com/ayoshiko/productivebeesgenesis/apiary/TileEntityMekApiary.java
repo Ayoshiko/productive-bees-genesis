@@ -51,6 +51,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.LongConsumer;
 
 /**
 	 * MEK通用机械蜂箱方块实体 — 继承 TileEntityElectricMachine，复用能量/侧面/升级/GUI 体系。
@@ -410,6 +411,10 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	 */
 	List<ItemStack> directTransferProducedToCentrifuges(List<ItemStack> stacks) {
 		return directEjectHandler.transferProducedStacks(stacks);
+	}
+
+	long directTransferProducedToCentrifuges(ItemStack template, long amount, LongConsumer debit) {
+		return directEjectHandler.transferProduced(template, amount, debit);
 	}
 
 	/** Called when item-side routing changes, so same-tick direct-eject caches cannot stay stale. */

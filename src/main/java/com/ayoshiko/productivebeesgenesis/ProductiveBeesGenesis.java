@@ -52,6 +52,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.registries.RegisterEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
@@ -220,6 +221,9 @@ public final class ProductiveBeesGenesis {
 		// 注册服务端 tick 时间监测器 — 通过 Pre/Post 监听器记录每 tick 实际耗时（MSPT），
 		// 维护最近 100 tick 滚动平均，暴露 getTpsFactor() 供所有节流逻辑使用
 		NeoForge.EVENT_BUS.addListener(ServerTickTimeMonitor.getInstance()::onTickPre);
+		// 普通工厂的已付物品在整刻结束合并交付，成本计入本刻监测。
+		NeoForge.EVENT_BUS.addListener(EventPriority.HIGH, (ServerTickEvent.Post event) ->
+				Ae2IntegrationLoader.flushDeferredItemOutputs(event.getServer()));
 		NeoForge.EVENT_BUS.addListener(ServerTickTimeMonitor.getInstance()::onTickPost);
 		// 推进全局游戏刻时钟 — 槽位对象拿不到 Level，「外部退回窗口」靠它判断凭据是否过期
 		NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post event) -> ServerTickClock.tick());
@@ -238,6 +242,8 @@ public final class ProductiveBeesGenesis {
 		// 避免 ItemCraftedEvent 在输入被消耗后读到空物品的时序问题。
 		// 服务器停止时清理静态缓存，防止跨存档数据泄漏
 		NeoForge.EVENT_BUS.addListener(this::onServerStopped);
+		NeoForge.EVENT_BUS.addListener((ServerStoppingEvent event) ->
+				Ae2IntegrationLoader.cancelDeferredItemOutputs(event.getServer()));
 	}
 
 	/** 标签事件仅在对应资源已被接收时发布；候选管理器不影响当前生产。 */

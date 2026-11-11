@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.LongConsumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -41,6 +42,8 @@ class FrozenItemBatchMinecraftTest {
             0, false, false, 1, false, false, false, true, true, false);
     private static final ApiaryBatchUpgradeSnapshot AE_CENTRIFUGE = new ApiaryBatchUpgradeSnapshot(
             0, false, false, 1, false, false, false, true, false, true);
+    private static final ApiaryBatchUpgradeSnapshot CENTRIFUGE = new ApiaryBatchUpgradeSnapshot(
+            0, false, false, 1, false, false, false, false, false, true);
 
     @BeforeAll
     static void configs() {
@@ -284,20 +287,20 @@ class FrozenItemBatchMinecraftTest {
     }
 
     @Test
-    void priorityEnabledRetainsLiveHoldChecksAndTheOriginalPerSourceRoute() {
+    void priorityBatchRetainsLiveHoldChecksAfterPartialReceipt() {
         var fixture = fixture(false);
         fixture.tile().setCentrifugePriorityEnabled(true);
         freeze(fixture, new ItemStack(Items.DIAMOND, 4), new ItemStack(Items.DIAMOND, 6));
         var available = new boolean[]{true};
         doAnswer(call -> available[0]).when(fixture.tile()).shouldHoldForCentrifuge(any());
         doAnswer(call -> {
-            List<ItemStack> offered = call.getArgument(0);
-            assertEquals(1, offered.size());
-            assertEquals(4, offered.getFirst().getCount());
-            offered.getFirst().shrink(4);
+            ItemStack offered = call.getArgument(0);
+            assertEquals(Items.DIAMOND, offered.getItem());
+            assertEquals(10L, call.<Long>getArgument(1));
+            call.<LongConsumer>getArgument(2).accept(4);
             available[0] = false;
-            return List.of();
-        }).when(fixture.tile()).directTransferProducedToCentrifuges(anyList());
+            return 4L;
+        }).when(fixture.tile()).directTransferProducedToCentrifuges(any(), anyLong(), any());
         doAnswer(call -> {
             ItemStack stack = call.getArgument(0);
             assertFalse(available[0]);
@@ -305,9 +308,126 @@ class FrozenItemBatchMinecraftTest {
             return stack.getCount();
         }).when(fixture.tile()).pushGeneratedItemToAe(any());
         assertTrue(fixture.processor().flushFrozen(AE_CENTRIFUGE));
-        verify(fixture.tile(), times(1)).directTransferProducedToCentrifuges(anyList());
+        verify(fixture.tile()).directTransferProducedToCentrifuges(any(), anyLong(), any());
+        verify(fixture.tile(), never()).directTransferProducedToCentrifuges(anyList());
         verify(fixture.tile(), times(1)).pushGeneratedItemToAe(any());
         verify(fixture.tile(), never()).pushGeneratedItemToAe(any(), anyLong());
+    }
+
+    @Test
+    void centrifugeBatchPreservesIdentityOrderAndDebitsEachReceiptImmediately() {
+        var fixture = fixture(false);
+        fixture.tile().setCentrifugePriorityEnabled(true);
+        ItemStack named = new ItemStack(Items.DIAMOND, 2);
+        named.set(DataComponents.CUSTOM_NAME, Component.literal("separate"));
+        freeze(fixture, new ItemStack(Items.DIAMOND, 4), new ItemStack(Items.DIAMOND, 6),
+                named, new ItemStack(Items.DIAMOND, 3));
+        List<ItemStack> sources = List.copyOf(fixture.production().items());
+        List<String> events = new ArrayList<>();
+        doAnswer(call -> {
+            ItemStack template = call.getArgument(0);
+            assertEquals(10L, call.<Long>getArgument(1));
+            LongConsumer debit = call.getArgument(2);
+            debit.accept(4);
+            assertTrue(sources.getFirst().isEmpty());
+            assertEquals(6, sources.get(1).getCount());
+            assertEquals(Items.DIAMOND, template.getItem());
+            assertFalse(fixture.processor().flushFrozen(CENTRIFUGE));
+            debit.accept(6);
+            events.add("plain-10");
+            return 10L;
+        }).when(fixture.tile()).directTransferProducedToCentrifuges(any(), anyLong(), any());
+        doAnswer(call -> {
+            List<ItemStack> offered = call.getArgument(0);
+            ItemStack stack = offered.getFirst();
+            events.add((stack.has(DataComponents.CUSTOM_NAME) ? "named-" : "plain-") + stack.getCount());
+            stack.setCount(0);
+            return List.of();
+        }).when(fixture.tile()).directTransferProducedToCentrifuges(anyList());
+        assertTrue(fixture.processor().flushFrozen(CENTRIFUGE));
+        assertEquals(List.of("plain-10", "named-2", "plain-3"), events);
+        assertTrue(sources.stream().allMatch(ItemStack::isEmpty));
+        verify(fixture.tile(), never()).pushGeneratedItemToAe(any());
+        verify(fixture.tile(), times(1)).directTransferProducedToCentrifuges(any(), anyLong(), any());
+    }
+
+    @Test
+    void completedAePrefixDoesNotEraseTheRemainingCentrifugeTemplate() {
+        var fixture = fixture(false);
+        fixture.tile().setCentrifugePriorityEnabled(true);
+        freeze(fixture, new ItemStack(Items.DIAMOND, 4), new ItemStack(Items.DIAMOND, 6));
+        boolean[] available = {false};
+        doAnswer(call -> available[0]).when(fixture.tile()).shouldHoldForCentrifuge(any());
+        doAnswer(call -> {
+            available[0] = true;
+            return call.<ItemStack>getArgument(0).getCount();
+        }).when(fixture.tile()).pushGeneratedItemToAe(any());
+        doAnswer(call -> {
+            ItemStack template = call.getArgument(0);
+            assertEquals(Items.DIAMOND, template.getItem());
+            assertEquals(6L, call.<Long>getArgument(1));
+            call.<LongConsumer>getArgument(2).accept(6);
+            return 6L;
+        }).when(fixture.tile()).directTransferProducedToCentrifuges(any(), anyLong(), any());
+        assertTrue(fixture.processor().flushFrozen(AE_CENTRIFUGE));
+        verify(fixture.tile()).pushGeneratedItemToAe(any());
+        verify(fixture.tile()).directTransferProducedToCentrifuges(any(), anyLong(), any());
+    }
+
+    @Test
+    void failedLaterCentrifugeRouteKeepsDebitedPrefixAndRestoresLongSuffix() {
+        var fixture = fixture(true);
+        freeze(fixture, new ItemStack(Items.DIAMOND, Integer.MAX_VALUE),
+                new ItemStack(Items.DIAMOND, Integer.MAX_VALUE));
+        long accepted = (long) Integer.MAX_VALUE + 7;
+        doAnswer(call -> {
+            assertEquals(2L * Integer.MAX_VALUE, call.<Long>getArgument(1));
+            call.<LongConsumer>getArgument(2).accept(Integer.MAX_VALUE);
+            call.<LongConsumer>getArgument(2).accept(7);
+            throw new IllegalStateException("next target unavailable");
+        }).when(fixture.tile()).directTransferProducedToCentrifuges(any(), anyLong(), any());
+        assertEquals("next target unavailable", assertThrows(IllegalStateException.class,
+                () -> fixture.processor().flushFrozen(CENTRIFUGE)).getMessage());
+        assertEquals(1, fixture.production().items().size());
+        assertEquals(Integer.MAX_VALUE - 7, fixture.production().items().getFirst().getCount());
+        var restored = restore(fixture);
+        long[] resumed = {0};
+        doAnswer(call -> {
+            ItemStack stack = call.<List<ItemStack>>getArgument(0).getFirst();
+            resumed[0] += stack.getCount();
+            stack.setCount(0);
+            return List.of();
+        }).when(restored.tile()).directTransferProducedToCentrifuges(anyList());
+        assertTrue(restored.processor().flushFrozen(CENTRIFUGE));
+        assertEquals(2L * Integer.MAX_VALUE, accepted + resumed[0]);
+    }
+
+    @Test
+    void unknownCentrifugeChunkHasOneCustodyOwnerAndRetainsTheUnattemptedSuffix() {
+        var fixture = fixture(true);
+        freeze(fixture, new ItemStack(Items.DIAMOND, Integer.MAX_VALUE),
+                new ItemStack(Items.DIAMOND, Integer.MAX_VALUE));
+        long[] received = {0};
+        doAnswer(call -> {
+            ItemStack template = call.getArgument(0);
+            long handed = OutputCustody.of(fixture.tile()).handoffItem(
+                    template, Integer.MAX_VALUE, "test-centrifuge", () -> {
+                        received[0] += 9;
+                        throw new IllegalStateException("receipt lost");
+                    });
+            call.<LongConsumer>getArgument(2).accept(handed);
+            return handed;
+        }).when(fixture.tile()).directTransferProducedToCentrifuges(any(), anyLong(), any());
+        assertFalse(fixture.processor().flushFrozen(CENTRIFUGE));
+        assertEquals(9, received[0]);
+        assertEquals(Integer.MAX_VALUE, OutputCustody.of(fixture.tile()).amount());
+        assertEquals(1, fixture.production().items().size());
+        assertEquals(Integer.MAX_VALUE, fixture.production().items().getFirst().getCount());
+        var restored = restore(fixture);
+        assertFalse(restored.processor().flushFrozen(CENTRIFUGE));
+        verify(restored.tile(), never()).directTransferProducedToCentrifuges(anyList());
+        verify(restored.tile(), never()).directTransferProducedToCentrifuges(any(), anyLong(), any());
+        assertEquals(Integer.MAX_VALUE, OutputCustody.of(restored.tile()).amount());
     }
 
     @Test

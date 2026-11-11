@@ -297,8 +297,13 @@ public class BeeProduceProcessor {
         List<ItemStack> frozenItems = production.items();
         boolean batchAeOutput = upgrades.directAeOutputEnabled() && !apiary.isCentrifugePriorityEnabled()
                 && frozenItems.size() > 1;
+        boolean batchCentrifugeOutput = upgrades.centrifugeDirectTransferEnabled()
+                && (apiary.isCentrifugePriorityEnabled() || !upgrades.directAeOutputEnabled())
+                && frozenItems.size() > 1;
         try {
-            if (batchAeOutput) frozenItemBatch.prepare(frozenItems);
+            if (batchAeOutput || batchCentrifugeOutput) {
+                frozenItemBatch.prepare(frozenItems, batchCentrifugeOutput);
+            }
             for (int sourceIndex = 0; sourceIndex < frozenItems.size(); sourceIndex++) {
                 ItemStack stack = frozenItems.get(sourceIndex);
                 if (stack.isEmpty() || custody.blocked()) continue;
@@ -312,7 +317,9 @@ public class BeeProduceProcessor {
                         }
                     }
                     if (!stack.isEmpty() && upgrades.centrifugeDirectTransferEnabled() && !custody.blocked()) {
-                        apiary.directTransferProducedToCentrifuges(List.of(stack));
+                        if (!batchCentrifugeOutput || !frozenItemBatch.pushToCentrifuges(sourceIndex, apiary)) {
+                            apiary.directTransferProducedToCentrifuges(List.of(stack));
+                        }
                     }
                     if (!stack.isEmpty() && upgrades.directContainerOutputEnabled() && !apiary.shouldHoldForCentrifuge(stack)) {
                         stack.shrink(apiary.pushGeneratedItemToNeighbors(stack));
@@ -331,7 +338,7 @@ public class BeeProduceProcessor {
                 }
             }
         } finally {
-            if (batchAeOutput) {
+            if (batchAeOutput || batchCentrifugeOutput) {
                 itemsChanged |= frozenItemBatch.changed();
                 frozenItemBatch.clear();
             }

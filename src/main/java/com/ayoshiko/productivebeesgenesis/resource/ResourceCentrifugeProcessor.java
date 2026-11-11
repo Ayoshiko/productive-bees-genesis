@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /** PB 与 Genesis 离心机共用的实际消费边界；世界账户保存已付费进度和唯一冻结结果。 */
 public final class ResourceCentrifugeProcessor {
@@ -46,6 +47,13 @@ public final class ResourceCentrifugeProcessor {
 	public interface LocalBatch {
 		CompoundTag snapshot();
 		void commit();
+		/** false 必须没有副作用；工厂接管原产物后才申请账户的延期确认。 */
+		default boolean defer(Supplier<Completion> completion) { return false; }
+
+		interface Completion {
+			void complete();
+			void uncertain(String reason);
+		}
 	}
 	public enum Result { UNMANAGED, BLOCKED, WORKING }
 	private record Cached(ResourceAccount account, CompoundTag raw, HolderLookup.Provider provider,
@@ -314,7 +322,7 @@ public final class ResourceCentrifugeProcessor {
 			var next = remaining == 0 ? null : work.advance(remaining,
 					consumed == 0 ? work.seed : level.random.nextLong());
 			CompoundTag nextWork = next == null ? null : next.save(level.registryAccess());
-			ResourceAccount.validateWork(access.lane(), nextWork, account.centrifugeWork);
+			account.validateCentrifugeWork(access.lane(), nextWork);
 			var context = new CompoundTag();
 			context.putString("host", "resource_centrifuging");
 			context.putInt("lane", access.lane());
@@ -328,7 +336,7 @@ public final class ResourceCentrifugeProcessor {
 			ticket = account.reserve(host.reference(), work.revision, context, maximum);
 			account.start(ticket);
 			var produced = rolls.sampleWithRolls(Math.multiplyExact((long) consumed, units), work.seed).exactAmounts();
-			account.freeze(ticket, produced);
+			account.freezeCentrifuge(ticket, produced, nextWork);
 			if (access.consumeEnergy(energyCost, false) != energyCost) throw new IllegalStateException("Incomplete energy debit");
 			if (host.account(access.entity()) != account || !exact(access.input(), input, input.getCount())) {
 				throw new IllegalStateException("Resource source changed during energy debit");
@@ -339,21 +347,54 @@ public final class ResourceCentrifugeProcessor {
 			int expected = input.getCount() - consumed;
 			if ((expected == 0 ? !access.input().isEmpty() : !exact(access.input(), input, expected))
 					|| host.account(access.entity()) != account) throw new IllegalStateException("Resource input changed during debit");
-			if (localBatch != null) localBatch.commit();
+			var frozenTicket = ticket;
+			boolean deferred = localBatch != null && localBatch.defer(() -> {
+				var pending = account.deferCentrifuge(frozenTicket, access.lane(), nextWork);
+				return new LocalBatch.Completion() {
+					private boolean completed;
+
+					@Override
+					public void complete() {
+						if (completed) throw new IllegalStateException("Resource completion already confirmed");
+						if (access.entity().isRemoved() || host.account(access.entity()) != account) {
+							throw new IllegalStateException("Resource host changed before output confirmation");
+						}
+						pending.complete();
+						completed = true;
+						recordCompletion(access, host, account, level, work, next, produced);
+					}
+
+					@Override
+					public void uncertain(String reason) {
+						if (completed) return;
+						try {
+							pending.uncertain(reason);
+						} finally {
+							access.progress(remaining, required, false);
+							access.entity().setChanged();
+							host.status("production_uncertain");
+						}
+					}
+				};
+			});
+			if (!deferred && localBatch != null) localBatch.commit();
 			access.progress(remaining, required, true);
 			access.entity().setChanged();
-			host.account(access.entity());
-			account.commitCentrifuge(ticket, access.lane(), nextWork);
-			host.productionMonitor().record(produced);
-			host.productionMonitor().observe(access.lane(), work.recipe.outputs(), ResourceProductionSnapshot.State.PRODUCING, level.getGameTime());
-			if (next == null) decoded.remove(access.lane());
-			else decoded.put(access.lane(), new Cached(account, account.centrifugeWork(access.lane()), level.registryAccess(), next));
-			host.status("ready");
+			if (!deferred) {
+				host.account(access.entity());
+				account.commitCentrifuge(ticket, access.lane(), nextWork);
+				recordCompletion(access, host, account, level, work, next, produced);
+			}
 			return Result.WORKING;
 		} catch (RuntimeException failure) {
 			if (ticket != null) {
-				try { account.suspendProduction(account.productionTicket(), "Resource centrifuge outcome uncertain"); }
-				catch (RuntimeException isolationFailure) { failure.addSuppressed(isolationFailure); }
+				try {
+					if (!account.laneSuspended(access.lane())) {
+						account.suspendProduction(ticket, "Resource centrifuge outcome uncertain");
+					}
+				} catch (RuntimeException isolationFailure) {
+					failure.addSuppressed(isolationFailure);
+				}
 				ProductiveBeesGenesis.LOGGER.error("资源离心结果未知，账户 {} 请求 {}，位置 {}",
 						ticket.source().sourceId(), ticket.sequence(), access.entity().getBlockPos(), failure);
 			} else {
@@ -363,6 +404,18 @@ public final class ResourceCentrifugeProcessor {
 			host.status(ticket == null ? "invalid_centrifuge_plan" : "production_uncertain");
 			return Result.BLOCKED;
 		}
+	}
+
+	private void recordCompletion(Access access, ResourceHiveHost host, ResourceAccount account,
+			ServerLevel level, ResourceCentrifugeWork work, ResourceCentrifugeWork next,
+			Map<ResourceKey, BigInteger> produced) {
+		host.productionMonitor().record(produced);
+		host.productionMonitor().observe(access.lane(), work.recipe.outputs(),
+				ResourceProductionSnapshot.State.PRODUCING, level.getGameTime());
+		if (next == null) decoded.remove(access.lane());
+		else decoded.put(access.lane(), new Cached(account, account.centrifugeWork(access.lane()),
+				level.registryAccess(), next));
+		host.status("ready");
 	}
 
 	private static boolean exact(ItemStack actual, ItemStack expected, int count) {

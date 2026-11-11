@@ -108,6 +108,82 @@ class ResourceAccountSnapshotsMinecraftTest {
         assertEquals(1, ResourceExactAmounts.load(row(store.save()).get("available")).size());
     }
 
+    @Test
+    void waitingSnapshotKeepsOriginalEvidenceAndMovesPaidWorkOnlyAfterConfirmation() {
+        var store = new ResourceAccounts(() -> {});
+        var account = account(store);
+        var context = new CompoundTag();
+        context.putString("host", "resource_centrifuging");
+        context.putInt("lane", 0);
+        context.putInt("next_ticks", 5);
+        context.putString("evidence", "x".repeat(16 * 1024));
+        var originalContext = context.copy();
+        var nextWork = new CompoundTag();
+        nextWork.putInt("paid_ticks", 5);
+        nextWork.putLong("seed", 93L);
+        nextWork.putByteArray("payload", new byte[60 * 1024]);
+        var expectedWork = nextWork.copy();
+        var ticket = account.reserve(account.reference(), 7, context, Map.of(HYDROGEN, 100L));
+        long reserved = store.reservedStorage();
+        account.start(ticket);
+        var started = store.save();
+        account.freezeCentrifuge(ticket, Map.of(HYDROGEN, 23L), nextWork);
+        var frozen = store.save();
+        var frozenRequest = row(frozen).getCompound("production");
+        assertEquals("FROZEN", frozenRequest.getString("phase"));
+        assertTrue(frozenRequest.getBoolean("next_work_captured"));
+        assertEquals(expectedWork, frozenRequest.getCompound("next_work"));
+        assertEquals(Map.of(HYDROGEN, BigInteger.valueOf(100)), ResourceExactAmounts.load(frozenRequest.get("maximum")));
+        assertEquals(Map.of(HYDROGEN, BigInteger.valueOf(100)), account.production.capacityReservation());
+        assertFalse(account.canReserve(account.reference(), Map.of(HYDROGEN, 1L)));
+        assertEquals("STARTED", row(started).getCompound("production").getString("phase"));
+        assertFalse(row(started).getCompound("production").contains("next_work_captured"));
+        nextWork.putInt("paid_ticks", 999);
+        nextWork.putLong("seed", 94L);
+        frozenRequest.getCompound("next_work").putLong("seed", 95L);
+        assertEquals(expectedWork, account.requestData(ticket).getCompound("next_work"));
+        var completion = account.deferCentrifuge(ticket, 0, expectedWork);
+        var saved = store.save();
+        var pending = row(saved).getCompound("suspended_lanes").getCompound("0").getCompound("production");
+        assertEquals("WAITING_OUTPUT", pending.getString("phase"));
+        assertTrue(pending.getBoolean("next_work_captured"));
+        assertEquals(originalContext, pending.getCompound("context"));
+        assertEquals(expectedWork, pending.getCompound("next_work"));
+        assertFalse(row(saved).contains("centrifuge_work"));
+        assertEquals(Map.of(HYDROGEN, BigInteger.valueOf(23)), account.reservedCapacity());
+        assertTrue(store.reservedStorage() <= reserved);
+        var file = new CompoundTag();
+        file.put("data", saved);
+        net.minecraft.nbt.NbtUtils.addCurrentDataVersion(file);
+        assertTrue(file.sizeInBytes() <= reserved);
+
+        var restoredStore = ResourceAccounts.load(saved, () -> {});
+        assertFalse(restoredStore.hasInvalidData());
+        var restored = restoredStore.find(ticket.source().sourceId());
+        assertTrue(restored.laneSuspended(0));
+        assertEquals(Map.of(HYDROGEN, BigInteger.valueOf(23)), restored.reservedCapacity());
+        assertTrue(restored.available().isEmpty());
+        assertNull(restored.centrifugeWork(0));
+        assertNull(restored.suspendedLanes.get(0).activeCompletion);
+        restored.resolveProduction(OWNER, ticket, true);
+        assertEquals(5, restored.centrifugeWork(0).getInt("paid_ticks"));
+        assertEquals(93L, restored.centrifugeWork(0).getLong("seed"));
+        assertEquals(23L, restored.available().get(HYDROGEN));
+
+        pending.getCompound("next_work").putInt("paid_ticks", 888);
+        pending.getCompound("next_work").putLong("seed", 96L);
+        pending.getCompound("context").putString("evidence", "caller changed snapshot");
+        assertEquals(5, account.requestData(ticket).getCompound("next_work").getInt("paid_ticks"));
+        assertEquals(93L, account.requestData(ticket).getCompound("next_work").getLong("seed"));
+        assertEquals(originalContext, account.productionContext(ticket));
+        completion.complete();
+        assertEquals(5, account.centrifugeWork(0).getInt("paid_ticks"));
+        assertEquals(93L, account.centrifugeWork(0).getLong("seed"));
+        assertEquals(23L, account.available().get(HYDROGEN));
+        assertFalse(row(store.save()).contains("suspended_lanes"));
+        assertEquals("WAITING_OUTPUT", pending.getString("phase"));
+    }
+
     private static CompoundTag row(CompoundTag root) {
         return root.getList("accounts", Tag.TAG_COMPOUND).getCompound(0);
     }

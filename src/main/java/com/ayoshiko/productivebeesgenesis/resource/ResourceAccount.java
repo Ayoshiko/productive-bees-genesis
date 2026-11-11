@@ -47,7 +47,7 @@ public final class ResourceAccount {
 		}
 	}
 
-	enum Phase { RESERVED, STARTED, FROZEN }
+	enum Phase { RESERVED, STARTED, FROZEN, WAITING_OUTPUT }
 
 	static final class Production {
 		final long sequence;
@@ -56,22 +56,45 @@ public final class ResourceAccount {
 		final Map<ResourceKey, BigInteger> maximum;
 		final Map<ResourceKey, BigInteger> result;
 		final Phase phase;
+		final CompoundTag nextWork;
+		final boolean nextWorkCaptured;
 
 		Production(long sequence, long revision, CompoundTag context, Map<ResourceKey, BigInteger> maximum,
 				Map<ResourceKey, BigInteger> result, Phase phase) {
+			this(sequence, revision, context, maximum, result, phase, null, false);
+		}
+
+		Production(long sequence, long revision, CompoundTag context, Map<ResourceKey, BigInteger> maximum,
+				Map<ResourceKey, BigInteger> result, Phase phase, CompoundTag nextWork, boolean nextWorkCaptured) {
 			this.sequence = sequence;
 			this.recipeRevision = revision;
 			this.context = context.copy();
 			this.maximum = ResourceExactAmounts.copy(maximum);
 			this.result = ResourceExactAmounts.copy(result);
 			this.phase = phase;
+			this.nextWork = nextWork == null ? null : nextWork.copy();
+			this.nextWorkCaptured = nextWorkCaptured;
 		}
 
 		Production with(Phase next, Map<ResourceKey, BigInteger> output) {
-			return new Production(this, next, output);
+			return new Production(this, next, output, nextWork, nextWorkCaptured);
 		}
 
-		private Production(Production previous, Phase next, Map<ResourceKey, BigInteger> output) {
+		Production freezeCentrifuge(Map<ResourceKey, BigInteger> output, CompoundTag work) {
+			return new Production(this, Phase.FROZEN, output, work == null ? null : work.copy(), true);
+		}
+
+		Production awaitingOutput() {
+			return new Production(this, Phase.WAITING_OUTPUT, result, nextWork, nextWorkCaptured);
+		}
+
+		Map<ResourceKey, BigInteger> capacityReservation() {
+			// 等待态只在扣费、扣料和 PB 所有权交接全部确认后进入；其资源结果不会再变化。
+			return phase == Phase.WAITING_OUTPUT ? result : maximum;
+		}
+
+		private Production(Production previous, Phase next, Map<ResourceKey, BigInteger> output,
+				CompoundTag work, boolean nextWorkCaptured) {
 			sequence = previous.sequence;
 			recipeRevision = previous.recipeRevision;
 			// 首次接管已深拷贝，之后只有本账户读；阶段转换共享封闭证据。
@@ -79,6 +102,8 @@ public final class ResourceAccount {
 			maximum = previous.maximum;
 			result = output;
 			phase = next;
+			nextWork = work;
+			this.nextWorkCaptured = nextWorkCaptured;
 		}
 	}
 
@@ -93,7 +118,19 @@ public final class ResourceAccount {
 	Map<ResourceKey, BigInteger> available = Map.of();
 	final Map<Integer, CompoundTag> centrifugeWork = new LinkedHashMap<>();
 	Production production;
-	record SuspendedProduction(Production production, String reason) {}
+	static final class SuspendedProduction {
+		final Production production;
+		String reason;
+		DeferredCentrifuge activeCompletion;
+
+		SuspendedProduction(Production production, String reason) {
+			this.production = production;
+			this.reason = reason;
+		}
+
+		Production production() { return production; }
+		String reason() { return reason; }
+	}
 	final Map<Integer, SuspendedProduction> suspendedLanes = new LinkedHashMap<>();
 	Transfer transfer;
 	record SuspendedTransfer(Transfer transfer, String reason) {}
@@ -114,6 +151,7 @@ public final class ResourceAccount {
 		sortedKeys = List.of();
 		observedAvailable = null;
 		boundedAvailable = Map.of();
+		for (var pending : suspendedLanes.values()) pending.activeCompletion = null;
 	}
 
 	List<ResourceKey> sortedAvailableKeys() {
@@ -221,22 +259,153 @@ public final class ResourceAccount {
 	}
 
 	static void validateWork(int lane, CompoundTag value, Map<Integer, CompoundTag> work) {
+		if (workBytes(lane, value, work) > MAX_WORK_BYTES) {
+			throw new IllegalArgumentException("Resource work snapshot budget exceeded");
+		}
+	}
+
+	private static long workBytes(int lane, CompoundTag value, Map<Integer, CompoundTag> work) {
 		if (lane < 0 || lane >= 256 || (value != null && value.sizeInBytes() > MAX_LANE_BYTES)) {
 			throw new IllegalArgumentException("Invalid resource work snapshot");
 		}
 		long bytes = value == null ? 0 : value.sizeInBytes();
-		for (var entry : work.entrySet()) if (entry.getKey() != lane) bytes += entry.getValue().sizeInBytes();
+		for (var entry : work.entrySet()) {
+			if (entry.getKey() != lane) bytes += entry.getValue().sizeInBytes();
+		}
+		return bytes;
+	}
+
+	/** 等待交付的下一段仍属已付工作，后续车道必须计入同一整机保存预算。 */
+	void validateCentrifugeWork(int lane, CompoundTag nextWork) {
+		accounts.checkThread();
+		long bytes = workBytes(lane, nextWork, centrifugeWork);
+		for (var entry : suspendedLanes.entrySet()) {
+			var pending = entry.getValue().production;
+			if (entry.getKey() != lane && pending.nextWork != null
+					&& (pending.phase == Phase.WAITING_OUTPUT || pending.nextWorkCaptured)) {
+				bytes += pending.nextWork.sizeInBytes();
+			}
+		}
+		if (production != null && productionLane(production.context) != lane
+				&& production.nextWorkCaptured && production.nextWork != null) {
+			bytes += production.nextWork.sizeInBytes();
+		}
 		if (bytes > MAX_WORK_BYTES) throw new IllegalArgumentException("Resource work snapshot budget exceeded");
+	}
+
+	static void validateDeferredProgress(CompoundTag context, CompoundTag nextWork) {
+		if (!context.contains("next_ticks")) return;
+		if (!context.contains("next_ticks", net.minecraft.nbt.Tag.TAG_INT)) {
+			throw new IllegalArgumentException("Invalid deferred centrifuge progress");
+		}
+		int ticks = context.getInt("next_ticks");
+		if (ticks < 0 || ticks == 0 && nextWork != null || ticks > 0 && (nextWork == null
+				|| !nextWork.contains("paid_ticks", net.minecraft.nbt.Tag.TAG_INT)
+				|| nextWork.getInt("paid_ticks") != ticks)) {
+			throw new IllegalArgumentException("Deferred centrifuge work does not match paid progress");
+		}
+	}
+
+	/** 本地已付结果已被唯一 pending 接管；只延后确认，资产仍保存在原请求。 */
+	DeferredCentrifuge deferCentrifuge(Ticket ticket, int lane, CompoundTag nextWork) {
+		checkProduction(ticket, Phase.FROZEN);
+		if (!"resource_centrifuging".equals(production.context.getString("host"))
+				|| productionLane(production.context) != lane || suspendedLanes.containsKey(lane)) {
+			throw new IllegalStateException("Resource centrifuge request does not own this lane");
+		}
+		if (!production.nextWorkCaptured || !Objects.equals(production.nextWork, nextWork)) {
+			throw new IllegalStateException("Deferred centrifuge work differs from its frozen plan");
+		}
+		validateCentrifugeWork(lane, production.nextWork);
+		var pending = new SuspendedProduction(production.awaitingOutput(),
+				"Paid centrifuge output awaiting delivery confirmation");
+		var completion = new DeferredCentrifuge(ticket, lane, pending);
+		accounts.beforeChange(this);
+		pending.activeCompletion = completion;
+		suspendedLanes.put(lane, pending);
+		production = null;
+		// 原周期已有确定扣费扣料回执；下一段只由等待请求持有，不能同时继续运行。
+		centrifugeWork.remove(lane);
+		accounts.releaseStorage(this);
+		return completion;
+	}
+
+	/** 只在同一活动批次内有效；保存只包含请求，恢复必须经原人工核验入口。 */
+	final class DeferredCentrifuge {
+		private final Ticket ticket;
+		private final int lane;
+		private final SuspendedProduction pending;
+		private boolean settling;
+
+		private DeferredCentrifuge(Ticket ticket, int lane, SuspendedProduction pending) {
+			this.ticket = ticket;
+			this.lane = lane;
+			this.pending = pending;
+		}
+
+		void complete() {
+			checkActive();
+			checkNotSuspended();
+			if (production != null || transfer != null) {
+				throw new IllegalStateException("Resource request is still executing");
+			}
+			validateCentrifugeWork(lane, pending.production.nextWork);
+			var next = ResourceExactAmounts.plus(available, pending.production.result);
+			var work = pending.production.nextWork;
+			settling = true;
+			try {
+				accounts.beforeChange(ResourceAccount.this);
+				available = next;
+				if (work == null) centrifugeWork.remove(lane);
+				else centrifugeWork.put(lane, work);
+				suspendedLanes.remove(lane);
+				pending.activeCompletion = null;
+				accounts.releaseStorage(ResourceAccount.this);
+			} finally {
+				settling = false;
+			}
+		}
+
+		void uncertain(String explanation) {
+			String checkedReason = reason(explanation);
+			checkActive();
+			settling = true;
+			try {
+				accounts.beforeChange(ResourceAccount.this);
+				pending.reason = checkedReason;
+			} finally {
+				// 存储隔离时原等待请求仍完整；释放活动权限后不允许任何自动重试。
+				pending.activeCompletion = null;
+				settling = false;
+			}
+		}
+
+		private void checkActive() {
+			checkReference(ticket.source());
+			if (binding == null || settling || suspendedLanes.get(lane) != pending
+					|| pending.activeCompletion != this || pending.production.sequence != ticket.sequence()
+					|| pending.production.phase != Phase.WAITING_OUTPUT) {
+				throw new IllegalStateException("Stale centrifuge delivery confirmation");
+			}
+		}
 	}
 
 	/** 与已冻结产物在一次账户变更中提交下一段已付费进度，避免保存时出现半份状态。 */
 	void commitCentrifuge(Ticket ticket, int lane, CompoundTag nextWork) {
 		checkProduction(ticket, Phase.FROZEN);
-		validateWork(lane, nextWork, centrifugeWork);
-		var copied = nextWork == null ? null : nextWork.copy();
+		if (production.nextWorkCaptured && !Objects.equals(production.nextWork, nextWork)) {
+			throw new IllegalStateException("Committed centrifuge work differs from its frozen plan");
+		}
+		validateCentrifugeWork(lane, nextWork);
+		CompoundTag copied = production.nextWork;
+		if (!production.nextWorkCaptured && nextWork != null) copied = nextWork.copy();
 		var next = ResourceExactAmounts.plus(available, production.result);
 		accounts.beforeChange(this);
-		if (copied == null) centrifugeWork.remove(lane); else centrifugeWork.put(lane, copied);
+		if (copied == null) {
+			centrifugeWork.remove(lane);
+		} else {
+			centrifugeWork.put(lane, copied);
+		}
 		available = next;
 		production = null;
 		accounts.releaseStorage(this);
@@ -378,6 +547,32 @@ public final class ResourceAccount {
 		production = next;
 	}
 
+	/** 在扣费扣料前封闭保存下一段计划；未知结果仍须核验，不能直接恢复运行。 */
+	void freezeCentrifuge(Ticket ticket, Map<ResourceKey, ? extends Number> result, CompoundTag nextWork) {
+		checkProduction(ticket, Phase.STARTED);
+		int lane = productionLane(production.context);
+		if (!"resource_centrifuging".equals(production.context.getString("host")) || lane < 0
+				|| !production.context.contains("next_ticks", net.minecraft.nbt.Tag.TAG_INT)) {
+			throw new IllegalArgumentException("Missing centrifuge progress plan");
+		}
+		validateDeferredProgress(production.context, nextWork);
+		validateCentrifugeWork(lane, nextWork);
+		long workBytes = nextWork == null ? 0 : nextWork.sizeInBytes();
+		for (var work : centrifugeWork.values()) workBytes += work.sizeInBytes();
+		for (var pending : suspendedLanes.values()) {
+			if (pending.production.nextWork != null
+					&& (pending.production.phase == Phase.WAITING_OUTPUT || pending.production.nextWorkCaptured)) {
+				workBytes += pending.production.nextWork.sizeInBytes();
+			}
+		}
+		if (workBytes > MAX_WORK_BYTES) throw new IllegalArgumentException("Resource work snapshot budget exceeded");
+		var checked = ResourceExactAmounts.copy(result);
+		ResourceExactAmounts.within(checked, production.maximum);
+		var next = production.freezeCentrifuge(checked, nextWork);
+		accounts.beforeChange(this);
+		production = next;
+	}
+
 	/** 仅在外层宿主正常完成后入账；重复提交同一票据会被拒绝。 */
 	public void commit(Ticket ticket) {
 		checkProduction(ticket, Phase.FROZEN);
@@ -427,7 +622,7 @@ public final class ResourceAccount {
 		if (reservedCapacitySnapshot == null) {
 			var result = available;
 			for (var pending : suspendedLanes.values()) {
-				result = ResourceExactAmounts.plus(result, pending.production.maximum);
+				result = ResourceExactAmounts.plus(result, pending.production.capacityReservation());
 			}
 			for (var pending : suspendedTransfers.values()) {
 				result = ResourceExactAmounts.plus(result, Map.of(pending.transfer.key, pending.transfer.amount));
@@ -549,7 +744,11 @@ public final class ResourceAccount {
 		int lane = productionLane(pending.context);
 		boolean isolated = lane >= 0 && suspendedLanes.containsKey(lane)
 				&& suspendedLanes.get(lane).production.sequence == ticket.sequence();
-		if ((!isolated && suspension.isEmpty()) || confirmCompleted && pending.phase != Phase.FROZEN) {
+		if (isolated && suspendedLanes.get(lane).activeCompletion != null) {
+			throw new IllegalStateException("Centrifuge delivery confirmation is still active");
+		}
+		if ((!isolated && suspension.isEmpty())
+				|| confirmCompleted && pending.phase != Phase.FROZEN && pending.phase != Phase.WAITING_OUTPUT) {
 			throw new IllegalStateException("Production outcome has not been established");
 		}
 	}
@@ -563,10 +762,18 @@ public final class ResourceAccount {
 		boolean isolatedLane = lane >= 0 && suspendedLanes.containsKey(lane)
 				&& suspendedLanes.get(lane).production.sequence == ticket.sequence();
 		var next = confirmCompleted ? ResourceExactAmounts.plus(available, pending.result) : available;
+		boolean restoreWork = pending.phase == Phase.WAITING_OUTPUT
+				|| confirmCompleted && pending.nextWorkCaptured;
+		if (restoreWork) validateCentrifugeWork(lane, pending.nextWork);
 		accounts.beforeChange(this);
 		available = next;
-		// 管理员已核验并清空旧加工输入；旧付费进度不能再驱动第二次同周期生产。
-		if (lane >= 0 && "resource_centrifuging".equals(pending.context.getString("host"))) centrifugeWork.remove(lane);
+		if (restoreWork && pending.nextWork != null) {
+			// FROZEN 只有核实完成后恢复计划；等待态已确认扣费扣料，交付核验不撤销下一段。
+			centrifugeWork.put(lane, pending.nextWork);
+		} else if (lane >= 0 && "resource_centrifuging".equals(pending.context.getString("host"))) {
+			// 旧未决阶段尚未确定扣料，管理员清空原输入后不能重跑旧周期。
+			centrifugeWork.remove(lane);
+		}
 		if (isolatedLane) {
 			suspendedLanes.remove(lane);
 		} else {
@@ -586,6 +793,12 @@ public final class ResourceAccount {
 		accounts.beforeChange(this);
 		generation = next;
 		binding = null;
+		for (var pending : suspendedLanes.values()) {
+			if (pending.activeCompletion != null) {
+				pending.activeCompletion = null;
+				pending.reason = "Host removed before centrifuge delivery confirmation";
+			}
+		}
 		if (transfer != null) {
 			suspendedTransfers.put(transfer.key, new SuspendedTransfer(transfer, "Host removed during resource output"));
 			transfer = null;

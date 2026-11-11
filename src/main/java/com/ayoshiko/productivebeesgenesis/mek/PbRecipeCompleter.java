@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.LocalBatch.Completion;
 
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Supplier;
 
 /**
 	 * PB配方输出聚合器 — 封装配方输出的批量聚合逻辑
@@ -135,6 +137,7 @@ public class PbRecipeCompleter {
 	 * @param productivityModifier 生产力倍率
 	 */
 	public void accumulatePbRecipeOutputs(CentrifugeRecipe recipe, int processIndex, int productivityModifier) {
+		beforePendingMutation();
 		accumulateSingle(recipe, productivityModifier, ThreadLocalRandom.current());
 	}
 
@@ -203,6 +206,7 @@ public class PbRecipeCompleter {
 	 */
 	public void accumulatePbRecipeOutputsBatch(CentrifugeRecipe recipe, int processIndex,
 			int productivityModifier, int batchCount) {
+		beforePendingMutation();
 		accumulateBatch(recipe, productivityModifier, batchCount, ThreadLocalRandom.current());
 	}
 
@@ -338,6 +342,7 @@ public class PbRecipeCompleter {
 
 	/** 输入已由唯一协调者消费后转交一次；准备对象不再保留另一份可排空库存。 */
 	void acceptPrepared(PbRecipeCompleter batch) {
+		beforePendingMutation();
 		if (hasPendingOutputs() || pendingInputShrink != 0 || invalidPending != null)
 			throw new IllegalStateException("Previous centrifuge output still owned");
 		pendingRecipe = batch.pendingRecipe;
@@ -354,6 +359,7 @@ public class PbRecipeCompleter {
 
 	/** 完成时固定采样与转换；输入仍在源槽时也可保存，拒收不能重新采样。 */
 	void freezeCompletedBatch(ItemStack input) {
+		beforePendingMutation();
 		prepareOutputUpgrades(false);
 		if (context.suppressesUselessByproducts() && pendingFluidTemplate != null
 				&& UselessByproductUpgradeHelper.isHoney(pendingFluidTemplate)) pendingFluidAmount = 0;
@@ -365,6 +371,7 @@ public class PbRecipeCompleter {
 	/** 万象的确定模板与数量使用同一个已付缓冲，不再通过输出容量重选产物。 */
 	void freezeMyriadBatch(Map<ItemStack, Long> items, FluidStack fluid, long fluidAmount,
 			ItemStack input, int inputs) {
+		beforePendingMutation();
 		if (hasPendingOutputs() || pendingInputShrink != 0 || invalidPending != null)
 			throw new IllegalStateException("Previous centrifuge output still owned");
 		resetPendingRecipe();
@@ -453,6 +460,7 @@ public class PbRecipeCompleter {
 
 	/** 原输入变为不可处理时交给已付物品缓冲；不经过采样、配方转换或能量扣费。 */
 	boolean returnInput(int lane) {
+		beforePendingMutation();
 		if (hasPendingOutputs() || pendingInputShrink != 0 || invalidPending != null) return false;
 		var slot = context.inputSlot(lane);
 		var input = slot.getStack().copy();
@@ -508,18 +516,43 @@ public class PbRecipeCompleter {
 	 * @return true 全部输出成功插入并扣除输入;false 输出空间不足或仍有剩余 pending
 	 */
 	public boolean flushPendingPbOutputs(int processIndex) {
+		beforePendingMutation();
 		return flusher.flush(this, processIndex);
 	}
 
 	void setFactoryOutputBatch(PbFactoryOutputBatch batch) {
+		beforePendingMutation();
 		factoryOutputBatch = batch;
+	}
+
+	private void beforePendingMutation() {
+		if (factoryOutputBatch != null) factoryOutputBatch.beforeOwnerMutation();
 	}
 
 	/** 新完成批次留到同机循环末尾；已冻结旧积压由处理器在生产前单独合并排空。 */
 	boolean flushCompletedBatch(int processIndex) {
+		beforePendingMutation();
 		if (!commitCompletedInput(processIndex)) return false;
 		if (factoryOutputBatch != null && factoryOutputBatch.defer(this, processIndex)) return true;
 		return flushPendingPbOutputs(processIndex);
+	}
+
+	/** 返回 false 时保留准备对象；接管后账户与原 pending 共同等待本轮唯一回执。 */
+	boolean deferPrepared(PbRecipeCompleter batch, int lane, Supplier<Completion> completion) {
+		if (factoryOutputBatch == null || !factoryOutputBatch.canDefer(this, lane)) return false;
+		acceptPrepared(batch);
+		Completion pending = completion.get();
+		try {
+			factoryOutputBatch.defer(this, lane, pending);
+		} catch (RuntimeException | Error failure) {
+			try {
+				pending.uncertain("Factory output registration failed");
+			} catch (RuntimeException isolationFailure) {
+				failure.addSuppressed(isolationFailure);
+			}
+			throw failure;
+		}
+		return true;
 	}
 
 	boolean flushAfterFactoryAe(int processIndex) {
@@ -537,6 +570,7 @@ public class PbRecipeCompleter {
 	 * @return true 表示输入已提交（全部或部分产物已写出）
 	 */
 	boolean flushPendingPbOutputsWithDeferral(int processIndex, int maxDeferredPerType) {
+		beforePendingMutation();
 		PbRecipeFlusher.Outcome outcome = flusher.flush(this, processIndex, maxDeferredPerType);
 		return outcome == PbRecipeFlusher.Outcome.COMMITTED
 				|| outcome == PbRecipeFlusher.Outcome.DEFERRED;
@@ -563,6 +597,8 @@ public class PbRecipeCompleter {
 	 * 不清空 {@link #pendingFluidTemplate},同配方流体模板可复用,避免重新调用 getFluidOutputs()。
 	 */
 	void clearPendingOutputs() {
+		// 已回执交空的槽可结束冻结；回调不能抢先清除尚未扣账的原资产。
+		if (hasPendingOutputs() || pendingInputShrink != 0 || paymentPending) beforePendingMutation();
 		// 空闲进程无需重复清理模板索引。
 		if (!pendingOutputs.isEmpty()) pendingOutputs.clear();
 		pendingFluidAmount = 0;
@@ -579,6 +615,12 @@ public class PbRecipeCompleter {
 
 	/** 配方变更或输入清空时重置聚合配方引用 */
 	public void resetPendingRecipe() {
+		beforePendingMutation();
+		if (hasPaidPendingOutputs()) return;
+		clearPendingRecipe();
+	}
+
+	private void clearPendingRecipe() {
 		pendingRecipe = null;
 		pendingRecipeOutputs = null;
 		pendingFluidTemplate = null;
@@ -722,6 +764,7 @@ public class PbRecipeCompleter {
 
 	@Nullable
 	CompoundTag saveCommittedPending(HolderLookup.Provider provider) {
+		if (factoryOutputBatch != null) factoryOutputBatch.cancelDeferredOutput();
 		if (invalidPending != null) return invalidPending.copy();
 		if (!hasPaidPendingOutputs()) return null;
 		CompoundTag root = new CompoundTag();
@@ -785,10 +828,11 @@ public class PbRecipeCompleter {
 	}
 
 	void loadCommittedPending(CompoundTag root, HolderLookup.Provider provider) {
+		beforePendingMutation();
 		pendingTemplates.items.clear();
 		pendingTemplates.provider = null;
 		invalidPending = null;
-		resetPendingRecipe();
+		clearPendingRecipe();
 		try {
 			if (!java.util.Set.of("version", "items", "fluid", "fluid_amount", "prepared", "process",
 					"input", "input_count", "payment_request", "payment_energy", "payment_progress").containsAll(root.getAllKeys())

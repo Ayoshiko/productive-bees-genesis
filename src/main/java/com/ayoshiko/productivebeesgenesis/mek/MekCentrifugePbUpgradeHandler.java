@@ -105,7 +105,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 				this::getLimit, counts -> {
 					pbUpgradeCounts.clear();
 					pbUpgradeCounts.putAll(counts);
-					upgradeCountsVersion++;
+					upgradeCountsChanged();
 					tile.setChanged();
 				}, PbConfigCardDataHelper.MachineType.CENTRIFUGE);
 	}
@@ -125,7 +125,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		if (!BalanceConfig.canInstall(type, pbUpgradeCounts)) return false;
 		if (current >= getLimit(type)) return false;
 		pbUpgradeCounts.put(type, current + 1);
-		upgradeCountsVersion++;
+		upgradeCountsChanged();
 		tile.setChanged();
 		return true;
 	}
@@ -153,7 +153,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		int toAdd = Math.min(limit - current, maxAvailable);
 		if (toAdd <= 0) return 0;
 		pbUpgradeCounts.put(type, current + toAdd);
-		upgradeCountsVersion++;
+		upgradeCountsChanged();
 		tile.setChanged();
 		return toAdd;
 	}
@@ -187,7 +187,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		} else {
 			pbUpgradeCounts.put(type, current - 1);
 		}
-		upgradeCountsVersion++;
+		upgradeCountsChanged();
 		tile.setChanged();
 		ItemStack removed = template.copyWithCount(1);
 		if (output.isEmpty()) {
@@ -222,7 +222,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 		} else {
 			pbUpgradeCounts.put(type, current - toRemove);
 		}
-		upgradeCountsVersion++;
+		upgradeCountsChanged();
 		tile.setChanged();
 		ItemStack template = PbUpgradeInventorySlot.getRepresentativeStack(type);
 		if (template.isEmpty()) return Collections.emptyList();
@@ -257,7 +257,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 			int canInstall = Math.min(input.getCount(), maxCount - current);
 			if (canInstall > 0) {
 				pbUpgradeCounts.put(type, current + canInstall);
-				upgradeCountsVersion++;
+				upgradeCountsChanged();
 				input.shrink(canInstall);
 				if (input.isEmpty()) inputSlot.setStack(ItemStack.EMPTY);
 				tile.setChanged();
@@ -360,7 +360,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 			if (ord >= 0 && ord < clientUpgradeCounts.length()) {
 				int previous = clientUpgradeCounts.getAndSet(ord, count);
 				if (previous != count) {
-					upgradeCountsVersion++;
+					upgradeCountsChanged();
 				}
 			}
 		}
@@ -414,7 +414,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 				unresolvedCounts = raw.copy();
 			}
 		}
-		upgradeCountsVersion++;
+		upgradeCountsChanged();
 	}
 
 	public boolean hasUnresolvedData() {
@@ -502,6 +502,12 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 */
 	public void invalidateMultiplierCache() {
 		cachedMultiplierVersion = -1;
+		FactoryUpgradeStateHelper.cancelDeferredOutput(tile);
+	}
+
+	private void upgradeCountsChanged() {
+		upgradeCountsVersion++;
+		FactoryUpgradeStateHelper.cancelDeferredOutput(tile);
 	}
 
 	/**

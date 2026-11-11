@@ -196,10 +196,17 @@ public class PbRecipeProcessor {
 
 	/** 卸载只释放近期模板保留根；已付、暂停和待交付资产仍由各自状态持有。 */
 	public void clearTransientCaches() {
+		factoryOutputBatch.abandon();
 		paidWorkCache.clear();
 	}
 
+	/** 升级、配置及保存边界撤销尚未执行的刻末票据；已付资产仍留原缓冲。 */
+	public void cancelDeferredOutput() {
+		factoryOutputBatch.cancelDeferredOutput();
+	}
+
 	public void beginFactoryOutputBatch(int processStart) {
+		factoryOutputBatch.beforeOwnerMutation();
 		if (factoryPassActive) throw new IllegalStateException("Factory processing pass already active");
 		factoryPassActive = true;
 		try {
@@ -233,7 +240,7 @@ public class PbRecipeProcessor {
 
 	public void finishFactoryOutputBatch() {
 		try {
-			factoryOutputBatch.finish();
+			factoryOutputBatch.finish(true);
 		} finally {
 			factoryPassActive = false;
 			Arrays.fill(factoryPendingAttempted, false);
@@ -325,6 +332,7 @@ public class PbRecipeProcessor {
 
 	/** 清空所有进程的 SMELTING 配方缓存和 PB 配方引用（配方重载时调用） */
 	public void clearSmeltingCacheAll() {
+		cancelDeferredOutput();
 		smeltingCache.clearAll();
 		Arrays.fill(cachedPbRecipes, null);
 		clearReservedPbRecipeCache();
@@ -381,6 +389,7 @@ public class PbRecipeProcessor {
 
 	/** 在父类加工和自动整理前释放已换料的普通车道。 */
 	public void reconcileInputWork() {
+		factoryOutputBatch.beforeOwnerMutation();
 		if (context.level() == null || context.level().isClientSide || context.hasUnresolvedInput()) return;
 		for (int lane = 0; lane < paidWork.length; lane++) {
 			// 前一车道可能刚停入缓冲，必须逐车道读取，不能固定整轮的空状态。
@@ -495,6 +504,7 @@ public class PbRecipeProcessor {
 	/** Processes one lane without allowing it to consume another lane's reserved energy. */
 	public boolean tryProcessPbRecipe(int processIndex, RecipeHolder<CentrifugeRecipe> preFoundRecipe,
 			long energyBudget) {
+		factoryOutputBatch.beforeOwnerMutation();
 		try {
 			return tryProcessPbRecipeInternal(processIndex, preFoundRecipe, energyBudget);
 		} catch (Exception e) {
@@ -552,6 +562,8 @@ public class PbRecipeProcessor {
 					(paid, required, working) -> {
 						pbOperatingTicks[processIndex] = paid;
 						pbProcessingTime[processIndex] = required;
+						pbProcessing[processIndex] = working;
+						context.setPbActiveState(working, processIndex);
 					}, completer, recipeFinder);
 			if (resourceResult != com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.Result.UNMANAGED) {
 				boolean working = resourceResult == com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.Result.WORKING;
@@ -659,6 +671,7 @@ public class PbRecipeProcessor {
 	 * @return true 表示 pending 已全部写出
 	 */
 	public boolean drainCommittedPendingOutputs(int processIndex) {
+		factoryOutputBatch.beforeOwnerMutation();
 		if (invalidCommittedPending != null || invalidPaidWork != null) return false;
 		if (processIndex < 0 || processIndex >= recipeCompleters.length) return false;
 		PbRecipeCompleter completer = recipeCompleters[processIndex];
@@ -699,11 +712,13 @@ public class PbRecipeProcessor {
 
 	/** 失效 ticksForBaseCache（委托给 {@link PbRecipeEnergyCache#clear}） */
 	public void clearTicksForBaseCache() {
+		cancelDeferredOutput();
 		energyCache.clear();
 	}
 
 	/** Clears all per-process PB state (implementation moved to {@link PbRecipeProcessorStateHelper#clearPbState}). */
 	private void clearPbState(int processIndex) {
+		factoryOutputBatch.beforeOwnerMutation();
 		reconcileInputWork(processIndex, context.inputSlot(processIndex).getStack());
 		if (paidWork[processIndex] != null || restoredLegacyProgress[processIndex]) {
 			pbProcessing[processIndex] = false;
@@ -720,6 +735,7 @@ public class PbRecipeProcessor {
 	 * {@link PbRecipeProcessorStateHelper#resetPbState}).
 	 */
 	public void resetPbState(int processIndex) {
+		factoryOutputBatch.beforeOwnerMutation();
 		ItemStack input = context.inputSlot(processIndex).getStack();
 		if (input.isEmpty()) paidWorkCache.forget(processIndex);
 		reconcileInputWork(processIndex, input);
@@ -781,6 +797,7 @@ public class PbRecipeProcessor {
 	}
 
 	public void confirmPaymentSettled(java.util.UUID request) {
+		factoryOutputBatch.beforeOwnerMutation();
 		for (int lane = 0; lane < recipeCompleters.length; lane++) {
 			var completer = recipeCompleters[lane];
 			if (request.equals(completer.paymentRequest())) {
@@ -795,6 +812,7 @@ public class PbRecipeProcessor {
 
 	/** Persists PB progress to NBT (implementation moved to {@link PbRecipeProcessorStateHelper#saveAdditional}). */
 	public void saveAdditional(CompoundTag nbt, HolderLookup.Provider provider) {
+		cancelDeferredOutput();
 		PbRecipeProcessorStateHelper.saveAdditional(nbt, pbOperatingTicks, pbProcessing, pbProcessingTime);
 		myriadHandler.saveAdditional(nbt);
 		savePaidWork(nbt, provider);
@@ -815,6 +833,7 @@ public class PbRecipeProcessor {
 
 	/** Restores PB progress from NBT (implementation moved to {@link PbRecipeProcessorStateHelper#loadAdditional}). */
 	public void loadAdditional(CompoundTag nbt, HolderLookup.Provider provider) {
+		factoryOutputBatch.beforeOwnerMutation();
 		paidWorkCache.clear();
 		java.util.Arrays.fill(emptyFactoryProcesses, false);
 		PbRecipeProcessorStateHelper.loadAdditional(nbt, pbOperatingTicks, pbProcessing, pbProcessingTime);

@@ -86,6 +86,18 @@ class CentrifugeInputSlotManager {
 		}
 	}
 
+	/** 容量查询只需找到一个候选；实时读取避免为布尔判定构造整机排序索引。 */
+	boolean hasInputRoom(IMekCentrifugeTile centrifuge, ItemStack template, int slotCount) {
+		for (int index = 0; index < slotCount; index++) {
+			IInventorySlot slot = centrifuge.productivebeesgenesis$getInputSlot(index);
+			if (slot == null) continue;
+			ItemStack current = slot.getStack();
+			if (!current.isEmpty() && !ItemStack.isSameItemSameComponents(current, template)) continue;
+			if (slot.getLimit(template) > current.getCount() && slot.isItemValid(template)) return true;
+		}
+		return false;
+	}
+
 	/**
 	 * 在 tryTransferToInput 完成转移后,更新预扫描数组中的槽位状态
 	 * <br/>

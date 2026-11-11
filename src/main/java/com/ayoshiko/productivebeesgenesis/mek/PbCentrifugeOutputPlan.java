@@ -5,6 +5,8 @@ import com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import net.minecraft.nbt.CompoundTag;
 
+import java.util.function.Supplier;
+
 /** 原离心聚合器的准备／交接边界；账户只持有资源，剩余物品和流体由原 pending 独占。 */
 final class PbCentrifugeOutputPlan implements ResourceCentrifugeProcessor.LocalPlan {
     private final PbRecipeCompleter owner;
@@ -43,6 +45,14 @@ final class PbCentrifugeOutputPlan implements ResourceCentrifugeProcessor.LocalP
             @Override public CompoundTag snapshot() {
                 var saved = batch.saveCommittedPending(owner.getContext().level().registryAccess());
                 return saved == null ? new CompoundTag() : saved;
+            }
+
+            @Override
+            public boolean defer(Supplier<Completion> completion) {
+                if (committed) throw new IllegalStateException("Local batch already handed off");
+                boolean deferred = owner.deferPrepared(batch, lane, completion);
+                if (deferred) committed = true;
+                return deferred;
             }
 
             @Override public void commit() {

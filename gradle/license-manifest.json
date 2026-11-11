@@ -3890,7 +3890,7 @@
       "permission_record": null,
       "unresolved_reason": null,
       "jar_entry": "assets/productivebeesgenesis/lang/en_us.json",
-      "source_sha256": "f21eb2a6bc1ff7e2a924b3557a6b99df131c3c4771dc947f5f040832c2aadd66"
+      "source_sha256": "7c3872d103952dcb31e81c4417273e3db701c5443be4c052d6b14b9e6848fe16"
     },
     {
       "id": "resource:assets/productivebeesgenesis/lang/fr_fr.json",
@@ -3913,7 +3913,7 @@
       "permission_record": null,
       "unresolved_reason": null,
       "jar_entry": "assets/productivebeesgenesis/lang/fr_fr.json",
-      "source_sha256": "535d285fcca52d5f675a36a742e3913f7a2c539e8cdc1c3c4170d82def8fa90b"
+      "source_sha256": "b1792b535e4cbe8e6e53ebb96dd5a78ddfbd1fc56d338ad598d4f270726db0fe"
     },
     {
       "id": "resource:assets/productivebeesgenesis/lang/zh_cn.json",
@@ -3936,7 +3936,7 @@
       "permission_record": null,
       "unresolved_reason": null,
       "jar_entry": "assets/productivebeesgenesis/lang/zh_cn.json",
-      "source_sha256": "dc9c3ab9d0858f572c2c167beca2f4611ee73ebe241b74617818cf97a40e1a55"
+      "source_sha256": "baf2764f303e1da56f9664f8a85ff58486469484b9394998143a525a05ed50c9"
     },
     {
       "id": "resource:assets/productivebeesgenesis/models/block/factory/mek_apiary/absolute_overclocked.json",
