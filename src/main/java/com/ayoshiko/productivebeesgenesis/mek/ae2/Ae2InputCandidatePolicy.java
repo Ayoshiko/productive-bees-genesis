@@ -158,15 +158,15 @@ final class Ae2InputCandidatePolicy {
 					AEItemKey resolved = resolvedKeys.get(direct.fingerprint());
 					if (resolved != null) filter.resolveDirectKey(direct.index(), resolved);
 				}
-				directEntries = filter.getDirectEntries();
 			}
 		}
+		Ae2FilterMatchCache filterSnapshot = filter == null ? null : filter.pullSnapshot(tagFilterActive);
+		if (filterSnapshot != null) directEntries = filterSnapshot.directEntries;
 		Ae2PullDecision decision = buffers.pullDecision;
-		boolean stockPolicyActive = filter != null
-				&& (filter.isGlobalNetworkStock() || filter.hasNetworkStockEntries());
-		boolean directOnly = filter != null
-				&& filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST
-				&& !filter.hasFuzzyEntries()
+		boolean stockPolicyActive = filterSnapshot != null && filterSnapshot.stockPolicyActive;
+		boolean directOnly = filterSnapshot != null
+				&& filterSnapshot.mode == Ae2InputFilter.FilterMode.WHITELIST
+				&& !filterSnapshot.hasFuzzyEntries
 				&& !ignoreNbt
 				&& !tagFilterActive
 				&& !directEntries.isEmpty();
@@ -174,7 +174,7 @@ final class Ae2InputCandidatePolicy {
 			for (Ae2InputFilter.DirectEntry direct : directEntries) {
 				// 非精确蜜脾条目还会匹配同 bee_type 的蜜脾块，不能只探测配置键。
 				if (direct.key() == null
-						|| (!filter.isPreciseMode() && CombFuzzyMatcher.isCombItem(direct.key()))) {
+						|| (!filterSnapshot.precise && CombFuzzyMatcher.isCombItem(direct.key()))) {
 					directOnly = false;
 					break;
 				}
@@ -196,12 +196,12 @@ final class Ae2InputCandidatePolicy {
 				Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
 						level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
 				if (!kind.isAllowed() || !pullKeys.add(key)) continue;
-				boolean liveStockEntry = direct.networkStock() || filter.isGlobalNetworkStock();
+				boolean liveStockEntry = direct.networkStock() || filterSnapshot.globalNetworkStock;
 				long available = liveStockEntry
 						? Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 								availableStacks, meStorage, key, Long.MAX_VALUE, actionSource)
 						: inputCapacity;
-				long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive, decision);
+				long configuredLimit = filterSnapshot.pullLimit(key, available, ignoreNbt, decision);
 				if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 					pullKeys.remove(key);
 					continue;
@@ -233,7 +233,7 @@ final class Ae2InputCandidatePolicy {
 			// 白名单精确条目优先直探：过滤配置刚变更时无需等待候选缓存刷新，且单条
 			// SMELTING 指纹也不会依赖游标扫描。库存模式继续用实时可见量探测外部存储；
 			// 普通条目沿用 AE2 已聚合的 KeyCounter，避免额外网络模拟。黑名单仍只走扫描。
-			if (filter != null && filter.getFilterMode() != Ae2InputFilter.FilterMode.BLACKLIST) {
+			if (filterSnapshot != null && filterSnapshot.mode != Ae2InputFilter.FilterMode.BLACKLIST) {
 				int directStart = Ae2CursorScan.cursorStartIndex(
 						directEntries, candidateCursor, Ae2InputFilter.DirectEntry::key);
 				for (int directOffset = 0; directOffset < directEntries.size(); directOffset++) {
@@ -243,15 +243,15 @@ final class Ae2InputCandidatePolicy {
 					AEItemKey key = direct.key();
 					Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
 							level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
-					boolean whitelistEntry = filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST;
-					boolean liveStockEntry = direct.networkStock() || filter.isGlobalNetworkStock();
+					boolean whitelistEntry = filterSnapshot.mode == Ae2InputFilter.FilterMode.WHITELIST;
+					boolean liveStockEntry = direct.networkStock() || filterSnapshot.globalNetworkStock;
 					if ((!whitelistEntry && !liveStockEntry)
 							|| !kind.isAllowed() || !pullKeys.add(key)) continue;
 					long available = liveStockEntry
 							? Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
 									availableStacks, meStorage, key, Long.MAX_VALUE, actionSource)
 							: Math.max(0L, availableStacks.get(key));
-					long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive, decision);
+					long configuredLimit = filterSnapshot.pullLimit(key, available, ignoreNbt, decision);
 					if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 						pullKeys.remove(key);
 						continue;
@@ -323,11 +323,11 @@ final class Ae2InputCandidatePolicy {
 				long cachedAvailable = scanInventory.get(key);
 				if (cachedAvailable <= 0L && !stockPolicyActive) return false;
 				long limit;
-				if (filter == null) {
+				if (filterSnapshot == null) {
 					decision.set(true, false, false, -1L);
 					limit = -1L;
 				} else {
-					limit = filter.getPullLimitIfAllowed(key, Long.MAX_VALUE, ignoreNbt, tagFilterActive, decision);
+					limit = filterSnapshot.pullLimit(key, Long.MAX_VALUE, ignoreNbt, decision);
 				}
 				if (!decision.admitted) return false;
 				long available = decision.reserveFloor >= 0L ? Long.MAX_VALUE : cachedAvailable;

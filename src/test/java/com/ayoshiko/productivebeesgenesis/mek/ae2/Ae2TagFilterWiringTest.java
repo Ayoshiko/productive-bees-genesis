@@ -70,7 +70,8 @@ class Ae2TagFilterWiringTest {
 		String puller = read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputCandidatePolicy.java")
 				.replaceAll("\\s+", " ");
 		assertTrue(puller.contains("&& !ignoreNbt && !tagFilterActive && !directEntries.isEmpty()"));
-		assertTrue(puller.contains("getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive, decision)"));
+		assertTrue(puller.contains("filter.pullSnapshot(tagFilterActive)"));
+		assertTrue(puller.contains("filterSnapshot.pullLimit(key, available, ignoreNbt, decision)"));
 	}
 
 	@Test

@@ -320,9 +320,17 @@ final class Ae2InputFilterQuerySupport {
 			long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
 			boolean unlimitedAll, boolean tagFilterActive, boolean hasConfiguredEntries,
 			boolean globalNetworkStock, long globalReserve, int[] hitSlots, Ae2PullDecision decision) {
-		if (decision != null) decision.set(false, false, false, -1L);
+		return compileMatchedPullRule(mode, slots, amounts, reserves, unlimited, networkStock,
+				unlimitedAll, tagFilterActive, hasConfiguredEntries, globalNetworkStock, globalReserve,
+				hitSlots).limit(visibleStock, Ae2InputFilter.getMaxDirectAmount(), decision);
+	}
+
+	static Ae2FilterPullPolicy.PullRule compileMatchedPullRule(FilterMode mode, String[] slots,
+			long[] amounts, long[] reserves, boolean[] unlimited, boolean[] networkStock,
+			boolean unlimitedAll, boolean tagFilterActive, boolean hasConfiguredEntries,
+			boolean globalNetworkStock, long globalReserve, int[] hitSlots) {
 		boolean matched = hitSlots != null && hitSlots.length > 0;
-		if (matched && mode == FilterMode.BLACKLIST) return Ae2InputFilter.PULL_DISALLOWED;
+		if (matched && mode == FilterMode.BLACKLIST) return Ae2FilterPullPolicy.PullRule.REJECTED;
 		boolean directFound = false;
 		boolean liveStock = false;
 		boolean unlimitedPull = false;
@@ -342,12 +350,10 @@ final class Ae2InputFilterQuerySupport {
 		}
 		boolean admitted = Ae2FilterPullPolicy.isAdmitted(
 				mode, matched, tagFilterActive, hasConfiguredEntries);
-		if (decision != null) decision.set(admitted, mode == FilterMode.WHITELIST && matched,
-				unlimitedPull || unlimitedAll, Ae2FilterPullPolicy.effectiveReserveFloor(
-						liveStock, reserve, globalNetworkStock, globalReserve));
-		return Ae2FilterPullPolicy.effectiveLimit(admitted, directFound, requested, visibleStock,
-				liveStock, reserve, unlimitedPull, unlimitedAll, globalNetworkStock, globalReserve,
-				Ae2InputFilter.getMaxDirectAmount());
+		long reserveFloor = Ae2FilterPullPolicy.effectiveReserveFloor(
+				liveStock, reserve, globalNetworkStock, globalReserve);
+		return new Ae2FilterPullPolicy.PullRule(admitted, mode == FilterMode.WHITELIST && matched,
+				directFound, requested, unlimitedPull || unlimitedAll, reserveFloor);
 	}
 
 	/** Returns the effective reserve floor for a key, or {@code -1} when no stock policy applies. */

@@ -166,6 +166,11 @@ class ApiaryAe2HostAdapter {
 	}
 
 	int pushGeneratedItem(ItemStack stack) {
+		return (int) pushGeneratedItem(stack, stack == null ? 0 : stack.getCount());
+	}
+
+	long pushGeneratedItem(ItemStack stack, long amount) {
+		if (stack == null || stack.isEmpty() || amount <= 0) return 0;
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return 0;
 		Level level = tile.getLevel();
 		if (level == null) return 0;
@@ -180,7 +185,7 @@ class ApiaryAe2HostAdapter {
 				Ae2OutputPusher.prepareDirectItemPush(tile);
 		if (session == null) return 0;
 		int attemptsBefore = session.attemptedCount();
-		int pushed = session.applyAsInt(stack);
+		long pushed = session.push(stack, amount);
 		if (session.shouldTriggerBackoff() || (pushed <= 0 && session.attemptedCount() > attemptsBefore)) {
 			// 慢 insert/连续零接收，或零接收（真实 insert 被拒）→ 联动整体退避；
 			// 慢 insert 时指数不被成功分支复位，可累积至 1s 封顶（病态网络降频 ~20 倍）

@@ -265,6 +265,138 @@ class Ae2CandidateScanMinecraftTest {
     }
 
     @Test
+    void compiledFilterKeepsLiveStockDynamicAndOldConfigurationCoherent() {
+        var filter = new Ae2InputFilter();
+        var iron = AEItemKey.of(Items.IRON_INGOT);
+        var gold = AEItemKey.of(Items.GOLD_INGOT);
+        var copper = AEItemKey.of(Items.COPPER_INGOT);
+        filter.setFilterMode(Ae2InputFilter.FilterMode.WHITELIST);
+        filter.setPreciseMode(true);
+        direct(filter, 0, iron, 40);
+        direct(filter, 1, iron, 25);
+        direct(filter, 2, gold, 8);
+        filter.setDirectReserveAmountAt(0, 30);
+        filter.toggleDirectNetworkStockAt(0);
+        var original = filter.pullSnapshot(false);
+        var decision = new Ae2PullDecision();
+        assertEquals(65, original.pullLimit(iron, 100, false, decision));
+        assertEquals(10, original.pullLimit(iron, 40, false, decision));
+        assertEquals(0, original.pullLimit(iron, 20, false, decision));
+        assertEquals(30, decision.reserveFloor);
+        filter.setDirectVisibleAmountAt(0, 999);
+        assertSame(original, filter.pullSnapshot(false));
+
+        filter.setDirectAmountAt(1, 90);
+        filter.setDirectReserveAmountAt(0, 50);
+        filter.resolveDirectKey(2, copper);
+        var revised = filter.pullSnapshot(false);
+        assertNotSame(original, revised);
+        assertEquals(50, revised.pullLimit(iron, 100, false, decision));
+        assertEquals(65, original.pullLimit(iron, 100, false, decision));
+        // gold 尚未在旧快照中查过：冷查询也必须使用原数组和原解析键。
+        assertEquals(8, original.pullLimit(gold, 100, false, decision));
+        assertEquals(Ae2InputFilter.PULL_DISALLOWED, revised.pullLimit(gold, 100, false, decision));
+        assertEquals(8, revised.pullLimit(copper, 100, false, decision));
+        filter.toggleDirectUnlimitedAt(0);
+        assertEquals(450, filter.pullSnapshot(false).pullLimit(iron, 500, false, decision));
+        assertTrue(decision.unlimited);
+        filter.setFilterMode(Ae2InputFilter.FilterMode.BLACKLIST);
+        assertEquals(Ae2InputFilter.PULL_DISALLOWED, filter.pullSnapshot(false).pullLimit(iron, 500, false, decision));
+        assertEquals(50, revised.pullLimit(iron, 100, false, decision));
+    }
+
+    @Test
+    void emptyFilterSnapshotsRespectModeTagsAndGlobalPolicyChanges() {
+        var filter = new Ae2InputFilter();
+        var key = AEItemKey.of(Items.IRON_INGOT);
+        var decision = new Ae2PullDecision();
+        var initial = filter.pullSnapshot(false);
+        assertEquals(-1, initial.pullLimit(key, 80, false, decision));
+        filter.setFilterMode(Ae2InputFilter.FilterMode.WHITELIST);
+        var whitelist = filter.pullSnapshot(false);
+        assertEquals(Ae2InputFilter.PULL_DISALLOWED, whitelist.pullLimit(key, 80, false, decision));
+        var tagged = filter.pullSnapshot(true);
+        assertEquals(-1, tagged.pullLimit(key, 80, false, decision));
+        assertFalse(decision.marked);
+
+        filter.setGlobalNetworkStock(true);
+        filter.setGlobalReserveAmount(30);
+        var reserved = filter.pullSnapshot(true);
+        assertEquals(50, reserved.pullLimit(key, 80, false, decision));
+        assertEquals(0, reserved.pullLimit(key, 20, false, decision));
+        filter.toggleUnlimitedAllFallback();
+        var unlimited = filter.pullSnapshot(true);
+        assertEquals(50, unlimited.pullLimit(key, 80, false, decision));
+        assertTrue(decision.unlimited);
+        assertEquals(30, decision.reserveFloor);
+        filter.cycleFilterMode();
+        assertEquals(50, filter.pullSnapshot(false).pullLimit(key, 80, false, decision));
+        filter.resetPersistentState();
+        assertEquals(-1, filter.pullSnapshot(false).pullLimit(key, 80, false, decision));
+        assertFalse(decision.unlimited);
+        assertEquals(-1, decision.reserveFloor);
+        assertEquals(Ae2InputFilter.PULL_DISALLOWED, whitelist.pullLimit(key, 80, false, decision));
+        assertEquals(50, reserved.pullLimit(key, 80, false, decision));
+        assertFalse(decision.unlimited);
+    }
+
+    @Test
+    void compiledRuleEvictionKeepsCompleteKeysAndMatchingModesSeparate() {
+        var filter = new Ae2InputFilter();
+        var iron = AEItemKey.of(Items.IRON_INGOT);
+        filter.setFilterMode(Ae2InputFilter.FilterMode.WHITELIST);
+        filter.setPreciseMode(true);
+        direct(filter, 0, iron, 40);
+        var snapshot = filter.pullSnapshot(false);
+        var decision = new Ae2PullDecision();
+        for (int variant = 0; variant < 140; variant++) {
+            var stack = new ItemStack(Items.IRON_INGOT);
+            stack.set(DataComponents.CUSTOM_NAME, Component.literal("variant_" + variant));
+            var key = AEItemKey.of(stack);
+            assertEquals(Ae2InputFilter.PULL_DISALLOWED, snapshot.pullLimit(key, 100, false, decision));
+            assertEquals(40, snapshot.pullLimit(key, 100, true, decision));
+        }
+        assertEquals(40, snapshot.pullLimit(iron, 100, false, decision));
+        var first = new ItemStack(Items.IRON_INGOT);
+        first.set(DataComponents.CUSTOM_NAME, Component.literal("variant_0"));
+        assertEquals(Ae2InputFilter.PULL_DISALLOWED, snapshot.pullLimit(AEItemKey.of(first), 100, false, decision));
+        assertEquals(40, snapshot.pullLimit(AEItemKey.of(first), 100, true, decision));
+        filter.setDirectAmountAt(0, 7);
+        assertEquals(7, filter.pullSnapshot(false).pullLimit(iron, 100, false, decision));
+        assertEquals(40, snapshot.pullLimit(iron, 100, false, decision));
+    }
+
+    @Test
+    void directCollectionUsesEachTicksVisibleStockWithTheSameCompiledRules() {
+        var fixture = new Fixture();
+        var key = namedComb("live_stock");
+        fixture.filter.setFilterMode(Ae2InputFilter.FilterMode.WHITELIST);
+        fixture.filter.setPreciseMode(true);
+        fixture.holder.setAeInputNbtIgnore(false);
+        fixture.direct(key, 64);
+        fixture.filter.setDirectReserveAmountAt(0, 10);
+        fixture.filter.toggleDirectNetworkStockAt(0);
+        fixture.inventory.add(key, 1);
+        when(fixture.service.getCachedInventory()).thenReturn(fixture.inventory);
+        long[] available = {30};
+        when(fixture.storage.extract(eq(key), anyLong(), eq(Actionable.SIMULATE), any()))
+                .thenAnswer(call -> available[0]);
+        var snapshot = fixture.filter.pullSnapshot(false);
+
+        var first = fixture.collect(100);
+        assertEquals(1, first.size());
+        assertEquals(20, first.getFirst().remaining);
+        assertEquals(10, first.getFirst().reserveFloor);
+        available[0] = 15;
+        var next = fixture.collect(101);
+        assertEquals(1, next.size());
+        assertEquals(5, next.getFirst().remaining);
+        assertSame(snapshot, fixture.filter.pullSnapshot(false));
+        verify(fixture.storage, times(2)).extract(eq(key), anyLong(), eq(Actionable.SIMULATE), any());
+        verify(fixture.storage, never()).extract(any(), anyLong(), eq(Actionable.MODULATE), any());
+    }
+
+    @Test
     void candidateCollectionCarriesResourceDecisionOnceAndRefreshesOnNextCollection() {
         var accepted = namedComb("accepted");
         var deferred = namedComb("deferred");
@@ -288,7 +420,7 @@ class Ae2CandidateScanMinecraftTest {
                 if (!entry.getKey().equals(rejected)) expectedOrder.add((AEItemKey) entry.getKey());
             }
 
-            var first = fixture.collectWithoutFilter(100);
+            var first = fixture.collect(100);
             assertEquals(expectedOrder, first.stream().map(entry -> entry.key).toList());
             assertEquals(17, first.stream().mapToInt(entry -> entry.remaining).sum());
             assertTrue(first.stream().filter(entry -> entry.key.equals(deferred)).findFirst().orElseThrow().resourceDeferred);
@@ -299,7 +431,7 @@ class Ae2CandidateScanMinecraftTest {
             decisions.put(deferred, Ae2ResourceInputGate.Decision.ACCEPTED);
             decisions.put(rejected, Ae2ResourceInputGate.Decision.ACCEPTED);
             clearInvocations(gate);
-            var next = fixture.collectWithoutFilter(101);
+            var next = fixture.collect(101);
             assertEquals(Set.of(accepted, deferred, rejected),
                     next.stream().map(entry -> entry.key).collect(java.util.stream.Collectors.toSet()));
             assertEquals(27, next.stream().mapToInt(entry -> entry.remaining).sum());

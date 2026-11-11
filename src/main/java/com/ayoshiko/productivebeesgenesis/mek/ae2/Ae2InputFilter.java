@@ -146,7 +146,7 @@ public final class Ae2InputFilter {
 	private volatile FuzzyEntriesCache fuzzyEntriesCache;
 	/** 精确条目 {@code AEItemKey → 槽位} 索引，按 slots+keys 两个数组身份判版本 */
 	private volatile Ae2DirectKeyIndex<AEItemKey> directKeyIndexCache;
-	private Ae2FilterMatchCache matchCache;
+	private volatile Ae2FilterMatchCache matchCache;
 
 	/** 过滤器准入后对所有允许蜜脾生效的全局无限拉取开关。 */
 	private volatile boolean unlimitedAllFallback = false;
@@ -169,14 +169,16 @@ public final class Ae2InputFilter {
 		return filterMode;
 	}
 
-	public void setFilterMode(FilterMode mode) {
+	public synchronized void setFilterMode(FilterMode mode) {
+		if (filterMode == mode) return;
 		this.filterMode = mode;
+		invalidateDirectEntries();
 	}
 
 	/** 循环切换过滤模式：DISABLED → WHITELIST → BLACKLIST → DISABLED */
 	public synchronized void cycleFilterMode() {
 		FilterMode[] modes = FilterMode.values();
-		filterMode = modes[(filterMode.ordinal() + 1) % modes.length];
+		setFilterMode(modes[(filterMode.ordinal() + 1) % modes.length]);
 	}
 
 	public boolean isPreciseMode() {
@@ -563,6 +565,7 @@ public final class Ae2InputFilter {
 
 	public synchronized void toggleUnlimitedAllFallback() {
 		unlimitedAllFallback = !unlimitedAllFallback;
+		invalidateDirectEntries();
 	}
 
 	/** True when every configured entry has opted into exact network-stock mode. */
@@ -620,6 +623,7 @@ public final class Ae2InputFilter {
 
 	private void invalidateDirectEntries() {
 		directEntriesCache = null;
+		matchCache = null;
 	}
 
 	private Ae2InputFilterQuerySupport.FuzzyEntry[] getFuzzyEntries(String[] currentSlots) {
@@ -647,12 +651,21 @@ public final class Ae2InputFilter {
 	private record FuzzyEntriesCache(String[] slots, Ae2InputFilterQuerySupport.FuzzyEntry[] entries) {
 	}
 
-	private Ae2FilterMatchCache getMatchCache(String[] currentSlots, AEItemKey[] currentKeys) {
-		if (matchCache == null || !matchCache.valid(currentSlots, currentKeys, preciseMode)) {
-			matchCache = new Ae2FilterMatchCache(currentSlots, currentKeys, preciseMode,
-					getFuzzyEntries(currentSlots));
+	/** 同一收集轮持有旧快照也保持完整配置；编辑只影响之后取得的快照。 */
+	Ae2FilterMatchCache pullSnapshot(boolean tagFilterActive) {
+		long globalCap = getMaxDirectAmount();
+		Ae2FilterMatchCache cached = matchCache;
+		if (cached != null && cached.valid(tagFilterActive, globalCap)) return cached;
+		synchronized (this) {
+			cached = matchCache;
+			if (cached != null && cached.valid(tagFilterActive, globalCap)) return cached;
+			Ae2FilterMatchCache snapshot = new Ae2FilterMatchCache(filterMode, slots, resolvedDirectKeys,
+					preciseMode, directAmounts, directReserveAmounts, directUnlimited, directNetworkStock,
+					unlimitedAllFallback, globalNetworkStock, globalReserveAmount, globalCap, tagFilterActive,
+					getFuzzyEntries(slots), getDirectKeyIndex(slots, resolvedDirectKeys), getDirectEntries());
+			matchCache = snapshot;
+			return snapshot;
 		}
-		return matchCache;
 	}
 
 	/**
@@ -704,26 +717,7 @@ public final class Ae2InputFilter {
 
 	long getPullLimitIfAllowed(AEItemKey key, long visibleStock, boolean ignoreNbt,
 			boolean tagFilterActive, Ae2PullDecision decision) {
-		String[] currentSlots = slots;
-		AEItemKey[] currentKeys = resolvedDirectKeys;
-		if (key == null) {
-			if (decision != null) decision.set(false, false, false, -1L);
-			return PULL_DISALLOWED;
-		}
-		Ae2FilterMatchCache matches = getMatchCache(currentSlots, currentKeys);
-		Ae2DirectKeyIndex<AEItemKey> index = getDirectKeyIndex(currentSlots, currentKeys);
-		int[] hitSlots;
-		// 精确模式且没有模糊条目时，带 bee_type 的蜜脾同样只可能按完整键命中。
-		if (!ignoreNbt && index.isComplete()
-				&& (preciseMode && !matches.hasFuzzyEntries || CombFuzzyMatcher.getBeeType(key) == null)) {
-			hitSlots = index.slotsFor(key);
-		} else {
-			hitSlots = matches.slotsFor(key, ignoreNbt);
-		}
-		return Ae2InputFilterQuerySupport.matchedPullLimit(visibleStock, filterMode, currentSlots,
-				directAmounts, directReserveAmounts, directUnlimited, directNetworkStock,
-				unlimitedAllFallback, tagFilterActive, matches.hasConfiguredEntries,
-				globalNetworkStock, globalReserveAmount, hitSlots, decision);
+		return pullSnapshot(tagFilterActive).pullLimit(key, visibleStock, ignoreNbt, decision);
 	}
 
 	/** Returns the reserve floor that must be rechecked immediately before extracting this key. */

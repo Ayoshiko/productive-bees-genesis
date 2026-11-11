@@ -8,6 +8,20 @@ final class Ae2FilterPullPolicy {
 	private Ae2FilterPullPolicy() {
 	}
 
+	/** 配置决定的规则只编译一次；库存数量仍由本次查询提供。 */
+	record PullRule(boolean admitted, boolean marked, boolean directFound, long requested,
+			boolean unlimited, long reserveFloor) {
+		static final PullRule REJECTED = new PullRule(false, false, false, 0L, false, -1L);
+
+		long limit(long visibleStock, long globalCap, Ae2PullDecision decision) {
+			if (decision != null) decision.set(admitted, marked, unlimited, reserveFloor);
+			if (!admitted) return PULL_DISALLOWED;
+			if (!directFound) return reserveFloor < 0L ? -1L : Math.max(0L, visibleStock - reserveFloor);
+			return Ae2PullAmountMath.effectiveLimit(requested, visibleStock, reserveFloor >= 0L,
+					unlimited, globalCap, reserveFloor);
+		}
+	}
+
 	/** 统一黑白名单准入真值表，供线性与精确索引路径共用。 */
 	static boolean isAdmitted(Ae2InputFilter.FilterMode mode, boolean filterMatched) {
 		return switch (mode) {

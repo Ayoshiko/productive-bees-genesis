@@ -58,6 +58,7 @@ public class BeeProduceProcessor {
 	private final TileEntityMekApiary apiary;
 	final ApiaryProductionState production;
 	final ApiaryOutputEvidenceCache outputEvidence = new ApiaryOutputEvidenceCache();
+	private final ApiaryFrozenItemBatch frozenItemBatch = new ApiaryFrozenItemBatch();
 	private final Ae2PushBackoff frozenOutputBackoff = new Ae2PushBackoff(50_000_000L, 200_000_000L);
 	private long frozenOutputVersion = Long.MIN_VALUE;
 	private long frozenProductionVersion = Long.MIN_VALUE;
@@ -269,7 +270,7 @@ public class BeeProduceProcessor {
 
 	boolean flushFrozen(ApiaryBatchUpgradeSnapshot upgrades) {
         var custody = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(apiary);
-        if (production.suspended() || custody.blocked()) return false;
+        if (production.suspended() || custody.blocked() || frozenItemBatch.active()) return false;
         if (!production.hasFrozen()) {
             frozenOutputBackoff.reset();
             return true;
@@ -293,13 +294,22 @@ public class BeeProduceProcessor {
         frozenAeRetryNanos = 0;
         boolean itemsChanged = false;
         long originalFluidAmount = production.fluidAmount();
+        List<ItemStack> frozenItems = production.items();
+        boolean batchAeOutput = upgrades.directAeOutputEnabled() && !apiary.isCentrifugePriorityEnabled()
+                && frozenItems.size() > 1;
         try {
-            for (ItemStack stack : production.items()) {
+            if (batchAeOutput) frozenItemBatch.prepare(frozenItems);
+            for (int sourceIndex = 0; sourceIndex < frozenItems.size(); sourceIndex++) {
+                ItemStack stack = frozenItems.get(sourceIndex);
                 if (stack.isEmpty() || custody.blocked()) continue;
                 int originalCount = stack.getCount();
                 try {
                     if (upgrades.directAeOutputEnabled() && !apiary.shouldHoldForCentrifuge(stack)) {
-                        stack.shrink(apiary.pushGeneratedItemToAe(stack));
+                        if (batchAeOutput) {
+                            frozenItemBatch.push(sourceIndex, apiary);
+                        } else {
+                            stack.shrink(apiary.pushGeneratedItemToAe(stack));
+                        }
                     }
                     if (!stack.isEmpty() && upgrades.centrifugeDirectTransferEnabled() && !custody.blocked()) {
                         apiary.directTransferProducedToCentrifuges(List.of(stack));
@@ -321,6 +331,10 @@ public class BeeProduceProcessor {
                 }
             }
         } finally {
+            if (batchAeOutput) {
+                itemsChanged |= frozenItemBatch.changed();
+                frozenItemBatch.clear();
+            }
             // 后续路线异常也必须提交已接收前缀，原异常仍交给调用方处理。
             if (itemsChanged) production.itemsChanged();
         }

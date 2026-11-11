@@ -180,6 +180,9 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		return nbtSerializer != null && nbtSerializer.hasInvalidFluidData();
 	}
 	int pushGeneratedItemToAe(ItemStack stack) { return ae2HostAdapter.pushGeneratedItem(stack); }
+	long pushGeneratedItemToAe(ItemStack stack, long amount) {
+		return ae2HostAdapter.pushGeneratedItem(stack, amount);
+	}
 	long pushGeneratedFluidToAe(FluidStack stack, long amount) {
 		return ae2HostAdapter.pushGeneratedFluid(stack, amount);
 	}
