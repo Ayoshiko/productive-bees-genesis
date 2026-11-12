@@ -232,6 +232,11 @@ final class Ae2InputLaneSnapshot {
 		return size <= Long.SIZE;
 	}
 
+	/** 自定义槽的模拟容量不承诺整批接收，保留完整规划与后续车道。 */
+	boolean canBoundCapacityPlanning() {
+		return isIndexed() && customLaneMask == 0L;
+	}
+
 	long candidateLanes(AEItemKey key) {
 		return emptyLaneMask | customLaneMask | occupiedLaneMasks.getLong(key);
 	}

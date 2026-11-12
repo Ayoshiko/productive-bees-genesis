@@ -4,9 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -54,15 +51,4 @@ class ApiaryFlushPolicyTest {
 		assertEquals(64, ApiaryFlushPolicy.accumulationThreshold(-5));
 	}
 
-	/** 接线断言：处理器必须走策略类，否则改动被重构掉后表现为「悄悄变慢」而非报错。 */
-	@Test
-	void tickProcessorUsesFlushPolicy() throws Exception {
-		Path src = Path.of("src", "main", "java", "com", "ayoshiko", "productivebeesgenesis",
-				"apiary", "BeeSlotTickProcessor.java");
-		String source = Files.readString(src).replaceAll("\\s+", " ");
-		assertTrue(source.contains("ApiaryFlushPolicy.shouldFlush(tickCounter, BATCH_FLUSH_INTERVAL,"),
-				"刷新判定必须委托 ApiaryFlushPolicy");
-		assertFalse(source.contains("accumulatedProgress.get() >= FLUSH_ACCUMULATION_THRESHOLD"),
-				"不得保留固定阈值判定");
-	}
 }

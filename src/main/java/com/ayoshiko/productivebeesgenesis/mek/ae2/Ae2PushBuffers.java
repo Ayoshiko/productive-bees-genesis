@@ -99,6 +99,11 @@ final class Ae2PushBuffers {
 	volatile int scanCandidateTagGeneration = Integer.MIN_VALUE;
 	/** 当前 per-network 基础目录代号；共享目录重建后宿主分类缓存必须同步刷新。 */
 	volatile long scanCandidateDirectoryGeneration = Long.MIN_VALUE;
+	/** 普通键集合不变时，数量刷新不使宿主熔炼分类失效。 */
+	volatile Object scanSmeltingSource;
+	volatile long scanSmeltingRecipeVersion = Long.MIN_VALUE;
+	volatile boolean scanSmeltingEnabled;
+	volatile int scanSmeltingTagGeneration = Integer.MIN_VALUE;
 	/** Per-host Mekanism recipe lookup cache; released with the reusable buffers. */
 	final Ae2SmeltingInputCache smeltingInputCache = new Ae2SmeltingInputCache();
 	/** Per-host 标签过滤判定缓存；与配方缓存同生命周期。 */
@@ -197,6 +202,23 @@ final class Ae2PushBuffers {
 		return scanSmeltingCandidateKeys;
 	}
 
+	boolean needsScanSmeltingRefresh(Object source, long recipeVersion,
+			boolean smeltingEnabled, int tagGeneration) {
+		return scanSmeltingSource != source
+				|| scanSmeltingRecipeVersion != recipeVersion
+				|| scanSmeltingEnabled != smeltingEnabled
+				|| scanSmeltingTagGeneration != tagGeneration;
+	}
+
+	void markScanSmeltingRefresh(Object source, long recipeVersion,
+			boolean smeltingEnabled, int tagGeneration) {
+		scanSmeltingPosition.clear();
+		scanSmeltingSource = source;
+		scanSmeltingRecipeVersion = recipeVersion;
+		scanSmeltingEnabled = smeltingEnabled;
+		scanSmeltingTagGeneration = tagGeneration;
+	}
+
 	boolean needsScanCandidateRefresh(Object source, long directoryGeneration,
 			long recipeVersion, boolean smeltingEnabled, int tagGeneration) {
 		return scanCandidateSource != source
@@ -208,7 +230,6 @@ final class Ae2PushBuffers {
 
 	void markScanCandidateRefresh(Object source, long directoryGeneration, long recipeVersion,
 			boolean smeltingEnabled, int tagGeneration) {
-		scanSmeltingPosition.clear();
 		scanCombPosition.clear();
 		scanCandidateSource = source;
 		scanCandidateDirectoryGeneration = directoryGeneration;
@@ -224,6 +245,9 @@ final class Ae2PushBuffers {
 		scanCandidateDirectoryGeneration = Long.MIN_VALUE;
 		scanCandidateRecipeVersion = Long.MIN_VALUE;
 		scanCandidateTagGeneration = Integer.MIN_VALUE;
+		scanSmeltingSource = null;
+		scanSmeltingRecipeVersion = Long.MIN_VALUE;
+		scanSmeltingTagGeneration = Integer.MIN_VALUE;
 		smeltingInputCache.clear();
 		tagFilterCache.clear();
 		combProcessableCache.clear();

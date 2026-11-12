@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
+import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.logistics.GenesisTileComponentEjector;
 import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
@@ -16,11 +18,13 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.material.Fluids;
@@ -52,6 +56,64 @@ class PbFactoryOutputBatchMinecraftTest {
     @AfterAll
     static void unload() {
         ConfigTracker.INSTANCE.unloadConfigs(ModConfig.Type.SERVER);
+    }
+
+    @Test
+    void myriadFullLocalSlotsPreserveVirtualTickBudgetWhenAeOutputIsEnabled() {
+        for (int route = 0; route < 3; route++) {
+            boolean direct = route != 2;
+            boolean accepts = route == 0;
+            var fixture = new Fixture(mock(PbRecipeContext.class), 1);
+            var level = mock(ServerLevel.class);
+            when(level.registryAccess()).thenReturn(REGISTRIES);
+            when(fixture.context.level()).thenReturn(level);
+            when(fixture.context.getTicksForBase(anyInt())).thenReturn(2);
+            when(fixture.context.productivityModifier()).thenReturn(1);
+            when(fixture.context.productivebeesgenesis$outputSlotsFull(0)).thenReturn(true);
+            when(fixture.context.productivebeesgenesis$isDirectAeOutputEnabled()).thenReturn(direct);
+            when(fixture.context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))
+                    .thenAnswer(call -> accepts ? call.getArgument(1) : 0L);
+            when(fixture.context.productivebeesgenesis$pushGeneratedFluidToAe(any(), anyLong()))
+                    .thenAnswer(call -> accepts ? call.getArgument(1) : 0L);
+            var energy = mock(MachineEnergyContainer.class);
+            when(fixture.context.energyContainer()).thenReturn(energy);
+            when(energy.getEnergy()).thenReturn(1_000L);
+            when(energy.extract(anyLong(), any(), any())).thenAnswer(call -> call.getArgument(0));
+            fixture.inputs[0].setStack(new ItemStack(Items.HONEYCOMB, 8));
+            int[] progress = new int[1];
+            var handler = new MyriadCreationsHandler(fixture.context, "myriad-full-output-test",
+                    progress, new boolean[1], new int[1], new RecipeHolder[1],
+                    mock(PbRecipeFinder.class), fixture.owners);
+            var type = ResourceLocation.parse("productivebees:iron");
+            var selected = List.of(type);
+            var snapshot = mock(MyriadBeeTypeCache.BeeTypeCacheSnapshot.class);
+            when(snapshot.selectTemplates(eq(selected), eq(false), any()))
+                    .thenReturn(Map.of(type, new ItemStack(Items.IRON_INGOT)));
+            var selector = mock(WeightedTypeSelector.class);
+            when(selector.getWeightsFor(selected)).thenReturn(new double[]{1});
+            try (var events = mockStatic(MyriadCreationsEventHandler.class);
+                 var types = mockStatic(MyriadBeeTypeCache.class);
+                 var selectors = mockStatic(WeightedTypeSelector.class)) {
+                events.when(MyriadCreationsEventHandler::isMyriadCreationsEnabled).thenReturn(true);
+                events.when(() -> MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(any())).thenReturn(true);
+                events.when(() -> MyriadCreationsEventHandler.selectDistinctBeeTypesCached(anyInt(), eq(level), eq(false)))
+                        .thenReturn(selected);
+                types.when(MyriadBeeTypeCache::snapshot).thenReturn(snapshot);
+                selectors.when(WeightedTypeSelector::getInstance).thenReturn(selector);
+                assertTrue(handler.tryProcessMyriadCreations(0, fixture.inputs[0].getStack(), 10, 1, 8));
+            }
+            int completed = direct ? 4 : 1;
+            assertEquals(8 - completed, fixture.inputs[0].getCount());
+            assertEquals(0, progress[0]);
+            verify(energy).extract(eq(direct ? 80L : 20L), any(), any());
+            assertEquals(accepts ? 0 : completed, pending(fixture.owners[0]));
+            assertEquals(accepts ? 0 : 100L * completed, fixture.owners[0].getPendingFluidAmount());
+            if (!accepts) {
+                assertFalse(handler.tryProcessMyriadCreations(0, fixture.inputs[0].getStack(), 10, 1, 8));
+                assertEquals(8 - completed, fixture.inputs[0].getCount());
+                verify(energy, times(1)).extract(anyLong(), any(), any());
+            }
+        }
     }
 
     @Test

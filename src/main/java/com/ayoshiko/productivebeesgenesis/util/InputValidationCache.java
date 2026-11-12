@@ -1,7 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
-import net.minecraft.core.component.DataComponentPatch;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.PatchedDataComponentMap;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -12,6 +13,7 @@ import net.minecraft.world.level.Level;
 import javax.annotation.Nullable;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -24,7 +26,8 @@ import java.util.function.Supplier;
 	 * 避免多进程工厂交替输入时缓存槽位互相驱逐。
 	 * <p>
 	 * {@link InputFingerprint} 保留完整组件身份；PB 蜜脾按 Item + bee_type 计算轻量哈希，
-	 * 同一哈希桶内仍比较全部组件补丁，正、负结果都不会跨组件输入复用。
+	 * 同一哈希桶内仍比较全部组件，正、负结果都不会跨组件输入复用。
+	 * 查询键只用于本次查找；命中不复制组件，未命中才封存组件快照。
 	 * 普通物品没有组件补丁时跳过完整组件哈希，带补丁时使用官方哈希分桶。
 	 * <p>
 	 * 支持两种缓存粒度：
@@ -56,35 +59,104 @@ public class InputValidationCache {
 	 */
 	private static final int DEFAULT_MAX_ENTRIES = 64;
 
-	/**
-	 * 不含数量的输入身份；哈希只负责分桶，完整组件补丁决定是否复用结果。
-	 * 同 Item 的默认组件固定，无补丁输入仍可跳过完整组件哈希。
-	 */
-	private record InputFingerprint(Item item, @Nullable ResourceLocation beeType,
-			DataComponentPatch components, int componentHash) {
-		static final InputFingerprint EMPTY = new InputFingerprint(Items.AIR, null, DataComponentPatch.EMPTY, 0);
+	/** 不含数量的完整输入身份；查询对象永远不进入缓存，存储键持有写时复制快照。 */
+	private interface InputIdentity {
+		Item item();
+		@Nullable ResourceLocation beeType();
+		DataComponentMap components();
+		int componentHash();
+	}
 
-		/** 从 ItemStack 提取指纹（空栈返回 EMPTY 常量） */
-		static InputFingerprint of(ItemStack stack) {
-			if (stack.isEmpty()) {
-				return EMPTY;
-			}
-			Item item = stack.getItem();
-			// bee_type 用于轻量分桶，其它合法组件仍参与 equals。
+	private record InputFingerprint(Item item, @Nullable ResourceLocation beeType,
+			DataComponentMap components, int componentHash) implements InputIdentity {
+		static final InputFingerprint EMPTY = new InputFingerprint(Items.AIR, null, DataComponentMap.EMPTY, 0);
+
+		@Override
+		public int hashCode() {
+			return identityHash(this);
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			return sameIdentity(this, other);
+		}
+	}
+
+	/** 只在 Map.get 期间持有原组件引用，避免每条产线命中都构造指纹和补丁。 */
+	private static final class InputLookup implements InputIdentity {
+		private Item item;
+		private ResourceLocation beeType;
+		private DataComponentMap components;
+		private int componentHash;
+
+		void prepare(ItemStack stack) {
+			item = stack.getItem();
+			components = stack.getComponents();
 			if (item == PbCombItemRefs.honeycomb() || item == PbCombItemRefs.combBlock()) {
-				return new InputFingerprint(item, stack.get(PbDataComponents.beeType()), stack.getComponentsPatch(), 0);
+				beeType = stack.get(PbDataComponents.beeType());
+				componentHash = 0;
+			} else {
+				beeType = null;
+				componentHash = stack.isComponentsPatchEmpty() ? 0 : ItemStack.hashItemAndComponents(stack);
 			}
-			if (stack.getComponentsPatch().isEmpty()) {
-				return new InputFingerprint(item, null, DataComponentPatch.EMPTY, 0);
-			}
-			return new InputFingerprint(item, null, stack.getComponentsPatch(), ItemStack.hashItemAndComponents(stack));
+		}
+
+		InputFingerprint snapshot() {
+			if (item == Items.AIR && components == DataComponentMap.EMPTY) return InputFingerprint.EMPTY;
+			DataComponentMap snapshot = components instanceof PatchedDataComponentMap patched
+					? patched.copy() : DataComponentMap.builder().addAll(components).build();
+			return new InputFingerprint(item, beeType, snapshot, componentHash);
+		}
+
+		void clear() {
+			item = null;
+			beeType = null;
+			components = null;
+			componentHash = 0;
+		}
+
+		@Override
+		public Item item() {
+			return item;
+		}
+
+		@Override
+		public ResourceLocation beeType() {
+			return beeType;
+		}
+
+		@Override
+		public DataComponentMap components() {
+			return components;
+		}
+
+		@Override
+		public int componentHash() {
+			return componentHash;
 		}
 
 		@Override
 		public int hashCode() {
-			int hash = 31 * item.hashCode() + (beeType == null ? 0 : beeType.hashCode());
-			return 31 * hash + componentHash;
+			return identityHash(this);
 		}
+
+		@Override
+		public boolean equals(Object other) {
+			return sameIdentity(this, other);
+		}
+	}
+
+	private static int identityHash(InputIdentity input) {
+		int hash = 31 * input.item().hashCode() + (input.beeType() == null ? 0 : input.beeType().hashCode());
+		return 31 * hash + input.componentHash();
+	}
+
+	private static boolean sameIdentity(InputIdentity first, Object other) {
+		if (first == other) return true;
+		return other instanceof InputIdentity second && first.item() == second.item()
+				&& Objects.equals(first.beeType(), second.beeType())
+				&& first.componentHash() == second.componentHash()
+				&& first.components().equals(second.components());
 	}
 
 	/**
@@ -105,6 +177,7 @@ public class InputValidationCache {
 	private final int ttlTicks;
 	private final Map<InputFingerprint, CacheEntry> entries;
 	private long generation;
+	private final InputLookup reusableLookup = new InputLookup();
 
 	private static final class CacheEntry {
 		private final ValidationResult result;
@@ -153,7 +226,7 @@ public class InputValidationCache {
 	 * 命中时直接返回 {@link ValidationResult}，调用方可读取 {@code recipe()} / {@code beeType()} 等，
 	 * 避免 {@code findPbRecipe} 重复调用。
 	 * <p>
-	 * 指纹保存组件补丁快照；槽位复用同一 ItemStack 并修改 bee_type 或其它组件时，
+	 * 指纹保存完整组件快照；槽位复用同一 ItemStack 并修改 bee_type 或其它组件时，
 	 * 原缓存键不会随栈变化，必须按新的完整身份重新校验。
 	 *
 	 * @param level     世界（用于获取当前游戏刻），为 null 时直接走校验
@@ -167,11 +240,17 @@ public class InputValidationCache {
 			return validator.get();
 		}
 		long now = level.getGameTime();
-		// 哈希分桶后以完整组件补丁判断身份。
-		InputFingerprint fp = InputFingerprint.of(input);
-		CacheEntry hit = findFreshEntry(fp, now);
-		if (hit != null) return hit.result;
-		// 未命中 — 重新校验并缓存指纹
+		InputFingerprint fp;
+		InputLookup lookup = reusableLookup;
+		try {
+			lookup.prepare(input);
+			CacheEntry hit = findFreshEntry(lookup, now);
+			if (hit != null) return hit.result;
+			// 校验回调可能改原栈或嵌套查询；必须先封存当前完整身份。
+			fp = lookup.snapshot();
+		} finally {
+			lookup.clear();
+		}
 		long validationGeneration = generation;
 		ValidationResult result = validator.get();
 		if (generation == validationGeneration) entries.put(fp, new CacheEntry(result, now));
@@ -194,10 +273,16 @@ public class InputValidationCache {
 			return validator.get();
 		}
 		long now = level.getGameTime();
-		// 指纹比对
-		InputFingerprint fp = InputFingerprint.of(input);
-		CacheEntry hit = findFreshEntry(fp, now);
-		if (hit != null) return hit.result.valid();
+		InputFingerprint fp;
+		InputLookup lookup = reusableLookup;
+		try {
+			lookup.prepare(input);
+			CacheEntry hit = findFreshEntry(lookup, now);
+			if (hit != null) return hit.result.valid();
+			fp = lookup.snapshot();
+		} finally {
+			lookup.clear();
+		}
 		long validationGeneration = generation;
 		boolean result = validator.get();
 		if (generation == validationGeneration) {
@@ -206,7 +291,7 @@ public class InputValidationCache {
 		return result;
 	}
 
-	private CacheEntry findFreshEntry(InputFingerprint fingerprint, long now) {
+	private CacheEntry findFreshEntry(InputLookup fingerprint, long now) {
 		CacheEntry entry = entries.get(fingerprint);
 		return entry != null && now >= entry.cachedAt && now - entry.cachedAt < ttlTicks ? entry : null;
 	}

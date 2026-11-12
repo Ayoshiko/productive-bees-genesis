@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.logistics;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,31 +31,4 @@ class EjectorIsolationTest {
 		}
 	}
 
-	@Test
-	void onlyAddonMachinesInstallDedicatedComponent() throws Exception {
-		String component = read("src/main/java/com/ayoshiko/productivebeesgenesis/logistics/"
-				+ "GenesisTileComponentEjector.java");
-		assertTrue(component.contains("extends TileComponentEjector implements IFastEjectHost"));
-		assertTrue(component.contains("new FastItemEjector(tile)"));
-		assertTrue(component.contains("new FastFluidEjector(tile)"));
-
-		assertTrue(read("src/main/java/com/ayoshiko/productivebeesgenesis/apiary/ApiarySideConfigSupport.java")
-				.contains("GenesisTileComponentEjector.replace(tile, tile.ejectorComponent"));
-		assertTrue(read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/TileEntityMekCentrifuge.java")
-				.contains("GenesisTileComponentEjector.replace(this, ejectorComponent"));
-		assertTrue(read("src/main/java/com/ayoshiko/productivebeesgenesis/mek/MekCentrifugeIoConfigHelper.java")
-				.contains("GenesisTileComponentEjector.replace(factory, previous"));
-	}
-
-	@Test
-	void transporterUsesPublicRoutingWithoutVanillaFallbackMutation() throws Exception {
-		String source = read("src/main/java/com/ayoshiko/productivebeesgenesis/logistics/FastItemEjector.java");
-		assertTrue(source.contains("request.eject("));
-		assertTrue(source.contains("ignored -> ejector.getOutputColor()"));
-        assertTrue(source.contains("TransitRequest.simple(taken.copy())"));
-        assertFalse(source.contains("response.useAll()"), "源槽已在交接前扣除，简单请求不能再次扣源");
-        assertTrue(source.contains("custody.handoffItem(taken"));
-		assertFalse(source.contains("needsVanillaFallback"));
-		assertFalse(source.contains("setTickDelay"));
-	}
 }

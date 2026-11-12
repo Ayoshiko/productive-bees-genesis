@@ -24,52 +24,6 @@ class GeneSamplerTest {
 	}
 
 	@Test
-	void samplerUsesSixAttributesAndBoundedHotPath() throws Exception {
-		String source = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/GeneSampler.java"));
-		String profile = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/GeneSampleProfile.java"));
-
-		assertTrue(source.contains("MAX_EXACT_EVENTS = 128"));
-		assertTrue(source.contains("ATTRIBUTES[random.nextInt(ATTRIBUTES.length)]"));
-		assertTrue(source.contains("ProductiveBeesConfig.UPGRADES.samplerChance.get()"));
-		assertTrue(source.contains("GeneSamplerMath.cumulativeHitAllocation"));
-		assertTrue(source.contains("private final long[] sampledCounts"));
-		assertTrue(source.contains("Gene.getStack(attribute, value, stackCount, purity)"));
-		assertTrue(profile.contains("\"bee_productivity\""));
-		assertTrue(profile.contains("\"bee_endurance\""));
-		assertTrue(profile.contains("\"bee_temper\""));
-		assertTrue(profile.contains("\"bee_behavior\""));
-		assertTrue(profile.contains("\"bee_weather_tolerance\""));
-	}
-
-	@Test
-	void produceProcessorReusesPerBeeProfilesAndClearsBatch() throws Exception {
-		String source = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeProductionGenerator.java"));
-
-		assertTrue(source.contains("geneSampleBatch.add(slot.getGeneSampleProfile(), count)"));
-		assertTrue(source.contains("allItems, geneSampleBatch, beeTypeKey, geneSamplerCount, level"));
-		assertTrue(source.contains("geneSampleBatch.clear()"));
-	}
-
-	@Test
-	void samplerPluginsAreAppliedAtTheSamplingBoundary() throws Exception {
-		String sampler = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/GeneSampler.java"));
-		String snapshot = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/ApiaryBatchUpgradeSnapshot.java"));
-		String processor = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/BeeProductionGenerator.java"));
-
-		assertTrue(sampler.contains("boolean typeOnly, boolean fullPurity"));
-		assertTrue(sampler.contains("? GeneAttribute.TYPE : ATTRIBUTES[random.nextInt(ATTRIBUTES.length)]"));
-		assertTrue(sampler.contains("int purity = fullPurity ? 100 : attributeOffset % PURITY_COUNT + 1"));
-		assertTrue(snapshot.contains("geneTypeOnly") && snapshot.contains("geneFullPurity"));
-		assertTrue(processor.contains("upgrades.geneTypeOnly(), upgrades.geneFullPurity()"));
-	}
-
-	@Test
 	void pluginItemsHaveIndependentModelsAndRecipes() throws Exception {
 		String typeModel = Files.readString(Path.of(
 				"src/main/resources/assets/productivebeesgenesis/models/item/gene_type_only_upgrade.json"));

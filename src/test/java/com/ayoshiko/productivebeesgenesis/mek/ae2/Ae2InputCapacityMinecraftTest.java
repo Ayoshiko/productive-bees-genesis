@@ -4,7 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import appeng.api.config.Actionable;
@@ -324,6 +326,173 @@ class Ae2InputCapacityMinecraftTest {
 			assertEquals(10, first.getCount());
 			assertTrue(second.isEmpty());
 			assertEquals(0, available[0]);
+			assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
+		} finally {
+			Ae2NetworkWorkCoordinator.clearAll();
+		}
+	}
+
+	@Test
+	void smallDemandStopsPlanningOnceARealLaneCanHoldTheRequest() {
+		var level = mock(Level.class);
+		when(level.getGameTime()).thenReturn(400L);
+		when(level.registryAccess()).thenReturn(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+		var host = mock(IAe2InputHost.class);
+		when(host.productivebeesgenesis$getAe2Level()).thenReturn(level);
+		when(host.productivebeesgenesis$getAe2BlockPos()).thenReturn(BlockPos.ZERO);
+		var holder = new Ae2OutputStateHolder();
+		var buffers = new Ae2PushBuffers();
+		var fairness = new Ae2InputFairnessScheduler();
+		var key = AEItemKey.of(Items.IRON_INGOT);
+		var storage = mock(MEStorage.class);
+		when(storage.extract(eq(key), eq(3L), eq(Actionable.MODULATE), any())).thenReturn(3L);
+		List<IInventorySlot> slots = new ArrayList<>();
+		int[] validationCalls = new int[19];
+		for (int lane = 0; lane < validationCalls.length; lane++) {
+			int index = lane;
+			slots.add(BasicInventorySlot.at(stack -> {
+				validationCalls[index]++;
+				return true;
+			}, null, 0, 0));
+		}
+		var entry = new Ae2InputExecution.PullEntry(key, 3);
+		try {
+			fairness.roll(400);
+			var result = Ae2InputExecution.execute(host, holder, buffers, new ArrayList<>(List.of(entry)),
+					slots, storage, new Ae2KeyBackoffRegistry<>(), fairness, 19L * 64, 64, 64,
+					IActionSource.empty());
+			assertEquals(3, result.totalPulled());
+			assertEquals(3, slots.getFirst().getCount());
+			assertTrue(validationCalls[0] > 0);
+			for (int lane = 1; lane < validationCalls.length; lane++) {
+				assertEquals(0, validationCalls[lane], "unused lane " + lane);
+				assertTrue(slots.get(lane).isEmpty());
+			}
+			assertEquals(0, entry.remaining);
+			assertFalse(holder.getPendingItemBuffer().isBlocked());
+			assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
+		} finally {
+			Ae2NetworkWorkCoordinator.clearAll();
+		}
+	}
+
+	@Test
+	void partialCustomSlotsKeepEveryPlannedDestinationAvailable() {
+		var level = mock(Level.class);
+		when(level.getGameTime()).thenReturn(403L);
+		when(level.registryAccess()).thenReturn(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+		var host = mock(IAe2InputHost.class);
+		when(host.productivebeesgenesis$getAe2Level()).thenReturn(level);
+		when(host.productivebeesgenesis$getAe2BlockPos()).thenReturn(BlockPos.ZERO);
+		var holder = new Ae2OutputStateHolder();
+		var buffers = new Ae2PushBuffers();
+		var fairness = new Ae2InputFairnessScheduler();
+		var key = AEItemKey.of(Items.IRON_INGOT);
+		var storage = mock(MEStorage.class);
+		when(storage.extract(eq(key), eq(19L), eq(Actionable.MODULATE), any())).thenReturn(19L);
+		List<IInventorySlot> slots = new ArrayList<>();
+		ItemStack[] stored = new ItemStack[19];
+		for (int lane = 0; lane < stored.length; lane++) {
+			int index = lane;
+			stored[index] = ItemStack.EMPTY;
+			var slot = mock(IInventorySlot.class);
+			when(slot.getStack()).thenAnswer(call -> stored[index]);
+			when(slot.getLimit(any())).thenReturn(64);
+			when(slot.insertItem(any(), any(), eq(AutomationType.INTERNAL))).thenAnswer(call -> {
+				ItemStack offered = call.getArgument(0);
+				if (call.getArgument(1) == Action.EXECUTE) stored[index] = offered.copyWithCount(1);
+				return offered.getCount() == 1 ? ItemStack.EMPTY : offered.copyWithCount(offered.getCount() - 1);
+			});
+			slots.add(slot);
+		}
+		var entry = new Ae2InputExecution.PullEntry(key, 19);
+		try {
+			fairness.roll(403);
+			var result = Ae2InputExecution.execute(host, holder, buffers, new ArrayList<>(List.of(entry)),
+					slots, storage, new Ae2KeyBackoffRegistry<>(), fairness, 1216, 19, 64,
+					IActionSource.empty());
+			assertEquals(19, result.totalPulled());
+			for (ItemStack stack : stored) {
+				assertTrue(key.matches(stack));
+				assertEquals(1, stack.getCount());
+			}
+			assertEquals(0, entry.remaining);
+			assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
+			assertFalse(holder.getPendingItemBuffer().isBlocked());
+		} finally {
+			Ae2NetworkWorkCoordinator.clearAll();
+		}
+	}
+
+	@Test
+	void exhaustedNormalQuotaSkipsAllInputValidationAndExtraction() {
+		var level = mock(Level.class);
+		when(level.getGameTime()).thenReturn(401L);
+		var host = mock(IAe2InputHost.class);
+		when(host.productivebeesgenesis$getAe2Level()).thenReturn(level);
+		when(host.productivebeesgenesis$getAe2BlockPos()).thenReturn(BlockPos.ZERO);
+		var holder = new Ae2OutputStateHolder();
+		var buffers = new Ae2PushBuffers();
+		var fairness = new Ae2InputFairnessScheduler();
+		var key = AEItemKey.of(Items.IRON_INGOT);
+		var storage = mock(MEStorage.class);
+		var slot = BasicInventorySlot.at(stack -> {
+			throw new AssertionError("zero demand must not validate");
+		}, null, 0, 0);
+		var entry = new Ae2InputExecution.PullEntry(key, 3);
+		try {
+			fairness.roll(401);
+			var result = Ae2InputExecution.execute(host, holder, buffers, new ArrayList<>(List.of(entry)),
+					List.of(slot), storage, new Ae2KeyBackoffRegistry<>(), fairness, 64, 0, 64,
+					IActionSource.empty());
+			assertEquals(0, result.totalPulled());
+			assertEquals(3, entry.remaining);
+			assertTrue(slot.isEmpty());
+			assertFalse(holder.getPendingItemBuffer().isBlocked());
+			verifyNoInteractions(storage);
+		} finally {
+			Ae2NetworkWorkCoordinator.clearAll();
+		}
+	}
+
+	@Test
+	void earlyStopRetainsTheSecondPassAndIndependentLanesForBothTypes() {
+		var level = mock(Level.class);
+		when(level.getGameTime()).thenReturn(402L);
+		when(level.registryAccess()).thenReturn(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+		var host = mock(IAe2InputHost.class);
+		when(host.productivebeesgenesis$getAe2Level()).thenReturn(level);
+		when(host.productivebeesgenesis$getAe2BlockPos()).thenReturn(BlockPos.ZERO);
+		var holder = new Ae2OutputStateHolder();
+		var buffers = new Ae2PushBuffers();
+		var fairness = new Ae2InputFairnessScheduler();
+		var iron = AEItemKey.of(Items.IRON_INGOT);
+		var gold = AEItemKey.of(Items.GOLD_INGOT);
+		var storage = mock(MEStorage.class);
+		when(storage.extract(any(), anyLong(), eq(Actionable.MODULATE), any()))
+				.thenAnswer(call -> call.getArgument(1));
+		var first = BasicInventorySlot.at(null, 0, 0);
+		var second = BasicInventorySlot.at(null, 0, 0);
+		var ironEntry = new Ae2InputExecution.PullEntry(iron, 12);
+		var goldEntry = new Ae2InputExecution.PullEntry(gold, 2);
+		try {
+			fairness.roll(402);
+			var result = Ae2InputExecution.execute(host, holder, buffers,
+					new ArrayList<>(List.of(ironEntry, goldEntry)), List.of(first, second), storage,
+					new Ae2KeyBackoffRegistry<>(), fairness, 128, 10, 64, IActionSource.empty());
+			assertEquals(10, result.totalPulled());
+			assertTrue(first.getStack().is(Items.IRON_INGOT));
+			assertTrue(second.getStack().is(Items.GOLD_INGOT));
+			assertEquals(8, first.getCount());
+			assertEquals(2, second.getCount());
+			assertEquals(4, ironEntry.remaining);
+			assertEquals(0, goldEntry.remaining);
+			var calls = inOrder(storage);
+			calls.verify(storage).extract(eq(iron), eq(5L), eq(Actionable.MODULATE), any());
+			calls.verify(storage).extract(eq(gold), eq(2L), eq(Actionable.MODULATE), any());
+			calls.verify(storage).extract(eq(iron), eq(3L), eq(Actionable.MODULATE), any());
+			calls.verifyNoMoreInteractions();
+			assertFalse(holder.getPendingItemBuffer().isBlocked());
 			assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
 		} finally {
 			Ae2NetworkWorkCoordinator.clearAll();

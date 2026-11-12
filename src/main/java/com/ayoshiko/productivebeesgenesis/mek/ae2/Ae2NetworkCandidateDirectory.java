@@ -7,6 +7,7 @@ import it.unimi.dsi.fastutil.objects.Object2LongMap;
 
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,7 +30,7 @@ final class Ae2NetworkCandidateDirectory {
 	private Ae2NetworkCandidateDirectory() {
 	}
 
-	/** 普通候选沿目录窗口读取，库存保留策略仍强制刷新；实际抽取始终由 ME 确认。 */
+	/** 候选沿目录窗口读取；保留线在真实提取前独立查询，不使用目录数量。 */
 	static KeyCounter readInventory(Object networkIdentity, IStorageService storage, long gameTick,
 			boolean requireFresh) {
 		Directory directory = directoryFor(networkIdentity);
@@ -157,8 +158,8 @@ final class Ae2NetworkCandidateDirectory {
 
 		private void rebuild(Object source, long gameTick,
 				Iterable<? extends Object2LongMap.Entry<?>> entries) {
-			java.util.ArrayList<AEItemKey> combs = new java.util.ArrayList<>();
-			java.util.ArrayList<AEItemKey> ordinary = new java.util.ArrayList<>();
+			ArrayList<AEItemKey> combs = new ArrayList<>();
+			ArrayList<AEItemKey> ordinary = new ArrayList<>();
 			for (Object2LongMap.Entry<?> entry : entries) {
 				if (!(entry.getKey() instanceof AEItemKey key)) continue;
 				if (CombFuzzyMatcher.isCombItem(key)) combs.add(key);
@@ -167,7 +168,9 @@ final class Ae2NetworkCandidateDirectory {
 			inventorySource = new WeakReference<>(source);
 			refreshTick = gameTick;
 			generation++;
-			snapshot = new Snapshot(List.copyOf(combs), List.copyOf(ordinary), generation);
+			List<AEItemKey> ordinaryKeys = snapshot.ordinaryKeys();
+			if (!ordinaryKeys.equals(ordinary)) ordinaryKeys = List.copyOf(ordinary);
+			snapshot = new Snapshot(List.copyOf(combs), ordinaryKeys, generation);
 		}
 	}
 

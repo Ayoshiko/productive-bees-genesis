@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import mekanism.api.inventory.IInventorySlot;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -92,8 +93,15 @@ class CentrifugeInputSlotManager {
 			IInventorySlot slot = centrifuge.productivebeesgenesis$getInputSlot(index);
 			if (slot == null) continue;
 			ItemStack current = slot.getStack();
+			if (!(slot instanceof BasicInventorySlot)) {
+				if (!current.isEmpty() && !ItemStack.isSameItemSameComponents(current, template)) continue;
+				if (slot.getLimit(template) > current.getCount() && slot.isItemValid(template)) return true;
+				continue;
+			}
+			if (!current.isEmpty() && current.getItem() != template.getItem()) continue;
+			if (slot.getLimit(template) <= current.getCount()) continue;
 			if (!current.isEmpty() && !ItemStack.isSameItemSameComponents(current, template)) continue;
-			if (slot.getLimit(template) > current.getCount() && slot.isItemValid(template)) return true;
+			if (slot.isItemValid(template)) return true;
 		}
 		return false;
 	}

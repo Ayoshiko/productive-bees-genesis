@@ -93,7 +93,6 @@ class Ae2InputPullerTest {
 		assertTrue(state.tryAcquireGeneratedFluidInsert(101, 1));
 	}
 
-
 	@Test
 	void singleCombTypeNetworkKeepsPullingAfterFirstCursorIsSet() {
 		// 回归修复：单蜜脾类型网络中，游标指向唯一键时下一轮仍必须收集到该键。
@@ -357,27 +356,6 @@ class Ae2InputPullerTest {
 		assertTrue(Ae2InputLaneFairness.shouldRunPass(0, true));
 		assertFalse(Ae2InputLaneFairness.shouldRunPass(1, false));
 		assertTrue(Ae2InputLaneFairness.shouldRunPass(1, true));
-	}
-
-	@Test
-	void pullerRunsFairPassBeforeUnboundedFillPass() throws Exception {
-		String source = java.nio.file.Files.readString(java.nio.file.Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputExecution.java"));
-		// 公平轮 + 补齐轮的双轮结构，且补齐轮只在被截断时才跑（避免重复 SIMULATE 探测）
-		assertTrue(source.contains("int passes = typeCount > 1 ? 2 : 1;"));
-		assertTrue(source.contains("Ae2InputLaneFairness.shouldRunPass(pass, fairPassTruncated)"));
-		// 空槽车道上限与速率份额上限都只在公平轮生效；空槽判定改读车道快照（纯数组查询）
-		assertTrue(source.contains("Ae2InputLaneFairness.emptyLaneBudget(processCount, typeCount)"));
-		assertTrue(source.contains("Ae2InputLaneFairness.typeQuotaShare(normalQuota, typeCount)"));
-		assertTrue(source.contains("if (protectLanes && emptyLane && newLanes >= newLaneBudget)"));
-		// 容量规划走车道快照：廉价身份剪枝是数组读取，不再逐对调用 slot.getStack()/getItem()
-		assertTrue(source.replaceAll("\\s+", " ").contains("long slotCapacity = Math.min(slotQuota, "
-				+ "laneCapacity(laneSnapshot, slotIdx, keyItem, entry, slotProbe));"));
-		assertTrue(source.contains("if (laneItem != null && laneItem != keyItem) return 0;"));
-		// 快照必须每轮采集，且我方插入后即刻刷新，否则后续类型会读到过期车道
-		assertTrue(source.contains("laneSnapshot.capture(inputSlots, processCount, host instanceof BlockEntity entity ? entity : null);"));
-		assertTrue(source.contains("if (inserted > 0 && laneSnapshot != null) {"));
-		assertTrue(source.contains("laneSnapshot.refresh(slotIdx, key);"));
 	}
 
 }

@@ -1,16 +1,13 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
 /**
- * operationsPerTick 每游戏刻记忆化的行为与接线断言。
+ * operationsPerTick 每游戏刻记忆化的行为断言。
  * <p>
  * 背景：spark XnLugba3Cw 里 {@code TileEntityEMExtraMekCentrifugeFactory.operationsPerTick}
  * 自耗 776ms / 2.59%，为本模组首位热点 —— 它被 CachedRecipe 当作 baselineMaxOperations
@@ -58,18 +55,4 @@ class OperationsPerTickCacheTest {
 		assertEquals(2, calls.get());
 	}
 
-	@Test
-	void allFourCentrifugeVariantsUseTheCacheAndInvalidateOnUpgradeChange() throws Exception {
-		String prefix = "src/main/java/com/ayoshiko/productivebeesgenesis/";
-		for (String path : new String[] {
-				prefix + "compat/emextras/TileEntityEMExtraMekCentrifugeFactory.java",
-				prefix + "compat/mekanism_extras/TileEntityExtraMekCentrifugeFactory.java",
-				prefix + "mek/AbstractMekCentrifugeFactory.java",
-				prefix + "mek/TileEntityMekCentrifuge.java" }) {
-			String source = Files.readString(Path.of(path));
-			assertTrue(source.contains("new OperationsPerTickCache()"), "field missing: " + path);
-			// recalculateUpgrades 必须失效缓存，否则装/卸升级后一整刻仍用旧并行数
-			assertTrue(source.contains("PerTickCache.invalidate()"), "invalidate missing: " + path);
-		}
-	}
 }

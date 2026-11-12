@@ -1,13 +1,17 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRecipeIndex;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
+import cy.jdkdigital.productivebees.init.ModItems;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.RelativeSide;
 import mekanism.api.inventory.IInventorySlot;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.tile.component.config.DataType;
 import net.minecraft.core.BlockPos;
@@ -49,6 +53,32 @@ class ApiaryProducedTransferMinecraftTest {
     @AfterAll
     static void unload() {
         ConfigTracker.INSTANCE.unloadConfigs(ModConfig.Type.SERVER);
+    }
+
+    @Test
+    void standardSlotCapacityReflectsComponentLimitsWithoutCallingAFullSlotsValidator() {
+        var calls = new int[1];
+        var slot = BasicInventorySlot.at(stack -> {
+            calls[0]++;
+            return true;
+        }, null, 0, 0);
+        var input = mock(IMekCentrifugeTile.class);
+        when(input.productivebeesgenesis$getInputSlot(0)).thenReturn(slot);
+        var template = named(1);
+        slot.setStack(template.copyWithCount(slot.getLimit(template)));
+        calls[0] = 0;
+        var manager = new CentrifugeInputSlotManager();
+        assertFalse(manager.hasInputRoom(input, template, 1));
+        assertEquals(0, calls[0]);
+        slot.setStack(template.copyWithCount(3));
+        calls[0] = 0;
+        assertTrue(manager.hasInputRoom(input, template, 1));
+        assertTrue(calls[0] > 0);
+        var smaller = template.copy();
+        smaller.set(DataComponents.MAX_STACK_SIZE, 1);
+        calls[0] = 0;
+        assertFalse(manager.hasInputRoom(input, smaller, 1));
+        assertEquals(0, calls[0]);
     }
 
     @Test
@@ -132,6 +162,102 @@ class ApiaryProducedTransferMinecraftTest {
     }
 
     @Test
+    void blockedSlottedOutputRefillsFreedInputOnTheNextGameTick() {
+        var input = new Input(64);
+        input.stack = named(64);
+        try (var fixture = new Fixture(List.of(List.of(input)))) {
+            doReturn(true).when(fixture.tile).isDirectEjectEnabled();
+            when(input.slot.insertItem(any(), eq(Action.SIMULATE), eq(AutomationType.INTERNAL)))
+                    .thenAnswer(call -> {
+                        ItemStack offered = call.getArgument(0);
+                        int accepted = Math.min(offered.getCount(), input.limit - input.stack.getCount());
+                        return offered.copyWithCount(offered.getCount() - accepted);
+                    });
+            var source = fixture.tile.getOutputSlots().getFirst();
+            source.setStack(named(8));
+            fixture.handler.markEjectDirty();
+            long version = fixture.tile.getOutputBuffer().getOutputVersion();
+            for (int tick = 0; tick < 20; tick++) {
+                when(fixture.level.getGameTime()).thenReturn(10L + tick);
+                assertTrue(fixture.handler.tryDirectEject());
+                assertFalse(fixture.handler.tryDirectEject());
+            }
+            assertEquals(8, source.getCount());
+            assertEquals(version, fixture.tile.getOutputBuffer().getOutputVersion());
+            input.stack = named(56);
+            when(fixture.level.getGameTime()).thenReturn(30L);
+            assertTrue(fixture.handler.tryDirectEject());
+            assertTrue(source.isEmpty());
+            assertEquals(64, input.stack.getCount());
+            assertFalse(fixture.custody().blocked());
+        }
+    }
+
+    @Test
+    void fullTargetsDoNotQueryDynamicAdmissionAfterRecipeMatchingIsCached() {
+        var first = new Input(64);
+        var second = new Input(64);
+        first.stack = named(64);
+        second.stack = named(64);
+        try (var fixture = new Fixture(List.of(List.of(first), List.of(second)))) {
+            var source = named(9);
+            assertTrue(fixture.handler.canAnyTargetProcess(source));
+            fixture.runtime.clearInvocations();
+            assertFalse(fixture.handler.canAnyTargetAccept(source));
+            assertEquals(0, fixture.handler.transferProduced(source, source.getCount(),
+                    amount -> source.shrink((int) amount)));
+            fixture.runtime.verify(() -> ResourceRuntime.centrifugeAdmission(eq(fixture.server), any()), never());
+            assertEquals(9, source.getCount());
+            verify(first.slot, never()).insertItem(any(), any(), any());
+            verify(second.slot, never()).insertItem(any(), any(), any());
+        }
+    }
+
+    @Test
+    void unusedTargetsDoNotQueryAdmissionDuringHoldOrDirectTransfer() {
+        var first = new Input(64);
+        var second = new Input(64);
+        try (var fixture = new Fixture(List.of(List.of(first), List.of(second)))) {
+            var source = named(9);
+            assertTrue(fixture.handler.canAnyTargetProcess(source));
+            fixture.runtime.clearInvocations();
+            assertTrue(fixture.handler.canAnyTargetAccept(source));
+            fixture.runtime.verify(() -> ResourceRuntime.centrifugeAdmission(eq(fixture.server), any()), times(1));
+            fixture.runtime.clearInvocations();
+            assertEquals(9, fixture.handler.transferProduced(source, source.getCount(),
+                    amount -> source.shrink((int) amount)));
+            fixture.runtime.verify(() -> ResourceRuntime.centrifugeAdmission(eq(fixture.server), any()), times(1));
+            verify(second.slot, never()).getStack();
+            verify(second.slot, never()).insertItem(any(), any(), any());
+        }
+    }
+
+    @Test
+    void firstReceiptCanRevokeAdmissionBeforeTheNextSlotOrTarget() {
+        for (boolean separateTarget : new boolean[]{false, true}) {
+            var first = new Input(3);
+            var second = new Input(64);
+            var targets = separateTarget ? List.of(List.of(first), List.of(second)) : List.of(List.of(first, second));
+            try (var fixture = new Fixture(targets)) {
+                boolean[] available = {true};
+                fixture.runtime.when(() -> ResourceRuntime.centrifugeAdmission(eq(fixture.server), any()))
+                        .thenAnswer(call -> available[0] ? ResourceRuntime.CentrifugeAdmission.UNMANAGED
+                                : ResourceRuntime.CentrifugeAdmission.UNAVAILABLE);
+                first.afterInsert = () -> available[0] = false;
+                var source = named(9);
+                assertEquals(3, fixture.handler.transferProduced(source, source.getCount(),
+                        amount -> source.shrink((int) amount)));
+                assertEquals(6, source.getCount());
+                assertEquals(3, first.stack.getCount());
+                assertTrue(second.stack.isEmpty());
+                assertFalse(fixture.custody().blocked());
+                assertFalse(fixture.handler.canAnyTargetAccept(source));
+                verify(second.slot, never()).insertItem(any(), any(), any());
+            }
+        }
+    }
+
+    @Test
     void unknownSuffixIsDebitedOnceAndRemainingSourceIsNeverReplayed() {
         var first = new Input(3);
         var second = new Input(4);
@@ -204,6 +330,87 @@ class ApiaryProducedTransferMinecraftTest {
             assertTrue(input.stack.isEmpty());
             assertFalse(fixture.custody().blocked());
             verify(input.slot).insertItem(any(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL));
+        }
+    }
+
+    @Test
+    void receiverMayMutateItsRequestWithoutChangingStableReceiptIdentity() {
+        var first = new Input(3);
+        var second = new Input(4);
+        try (var fixture = new Fixture(List.of(List.of(first, second)))) {
+            doAnswer(call -> {
+                ItemStack offered = call.getArgument(0);
+                assertEquals("identity", offered.getHoverName().getString());
+                first.stack = offered.copyWithCount(2);
+                offered.set(DataComponents.CUSTOM_NAME, Component.literal("receiver-only"));
+                offered.setCount(0);
+                return named(1);
+            }).when(first.slot).insertItem(any(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL));
+            var source = named(6);
+            assertEquals(6, fixture.handler.transferProduced(source, source.getCount(),
+                    amount -> source.shrink((int) amount)));
+            assertTrue(source.isEmpty());
+            assertEquals(2, first.stack.getCount());
+            assertEquals(4, second.stack.getCount());
+            assertEquals("identity", second.stack.getHoverName().getString());
+            assertFalse(fixture.custody().blocked());
+        }
+    }
+
+    @Test
+    void changedIdentityReceiptIsIsolatedAfterReceiverMutation() {
+        var first = new Input(4);
+        var second = new Input(64);
+        try (var fixture = new Fixture(List.of(List.of(first, second)))) {
+            doAnswer(call -> {
+                ItemStack offered = call.getArgument(0);
+                offered.set(DataComponents.CUSTOM_NAME, Component.literal("wrong-identity"));
+                offered.setCount(1);
+                return offered;
+            }).when(first.slot).insertItem(any(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL));
+            var source = named(9);
+            assertEquals(4, fixture.handler.transferProduced(source, source.getCount(),
+                    amount -> source.shrink((int) amount)));
+            assertEquals(5, source.getCount());
+            assertTrue(fixture.custody().blocked());
+            assertEquals(4, fixture.custody().amount());
+            verify(second.slot, never()).insertItem(any(), any(), any());
+        }
+    }
+
+    @Test
+    void mixedCombCacheKeepsFullComponentsAndRefreshesForRecipeChanges() {
+        var input = new Input(64);
+        var originalVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
+        try (var fixture = new Fixture(List.of(List.of(input)))) {
+            var neighbor = fixture.neighbors.values().iterator().next();
+            var centrifuge = (IMekCentrifugeTile) neighbor;
+            when(centrifuge.productivebeesgenesis$isValidInput(any())).thenAnswer(call -> {
+                ItemStack offered = call.getArgument(0);
+                return "accepted".equals(offered.getHoverName().getString());
+            });
+            var accepted = new ItemStack(ModItems.CONFIGURABLE_HONEYCOMB.get());
+            accepted.set(PbDataComponents.beeType(),
+                    ResourceLocation.parse("productivebees:iron"));
+            accepted.set(DataComponents.CUSTOM_NAME, Component.literal("accepted"));
+            var rejected = accepted.copy();
+            rejected.set(DataComponents.CUSTOM_NAME, Component.literal("rejected"));
+            assertTrue(fixture.handler.canAnyTargetProcess(accepted));
+            assertFalse(fixture.handler.canAnyTargetProcess(rejected));
+            for (int index = 0; index < 62; index++) {
+                var variant = accepted.copy();
+                variant.set(PbDataComponents.beeType(),
+                        ResourceLocation.parse("productivebees:cache_" + index));
+                assertTrue(fixture.handler.canAnyTargetProcess(variant));
+            }
+            assertTrue(fixture.handler.canAnyTargetProcess(accepted));
+            assertFalse(fixture.handler.canAnyTargetProcess(rejected));
+            assertTrue(fixture.handler.canAnyTargetProcess(accepted.copy()));
+            doReturn(false).when(centrifuge).productivebeesgenesis$isValidInput(any());
+            ProductiveBeesGenesis.RECIPE_VERSION.incrementAndGet();
+            assertFalse(fixture.handler.canAnyTargetProcess(accepted));
+        } finally {
+            ProductiveBeesGenesis.RECIPE_VERSION.set(originalVersion);
         }
     }
 

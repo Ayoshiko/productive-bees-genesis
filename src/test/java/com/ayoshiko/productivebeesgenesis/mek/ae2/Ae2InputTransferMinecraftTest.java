@@ -69,6 +69,17 @@ class Ae2InputTransferMinecraftTest {
         assertEquals(36, secondSlot.getCount());
         assertEquals(800, live[0]);
         verify(storage, times(2)).extract(eq(key), anyLong(), eq(Actionable.MODULATE), any());
+        var calls = inOrder(storage);
+        calls.verify(storage).extract(eq(key), eq(964L), eq(Actionable.SIMULATE), any());
+        calls.verify(storage).extract(eq(key), eq(64L), eq(Actionable.MODULATE), any());
+        calls.verify(storage).extract(eq(key), eq(964L), eq(Actionable.SIMULATE), any());
+        calls.verify(storage).extract(eq(key), eq(36L), eq(Actionable.MODULATE), any());
+        calls.verify(storage).extract(eq(key), eq(928L), eq(Actionable.SIMULATE), any());
+        calls.verifyNoMoreInteractions();
+        assertFalse(firstHolder.getPendingItemBuffer().isBlocked());
+        assertFalse(secondHolder.getPendingItemBuffer().isBlocked());
+        assertEquals(0, firstHolder.getPendingItemBuffer().getTotalAmount());
+        assertEquals(0, secondHolder.getPendingItemBuffer().getTotalAmount());
     }
 
     @Test

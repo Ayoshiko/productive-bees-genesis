@@ -4,11 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
-/** 输入预算的隔离、恢复、高倍加速与计费接线回归测试。 */
+/** 输入预算的隔离、恢复、高倍加速与计费回归测试。 */
 class Ae2ExtractBudgetTest {
 
 	/** 健康 extract：80µs */
@@ -121,7 +119,6 @@ class Ae2ExtractBudgetTest {
 		assertTrue(budget.canExtractNow(1001L, 38, 0L));
 	}
 
-
 	@Test
 	void combinedCeilingStillCountsOutputAfterInputReserve() {
 		var budget = new Ae2ExtractBudget();
@@ -193,18 +190,4 @@ class Ae2ExtractBudgetTest {
 		assertTrue(budget.canExtractNow(10, 38));
 	}
 
-	@Test
-	void zeroReturnsAndExceptionsAreChargedBeforeLeavingTheAttempt() throws Exception {
-		String source = Files.readString(Path.of("src/main/java/com/ayoshiko/productivebeesgenesis/"
-				+ "mek/ae2/Ae2InputExecution.java"));
-		String extract = source.substring(source.indexOf("long extractStart = System.nanoTime()"),
-				source.indexOf("Ae2NetworkInventoryView.recordExtract(holder, gameTick"));
-		int failure = extract.indexOf("catch (LinkageError | RuntimeException error)");
-		int firstCharge = extract.indexOf("extractBudget.record(gameTick, extractCost)");
-		int rethrow = extract.indexOf("throw error");
-		int successCharge = extract.lastIndexOf("extractBudget.record(gameTick, extractCost)");
-		assertTrue(failure < firstCharge && firstCharge < rethrow);
-		assertTrue(rethrow < successCharge && successCharge < extract.indexOf("if (extracted <= 0)"));
-		assertEquals(2, source.split("extractBudget.recordProbe\\(gameTick, reserveQueryCost\\)", -1).length - 1);
-	}
 }

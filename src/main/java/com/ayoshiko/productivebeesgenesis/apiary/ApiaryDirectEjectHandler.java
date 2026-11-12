@@ -95,34 +95,6 @@ class ApiaryDirectEjectHandler {
 
 
 	/**
-	 * 模块5：连续转移失败计数器 — 达阈值后进入墙钟指数退避
-	 * <br/>
-	 * 服务端单线程访问，无需原子操作。
-	 */
-	private int consecutiveEjectFailures = 0;
-
-	/** 模块5：连续失败阈值 — 达到后进入墙钟退避（满缓存深度优化） */
-	private static final int EJECT_FAILURE_THRESHOLD = 20;
-
-	/**
-	 * 直连墙钟退避到期时间（nanoTime）— 连续失败后延迟重试
-	 * <br/>
-	 * 满缓存深度优化：离心机输入槽持续阻塞时，旧逻辑（计数达阈值后重置）实际每 tick
-	 * 仍执行完整重试（预扫描+合并+虚拟栈分配+缓冲区转移），空闲满缓存场景 CPU 浪费。
-	 * 墙钟退避对 tick 加速免疫（加速器同刻多次调用不会打穿退避）。
-	 */
-	private long ejectBackoffUntilNanos = 0L;
-
-	/** 当前直连退避时长 — 指数递增，250ms 起步、2s 封顶（与周期兜底间隔对齐） */
-	private long ejectBackoffNanos = 0L;
-
-	/** 进入退避时记录的输出版本 — 版本变化（新产出/槽位/缓冲区变化）立即解除退避 */
-	private long ejectBackoffVersion = -1L;
-
-	private static final long INITIAL_EJECT_BACKOFF_NANOS = 250_000_000L;
-	private static final long MAX_EJECT_BACKOFF_NANOS = 2_000_000_000L;
-
-	/**
 	 * 模块5：复用的离心机输入槽列表 — 避免每 tick 分配 ArrayList
 	 * <br/>
 	 * 用于把 IMekCentrifugeTile.getInputSlot 逐个收集为 List 传给 ApiaryOutputBuffer。
@@ -159,12 +131,11 @@ class ApiaryDirectEjectHandler {
 		needsEjectCheck = true;
 	}
 
-	/** 侧面路由或直连开关改变后立即丢弃拓扑和可处理性缓存，并解除直连退避。 */
+	/** 侧面路由或直连开关改变后立即丢弃拓扑、可处理性缓存及同刻失败记录。 */
 	void onRoutingConfigChanged() {
 		targets.clearCache();
 		clearProcessabilityCache();
 		failedTransferGate.clear();
-		clearEjectBackoff();
 		markEjectDirty();
 	}
 
@@ -194,13 +165,13 @@ class ApiaryDirectEjectHandler {
 		Level level = apiary.getLevel();
 		if (stack == null || stack.isEmpty() || level == null || level.isClientSide) return false;
 		List<ApiaryDirectEjectTargets.Target> targetList = targets.findDirectEjectTargets(level);
-		long acceptedTargets = acceptedTargetMask(stack, targetList);
+		long acceptedTargets = matchingTargetMask(stack, targetList);
 		if (acceptedTargets == 0L) return false;
 		for (int targetIndex = 0; targetIndex < targetList.size() && targetIndex < Long.SIZE; targetIndex++) {
 			if ((acceptedTargets & (1L << targetIndex)) == 0L) continue;
 			ApiaryDirectEjectTargets.Target target = targetList.get(targetIndex);
 			try {
-				if (target.hasInputRoom(stack)) return true;
+				if (target.hasInputRoom(stack) && ResourceInputAdmission.allows(target.blockEntity, stack)) return true;
 			} catch (Exception | LinkageError e) {
 				LogThrottle.warn("apiary_hold_capacity_check",
 						"离心机输入容量判定异常，按无空间处理: {}", stack.getItem(), e);
@@ -220,6 +191,11 @@ class ApiaryDirectEjectHandler {
 		return acceptanceCache.maskFor(stack, targetList);
 	}
 
+	private long matchingTargetMask(ItemStack stack,
+			List<ApiaryDirectEjectTargets.Target> targetList) {
+		return acceptanceCache.matchingMaskFor(stack, targetList);
+	}
+
 	private void clearProcessabilityCache() {
 		acceptanceCache.clear();
 	}
@@ -228,34 +204,13 @@ class ApiaryDirectEjectHandler {
 	 * 判断是否应该执行直连弹出检测
 	 * <br/>
 	 * 脏标记驱动（产出后立即检测）为主要触发源；周期性刷新（每 2 秒兜底）处理 NBT 加载产物、
-	 * 离心机后放置等边界场景。墙钟退避（满缓存连续失败后）期间跳过检测，
-	 * 输出版本变化（新产出/槽位/缓冲区变化）时立即解除。
+	 * 离心机后放置等边界场景。有库存时每真实刻重试；相邻输入腾位不会改变蜂箱输出版本，
+	 * 因此只用同刻失败门抑制加速器重复调用，不叠加跨刻墙钟等待。
 	 *
-	 * @param outputVersion 当前缓冲区输出版本
 	 * @return true 表示应执行检测
 	 */
-	private boolean shouldCheck(long outputVersion) {
-		long now = System.nanoTime();
-		if (now < ejectBackoffUntilNanos && outputVersion == ejectBackoffVersion) {
-			return false;
-		}
-		return needsEjectCheck || (now - lastCacheRefreshNanos >= PERIODIC_REFRESH_INTERVAL_NANOS);
-	}
-
-	/** 进入直连墙钟指数退避（250ms 起步、倍增、2s 封顶），版本变化时立即解除 */
-	private void enterEjectBackoff(long outputVersion) {
-		consecutiveEjectFailures = 0;
-		ejectBackoffNanos = Math.min(MAX_EJECT_BACKOFF_NANOS,
-				Math.max(INITIAL_EJECT_BACKOFF_NANOS,
-						SaturatingMath.saturatingMultiply(ejectBackoffNanos, 2)));
-		ejectBackoffUntilNanos = System.nanoTime() + ejectBackoffNanos;
-		ejectBackoffVersion = outputVersion;
-	}
-
-	/** 清除直连退避（成功转移或配置变化后调用） */
-	private void clearEjectBackoff() {
-		ejectBackoffNanos = 0L;
-		ejectBackoffUntilNanos = 0L;
+	private boolean shouldCheck() {
+		return needsEjectCheck || (System.nanoTime() - lastCacheRefreshNanos >= PERIODIC_REFRESH_INTERVAL_NANOS);
 	}
 
 	/**
@@ -271,7 +226,7 @@ class ApiaryDirectEjectHandler {
 	 * <p>
 	 * 源为冻结产物而非输出槽；物理源顺序与目的轮转起点保持不变，
 	 * 每个目标仍调用原输入槽的 insertItem，以保留配方门和自定义接收语义。
-	 * 复用 {@link #acceptedTargetMask} 跨 tick 缓存过滤不可处理物品。
+	 * 复用配方／拓扑掩码过滤不可处理物品，动态资源准入在实际候选槽提交前核验。
 	 * <p>
 	 * 不同组件或已满槽不创建交接请求；实际接收后立即扣源。
 	 * 插入异常的请求由 OutputCustody 保管，禁止作为零接收重放。
@@ -293,12 +248,16 @@ class ApiaryDirectEjectHandler {
 		for (ItemStack stack : stacks) {
 			if (stack == null || stack.isEmpty()) continue;
 			int originalCount = stack.getCount();
-			long acceptedTargets = acceptedTargetMask(stack, targetList);
+			long acceptedTargets = matchingTargetMask(stack, targetList);
 			if (acceptedTargets != 0L) {
-				for (int t = 0; t < targetList.size() && !stack.isEmpty(); t++) {
+				ItemStack stableTemplate = stack.copyWithCount(1);
+				OutputCustody custody = OutputCustody.of(apiary);
+				LongConsumer debit = accepted -> stack.shrink((int) accepted);
+				for (int t = 0; t < targetList.size() && !stack.isEmpty() && !custody.blocked(); t++) {
 					int targetIndex = (start + t) % targetList.size();
 					if ((acceptedTargets & (1L << targetIndex)) == 0L) continue;
-					transferStackToTargetInputs(targetList.get(targetIndex), stack);
+					transferTemplateToTargetInputs(targetList.get(targetIndex), stableTemplate,
+							stack.getCount(), custody, debit);
 				}
 			}
 			if (stack.getCount() < originalCount) {
@@ -312,9 +271,7 @@ class ApiaryDirectEjectHandler {
 		}
 		roundRobinIndex = (start + 1) % targetList.size();
 		if (transferredAny) {
-			// 离心机确认可接收 — 复位直连失败计数与退避，让 tryDirectEject 尽快跟进
-			consecutiveEjectFailures = 0;
-			clearEjectBackoff();
+			// 已知接收成功后允许同刻继续搬运输出槽和缓冲区。
 			failedTransferGate.clear();
 		}
 		return remaining == null ? stacks : remaining;
@@ -329,7 +286,7 @@ class ApiaryDirectEjectHandler {
 		ItemStack stableTemplate = template.copyWithCount(1);
 		List<ApiaryDirectEjectTargets.Target> targetList = targets.findDirectEjectTargets(level);
 		if (targetList.isEmpty()) return 0;
-		long acceptedTargets = acceptedTargetMask(stableTemplate, targetList);
+		long acceptedTargets = matchingTargetMask(stableTemplate, targetList);
 		if (acceptedTargets == 0L) return 0;
 		long handed = 0;
 		int start = roundRobinIndex % targetList.size();
@@ -344,19 +301,9 @@ class ApiaryDirectEjectHandler {
 		} finally {
 			roundRobinIndex = (start + 1) % targetList.size();
 			if (handed > 0) {
-				consecutiveEjectFailures = 0;
-				clearEjectBackoff();
 				failedTransferGate.clear();
 			}
 		}
-	}
-
-	/** 旧列表入口沿原目标起点和物理源顺序推进，单个源共享模板交付的实际回执协议。 */
-	private void transferStackToTargetInputs(ApiaryDirectEjectTargets.Target target, ItemStack stack) {
-		OutputCustody custody = OutputCustody.of(apiary);
-		if (custody.blocked()) return;
-		transferTemplateToTargetInputs(target, stack.copyWithCount(1), stack.getCount(), custody,
-				accepted -> stack.shrink((int) accepted));
 	}
 
 	private long transferTemplateToTargetInputs(ApiaryDirectEjectTargets.Target target, ItemStack template,
@@ -371,11 +318,10 @@ class ApiaryDirectEjectHandler {
 			long room = Math.max(0L, (long) slot.getLimit(template) - current.getCount());
 			if (room <= 0 || !ResourceInputAdmission.allows(target.blockEntity, template)) continue;
 			int chunk = (int) Math.min(requested - handed, Math.min(Integer.MAX_VALUE, room));
-			ItemStack offered = template.copyWithCount(chunk);
-			// 原输入槽可能执行配方门和自定义回调；不能直接写栈或相信其它槽的旧快照。
+			// 接收方只得到请求副本；回执按独立身份和原请求量校验，回调改栈不能改写上限。
 			long accepted = custody.handoffItem(template, chunk, "centrifuge-input", () ->
-					ItemPushHelper.accepted(offered,
-							slot.insertItem(offered.copy(), Action.EXECUTE, TARGET_INSERT_AUTOMATION)));
+					ItemPushHelper.accepted(template, chunk,
+							slot.insertItem(template.copyWithCount(chunk), Action.EXECUTE, TARGET_INSERT_AUTOMATION)));
 			handed += accepted;
 			debit.accept(accepted);
 		}
@@ -412,14 +358,12 @@ class ApiaryDirectEjectHandler {
 		if (level == null || level.isClientSide || com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(apiary).blocked()) return false;
 		if (!apiary.isDirectEjectEnabled()) {
 			needsEjectCheck = false;
-			consecutiveEjectFailures = 0;
-			clearEjectBackoff();
 			failedTransferGate.clear();
 			return false;
 		}
 
 		long outputVersion = apiary.getOutputBuffer().getOutputVersion();
-		if (!shouldCheck(outputVersion)) return false;
+		if (!shouldCheck()) return false;
 		long gameTick = level.getGameTime();
 		if (failedTransferGate.shouldSkip(gameTick, outputVersion)) return false;
 
@@ -447,7 +391,7 @@ class ApiaryDirectEjectHandler {
 		// Task 4: 合并蜂箱输出槽中相同类型的物品为虚拟栈
 		mergeOutputSlotsByType(outputSlots);
 
-		// 模块5：统计本次转移的物品总数（含输出槽+缓冲区），用于决定是否重置退避/递增失败计数
+		// 统计输出槽与缓冲区的实际交付，用于唤醒回填或记录同刻失败。
 		int transferredCount = 0;
 
 		// 对每个虚拟栈执行跨机器两轮分配（round-robin 起播点实现多台离心机负载均衡）
@@ -497,23 +441,15 @@ class ApiaryDirectEjectHandler {
 		transferredCount = SaturatingMath.saturatingToInt(SaturatingMath.saturatingAdd(
 				transferredCount, tryEjectFromBuffers(targetList)));
 
-		// 模块5：根据转移结果更新退避与失败计数
+		// 根据实际交付更新回填和同刻失败记录。
 		ApiaryOutputBuffer outputBuffer = apiary.getOutputBuffer();
 		int bufferedGroupCount = outputBuffer.getBufferedGroupCount();
 		if (transferredCount > 0) {
 			// 成功转移 — 重置缓冲区退避，立即下 tick 重试注入蜂箱输出槽
 			outputBuffer.resetBackoff();
-			consecutiveEjectFailures = 0;
-			clearEjectBackoff();
 			failedTransferGate.clear();
 		} else if (hasNonEmptyOutputSlot(outputSlots) || bufferedGroupCount > 0) {
-			// 有物品但未转移成功 — 递增失败计数，达阈值后进入墙钟指数退避
-			// （满缓存深度优化：空闲满缓存从每 tick 全量重试降为退避周期一次；
-			//   输出版本变化由 shouldCheck 立即解除退避，新产物零延迟响应）
-			consecutiveEjectFailures++;
-			if (consecutiveEjectFailures >= EJECT_FAILURE_THRESHOLD) {
-				enterEjectBackoff(outputBuffer.getOutputVersion());
-			}
+			// 自身库存不变时抑制同刻重复失败；下一真实刻允许接收方腾位后立即续料。
 			failedTransferGate.recordFailure(gameTick, outputBuffer.getOutputVersion());
 		} else {
 			failedTransferGate.clear();

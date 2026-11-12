@@ -77,6 +77,7 @@ final class Ae2InputExecution {
 		// 余量恢复结束后采集；执行中每次交付立即刷新该车道。
 		Ae2InputLaneSnapshot laneSnapshot = buffers.inputLaneSnapshot();
 		laneSnapshot.capture(inputSlots, processCount, host instanceof BlockEntity entity ? entity : null);
+		boolean boundedCapacityPlanning = laneSnapshot.canBoundCapacityPlanning();
 		// 公平轮先分配份额，补齐轮只在份额确实截断需求时借用余量。
 		int laneBudget = Ae2InputLaneFairness.emptyLaneBudget(processCount, typeCount);
 		long fairShare = Ae2InputLaneFairness.typeQuotaShare(normalQuota, typeCount);
@@ -97,6 +98,20 @@ final class Ae2InputExecution {
 					if (entry.remaining <= 0 || keyBackoff.shouldSkip(entry.key, nanoNow)) continue;
 					if (entry.resourceDeferred) {
 						networkWorkDeferred = true;
+						continue;
+					}
+					long entryQuota = entry.unlimited
+							? inputCapacity - totalPulled
+							: normalQuota - normalPulled;
+					boolean quotaClipped = false;
+					if (fairPass && !entry.unlimited && entryQuota > fairShare) {
+						entryQuota = fairShare;
+						quotaClipped = true;
+					}
+					int requested = SaturatingMath.saturatingToInt(
+							Math.min(entry.remaining, Math.max(0L, entryQuota)));
+					if (requested <= 0) {
+						if (quotaClipped) fairPassTruncated = true;
 						continue;
 					}
 
@@ -124,7 +139,8 @@ final class Ae2InputExecution {
 					if (!indexed) Arrays.fill(inputSlotCapacities, 0, processCount, 0L);
 					long deliveryLanes = 0L;
 					int slotOffset = 0;
-					while (indexed ? candidateLanes != 0L : slotOffset < processCount) {
+					while ((!boundedCapacityPlanning || typeAvailable < requested)
+							&& (indexed ? candidateLanes != 0L : slotOffset < processCount)) {
 						int slotIdx;
 						if (indexed) {
 							long afterStart = candidateLanes & (-1L << typeSlotStart);
@@ -156,16 +172,7 @@ final class Ae2InputExecution {
 						// 槽校验可能依赖配对输出状态，只表示本轮无容量，不能对整个 key 退避。
 						continue;
 					}
-					long entryQuota = entry.unlimited
-							? inputCapacity - totalPulled
-							: normalQuota - normalPulled;
-					boolean quotaClipped = false;
-					if (fairPass && !entry.unlimited && entryQuota > fairShare) {
-						entryQuota = fairShare;
-						quotaClipped = true;
-					}
-					int toPull = SaturatingMath.saturatingToInt(Math.min(
-							typeAvailable, Math.min(entry.remaining, Math.max(0L, entryQuota))));
+					int toPull = (int) Math.min(typeAvailable, requested);
 					if (toPull <= 0) {
 						if (lanesSuppressed || quotaClipped) fairPassTruncated = true;
 						continue;
@@ -377,10 +384,13 @@ final class Ae2InputExecution {
 			amount = Ae2FilterPullPolicy.reserveSafeRequest(amount, liveExtractable, reserveFloor);
 			boolean reserveReached = amount <= 0;
 			if (reserveReached) {
-				// 256x 加速仍只执行一次完整 tick，但保留线稳态下会每个真实 tick 重试。
-				// 按 key 墙钟退避可把空探针降到最高每秒一次；补货并成功抽取后立即清除。
-				if ((reserveReached || slowReserveQuery) && keyBackoff != null) {
-					keyBackoff.recordFailure(key, System.nanoTime());
+				// 健康查询达到保留线是正常库存等待，不能把单键或同刻库存变化的补货等待累积成失败退避。
+				if (keyBackoff != null) {
+					if (slowReserveQuery) {
+						keyBackoff.recordFailure(key, System.nanoTime());
+					} else {
+						keyBackoff.recordSuccess(key);
+					}
 				}
 				return new BatchResult(0, reserveQueryCost, slowReserveQuery,
 						slowReserveQuery, !slowReserveQuery);

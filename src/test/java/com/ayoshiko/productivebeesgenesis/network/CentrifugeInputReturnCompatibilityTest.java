@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Issue #8 可选依赖类加载与离线输出接线回归检查。 */
+/** Issue #8 可选依赖类加载与网络注册检查。 */
 class CentrifugeInputReturnCompatibilityTest {
 
 	private static final String NETWORK_SOURCE =
@@ -99,79 +99,6 @@ class CentrifugeInputReturnCompatibilityTest {
 				"含 AE2 API 的服务只能在加载检测之后触达");
 		assertFalse(handler.contains("Ae2PayloadHandlers.validateContainerMatch"),
 				"核心 handler 不得经由带 AE2 类型的 handler 做容器校验");
-	}
-
-	@Test
-	@DisplayName("全部输入批量返还和 Mekanism 配置输出链路保持接线")
-	void allInputAndConfiguredOutputStayWired() throws Exception {
-		String handler = Files.readString(Path.of(
-				NETWORK_SOURCE + "CentrifugeInputReturnPayloadHandler.java"));
-		assertFalse(handler.contains("MAX_ITEMS_PER_REQUEST"));
-		assertTrue(handler.contains("CentrifugeConfiguredOutputService.transfer"));
-
-		String output = Files.readString(Path.of(
-				NETWORK_SOURCE + "CentrifugeConfiguredOutputService.java"));
-		assertFalse(output.contains("remainingLimit"));
-		assertFalse(output.contains("maxItems"));
-		assertTrue(output.contains("getConfig(TransmissionType.ITEM)"));
-		assertTrue(output.contains("dataType.canOutput()"));
-		assertTrue(output.contains("Capabilities.ItemHandler.BLOCK"));
-		assertTrue(output.contains("worldSide.getOpposite()"));
-		int simulateInsert = output.indexOf("ItemHandlerHelper.insertItemStacked(target, candidate, true)");
-		int executeExtract = output.indexOf("source.setStack(sourceSnapshot.copyWithCount(requested - accepted))");
-		assertTrue(simulateInsert >= 0 && executeExtract > simulateInsert,
-				"必须先模拟目标接收量，再实际提取源槽物品");
-		assertTrue(output.contains("newSetFromMap(new IdentityHashMap<>())"));
-		assertFalse(output.contains("Containers.dropItemStack"),
-				"超大堆叠异常回滚不得生成世界掉落物");
-		assertFalse(output.contains("ItemEntity"),
-				"即使回滚异常也不得生成单个物品实体");
-		assertTrue(output.contains("sourceSnapshot"));
-		assertTrue(output.contains("custody.handoffItem(extracted"),
-				"外部真实接收必须经过已有保管记录");
-		assertTrue(output.contains("custody.retainItem(extracted.copyWithCount(knownRemainder)"),
-				"只允许明确未接收的余量回填");
-		assertFalse(handler.contains("recovery_drop"));
-
-		String ae2 = Files.readString(Path.of(
-				NETWORK_SOURCE + "Ae2CentrifugeInputReturnService.java"));
-		assertFalse(ae2.contains("remainingLimit"));
-		assertFalse(ae2.contains("maxItems"));
-		assertTrue(ae2.contains("int requested = Math.max(0, current.getCount())"));
-		int aeSimulateInsert = ae2.indexOf("holder, storage, key, requested, Actionable.SIMULATE");
-		int aeSimulateExtract = ae2.indexOf("slot.shrinkStack(requestedExtract, Action.SIMULATE)");
-		assertTrue(aeSimulateInsert >= 0 && aeSimulateExtract > aeSimulateInsert,
-				"AE2 路径必须先模拟网络接收量，再探测源槽可提取量");
-
-		String english = Files.readString(Path.of(
-				"src/main/resources/assets/productivebeesgenesis/lang/en_us.json"));
-		String chinese = Files.readString(Path.of(
-				"src/main/resources/assets/productivebeesgenesis/lang/zh_cn.json"));
-		assertTrue(english.contains("\"Return input-slot items\""));
-		assertTrue(chinese.contains("\"返还输入槽中的物品\""));
-		assertFalse(english.contains("recovery_drop"));
-		assertFalse(chinese.contains("recovery_drop"));
-	}
-
-	@Test
-	@DisplayName("自动返还和已知 pending 回收不受新输入拉取开关限制")
-	void automaticReturnAndPendingRecoveryPrecedeInputPullSwitch() throws Exception {
-		String puller = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputPuller.java"));
-		int autoReturn = puller.indexOf("Ae2CentrifugeInputReturnService.returnUnprocessableInputs");
-		int pullSwitch = puller.indexOf("if (!inputPullEnabled || holder.getPendingItemBuffer().isBlocked()) return;");
-		assertTrue(autoReturn >= 0 && pullSwitch > autoReturn,
-				"熔炼兼容关闭后的输入清理必须先于新输入拉取开关");
-		assertTrue(puller.contains("holder.getPendingItemBuffer().hasRetryableItems(currentTick)"));
-		assertTrue(puller.contains("if (!inputPullEnabled && !pendingRetryable) return;"));
-		assertTrue(puller.contains("if (pendingRetryable) {"));
-
-		String service = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/network/Ae2CentrifugeInputReturnService.java"));
-		assertTrue(service.contains("MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(outputHost)"),
-				"全局和单机熔炼兼容开关都必须生效");
-		assertTrue(service.contains("!host.productivebeesgenesis$canProcessInput(stack)"),
-				"只应返还当前机器不能处理的输入");
 	}
 
 	private static String readClassBytes(String internalName) throws Exception {

@@ -325,7 +325,8 @@ class FrozenItemBatchMinecraftTest {
         List<ItemStack> sources = List.copyOf(fixture.production().items());
         List<String> events = new ArrayList<>();
         doAnswer(call -> {
-            ItemStack template = call.getArgument(0);
+            // 模拟正式直交入口先封存身份，再逐槽回调扣源。
+            ItemStack template = call.<ItemStack>getArgument(0).copyWithCount(1);
             assertEquals(10L, call.<Long>getArgument(1));
             LongConsumer debit = call.getArgument(2);
             debit.accept(4);

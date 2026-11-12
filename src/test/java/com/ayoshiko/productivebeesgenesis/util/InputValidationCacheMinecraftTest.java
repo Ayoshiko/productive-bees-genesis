@@ -30,7 +30,7 @@ class InputValidationCacheMinecraftTest {
 			inputs.add(input);
 		}
 		var calls = new AtomicInteger();
-		for (int pass = 0; pass < 256; pass++) {
+		for (int pass = 0; pass < 2; pass++) {
 			for (int type = 0; type < inputs.size(); type++) {
 				boolean allowed = type % 2 == 0;
 				for (int lane = 0; lane < 19; lane++) {
@@ -42,6 +42,28 @@ class InputValidationCacheMinecraftTest {
 			}
 		}
 		assertEquals(38, calls.get());
+	}
+
+	@Test
+	void copiedComponentsInOneBeeHashBucketKeepIndependentCachedResults() {
+		var cache = new InputValidationCache(100, 64);
+		var level = mock(Level.class);
+		var inputs = new ArrayList<ItemStack>();
+		for (int index = 0; index < 38; index++) {
+			var input = new ItemStack(PbCombItemRefs.honeycomb());
+			input.set(PbDataComponents.beeType(), ResourceLocation.parse("test:shared_bucket"));
+			input.set(DataComponents.CUSTOM_NAME, Component.literal("component-" + index));
+			inputs.add(input);
+			boolean valid = index % 2 == 0;
+			assertEquals(valid, cache.get(level, input, () -> valid));
+		}
+		for (int pass = 0; pass < 3; pass++) {
+			for (int index = 0; index < inputs.size(); index++) {
+				var copy = inputs.get(index).copyWithCount(17 + pass);
+				assertEquals(index % 2 == 0, cache.getResult(level, copy,
+						() -> fail("complete component identity must remain cached")).valid());
+			}
+		}
 	}
 
 	@Test

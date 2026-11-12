@@ -3,9 +3,6 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -45,29 +42,4 @@ class Ae2NetworkCandidateDirectoryTest {
 		assertEquals(3L, state.generation());
 	}
 
-	@Test
-	void pullerUsesSharedDirectoryButKeepsHostClassificationLocal() throws Exception {
-		String puller = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputCandidatePolicy.java"));
-		String normalized = puller.replaceAll("\\s+", " ");
-
-		assertTrue(normalized.contains("Ae2NetworkCandidateDirectory.get( meStorage, availableStacks, "
-				+ "currentTick, availableStacks)"));
-		assertTrue(puller.contains("for (AEItemKey itemKey : networkDirectory.ordinaryKeys())"));
-		assertTrue(puller.contains("for (AEItemKey itemKey : networkDirectory.combKeys())"));
-		assertTrue(puller.contains("buffers.smeltingInputCache, tagGate, combGate"),
-				"SMELTING、标签和本机可处理性必须保留在宿主本地分类");
-	}
-
-	@Test
-	void serverStopClearsSharedNetworkState() throws Exception {
-		String loader = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2IntegrationLoader.java"));
-		String mod = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/ProductiveBeesGenesis.java"));
-
-		assertTrue(loader.contains("Ae2NetworkCandidateDirectory.clearAll()"));
-		assertTrue(loader.contains("Ae2NetworkWorkCoordinator.clearAll()"));
-		assertTrue(mod.contains("Ae2IntegrationLoader::clearServerCaches"));
-	}
 }

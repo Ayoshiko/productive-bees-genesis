@@ -87,8 +87,8 @@ final class ApiaryFrozenItemBatch {
             requested += sources[index].getCount();
         }
         if (requested <= 0) return true;
-        // 回调会清空首个原栈；后续目的槽必须继续使用独立身份模板。
-        ItemStack template = sources[sourceIndex].copyWithCount(1);
+        // 直交入口在首次回调前复制身份；这里只传原源，避免重复构造稳定模板。
+        ItemStack template = sources[sourceIndex];
         directSource = first;
         directRemaining = requested;
         try {

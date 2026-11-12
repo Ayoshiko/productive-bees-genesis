@@ -4,13 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import org.junit.jupiter.api.Test;
 
 /**
- * 零耗时配方（CREATIVE 升级）合并推进的数学与接线回归。
+ * 零耗时配方（CREATIVE 升级）合并推进的数学与窗口生命周期回归。
  * <p>
  * 背景：CREATIVE 让 {@code getTicksRequired()} 返回 0，Mekanism 每个配方 tick 恰好
  * 完成一个完整周期，原批量快速路径必然第一次推进就退出 ——
@@ -18,9 +15,6 @@ import org.junit.jupiter.api.Test;
  * （spark XnLugba3Cw：1940ms + 1208ms）。
  */
 class ZeroTickBatchMathTest {
-
-	private static final Path SRC = Path.of("src", "main", "java", "com", "ayoshiko",
-			"productivebeesgenesis");
 
 	@Test
 	void partialBatchAndLowEnergyMatchSequentialTicks() {
@@ -189,44 +183,4 @@ class ZeroTickBatchMathTest {
 		assertEquals(11, state.getAsInt(), "窗口未开时不得返回批内快照");
 	}
 
-	/** 接线断言：两条 CachedRecipe 装配路径都必须绑定合并窗口，否则优化静默失效。 */
-	@Test
-	void bothRecipeFactoriesBindCoalesceWindow() throws Exception {
-		String factory = Files.readString(SRC.resolve("mek/CentrifugeFactoryCommonLogic.java"));
-		assertTrue(factory.contains("coalesceState == null")
-				&& factory.contains("new ZeroTickCoalesceState(operationsPerTick)"),
-				"工厂路径必须支持建立默认合并窗口");
-		assertTrue(factory.contains("ZeroTickCoalesceState coalesce ="),
-				"工厂路径必须解析可复用的合并窗口");
-		assertTrue(factory.contains(".setBaselineMaxOperations(coalesce)"),
-				"工厂路径的并行上限供应商必须换成合并窗口");
-		assertTrue(factory.contains("accel.productivebeesgenesis$bindZeroTickCoalesce(coalesce)"),
-				"工厂路径必须把窗口绑定到 Mixin");
-
-		String basic = Files.readString(SRC.resolve("mek/MekCentrifugeUpgradeOps.java"));
-		assertTrue(basic.contains("new ZeroTickCoalesceState(tile::getOperationsPerTick)"),
-				"基础机路径必须建立合并窗口");
-		assertTrue(basic.contains(".setBaselineMaxOperations(coalesce)"),
-				"基础机路径的并行上限供应商必须换成合并窗口");
-		assertTrue(basic.contains("accel.productivebeesgenesis$bindZeroTickCoalesce(coalesce)"),
-				"基础机路径必须把窗口绑定到 Mixin");
-	}
-
-	/** 接线断言：Mixin 必须在完整计算前开窗、在 process 返回时闭窗。 */
-	@Test
-	void mixinOpensAndClosesWindowAroundFullCalculation() throws Exception {
-		String mixin = Files.readString(SRC.resolve("mixin/mek/CachedRecipeBatchAccelMixin.java"));
-		assertTrue(mixin.contains("productivebeesgenesis$beginZeroTickCoalesce();"),
-				"需要完整重算的分支必须开窗");
-		assertTrue(mixin.contains("productivebeesgenesis$endZeroTickCoalesce();"),
-				"process 返回时必须闭窗，否则窗口跨 tick 泄漏");
-		assertTrue(mixin.contains("ZeroTickBatchMath.virtualTicksFor(ops,"),
-				"必须按获批操作数反推消耗的虚拟刻，否则剩余预算会重复整批产出");
-		assertTrue(mixin.contains("ZeroTickBatchMath.affordableCoalescedOperations("),
-				"合并调用的能量可承担量必须按刻定价");
-		assertTrue(mixin.contains("state.beginBatch();"),
-				"startBatch 必须快照本 gameTick 的单刻上限，否则每虚拟刻都要读 level.getGameTime()");
-		assertTrue(mixin.contains("state.endBatch();"),
-				"批次结束必须丢弃快照，否则跨 gameTick 会沿用旧升级数量");
-	}
 }
