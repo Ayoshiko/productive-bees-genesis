@@ -129,6 +129,31 @@ def live_block_nbt(pos, dimension=None, nbt_path="{}"):
                    "scope": "Server saveWithFullMetadata. Root {} is exact SNBT; child paths use Minecraft Tag.getAsString and join multiple matches. Empty child text does not prove the block entity is absent."})
 
 
+def live_machine_status(pos, dimension=None):
+    player = text_data(minecraft_call("get_player_info"))
+    current_dimension = player["dimension"]
+    if dimension is not None and dimension != current_dimension:
+        raise ValueError("Player is in " + current_dimension
+                         + "; switch to the requested dimension before querying its machine.")
+    request_id = uuid.uuid4().hex
+    marker = "PBG_MACHINE_" + request_id + " "
+    coordinates = " ".join(str(pos[axis]) for axis in ("x", "y", "z"))
+    command = "execute as @s run productivebeesgenesis dev machine " + coordinates + " " + request_id
+    sent = text_data(minecraft_call("execute_commands", {"commands": [command], "validate_safety": True}))
+    if sent.get("acceptedCount") != 1:
+        return result({"server_confirmed": False, "command_receipt": sent}, True)
+    captured = text_data(minecraft_call("wait_for_chat", {"text": marker, "timeout_ms": 10000}))
+    if not captured.get("matched"):
+        return result({"server_confirmed": False, "message": "No current machine diagnostic receipt.",
+                       "command_receipt": sent, "chat_receipt": captured}, True)
+    message = captured["message"]
+    payload = message["text"].split(marker, 1)[1]
+    data = json.loads(payload)
+    return result({"server_confirmed": True, "position": pos, "dimension": current_dimension,
+                   "machine": data, "chat_timestamp_ms": message["timestampMs"],
+                   "scope": "Current server-thread runtime state; no cached saved-world snapshot."})
+
+
 POSITION = {"type": "object", "required": ["x", "y", "z"],
             "properties": {axis: {"type": "integer"} for axis in ("x", "y", "z")},
             "additionalProperties": False}
@@ -149,6 +174,10 @@ TOOLS = [
          "command": {"type": "string"},
          "commands": {"type": "array", "items": {"type": "string"}, "minItems": 1}},
          "oneOf": [{"required": ["command"]}, {"required": ["commands"]}]}},
+    {"name": "live_machine_status",
+     "description": "按坐标读取本模组机器的实时服务器诊断：输入开关、过滤器保管、AE供能与频道、节点状态及取料退避。需要包含dev machine诊断命令的版本；仅查询单机，不扫描世界。",
+     "inputSchema": {"type": "object", "required": ["pos"], "properties": {
+         "pos": POSITION, "dimension": {"type": "string"}}}},
     {"name": "live_block_nbt",
      "description": "读取当前玩家维度指定方块的服务端 NBT。nbt_path默认{}返回完整SNBT，也可只取指定Minecraft NBT路径以缩小结果；子路径返回Minecraft文本表示，空结果不证明没有方块实体。唯一聊天标记关联本次回执，需要allowedCommands包含tellraw。",
      "inputSchema": {"type": "object", "required": ["pos"], "properties": {
@@ -159,7 +188,7 @@ TOOLS = [
 FUNCTIONS = {tool["name"]: globals()[tool["name"]] for tool in TOOLS}
 for tool in TOOLS:
     tool["inputSchema"]["additionalProperties"] = False
-    readonly = tool["name"] in ("minecraft_status", "minecraft_tools", "live_block_nbt")
+    readonly = tool["name"] in ("minecraft_status", "minecraft_tools", "live_block_nbt", "live_machine_status")
     tool["annotations"] = {"readOnlyHint": readonly, "destructiveHint": not readonly,
                            "idempotentHint": readonly, "openWorldHint": False}
 

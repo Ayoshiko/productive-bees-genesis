@@ -33,6 +33,10 @@
 
 目标版本为 **1.2.4**，尚未发布。客户端与服务端须一起更新。 / Target version: **1.2.4**, not released yet. Update clients and servers together.
 
+### 新增
+
+- **开发诊断**：管理员可按坐标读取已加载机器的实时 AE2 取料、过滤保管、积压阻塞、退避及节点状态，并通过请求标识关联单次查询。
+
 ### 变更
 
 - **双语手册**：更新空蜂笼材料、会话容量与重启、坏字段 JSON 修复、离线脚本条件复查，以及未知交接和升级失败的核实说明；时间升级按实际除数／倍率解释，不再写成每级固定降低 15%／30%。查询应用结果沿用原操作；完全重启客户端后，未决列表不会自动恢复，服务器记录仍保留。
@@ -72,6 +76,10 @@
 - **编辑器会话与名称同步**：失去手持或创造资格后撤销旧编辑会话，恢复资格不能复用原会话。畸形服务器名称批次在写入客户端前整体校验，旧连接响应无效，避免后续界面或 tick 抛错。编辑器协议已更新，客户端与服务端须一起更新。
 
 ### English
+
+#### Added
+
+- **Developer diagnostics**: operators can query a loaded machine by coordinates for live AE2 input, retained filters, blocked pending output, backoff and node state, with request identifiers linking each response to its query.
 
 #### Changed
 

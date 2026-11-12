@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.DeferredItemOutput;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.google.gson.JsonObject;
 import net.minecraft.server.MinecraftServer;
 
 /**
@@ -87,6 +88,15 @@ public final class Ae2IntegrationLoader {
 		Ae2NetworkWorkCoordinator.clearAll();
 		Ae2FingerprintCache.clearShared();
 		CentrifugeDispatchScope.reset();
+	}
+
+	public static JsonObject machineDiagnostics(IAe2OutputHostBase host) {
+		if (isAe2Loaded()) {
+			return Ae2MachineDiagnostics.read(host);
+		}
+		JsonObject result = new JsonObject();
+		result.addProperty("installed", false);
+		return result;
 	}
 
 	public static boolean deferItemOutput(DeferredItemOutput output) {
