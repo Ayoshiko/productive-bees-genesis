@@ -198,18 +198,27 @@ final class Ae2InputCandidatePolicy {
 				Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
 						level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
 				if (!kind.isAllowed() || !pullKeys.add(key)) continue;
-				boolean liveStockEntry = direct.networkStock() || filterSnapshot.globalNetworkStock;
-				long available = inputCapacity;
-				if (liveStockEntry) {
-					// 多类型可用量参与车道公平分配；单个精确键没有竞争，可延后到实际提取前查询。
-					available = singleDirectCandidate ? Long.MAX_VALUE
-							: Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
-									availableStacks, meStorage, key, Long.MAX_VALUE, actionSource);
-				}
-				long configuredLimit = filterSnapshot.pullLimit(key, available, ignoreNbt, decision);
+				long configuredLimit = filterSnapshot.pullLimit(key, Long.MAX_VALUE, ignoreNbt, decision);
 				if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 					pullKeys.remove(key);
 					continue;
+				}
+				long maximumDemand = Math.min(inputCapacity, configuredLimit < 0L ? inputCapacity : configuredLimit);
+				if (maximumDemand <= 0L) {
+					pullKeys.remove(key);
+					continue;
+				}
+				boolean liveStockEntry = direct.networkStock() || filterSnapshot.globalNetworkStock;
+				long available = inputCapacity;
+				if (liveStockEntry) {
+					// 单个精确键无需候选探针；多类型只需确认保留量加本次需求。
+					available = Long.MAX_VALUE;
+					if (!singleDirectCandidate) {
+						long queryCap = SaturatingMath.saturatingAdd(decision.reserveFloor, maximumDemand);
+						available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
+								availableStacks, meStorage, key, queryCap, actionSource);
+					}
+					configuredLimit = filterSnapshot.pullLimit(key, available, ignoreNbt, decision);
 				}
 				if (configuredLimit >= 0L) {
 					available = Math.min(available, configuredLimit);
@@ -253,14 +262,24 @@ final class Ae2InputCandidatePolicy {
 					boolean liveStockEntry = direct.networkStock() || filterSnapshot.globalNetworkStock;
 					if ((!whitelistEntry && !liveStockEntry)
 							|| !kind.isAllowed() || !pullKeys.add(key)) continue;
-					long available = liveStockEntry
-							? Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
-									availableStacks, meStorage, key, Long.MAX_VALUE, actionSource)
-							: Math.max(0L, availableStacks.get(key));
-					long configuredLimit = filterSnapshot.pullLimit(key, available, ignoreNbt, decision);
+					long configuredLimit = filterSnapshot.pullLimit(key, Long.MAX_VALUE, ignoreNbt, decision);
 					if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 						pullKeys.remove(key);
 						continue;
+					}
+					long maximumDemand = Math.min(inputCapacity, configuredLimit < 0L ? inputCapacity : configuredLimit);
+					if (maximumDemand <= 0L) {
+						pullKeys.remove(key);
+						continue;
+					}
+					long available;
+					if (liveStockEntry) {
+						long queryCap = SaturatingMath.saturatingAdd(decision.reserveFloor, maximumDemand);
+						available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
+								availableStacks, meStorage, key, queryCap, actionSource);
+						configuredLimit = filterSnapshot.pullLimit(key, available, ignoreNbt, decision);
+					} else {
+						available = Math.max(0L, availableStacks.get(key));
 					}
 					if (configuredLimit >= 0L) {
 						available = Math.min(available, configuredLimit);

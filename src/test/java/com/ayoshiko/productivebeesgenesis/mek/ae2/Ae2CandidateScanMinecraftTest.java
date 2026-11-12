@@ -708,19 +708,34 @@ class Ae2CandidateScanMinecraftTest {
 
     @Test
     void globalReserveScanSkipsTheProbeWhenReportedStockCoversTheRequest() {
-        var fixture = new Fixture();
-        var key = namedComb("reported_stock");
-        fixture.filter.setGlobalNetworkStock(true);
-        fixture.filter.setGlobalReserveAmount(10);
-        fixture.inventory.add(key, 74);
-        when(fixture.service.getCachedInventory()).thenReturn(fixture.inventory);
+        for (String route : List.of("directory", "precise-direct", "fuzzy-direct")) {
+            var fixture = new Fixture();
+            fixture.holder.setAeInputNbtIgnore(false);
+            fixture.filter.setGlobalNetworkStock(true);
+            fixture.filter.setGlobalReserveAmount(10);
+            var keys = List.of(typedComb("iron", false, "reported"), typedComb("gold", false, "reported"));
+            if (!route.equals("directory")) {
+                fixture.filter.setFilterMode(Ae2InputFilter.FilterMode.WHITELIST);
+                fixture.filter.setPreciseMode(route.equals("precise-direct"));
+                for (int index = 0; index < keys.size(); index++) {
+                    direct(fixture.filter, index, keys.get(index), 64);
+                }
+            }
+            for (var key : keys) {
+                fixture.inventory.add(key, 74);
+            }
+            when(fixture.service.getCachedInventory()).thenReturn(fixture.inventory);
 
-        var candidates = fixture.collect(100);
+            var candidates = fixture.collect(100);
 
-        assertEquals(List.of(key), candidates.stream().map(entry -> entry.key).toList());
-        assertEquals(64, candidates.getFirst().remaining);
-        assertEquals(10, candidates.getFirst().reserveFloor);
-        verifyNoInteractions(fixture.storage);
+            assertEquals(Set.copyOf(keys), Set.copyOf(candidates.stream().map(entry -> entry.key).toList()));
+            assertEquals(2, candidates.size());
+            for (var candidate : candidates) {
+                assertEquals(64, candidate.remaining);
+                assertEquals(10, candidate.reserveFloor);
+            }
+            verifyNoInteractions(fixture.storage);
+        }
     }
 
     @Test
