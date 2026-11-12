@@ -11,10 +11,6 @@ import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEContainerSlot
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugePbUpgradeHandler;
 import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
-import mekanism.api.inventory.IInventorySlot;
-import mekanism.common.attachments.containers.ContainerType;
-import mekanism.common.attachments.containers.item.ComponentBackedItemHandler;
 import mekanism.common.block.attribute.Attribute;
 import mekanism.common.block.interfaces.IHasTileEntity;
 import mekanism.common.tier.FactoryTier;
@@ -31,7 +27,6 @@ import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.neoforged.neoforge.items.ItemHandlerHelper;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -42,7 +37,7 @@ import java.util.Set;
  * {@link ApiaryShapedRecipe} 的 BLOCK_ENTITY_DATA 转移/合并工具类（SRP 拆分）
  * <br/>
  * 从 ApiaryShapedRecipe 拆出，集中管理合成升级时的自定义 NBT 数据转移逻辑：
- * 蜜蜂槽取并集、PB 升级数量累加、BlockEntityType id 替换、降级路径深拷贝。
+ * 蜜蜂槽取并集、PB 升级数量累加、BlockEntityType id 替换及单输入完整快照。
  * 所有方法为静态纯函数（不持有状态），便于单独测试。
  */
 final class ApiaryCraftingDataTransfer {
@@ -50,14 +45,11 @@ final class ApiaryCraftingDataTransfer {
 	private ApiaryCraftingDataTransfer() {
 	}
 
-	/** 用于 WARN 日志的 feature 标识（DevLog 节流） */
-	private static final String DEV_FEATURE = "crafting_upgrade";
-
 	/**
 	 * 将机器输入的 BLOCK_ENTITY_DATA 转移到合成结果
 	 * <br/>
 	 * 单输入深拷贝完整数据；多输入按合并策略合并（蜜蜂槽取并集、PB升级累加、其他取首个非空）。
-	 * 正常路径与降级路径共用，保证数据转移逻辑一致。
+	 * 单输入保留全部自定义字段，多输入只合并可证明无损的资产。
 	 * <p>
 	 * 崩溃修复：BLOCK_ENTITY_DATA 组件使用 {@code CustomData.CODEC_WITH_ID} 校验顶层
 	 * {@code "id"}（BlockEntityType 注册键），必须写入目标方块的 BlockEntityType id，
@@ -102,18 +94,12 @@ final class ApiaryCraftingDataTransfer {
 		}
 	}
 
-	/** 读取 ItemStack 上的 BLOCK_ENTITY_DATA 深拷贝；无数据或读取失败返回 null。 */
+	/** 读取独立保存快照；新机器没有自定义数据。 */
 	@Nullable
 	private static CompoundTag readBlockEntityData(@Nullable ItemStack stack) {
 		if (stack == null || stack.isEmpty()) return null;
 		CustomData data = stack.get(DataComponents.BLOCK_ENTITY_DATA);
-		if (data == null) return null;
-		try {
-			return data.copyTag();
-		} catch (Exception e) {
-			DevLog.error("合成升级: 读取输出已有 BLOCK_ENTITY_DATA 失败", e);
-			return null;
-		}
+		return data == null ? null : data.copyTag();
 	}
 
 	/**
@@ -245,14 +231,8 @@ final class ApiaryCraftingDataTransfer {
 			}
 		}
 
-		// base 选择：优先沿用 dest 上已有的 BLOCK_ENTITY_DATA。
-		// 正常路径下它是 MekanismShapedRecipe 已经合并好的结果 —— MEK 的
-		// ItemRecipeData.merge 会把**每一个**输入的物品栏并进同一份 NBT，并已按目标等级
-		// 建立好槽位布局。原实现无条件用「首个输入的原始 NBT」作 base，等于把 MEK 合并
-		// 进来的第 2..N 个输入的物品栏整体覆盖掉：4 个基础蜂箱合成 1 个工厂蜂箱时，
-		// 后 3 个蜂箱输出槽里的物品会静默消失（无日志、无告警）。
-		// 降级路径下 dest 的 NBT 本就是首输入的副本，行为与原先完全一致 ——
-		// 因此这次改动只会「多保留」数据，不会少保留。
+		// 目标模板有自定义默认字段时沿用目标快照，否则沿用首个输入。
+		// 物品和流体附件已经独立按目标布局合并，此处只处理自定义保存状态。
 		CompoundTag merged = readBlockEntityData(dest);
 		if (merged == null) {
 			if (nbts.isEmpty()) {
@@ -437,33 +417,6 @@ final class ApiaryCraftingDataTransfer {
 		if (raw != null && (!(raw instanceof ListTag list) || !list.isEmpty())) {
 			throw new IllegalArgumentException("Unsettled machine asset: " + key);
 		}
-	}
-
-	/**
-	 * 回退合成路径复制第一个输入的组件后，继续把其余机器的 ATTACHED_ITEMS 合并进去。
-	 * <br/>
-	 * 正常路径由 MekanismShapedRecipe 完成相同工作；回退路径必须显式补齐，
-	 * 否则第二个及后续输入中的基因小食、能量物品和输出物品会静默丢失。
-	 */
-	static boolean mergeAttachedItemDataIntoFallback(List<ItemStack> inputs, ItemStack fallback) {
-		ComponentBackedItemHandler target = ContainerType.ITEM.createHandler(fallback);
-		if (target == null) return false;
-		for (int inputIndex = 1; inputIndex < inputs.size(); inputIndex++) {
-			ComponentBackedItemHandler source = ContainerType.ITEM.createHandler(inputs.get(inputIndex));
-			if (source == null) continue;
-			for (IInventorySlot slot : source.getInventorySlots(null)) {
-				ItemStack stack = slot.getStack();
-				if (stack.isEmpty()) continue;
-				ItemStack remainder = ItemHandlerHelper.insertItemStacked(target, stack.copy(), false);
-				if (!remainder.isEmpty()) {
-					DevLog.warn(DEV_FEATURE,
-							"合成升级回退路径无法容纳输入物品 {}，拒绝合成",
-							remainder.getHoverName().getString());
-					return false;
-				}
-			}
-		}
-		return true;
 	}
 
 	/**

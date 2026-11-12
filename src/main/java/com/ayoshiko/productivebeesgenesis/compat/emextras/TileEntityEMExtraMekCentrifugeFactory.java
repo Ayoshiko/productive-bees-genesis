@@ -331,6 +331,15 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 			() -> super.collectImplicitComponents(builder));
 	}
 
+	/** 流体组件覆盖 NBT 恢复后，生产路由必须与最终罐内容一致。 */
+	@Override
+	protected void applyImplicitComponents(DataComponentInput input) {
+		super.applyImplicitComponents(input);
+		if (getOrCreateDelegate().getFluidOutputHolder() instanceof MultiFluidTankHolder multi) {
+			multi.rebuildMappings();
+		}
+	}
+
 	/** 从配置卡数据读取 — 恢复AE2 per-tile状态 */
 	@Override
 	public void readSustainedData(@NotNull HolderLookup.Provider provider, @NotNull CompoundTag data) {

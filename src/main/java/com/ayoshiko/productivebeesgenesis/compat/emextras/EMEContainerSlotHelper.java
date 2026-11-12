@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.compat.emextras;
 
 import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
+import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeFluidTankMultipliers;
 import io.github.masyumero.emextras.common.block.attribute.EMExtraAttributeTier;
 import io.github.masyumero.emextras.common.tier.EMExtraFactoryTier;
 import mekanism.common.block.attribute.Attribute;
@@ -33,6 +34,12 @@ public final class EMEContainerSlotHelper {
 			return emeft.processes;
 		}
 		return 0;
+	}
+
+	public static int getCentrifugeFluidMultiplier(Block block) {
+		EMExtraAttributeTier<?> attribute = Attribute.get(block, EMExtraAttributeTier.class);
+		EMExtraFactoryTier tier = (EMExtraFactoryTier) attribute.tier();
+		return CentrifugeFluidTankMultipliers.forEMEFactory(tier.ordinal()).getAsInt();
 	}
 
 	/**

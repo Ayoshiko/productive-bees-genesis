@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.compat.mekanism_extras;
 
 import com.ayoshiko.productivebeesgenesis.apiary.FactoryApiaryConfig;
+import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeFluidTankMultipliers;
 import com.jerry.mekextras.common.block.attribute.ExtraAttributeTier;
 import com.jerry.mekextras.common.tier.ExtraFactoryTier;
 import mekanism.common.block.attribute.Attribute;
@@ -33,6 +34,12 @@ public final class MEContainerSlotHelper {
 			return eft.processes;
 		}
 		return 0;
+	}
+
+	public static int getCentrifugeFluidMultiplier(Block block) {
+		ExtraAttributeTier<?> attribute = Attribute.get(block, ExtraAttributeTier.class);
+		ExtraFactoryTier tier = (ExtraFactoryTier) attribute.tier();
+		return CentrifugeFluidTankMultipliers.forMEFactory(tier.ordinal()).getAsInt();
 	}
 
 	/**
