@@ -1,7 +1,7 @@
 #requires -Version 7.2
 [CmdletBinding()]
 param(
-    [string]$Scenario,
+    [string]$Scenario = 'compile',
     [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunId = (Get-Date -Format 'yyyyMMdd-HHmmss'),
     [ValidateRange(1, 300)][int]$TimeoutSeconds = 285,
     [string[]]$Tests = @(),
@@ -46,31 +46,6 @@ function Invoke-BoundedProcess {
         }
     }
 }
-function Get-TextHash([string]$Value) {
-    return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($Value))).ToLowerInvariant()
-}
-function Get-SourceFingerprint([string]$Root) {
-    $head = (& git -C $Root rev-parse HEAD) -join ''
-    if ($LASTEXITCODE -ne 0) { throw 'Cannot read Git HEAD' }
-    $diff = (& git -C $Root diff HEAD --binary -- src gradle build.gradle gradle.properties settings.gradle) -join [char]10
-    if ($LASTEXITCODE -ne 0) { throw 'Cannot read source diff' }
-    $extra = @(& git -C $Root ls-files --others --exclude-standard -- src gradle)
-    if ($LASTEXITCODE -ne 0) { throw 'Cannot read untracked source paths' }
-    $extraHashes = @($extra | Sort-Object | ForEach-Object {
-        $_ + '=' + (Get-FileHash -LiteralPath (Join-Path $Root $_) -Algorithm SHA256).Hash
-    })
-    return [ordered]@{ head = $head; sha256 = Get-TextHash ($head + $diff + ($extraHashes -join [char]10)) }
-}
-function Get-Dependencies([string]$Root) {
-    return @(foreach ($directory in @('libs', 'run/mods')) {
-        $path = Join-Path $Root $directory
-        if (Test-Path -LiteralPath $path) {
-            Get-ChildItem -LiteralPath $path -File -Filter '*.jar' | Sort-Object Name | ForEach-Object {
-                [ordered]@{ path = "$directory/$($_.Name)"; bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
-            }
-        }
-    })
-}
 function Quote-PowerShell([string]$Value) { return "'" + $Value.Replace("'", "''") + "'" }
 function Save-RunJson([string]$Path, $Value) {
     [IO.File]::WriteAllText($Path, ($Value | ConvertTo-Json -Depth 20) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
@@ -87,9 +62,6 @@ if (-not $Scenario -or -not $manifest.scenarios.ContainsKey($Scenario)) {
 }
 $selected = $manifest.scenarios[$Scenario]
 $tasks = if ($GradleTasks.Count) { $GradleTasks } else { @($selected.tasks) }
-if (($tasks -contains 'test' -or $tasks -contains 'build') -and $Tests.Count -eq 0) {
-    throw 'Specify -Tests with the affected test classes; implicit full-suite execution is disabled.'
-}
 if ($Tests.Count -gt 0 -and $tasks -notcontains 'test') { throw '-Tests requires an explicit test task' }
 if ($Properties | Where-Object { $_ -match '^(networkProbeRun|networkProbeSeedWorld|networkProbeAe2)(=|$)' }) {
     throw 'Use RunId, SeedRun and Ae2 for probe identity and dependencies.'
@@ -116,9 +88,12 @@ if ($selected.ContainsKey('writer')) {
     if (-not $SeedRun -or $SeedRun -notmatch '^[a-zA-Z0-9_-]+$') { throw 'Reader requires -SeedRun with a successful writer run ID' }
     $writerPath = Join-Path $runRoot "$SeedRun/run.json"
     $writer = [IO.File]::ReadAllText($writerPath, [Text.Encoding]::UTF8) | ConvertFrom-Json -AsHashtable
-    if ($writer.accepted -ne $true -or $writer.scenario -ne $selected.writer -or $writer.ae2 -ne [bool]$Ae2 -or $writer.worktree -ne $root) {
-        throw 'Writer must be accepted and match this scenario, worktree and AE2 selection.'
+    if ($writer.process.exitCode -ne 0 -or $writer.process.timedOut -or $writer.scenario -ne $selected.writer -or $writer.ae2 -ne [bool]$Ae2 -or $writer.worktree -ne $root) {
+        throw 'Writer must finish successfully and match this scenario, worktree and AE2 selection.'
     }
+    $writerReportPath = Join-Path $root "build/network-probe-$SeedRun/results/$($selected.report)"
+    $writerReport = [IO.File]::ReadAllText($writerReportPath, [Text.Encoding]::UTF8) | ConvertFrom-Json -AsHashtable
+    if ($writerReport.normalShutdown -ne $true) { throw 'Writer world was not saved by a normal shutdown' }
     $seedWorld = Join-Path $root "build/network-probe-$SeedRun/world"
     if (-not (Test-Path -LiteralPath (Join-Path $seedWorld 'level.dat'))) { throw 'Writer world is missing level.dat' }
     $writerProcess = Get-Process -Id $writer.process.pid -ErrorAction SilentlyContinue
@@ -139,11 +114,6 @@ $record = @{
     timeoutSeconds = $TimeoutSeconds; accepted = $false; reports = @()
 }
 try {
-    $record.source = Get-SourceFingerprint $root
-    $record.dependencies = Get-Dependencies $root
-    $record.fixtureSha256 = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    $invocation = [ordered]@{ command = $arguments; source = $record.source; dependencies = $record.dependencies; fixture = $record.fixtureSha256 }
-    $record.invocationSha256 = Get-TextHash ($invocation | ConvertTo-Json -Depth 10 -Compress)
     Save-RunJson (Join-Path $destination 'run.json') $record
     $remaining = $TimeoutSeconds * 1000 - $clock.ElapsedMilliseconds - 5000
     if ($remaining -le 0) { throw 'Preparation exhausted the run time budget' }
@@ -156,11 +126,6 @@ try {
         LimitMilliseconds = [int]$remaining
     }
     $record.process = Invoke-BoundedProcess @processArgs
-    $record.sourceAfter = Get-SourceFingerprint $root
-    $record.dependenciesAfter = Get-Dependencies $root
-    $stable = $record.source.sha256 -eq $record.sourceAfter.sha256 -and
-        (Get-TextHash ($record.dependencies | ConvertTo-Json -Depth 6 -Compress)) -eq
-        (Get-TextHash ($record.dependenciesAfter | ConvertTo-Json -Depth 6 -Compress))
     $reportPaths = @()
     if ($tasks -contains 'test') { $reportPaths += 'build/test-results/test' }
     if ($tasks -contains 'build' -or $tasks -contains 'reportReleaseArtifact') { $reportPaths += 'build/reports/release-artifact.txt' }
@@ -174,46 +139,27 @@ try {
             $record.reports += $relative
         }
     }
-    $reportsValid = $record.reports.Count -eq $reportPaths.Count
     if ($tasks -contains 'test') {
         $xmlFiles = @(Get-ChildItem -LiteralPath (Join-Path $root 'build/test-results/test') -Filter 'TEST-*.xml' -File -ErrorAction SilentlyContinue)
         $totals = @{ tests = 0; failures = 0; errors = 0; skipped = 0 }
-        $fresh = $xmlFiles.Count -gt 0
         foreach ($file in $xmlFiles) {
             [xml]$xml = [IO.File]::ReadAllText($file.FullName)
             foreach ($key in @('tests', 'failures', 'errors', 'skipped')) { $totals[$key] += [int]$xml.testsuite.GetAttribute($key) }
-            if ($file.LastWriteTimeUtc -lt $started) { $fresh = $false }
         }
-        $reportHashes = @($xmlFiles | Sort-Object Name | ForEach-Object {
-            $_.Name + '=' + (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
-        })
         $record.junit = $totals
-        $record.junit.reportSha256 = Get-TextHash ($reportHashes -join [char]10)
-        $record.junit.fresh = $fresh
-        if (-not $fresh) {
-            $previous = @(Get-ChildItem -LiteralPath $runRoot -Directory | Where-Object { $_.Name -ne $RunId } | ForEach-Object {
-                $oldPath = Join-Path $_.FullName 'run.json'
-                if (Test-Path -LiteralPath $oldPath) {
-                    $old = [IO.File]::ReadAllText($oldPath) | ConvertFrom-Json -AsHashtable
-                    if ($old.accepted -eq $true -and $old.invocationSha256 -eq $record.invocationSha256 -and
-                        $old.junit.reportSha256 -eq $record.junit.reportSha256) { $old.runId }
-                }
-            })
-            if ($previous.Count) { $record.junit.reusedFrom = $previous[-1] }
-            else { $reportsValid = $false }
-        }
-        if ($totals.tests -le $totals.skipped -or $totals.failures -gt 0 -or $totals.errors -gt 0) { $reportsValid = $false }
     }
     if ($selected.probe) {
         $jsonPath = Join-Path $probe ("results/" + $selected.report)
-        if (-not (Test-Path -LiteralPath $jsonPath)) { $reportsValid = $false }
+        if (-not (Test-Path -LiteralPath $jsonPath)) { throw "Probe report is missing: $jsonPath" }
         else {
             $probeResult = [IO.File]::ReadAllText($jsonPath) | ConvertFrom-Json -AsHashtable
-            if ($probeResult.passed -ne $true -or $probeResult.normalShutdown -ne $true -or $probeResult.ae2Loaded -ne [bool]$Ae2) { $reportsValid = $false }
+            $record.probe = $probeResult
+            if ($probeResult.passed -ne $true -or $probeResult.normalShutdown -ne $true -or $probeResult.ae2Loaded -ne [bool]$Ae2) {
+                throw 'Probe reported a behavior failure, incomplete shutdown or a different dependency combination.'
+            }
         }
     }
-    $record.accepted = $record.process.exitCode -eq 0 -and -not $record.process.timedOut -and $stable -and $reportsValid
-    $record.stableInputs = $stable
+    $record.accepted = $record.process.exitCode -eq 0 -and -not $record.process.timedOut
 } catch {
     $record.error = $_.Exception.ToString()
 } finally {

@@ -8,26 +8,18 @@
   },
   "scenarios": {
     "compile": {
-      "purpose": "合并后的生产、测试和专服探针接口编译",
+      "purpose": "仅编译当前生产源码",
       "tasks": [
-        "compileJava",
-        "compileTestJava",
-        "compileDomainProbeJava"
+        "compileJava"
       ],
-      "properties": [
-        "networkDomainProbe"
-      ]
+      "properties": []
     },
     "core": {
-      "purpose": "显式选择受影响纯逻辑行为并构建可分发产物",
+      "purpose": "显式选择需要运行的纯逻辑测试，可用 -Tests 限定范围",
       "tasks": [
-        "test",
-        "build",
-        "compileDomainProbeJava"
+        "test"
       ],
-      "properties": [
-        "networkDomainProbe"
-      ]
+      "properties": []
     },
     "hosts": {
       "purpose": "注册表初始化后的真实蜂箱、离心与正式资源账户行为",
@@ -143,6 +135,15 @@
         "reportReleaseArtifact"
       ],
       "properties": []
+    },
+    "probe-compile": {
+      "purpose": "按需编译专服探针接口",
+      "tasks": [
+        "compileDomainProbeJava"
+      ],
+      "properties": [
+        "networkDomainProbe"
+      ]
     }
   }
 }

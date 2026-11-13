@@ -1471,3 +1471,12 @@ JAR **4,416,037 字节**，SHA-256 `df5c577d4d1d8ca1dd5d68f8729f9a8c1d9d5737ee85
 **失败保管与交付现场。** 首次 Java 编译缺少迁移后的 PbVirtualTickPlan import；第二次测试／探针编译暴露旧配置 API 和测试 import，产物清单同时拒绝合并后摘要。均先保管根因后修复。付款夹具沿真实输入验证器校准世界、配方、完整蜜脾组件和生命周期，未放宽生产准入或删除守恒断言。各轮命令、输入指纹、时间、退出码及 XML／JSON 保存在 `build/network-dev/maintenance-*`，汇总为 `build/network-dev/maintenance-integration-20261109.json`。
 
 原工作区 5 份文档和旧法语原文已复制到其 `build/network-maintenance-intake-20261109` 并核对 SHA-256；独有的美术技能说明保留。旧法语没有独有键，维护版包含新增翻译与更新说明。配置备份校验后送入回收站并确认可找回。正式资源账户统一接管、完整外部桥故障、全部客户端／多人组合及 Spark 收益仍未验收，不随本次维护合并关闭。
+
+<a id="s10-181"></a>
+### 10.181 网络开发门禁与累计编排清理（2026-11-13）
+
+按用户明确要求撤销阻塞开发的累计阶段父门、固定兼容矩阵与强制测试前置。删除并回收 `network-stage-gate.ps1`、`network-stage-evidence.ps1`、`network-player-gate.ps1`、`network-exchange-gate.ps1`、`network-concurrent-gate.ps1`：这些旧编排器将全量测试／构建和多依赖、跨 JVM、客户端矩阵串成固定执行流程，日常按需执行已有 `network-dev.ps1` 可用。历史报告保留原记录，移除编排器不改变过去运行结论。
+
+`network-dev` 默认只编译生产源码；core 只运行选定测试，探针编译独立为 probe-compile。取消 build 强制提供 Tests、全源码／依赖重复散列、历史运行扫描和 JUnit 时间戳匹配式阻断，继续记录真实命令、退出码、JUnit 汇总和实际探针报告。保留本任务进程树 300 秒以内上限、唯一运行目录及 reader 读取已正常停服 writer 世界的边界。实际行为失败不记成功，取消流程门不生成许可授权或补造运行证据。
+
+本次只改上述工具和现行设计／队列；生产 Java、资产守恒、外部输入权限、未知结果保管和已付恢复未修改。用户原有 `bee-processing-network-visual-design.md` 改动保留。修改前的五份文件副本及回收脚本均核对 SHA-256 并确认回收站可恢复。验证仅做受影响 UTF-8、JSON、PowerShell 语法和 diff 检查；未运行构建、测试或游戏，未提交、推送或合并维护分支。
