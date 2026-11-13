@@ -10,7 +10,7 @@
 | 模组 ID | `productivebeesgenesis` |
 | 内部/构建版本 | 以 `gradle.properties` 的 `mod_version` 为准；当前版本为 `1.2.4` |
 | CurseForge 版本 | 以 `curseforge_release_version` 为准；当前版本为 `1.2.4` |
-| 发布状态 | `1.2.4` 正式版本说明日期为 2026-11-13，公开发布进行中。附件、工作流和 CurseForge 可用状态以 [本次 Release](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.4) 的实际结果为准，本文不预先记为通过。既有 `v1.2.3` 附件保持原状 |
+| 发布状态 | `1.2.4` 于 2026-11-13 在 [GitHub 正式发布并设为 Latest](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.4)，标签提交为 `863aa5be74ecc56f9ee6fa0cf2e43e8c8cd56dc7`。[维护 Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43378990852)、[标签 Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43381786352) 及 [CurseForge 上传](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43381809241) 均成功。公开 JAR 5,689,027 字节，重新下载 SHA-256 为 `0f181b726bf868080f723cd089245cd7e91393ea94ab958df2926763c857ffe9`，与上传附件一致。CurseForge 公共文件信息已列出 [文件 9587266](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis/files/9587266)，正式类型、1.21.1／NeoForge 与文件大小均匹配；上传工作流使用同一已核对的 GitHub 附件 |
 | CurseForge 渠道 | Release |
 | Minecraft | `1.21.1` |
 | 模组加载器 | NeoForge |

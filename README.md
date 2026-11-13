@@ -11,7 +11,7 @@
 
 **Languages**: [English](README.md) · [中文](README_zh.md)
 
-**Version 1.2.4 — production, upgrades and editor maintenance.** This update addresses apiary and centrifuge input/output delays, paid-work recovery, AE2 patterns for machines with contents, access permissions and editor behavior. Update clients and servers together. See the complete [1.2.4 changes](CHANGELOG.md#124---2026-11-13). Publication is in progress; current files and platform availability are recorded in the [1.2.4 release](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.4).
+**Version 1.2.4 — production, upgrades and editor maintenance.** This update addresses apiary and centrifuge input/output delays, paid-work recovery, AE2 patterns for machines with contents, access permissions and editor behavior. Update clients and servers together. See the complete [1.2.4 changes](CHANGELOG.md#124---2026-11-13). [1.2.4 is now published on GitHub](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.4), and the CurseForge upload workflow has completed successfully.
 
 **Download**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
