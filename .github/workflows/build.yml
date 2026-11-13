@@ -32,7 +32,7 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: pbg-forge-tools-v1-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle.properties', 'build.gradle', 'settings.gradle', 'tools/prepare_forge_dependencies.py') }}
+          key: pbg-forge-tools-v1-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle.properties', 'build.gradle', 'settings.gradle', 'tools/prepare_forge_dependencies.py', 'tools/prepare_optional_compile_inputs.py', 'tools/forge_optional_compile_inputs.json') }}
       - name: Restore verified Forge compile inputs
         if: steps.toolchain.outputs.cache-hit != 'true'
         run: python3 tools/prepare_forge_dependencies.py
@@ -62,7 +62,7 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: pbg-forge-tools-v1-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle.properties', 'build.gradle', 'settings.gradle', 'tools/prepare_forge_dependencies.py') }}
+          key: pbg-forge-tools-v1-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'gradle.properties', 'build.gradle', 'settings.gradle', 'tools/prepare_forge_dependencies.py', 'tools/prepare_optional_compile_inputs.py', 'tools/forge_optional_compile_inputs.json') }}
           fail-on-cache-miss: true
       - name: Restore verified Forge compile inputs
         run: python3 tools/prepare_forge_dependencies.py

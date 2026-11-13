@@ -5,6 +5,7 @@ import io
 import json
 import urllib.request
 import zipfile
+from prepare_optional_compile_inputs import prepare
 
 ROOT = Path(__file__).resolve().parents[1]
 LIBS = ROOT / "libs"
@@ -46,6 +47,7 @@ def main():
     name = "mixinextras-forge-0.5.5.jar"
     if not valid(name):
         save(name, download("https://repo.maven.apache.org/maven2/io/github/llamalad7/mixinextras-forge/0.5.5/" + name))
+    prepare(download_missing=True)
     print("Forge compile inputs verified.")
 
 if __name__ == "__main__":

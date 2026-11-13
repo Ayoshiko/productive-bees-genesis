@@ -8,7 +8,8 @@
         "id": "ae2lt",
         "version": "2.1.3"
       }
-    ]
+    ],
+    "url": "https://cursemaven.com/curse/maven/ae2-lightning-tech-1527395/9375155/ae2-lightning-tech-1527395-9375155.jar"
   },
   {
     "artifact": "ars-port",
@@ -19,7 +20,8 @@
         "id": "ars_nouveau",
         "version": "${file.jarVersion}"
       }
-    ]
+    ],
+    "url": "https://cursemaven.com/curse/maven/ars-nouveau-401955/6688854/ars-nouveau-401955-6688854.jar"
   },
   {
     "artifact": "pneumatic-port",
@@ -30,7 +32,8 @@
         "id": "pneumaticcraft",
         "version": "6.0.23+mc1.20.1"
       }
-    ]
+    ],
+    "url": "https://cursemaven.com/curse/maven/pneumaticcraft-repressurized-281849/8411196/pneumaticcraft-repressurized-281849-8411196.jar"
   },
   {
     "artifact": "projecte-port",
@@ -41,7 +44,8 @@
         "id": "projecte",
         "version": "1.0.1"
       }
-    ]
+    ],
+    "url": "https://cursemaven.com/curse/maven/projecte-226410/4901949/projecte-226410-4901949.jar"
   },
   {
     "artifact": "useless-core-port",
@@ -52,7 +56,8 @@
         "id": "useless_core",
         "version": "1.0.17"
       }
-    ]
+    ],
+    "url": "https://github.com/mybong9/Useless-Core/releases/download/v1.0.17/useless_core-1.0.17.jar"
   },
   {
     "artifact": "useless-port",
@@ -63,6 +68,7 @@
         "id": "useless_mod",
         "version": "1.4.6"
       }
-    ]
+    ],
+    "url": "https://github.com/mybong9/Useless-CE-Unofficial/releases/download/v1.4.6/useless_mod-1.4.6.jar"
   }
 ]
