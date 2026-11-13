@@ -2,11 +2,8 @@ package com.ayoshiko.productivebeesgenesis.recipe;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,8 +25,7 @@ import net.minecraft.nbt.Tag;
  * 输出物品上已经有 {@code MekanismShapedRecipe} 合并好的 {@code BLOCK_ENTITY_DATA}
  * —— 覆盖它就等于丢掉 MEK 已合并进来的第 2..N 个输入的物品栏（多输入升级场景静默丢物品）。
  * <p>
- * 本测试覆盖纯 NBT 逻辑（不依赖 Minecraft 运行时注册表），并额外用源码断言钉住
- * 「base 优先取输出已有数据」这一不变量。
+ * 本测试覆盖纯 NBT 合并、拒收和槽位重编号逻辑。
  */
 class ApiaryCraftingDataTransferTest {
 
@@ -148,27 +144,6 @@ class ApiaryCraftingDataTransferTest {
 	}
 
 	// ===== 源码级不变量 =====
-
-	@Test
-	@DisplayName("合并 base 必须优先沿用输出物品上 MEK 已合并好的数据")
-	void mergeBasePrefersDestinationBlockEntityData() throws Exception {
-		String source = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/recipe/ApiaryCraftingDataTransfer.java"));
-		// MEK 的 ItemRecipeData.merge 会把**每一个**输入的物品栏并进输出物品的
-		// BLOCK_ENTITY_DATA；若这里改回「首个输入的原始 NBT」，多输入升级会静默丢失
-		// 第 2..N 个机器里的物品。
-		assertTrue(source.contains("CompoundTag merged = readBlockEntityData(dest);"),
-				"mergeMachineInputs 必须优先用输出物品已有的 BLOCK_ENTITY_DATA 作为 base");
-		assertTrue(source.contains("merged = nbts.get(0);"),
-				"输出物品无数据（如玩家用空机器合成）时必须回退到首个输入 NBT，否则数据全丢");
-		// 两个合并子步骤必须与 base 来源无关
-		assertFalse(source.contains("for (int i = 1; i < inputs.size(); i++) {"),
-				"不得再假设「首输入已在 base 中」：base 换成 MEK 结果后该假设不成立");
-		assertTrue(source.contains("ListTag mergedBeeSlots = new ListTag();"),
-				"蜜蜂槽必须从零重建");
-		assertTrue(source.contains("CompoundTag mergedCounts = new CompoundTag();"),
-				"PB 升级计数必须从零求和");
-	}
 
 	// ===== 构造辅助 =====
 

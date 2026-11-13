@@ -5,6 +5,9 @@ import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
@@ -13,6 +16,8 @@ import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import java.util.ArrayList;
+import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -20,6 +25,132 @@ import static org.mockito.ArgumentMatchers.*;
 @Tag("minecraft")
 class OutputCustodyMinecraftTest {
     private static OutputCustody custody() { return new OutputCustody(() -> {}); }
+
+    @Test
+    void sharedItemExecutionSnapshotKeepsTheContributionAndBlocksReplay() {
+        var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        var request = UUID.randomUUID();
+        var first = custody();
+        var second = custody();
+        ItemStack template = new ItemStack(Items.DIAMOND);
+        template.set(DataComponents.CUSTOM_NAME, Component.literal("原身份"));
+        assertTrue(first.beginSharedItem(request, template, 5, "ae2-shared-item"));
+        assertTrue(second.beginSharedItem(request, template, 7, "ae2-shared-item"));
+        template.set(DataComponents.CUSTOM_NAME, Component.literal("后续修改"));
+        assertFalse(first.beginSharedItem(UUID.randomUUID(), template, 1, "reentry"));
+        assertThrows(IllegalStateException.class, () -> first.confirmSourceDebit(5));
+        assertThrows(IllegalStateException.class, () -> first.confirmSourceSettled(request));
+        var during = first.save(registries);
+        assertEquals(2, during.getInt("version"));
+        assertEquals(5, during.getLong("source_debit_pending"));
+        var restored = custody();
+        restored.load(registries, during);
+        assertEquals(during, restored.save(registries));
+        assertTrue(restored.blocked());
+        assertTrue(restored.recoveredItem().isEmpty());
+        assertEquals(0, restored.handoffItem(new ItemStack(Items.DIAMOND), "retry", () -> fail("unknown replay")));
+
+        first.sharedItemReceipt(5);
+        second.sharedItemReceipt(2);
+        assertEquals(request, first.sequence());
+        assertEquals(request, second.sequence());
+        assertEquals(2, second.amount());
+        assertEquals(2, second.sourceDebitPending());
+        var knownSnapshot = second.save(registries);
+        var knownRestored = custody();
+        knownRestored.load(registries, knownSnapshot);
+        assertEquals(knownSnapshot, knownRestored.save(registries));
+        assertTrue(knownRestored.blocked());
+        first.confirmSourceDebit(5);
+        second.confirmSourceDebit(2);
+        knownRestored.confirmSourceSettled(request);
+        assertFalse(first.blocked());
+        assertFalse(second.blocked());
+        assertFalse(knownRestored.blocked());
+
+        restored.confirmSourceSettled(request);
+        restored.resolve(request, 1);
+        assertEquals(4, restored.recoveredItem().getCount());
+        assertEquals("原身份", restored.recoveredItem().getHoverName().getString());
+    }
+
+    @Test
+    void sharedUnknownContributionsRemainSeparateUntilEachSourceIsSettled() {
+        var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        var request = UUID.randomUUID();
+        var first = custody();
+        var second = custody();
+        assertTrue(first.beginSharedItem(request, new ItemStack(Items.IRON_INGOT), 4, "ae2-shared-item"));
+        assertTrue(second.beginSharedItem(request, new ItemStack(Items.IRON_INGOT), 6, "ae2-shared-item"));
+        var failure = new IllegalStateException("mount accepted a prefix then failed");
+        first.sharedItemUncertain(failure);
+        second.sharedItemUncertain(failure);
+        first.confirmSourceDebit(4);
+        second.markSourceDebitUnknown(new IllegalStateException("source debit callback failed"));
+        assertTrue(first.blocked());
+        assertTrue(second.blocked());
+        assertEquals(4, first.amount());
+        assertEquals(6, second.amount());
+        assertThrows(IllegalStateException.class, () -> second.confirmSourceDebit(6));
+        assertThrows(IllegalStateException.class, () -> second.resolve(request, 0));
+        var saved = second.save(registries);
+        var restored = custody();
+        restored.load(registries, saved);
+        assertEquals(saved, restored.save(registries));
+        assertTrue(restored.sourceDebitUnknown());
+        restored.confirmSourceSettled(request);
+        first.resolve(request, 3);
+        restored.resolve(request, 0);
+        assertEquals(1, first.recoveredItem().getCount());
+        assertEquals(6, restored.recoveredItem().getCount());
+    }
+
+    @Test
+    void rejectedSharedRequestReleasesGuardsWithoutAStoredAsset() {
+        var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        var retained = custody();
+        assertTrue(retained.beginSharedItem(UUID.randomUUID(), new ItemStack(Items.DIAMOND), 12, "ae2-shared-item"));
+        retained.sharedItemReceipt(0);
+        assertFalse(retained.blocked());
+        assertEquals(0, retained.sourceDebitPending());
+        assertTrue(retained.save(registries).isEmpty());
+        assertEquals(2, retained.handoffItem(new ItemStack(Items.DIAMOND, 2), "normal", () -> 2));
+    }
+
+    @Test
+    void sharedReceiptNotificationsCannotReplaceOrSettleTheExecutingSource() {
+        var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        var owner = new OutputCustody[1];
+        var check = new boolean[1];
+        var snapshots = new ArrayList<CompoundTag>();
+        owner[0] = new OutputCustody(() -> {
+            if (!check[0]) return;
+            snapshots.add(owner[0].save(registries));
+            assertThrows(IllegalStateException.class, () -> owner[0].load(registries, new CompoundTag()));
+            assertThrows(IllegalStateException.class, () -> owner[0].confirmSourceDebit(1));
+            assertThrows(IllegalStateException.class, () -> owner[0].confirmSourceSettled(owner[0].sequence()));
+            throw new IllegalStateException("notification failed");
+        });
+        assertTrue(owner[0].beginSharedItem(UUID.randomUUID(), new ItemStack(Items.DIAMOND), 5, "shared"));
+        check[0] = true;
+        assertThrows(IllegalStateException.class, () -> owner[0].sharedItemReceipt(3));
+        assertEquals(3, owner[0].sourceDebitPending());
+        assertEquals(3, snapshots.getFirst().getLong("source_debit_pending"));
+        check[0] = false;
+        owner[0].confirmSourceDebit(3);
+        assertFalse(owner[0].blocked());
+
+        assertTrue(owner[0].beginSharedItem(UUID.randomUUID(), new ItemStack(Items.DIAMOND), 7, "shared"));
+        check[0] = true;
+        assertThrows(IllegalStateException.class,
+                () -> owner[0].sharedItemUncertain(new IllegalStateException("external unknown")));
+        assertEquals(7, owner[0].sourceDebitPending());
+        check[0] = false;
+        owner[0].confirmSourceDebit(7);
+        assertTrue(owner[0].blocked());
+        assertEquals(7, owner[0].amount());
+        assertTrue(owner[0].recoveredItem().isEmpty());
+    }
 
     @Test void successfulTemplateReuseKeepsLaterComponentChangesAndUnknownRequestIndependent() {
         var custody = custody();

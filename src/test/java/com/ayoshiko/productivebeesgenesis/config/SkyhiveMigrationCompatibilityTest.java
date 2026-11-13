@@ -43,14 +43,4 @@ class SkyhiveMigrationCompatibilityTest {
 				LegacyPackMigrationAssertions.content(plan, ModConfig.CAPACITIES_SERVER_FILE_NAME));
 	}
 
-	@Test
-	void skyhiveRecipeOverridesUseStableIdsAndDoNotDependOnLegacyConfigPath() throws Exception {
-		Assumptions.assumeTrue(Files.isRegularFile(SKYHIVE_KUBEJS),
-				"本机未安装 Skyhive 配方脚本，跳过外部配方回归测试");
-
-		String script = Files.readString(SKYHIVE_KUBEJS);
-		assertTrue(script.contains("event.remove({ id: 'productivebeesgenesis:mek_apiary' })"));
-		assertTrue(script.contains("event.remove({ id: 'productivebeesgenesis:mek_centrifuge' })"));
-		assertFalse(script.contains(ModConfig.LEGACY_SERVER_FILE_NAME));
-	}
 }

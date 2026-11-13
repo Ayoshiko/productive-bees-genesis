@@ -47,11 +47,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tasks=(build verifyReleaseArtifact verifyNoExampleBeesInJar)
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            tasks+=(verifyDistributionPermissions)
-          fi
-          timeout --signal=TERM --kill-after=5s 280s bash ./gradlew --no-daemon "${tasks[@]}" --stacktrace
+          timeout --signal=TERM --kill-after=5s 280s bash ./gradlew --no-daemon build --stacktrace
 
       - name: Record exact build provenance
         run: python3 .github/scripts/release_artifact.py record

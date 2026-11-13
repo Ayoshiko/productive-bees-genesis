@@ -301,6 +301,9 @@ public final class CentrifugeFactoryCommonLogic {
 	public static void onSetRemoved(@NotNull MekAe2LifecycleHandler ae2LifecycleHandler,
 			@NotNull IAe2OutputHostBase factory, @NotNull Runnable superSetRemoved) {
 		superSetRemoved.run();
+		if (factory instanceof IFactoryPbDelegateAccess access) {
+			access.productivebeesgenesis$getPbProcessor().clearTransientCaches();
+		}
 		ae2LifecycleHandler.destroyForRemoval(factory);
 	}
 
@@ -308,6 +311,9 @@ public final class CentrifugeFactoryCommonLogic {
 	public static void onChunkUnloaded(@NotNull MekAe2LifecycleHandler ae2LifecycleHandler,
 			@NotNull IAe2OutputHostBase factory, @NotNull Runnable superChunkUnload) {
 		superChunkUnload.run();
+		if (factory instanceof IFactoryPbDelegateAccess access) {
+			access.productivebeesgenesis$getPbProcessor().clearTransientCaches();
+		}
 		ae2LifecycleHandler.destroyForChunkUnload(factory);
 	}
 

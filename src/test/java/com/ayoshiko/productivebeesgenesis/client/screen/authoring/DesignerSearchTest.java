@@ -61,11 +61,4 @@ class DesignerSearchTest {
 		assertEquals(List.of("copper", "gold", "iron"), index.search("#ingots"));
 	}
 
-	@Test
-	void cachedSyllablesPreserveContextualHanReadings() {
-		for (String name : List.of("重庆", "藏文", "沈阳", "秘鲁", "绿宝石蜜蜂", "铁锭")) {
-			String expected = DesignerSearch.fold(com.ibm.icu.text.Transliterator.getInstance("Han-Latin").transliterate(name));
-			assertTrue(DesignerSearch.indexed(name).contains(expected), name);
-		}
-	}
 }

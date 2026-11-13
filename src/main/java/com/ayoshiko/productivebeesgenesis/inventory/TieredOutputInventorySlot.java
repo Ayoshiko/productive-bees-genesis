@@ -49,6 +49,7 @@ public class TieredOutputInventorySlot extends BasicInventorySlot {
 
 	/** 基础上限单条目缓存，避免每次 getLimit 都调用 ItemStack.getMaxStackSize() */
 	private final SlotLimitCache limitCache = new SlotLimitCache();
+	private long contentsVersion;
 
 	/**
 	 * 创建分等级输出槽
@@ -84,6 +85,17 @@ public class TieredOutputInventorySlot extends BasicInventorySlot {
 	@Override
 	public InventoryContainerSlot createContainerSlot() {
 		return null;
+	}
+
+	/** 所有合法库存修改经过此通知；邻接输出只在版本未变时复用已匹配请求。 */
+	@Override
+	public void onContentsChanged() {
+		contentsVersion++;
+		super.onContentsChanged();
+	}
+
+	public long contentsVersion() {
+		return contentsVersion;
 	}
 
 	/**

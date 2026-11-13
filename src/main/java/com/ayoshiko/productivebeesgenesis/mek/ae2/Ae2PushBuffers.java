@@ -3,11 +3,11 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 import appeng.api.networking.energy.IEnergySource;
 import appeng.api.stacks.AEItemKey;
 import it.unimi.dsi.fastutil.objects.Object2LongLinkedOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +65,7 @@ final class Ae2PushBuffers {
 	final List<Ae2InputExecution.PullEntry> pullList = new ArrayList<>();
 	final List<Ae2InputExecution.PullEntry> pullEntryPool = new ArrayList<>();
 	int pullEntryPoolCursor;
-	final Set<AEItemKey> pullKeys = new HashSet<>();
+	final Set<AEItemKey> pullKeys = new ObjectOpenHashSet<>();
 
 	/** Bounded wraparound prefix for the AE2 input cursor scan. */
 	final List<AEItemKey> scanPrefixKeys = new ArrayList<>();
@@ -79,7 +79,7 @@ final class Ae2PushBuffers {
 	 * 线性去重会使整轮扫描付出 O(候选数 × 选中上限) 次 {@code AEItemKey.equals}
 	 * （spark BkTP3d9oSc 中该方法自身 self 时间 1416ms / 2.36%）。
 	 */
-	final Set<AEItemKey> scanSeenKeys = new HashSet<>();
+	final Set<AEItemKey> scanSeenKeys = new ObjectOpenHashSet<>();
 	final Ae2PullCandidateAmounts scanCandidateAmounts = new Ae2PullCandidateAmounts();
 	final Ae2PullDecision pullDecision = new Ae2PullDecision();
 	/**
@@ -90,6 +90,8 @@ final class Ae2PushBuffers {
 	final List<AEItemKey> scanSmeltingCandidateKeys = new ArrayList<>();
 	/** Cached Productive Bees comb keys used as the lower-priority candidate group. */
 	final List<AEItemKey> scanCandidateKeys = new ArrayList<>();
+	final Ae2CursorScan.CursorPosition scanSmeltingPosition = new Ae2CursorScan.CursorPosition();
+	final Ae2CursorScan.CursorPosition scanCombPosition = new Ae2CursorScan.CursorPosition();
 	volatile Object scanCandidateSource;
 	volatile long scanCandidateRecipeVersion = Long.MIN_VALUE;
 	volatile boolean scanCandidateSmeltingEnabled;
@@ -97,6 +99,11 @@ final class Ae2PushBuffers {
 	volatile int scanCandidateTagGeneration = Integer.MIN_VALUE;
 	/** 当前 per-network 基础目录代号；共享目录重建后宿主分类缓存必须同步刷新。 */
 	volatile long scanCandidateDirectoryGeneration = Long.MIN_VALUE;
+	/** 普通键集合不变时，数量刷新不使宿主熔炼分类失效。 */
+	volatile Object scanSmeltingSource;
+	volatile long scanSmeltingRecipeVersion = Long.MIN_VALUE;
+	volatile boolean scanSmeltingEnabled;
+	volatile int scanSmeltingTagGeneration = Integer.MIN_VALUE;
 	/** Per-host Mekanism recipe lookup cache; released with the reusable buffers. */
 	final Ae2SmeltingInputCache smeltingInputCache = new Ae2SmeltingInputCache();
 	/** Per-host 标签过滤判定缓存；与配方缓存同生命周期。 */
@@ -195,6 +202,23 @@ final class Ae2PushBuffers {
 		return scanSmeltingCandidateKeys;
 	}
 
+	boolean needsScanSmeltingRefresh(Object source, long recipeVersion,
+			boolean smeltingEnabled, int tagGeneration) {
+		return scanSmeltingSource != source
+				|| scanSmeltingRecipeVersion != recipeVersion
+				|| scanSmeltingEnabled != smeltingEnabled
+				|| scanSmeltingTagGeneration != tagGeneration;
+	}
+
+	void markScanSmeltingRefresh(Object source, long recipeVersion,
+			boolean smeltingEnabled, int tagGeneration) {
+		scanSmeltingPosition.clear();
+		scanSmeltingSource = source;
+		scanSmeltingRecipeVersion = recipeVersion;
+		scanSmeltingEnabled = smeltingEnabled;
+		scanSmeltingTagGeneration = tagGeneration;
+	}
+
 	boolean needsScanCandidateRefresh(Object source, long directoryGeneration,
 			long recipeVersion, boolean smeltingEnabled, int tagGeneration) {
 		return scanCandidateSource != source
@@ -206,6 +230,7 @@ final class Ae2PushBuffers {
 
 	void markScanCandidateRefresh(Object source, long directoryGeneration, long recipeVersion,
 			boolean smeltingEnabled, int tagGeneration) {
+		scanCombPosition.clear();
 		scanCandidateSource = source;
 		scanCandidateDirectoryGeneration = directoryGeneration;
 		scanCandidateRecipeVersion = recipeVersion;
@@ -220,6 +245,9 @@ final class Ae2PushBuffers {
 		scanCandidateDirectoryGeneration = Long.MIN_VALUE;
 		scanCandidateRecipeVersion = Long.MIN_VALUE;
 		scanCandidateTagGeneration = Integer.MIN_VALUE;
+		scanSmeltingSource = null;
+		scanSmeltingRecipeVersion = Long.MIN_VALUE;
+		scanSmeltingTagGeneration = Integer.MIN_VALUE;
 		smeltingInputCache.clear();
 		tagFilterCache.clear();
 		combProcessableCache.clear();

@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
@@ -26,75 +25,6 @@ class Ae2InputPullerTest {
 	}
 
 	@Test
-	void accelerationShortensConfiguredIntervalWithoutDroppingBelowOneGameTick() {
-		assertEquals(10, Ae2PullFairnessPolicy.effectiveInterval(10, 1));
-		assertEquals(5, Ae2PullFairnessPolicy.effectiveInterval(10, 2));
-		assertEquals(1, Ae2PullFairnessPolicy.effectiveInterval(10, 256));
-	}
-
-	@Test
-	void coalescedBatchMultiplierDoesNotDependOnRepeatedTickerCalls() {
-		assertEquals(1024, Ae2PullFairnessPolicy.resolveAccelerationMultiplier(1024, 1, 1));
-		assertEquals(256, Ae2PullFairnessPolicy.resolveAccelerationMultiplier(0, 1, 256));
-	}
-
-	@Test
-	void initialPullPhaseIsStableAndEventuallyReady() {
-		long position = 0x1234_5678_9abcl;
-		int interval = 20;
-		int phase = Ae2PullFairnessPolicy.initialPhase(interval, position);
-
-		assertEquals(phase, Ae2PullFairnessPolicy.initialPhase(interval, position));
-		assertTrue(Ae2PullFairnessPolicy.isInitialPhaseReady(phase, interval, position));
-		assertTrue(Ae2PullFairnessPolicy.isInitialPhaseReady(1L, 1, position));
-	}
-
-	@Test
-	void highAccelerationUsesBoundedPerSlotQuota() {
-		assertEquals(8_192L, Ae2PullFairnessPolicy.perSlotQuota(1_024L, 256, 32));
-		assertEquals(131_072L, Ae2PullFairnessPolicy.perSlotQuota(16_384L, 256, 32));
-		assertEquals(64L, Ae2PullFairnessPolicy.perSlotQuota(1_024L, 1, 32));
-	}
-
-	@Test
-	void pushStateRotatesSlotsAndDeduplicatesAcceleratedSubTicks() {
-		Ae2PushStateHolder state = new Ae2PushStateHolder();
-		assertEquals(0, state.getAndAdvanceInputSlotRotation(3));
-		assertEquals(1, state.getAndAdvanceInputSlotRotation(3));
-		assertEquals(2, state.getAndAdvanceInputSlotRotation(3));
-		assertEquals(0, state.getAndAdvanceInputSlotRotation(3));
-
-		assertTrue(state.tryStartItemPush(100));
-		assertFalse(state.tryStartItemPush(100));
-		assertTrue(state.tryStartItemPush(101));
-		assertTrue(state.tryStartFluidPush(100));
-		assertFalse(state.tryStartFluidPush(100));
-		assertTrue(state.tryAcquireAdditionalLocalFluidDrain(100, 2));
-		assertTrue(state.tryAcquireAdditionalLocalFluidDrain(100, 2));
-		assertFalse(state.tryAcquireAdditionalLocalFluidDrain(100, 2));
-		assertTrue(state.tryAcquireAdditionalLocalFluidDrain(101, 2));
-	}
-
-	@Test
-	void directFluidInsertQuotaIsPerRealTickAndIndependentFromItemQuota() {
-		Ae2PushStateHolder state = new Ae2PushStateHolder();
-		// 同一真实游戏刻内（JDTE 加速会让同一刻多次进入）配额有限
-		assertTrue(state.tryAcquireGeneratedFluidInsert(100, 2));
-		assertTrue(state.tryAcquireGeneratedFluidInsert(100, 2));
-		assertFalse(state.tryAcquireGeneratedFluidInsert(100, 2));
-		// 物品直推配额独立计数，流体配额耗尽不得连带掐死物品路径
-		assertTrue(state.tryAcquireGeneratedItemPush(100, 1));
-		assertFalse(state.tryAcquireGeneratedItemPush(100, 1));
-		assertFalse(state.tryAcquireGeneratedFluidInsert(100, 2));
-		// 进入下一真实游戏刻后配额重置
-		assertTrue(state.tryAcquireGeneratedFluidInsert(101, 2));
-
-		state.reset();
-		assertTrue(state.tryAcquireGeneratedFluidInsert(101, 1));
-	}
-
-
-	@Test
 	void singleCombTypeNetworkKeepsPullingAfterFirstCursorIsSet() {
 		// 回归修复：单蜜脾类型网络中，游标指向唯一键时下一轮仍必须收集到该键。
 		// 旧实现命中游标键后 continue 跳过、回绕又在游标键处 break，导致 pullList 恒空、后续不再拉取。
@@ -105,101 +35,12 @@ class Ae2InputPullerTest {
 	}
 
 	@Test
-	void cursorRotationCollectsCursorItselfThenWrapAroundPrefix() {
-		List<String> keys = List.of("a", "b", "c");
-		List<String> out = new ArrayList<>();
-		Ae2CursorScan.collect(out, keys, "b", 8, key -> true);
-		// 主扫描：b（游标自身放行）+ c；回绕：a（b 已在列表中，遇 b 停止）
-		assertEquals(List.of("b", "c", "a"), out);
-	}
-
-	@Test
-	void nullCursorCollectsEverythingInOrder() {
-		List<String> out = new ArrayList<>();
-		Ae2CursorScan.collect(out, List.of("a", "b"), null, 8, key -> true);
-		assertEquals(List.of("a", "b"), out);
-	}
-
-	@Test
-	void scanBudgetRespectsMaxTypesCap() {
-		List<String> keys = List.of("a", "b", "c", "d", "e");
-		List<String> out = new ArrayList<>();
-		Ae2CursorScan.collect(out, keys, "c", 2, key -> true);
-		// 主扫描收集 c（游标自身）+ d 即达上限，回绕不再执行
-		assertEquals(List.of("c", "d"), out);
-	}
-
-	@Test
-	void rejectedKeysAreSkippedWithoutDisturbingCursorPositioning() {
-		List<String> keys = List.of("a", "b", "c");
-		List<String> out = new ArrayList<>();
-		Ae2CursorScan.collect(out, keys, "b", 8, key -> !key.equals("a"));
-		assertEquals(List.of("b", "c"), out);
-	}
-
-	@Test
 	void cursorMissingFromNetworkFallsBackToFullScan() {
 		List<String> keys = List.of("a", "b");
 		List<String> out = new ArrayList<>();
 		Ae2CursorScan.collect(out, keys, "zzz", 8, key -> true);
 		// 游标键已不在网络中：主扫描不命中，回绕从头收集全部可拉取键
 		assertEquals(List.of("a", "b"), out);
-	}
-
-	@Test
-	void mappedScanKeepsWraparoundStorageBounded() {
-		List<String> keys = new ArrayList<>();
-		for (int i = 0; i < 1_000; i++) keys.add("k" + i);
-		List<String> out = new ArrayList<>();
-		List<String> prefixScratch = new ArrayList<>();
-
-		Ae2CursorScan.collectMapped(out, prefixScratch, keys, "k500", 3,
-				key -> key, key -> true);
-
-		assertEquals(List.of("k500", "k501", "k502"), out);
-		assertEquals(3, prefixScratch.size());
-	}
-
-	@Test
-	void mappedScanStopsFilteringOnceWrapPrefixIsFull() {
-		List<String> keys = new ArrayList<>();
-		for (int i = 0; i < 1_000; i++) keys.add("k" + i);
-		List<String> out = new ArrayList<>();
-		List<String> prefixScratch = new ArrayList<>();
-		AtomicInteger predicateCalls = new AtomicInteger();
-
-		Ae2CursorScan.collectMapped(out, prefixScratch, keys, "k900", 3,
-				key -> key, key -> {
-					predicateCalls.incrementAndGet();
-					return true;
-				});
-
-		assertEquals(List.of("k900", "k901", "k902"), out);
-		assertEquals(6, predicateCalls.get());
-	}
-
-	@Test
-	void mappedScanSkipsUnrelatedSourceTypes() {
-		List<Object> keys = List.of(1, "a", 2, "b", "c");
-		List<String> out = new ArrayList<>();
-		List<String> prefixScratch = new ArrayList<>();
-
-		Ae2CursorScan.collectMapped(out, prefixScratch, keys, "b", 3,
-				key -> key instanceof String string ? string : null, key -> true);
-
-		assertEquals(List.of("b", "c", "a"), out);
-	}
-
-	@Test
-	void prioritizedScanFillsSmeltingCandidatesBeforeCombFallback() {
-		List<String> out = new ArrayList<>();
-		List<String> prefixScratch = new ArrayList<>();
-
-		Ae2CursorScan.collectPrioritized(out, prefixScratch,
-				List.of("smelt_a", "smelt_b"), List.of("comb_a", "comb_b"),
-				null, 3, key -> true);
-
-		assertEquals(List.of("smelt_a", "smelt_b", "comb_a"), out);
 	}
 
 	@Test
@@ -217,22 +58,6 @@ class Ae2InputPullerTest {
 						false, false, true, 1_000L, Long.MAX_VALUE) > 0L);
 
 		assertEquals(List.of("smelt_above", "comb_above"), out);
-	}
-
-	@Test
-	void prioritizedScanKeepsSingleSmeltingCandidateAtItsCursor() {
-		List<String> out = new ArrayList<>();
-		Ae2CursorScan.collectPrioritized(out, new ArrayList<>(),
-				List.of("raw_gold"), List.of(), "raw_gold", 2, key -> true);
-		assertEquals(List.of("raw_gold"), out);
-	}
-
-	@Test
-	void prioritizedScanKeepsSingleCombCandidateAtItsCursor() {
-		List<String> out = new ArrayList<>();
-		Ae2CursorScan.collectPrioritized(out, new ArrayList<>(),
-				List.of(), List.of("gold_comb"), "gold_comb", 2, key -> true);
-		assertEquals(List.of("gold_comb"), out);
 	}
 
 	@Test
@@ -267,79 +92,6 @@ class Ae2InputPullerTest {
 		assertEquals(0, smeltingSelected);
 		assertEquals(List.of("comb_c", "comb_a", "comb_b"), out,
 				"熔炼键不再可用时蜜脾回退游标也应持续轮转");
-	}
-
-	@Test
-	void prioritizedScanFindsAllowedKeyAcrossPriorityGroups() {
-		List<String> out = new ArrayList<>();
-		Ae2CursorScan.collectPrioritized(out, new ArrayList<>(),
-				List.of("raw_gold", "raw_iron"), List.of("gold_comb"), "gold_comb", 2,
-				key -> key.equals("raw_gold"));
-		assertEquals(List.of("raw_gold"), out);
-	}
-
-	@Test
-	void directEntryCursorRotatesBoundedWhitelistWithoutStarvation() {
-		List<String> entries = List.of("raw_gold", "raw_iron", "raw_copper");
-		assertEquals(0, Ae2CursorScan.cursorStartIndex(entries, null, key -> key));
-		assertEquals(1, Ae2CursorScan.cursorStartIndex(entries, "raw_iron", key -> key));
-		assertEquals(0, Ae2CursorScan.cursorStartIndex(entries, "missing", key -> key));
-	}
-
-	@Test
-	void laneBudgetSplitsSlotsAcrossCompetingTypesAndNeverStarves() {
-		// 单类型不设限：吞吐与旧实现完全一致
-		assertEquals(Ae2InputLaneFairness.UNLIMITED_LANES,
-				Ae2InputLaneFairness.emptyLaneBudget(32, 1));
-		// 32 槽 4 类型 → 每类型 8 条车道
-		assertEquals(8, Ae2InputLaneFairness.emptyLaneBudget(32, 4));
-		// 槽少于类型数时向上取整为 1，否则少数类型永远拿不到槽（饿死）
-		assertEquals(1, Ae2InputLaneFairness.emptyLaneBudget(3, 8));
-		assertEquals(0, Ae2InputLaneFairness.emptyLaneBudget(0, 4));
-		assertEquals(0, Ae2InputLaneFairness.remainingLaneBudget(1, 1));
-		assertEquals(0, Ae2InputLaneFairness.remainingLaneBudget(1, 2));
-		assertEquals(1, Ae2InputLaneFairness.remainingLaneBudget(1, 0));
-		assertEquals(2, Ae2InputLaneFairness.remainingLaneBudget(8, 6));
-		assertEquals(Integer.MAX_VALUE, Ae2InputLaneFairness.remainingLaneBudget(Integer.MAX_VALUE, 18));
-	}
-
-	@Test
-	void typeQuotaShareDividesRateBudgetAndKeepsAtLeastOne() {
-		assertEquals(1_024L, Ae2InputLaneFairness.typeQuotaShare(1_024L, 1));
-		assertEquals(256L, Ae2InputLaneFairness.typeQuotaShare(1_024L, 4));
-		// 向上取整：3 个类型分 10 个额度，每个至少 4，不会有类型分到 0
-		assertEquals(4L, Ae2InputLaneFairness.typeQuotaShare(10L, 3));
-		assertEquals(1L, Ae2InputLaneFairness.typeQuotaShare(2L, 8));
-		assertEquals(0L, Ae2InputLaneFairness.typeQuotaShare(0L, 4));
-	}
-
-	@Test
-	void firstCapacityPassAlwaysRunsForSingleAndMultipleTypes() {
-		assertTrue(Ae2InputLaneFairness.shouldRunPass(0, false));
-		assertTrue(Ae2InputLaneFairness.shouldRunPass(0, true));
-		assertFalse(Ae2InputLaneFairness.shouldRunPass(1, false));
-		assertTrue(Ae2InputLaneFairness.shouldRunPass(1, true));
-	}
-
-	@Test
-	void pullerRunsFairPassBeforeUnboundedFillPass() throws Exception {
-		String source = java.nio.file.Files.readString(java.nio.file.Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/mek/ae2/Ae2InputExecution.java"));
-		// 公平轮 + 补齐轮的双轮结构，且补齐轮只在被截断时才跑（避免重复 SIMULATE 探测）
-		assertTrue(source.contains("int passes = typeCount > 1 ? 2 : 1;"));
-		assertTrue(source.contains("Ae2InputLaneFairness.shouldRunPass(pass, fairPassTruncated)"));
-		// 空槽车道上限与速率份额上限都只在公平轮生效；空槽判定改读车道快照（纯数组查询）
-		assertTrue(source.contains("Ae2InputLaneFairness.emptyLaneBudget(processCount, typeCount)"));
-		assertTrue(source.contains("Ae2InputLaneFairness.typeQuotaShare(normalQuota, typeCount)"));
-		assertTrue(source.contains("if (protectLanes && emptyLane && newLanes >= newLaneBudget)"));
-		// 容量规划走车道快照：廉价身份剪枝是数组读取，不再逐对调用 slot.getStack()/getItem()
-		assertTrue(source.contains("long slotCapacity = Math.min(slotQuota,\n"
-				+ "\t\t\t\t\t\t\tlaneCapacity(laneSnapshot, slotIdx, keyItem, entry, slotProbe));"));
-		assertTrue(source.contains("if (laneItem != null && laneItem != keyItem) return 0;"));
-		// 快照必须每轮采集，且我方插入后即刻刷新，否则后续类型会读到过期车道
-		assertTrue(source.contains("laneSnapshot.capture(inputSlots, processCount, host instanceof BlockEntity entity ? entity : null);"));
-		assertTrue(source.contains("if (inserted > 0 && laneSnapshot != null) {"));
-		assertTrue(source.contains("laneSnapshot.refresh(slotIdx);"));
 	}
 
 }

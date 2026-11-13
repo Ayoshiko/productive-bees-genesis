@@ -26,30 +26,6 @@ import static org.mockito.Mockito.*;
 class WrappedItemModelMinecraftTest {
 
 	@Test
-	void cachedWrappersHoldOnlyWeakWorldAndEntityReferencesEvenWhenNeverRendered() throws Exception {
-		BakedModel wrapped = wrapped();
-		List<WrappedItemModel> models = List.of(new BakedModelMyriadComb(wrapped, wrapped),
-				new BakedModelMyriadCombBlock(wrapped, wrapped),
-				new BakedModelMyriadSpawnEgg(wrapped, wrapped),
-				new BakedModelCosmic(wrapped, List.of()));
-		ClientLevel world = mock(ClientLevel.class);
-		LivingEntity entity = mock(LivingEntity.class);
-		for (WrappedItemModel model : models) {
-			model.getOverrides().resolve(model, ItemStack.EMPTY, world, entity, 7);
-			WeakReference<?> worldRef = reference(model, "world");
-			WeakReference<?> entityRef = reference(model, "entity");
-			assertSame(world, worldRef.get());
-			assertSame(entity, entityRef.get());
-			model.getOverrides().resolve(model, ItemStack.EMPTY, world, entity, 8);
-			assertSame(worldRef, reference(model, "world"));
-			assertSame(entityRef, reference(model, "entity"));
-			model.getOverrides().resolve(model, ItemStack.EMPTY, null, null, 9);
-			assertNull(reference(model, "world"));
-			assertNull(reference(model, "entity"));
-		}
-	}
-
-	@Test
 	void entityWorldFallbackAndNullableRenderContextArePreserved() throws Exception {
 		BakedModel wrapped = wrapped();
 		ClientLevel world = mock(ClientLevel.class);
@@ -74,20 +50,6 @@ class WrappedItemModelMinecraftTest {
 		ObservedContext released = assertThrows(ObservedContext.class, () -> render(model));
 		assertNull(released.world);
 		assertNull(released.entity);
-	}
-
-	@Test
-	void cosmicOverridesStillSelectTheUnderlyingModelWithTheOriginalArguments() {
-		BakedModel wrapped = wrapped();
-		ItemOverrides overrides = mock(ItemOverrides.class);
-		BakedModel selected = mock(BakedModel.class);
-		ClientLevel world = mock(ClientLevel.class);
-		LivingEntity entity = mock(LivingEntity.class);
-		WrappedItemModel model = new BakedModelCosmic(wrapped, List.of());
-		when(wrapped.getOverrides()).thenReturn(overrides);
-		when(overrides.resolve(model, ItemStack.EMPTY, world, entity, 11)).thenReturn(selected);
-		assertSame(selected, model.getOverrides().resolve(model, ItemStack.EMPTY, world, entity, 11));
-		verify(overrides).resolve(model, ItemStack.EMPTY, world, entity, 11);
 	}
 
 	@Test

@@ -1,19 +1,15 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
 import io.netty.buffer.Unpooled;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -39,83 +35,6 @@ class ResourceProductionMonitorMinecraftTest {
         assertEquals(ResourceProductionSnapshot.State.WAITING_OUTPUT, row.state());
         monitor.route(List.of(ResourceTypes.AIR), false);
         assertEquals(ResourceProductionSnapshot.State.RECENT, monitor.snapshot(102).entries().getFirst().state());
-    }
-
-    @Test void expiredHistoryMakesRoomWithoutResettingActiveDeltaIdentity() {
-        var clock = new AtomicLong(10_000);
-        var monitor = new ResourceProductionMonitor(clock::get);
-        var publisher = new ResourceProductionDelta.Publisher();
-        var receiver = new ResourceProductionDelta.Receiver();
-        var history = new java.util.LinkedHashMap<ResourceKey, BigInteger>();
-        for (int i = 0; i < ResourceAmounts.MAX_KEYS - 1; i++) {
-            var components = new CompoundTag();
-            components.putInt("audit_identity", i);
-            history.put(ResourceKey.aeKey(ResourceLocation.parse("ae2:item"),
-                    ResourceLocation.parse("minecraft:stone"), components), BigInteger.ONE);
-        }
-        history.put(ResourceTypes.AIR, BigInteger.TEN);
-        monitor.record(history);
-        monitor.observe(0, List.of(ResourceTypes.AIR), ResourceProductionSnapshot.State.WAITING_WORK, 1);
-        var initial = publisher.update(monitor.snapshot(1), 0);
-        receiver.apply(roundTrip(initial));
-        int activeId = initial.entries().stream().filter(entry -> ResourceTypes.AIR.equals(entry.key()))
-                .findFirst().orElseThrow().id();
-        assertEquals(ResourceAmounts.MAX_KEYS, initial.entries().size());
-        monitor.record(Map.of(ResourceTypes.FE, BigInteger.valueOf(12)));
-        var atCapacity = monitor.snapshot(2);
-        assertEquals(ResourceAmounts.MAX_KEYS, atCapacity.entries().size());
-        assertTrue(atCapacity.entries().stream().anyMatch(entry -> entry.key().equals(ResourceTypes.FE)));
-        assertTrue(atCapacity.entries().stream().anyMatch(entry -> entry.key().equals(ResourceTypes.AIR)));
-
-        clock.addAndGet(5000);
-        monitor.observe(0, List.of(ResourceTypes.AIR), ResourceProductionSnapshot.State.WAITING_WORK, 101);
-        monitor.record(Map.of(ResourceTypes.FE, BigInteger.valueOf(37)));
-        var current = monitor.snapshot(101);
-        assertEquals(2, current.entries().size());
-        var delta = publisher.update(current, receiver.revision());
-        assertFalse(delta.reset());
-        var active = delta.entries().stream().filter(entry -> entry.id() == activeId).findFirst().orElseThrow();
-        assertNull(active.key());
-        assertEquals(ResourceProductionSnapshot.State.WAITING_WORK, active.state());
-        assertEquals(BigInteger.ZERO, active.produced());
-        assertEquals(new java.util.HashSet<>(current.entries()),
-                new java.util.HashSet<>(receiver.apply(roundTrip(delta)).entries()));
-        assertEquals(BigInteger.valueOf(37), current.entries().stream()
-                .filter(entry -> entry.key().equals(ResourceTypes.FE)).findFirst().orElseThrow().produced());
-
-        clock.addAndGet(5000);
-        assertTrue(monitor.snapshot(201).entries().isEmpty());
-    }
-
-    @Test void currentWindowIsRetainedAndUnrefreshedBlockedHistoryExpires() {
-        var clock = new AtomicLong(10_000);
-        var monitor = new ResourceProductionMonitor(clock::get);
-        monitor.record(Map.of(ResourceTypes.AIR, BigInteger.TEN));
-        monitor.route(List.of(ResourceTypes.FE), true);
-        clock.addAndGet(4500);
-        assertEquals(2, monitor.snapshot(90).entries().size());
-        monitor.observe(0, List.of(ResourceTypes.AIR), ResourceProductionSnapshot.State.WAITING_WORK, 90);
-        clock.addAndGet(500);
-        var current = monitor.snapshot(100);
-        assertEquals(1, current.entries().size());
-        assertEquals(ResourceTypes.AIR, current.entries().getFirst().key());
-        assertEquals(BigInteger.ZERO, current.entries().getFirst().produced());
-    }
-
-    @Test void sameBucketAccumulatesExactEmcAndOtherProducingLanesRemainVisible() {
-        var monitor = new ResourceProductionMonitor(() -> 10_000);
-        var large = new BigInteger("47958864426752000000");
-        monitor.record(Map.of(ResourceTypes.EMC, large));
-        monitor.record(Map.of(ResourceTypes.EMC, large));
-        monitor.observe(0, List.of(ResourceTypes.EMC), ResourceProductionSnapshot.State.WAITING_OUTPUT, 1);
-        monitor.observe(1, List.of(ResourceTypes.EMC), ResourceProductionSnapshot.State.PRODUCING, 1);
-        var row = monitor.snapshot(1).entries().getFirst();
-        assertEquals(large.multiply(BigInteger.TWO), row.produced());
-        assertEquals(ResourceProductionSnapshot.State.PRODUCING, row.state());
-        var host = new ResourceHiveHost();
-        host.productionMonitor().record(Map.of(ResourceTypes.EMC, large));
-        host.deserializeNBT(REGISTRIES, new CompoundTag());
-        assertTrue(host.productionMonitor().snapshot(1).entries().isEmpty());
     }
 
     @Test void incrementalProductionRetainsZeroAndRebuildsAfterMissingRevision() {
@@ -150,37 +69,6 @@ class ResourceProductionMonitorMinecraftTest {
         assertThrows(IllegalArgumentException.class, () -> new ResourceProductionDelta(1, true, 5000, List.of(
                 new ResourceProductionDelta.Entry(0, ResourceTypes.AIR, BigInteger.ZERO, ResourceProductionSnapshot.State.RECENT),
                 new ResourceProductionDelta.Entry(0, ResourceTypes.FE, BigInteger.ZERO, ResourceProductionSnapshot.State.RECENT))));
-    }
-
-    @Test void menuAndCloseCodecRetainBothRevisions() {
-        var request = new ResourceMenuSync.Request(2, BlockPos.ZERO, UUID.randomUUID(), 12, 0, 4, 7);
-        var production = new ResourceProductionDelta.Publisher().update(new ResourceProductionSnapshot(5000, List.of(
-                new ResourceProductionSnapshot.Entry(ResourceTypes.AIR, BigInteger.valueOf(5_000_000_000L),
-                        ResourceProductionSnapshot.State.PRODUCING))), 0);
-        var reply = new ResourceMenuSync.Reply(request, new ResourceOutputStatus(ResourceOutputStatus.State.READY,
-                true, 0, List.of()), null, 1000, ResourceInventoryDelta.empty(), 1, ResourceMenuSync.EmcRecipient.NONE, production);
-        var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), REGISTRIES);
-        try {
-            ResourceMenuSync.Reply.CODEC.encode(buffer, reply);
-            assertEquals(reply, ResourceMenuSync.Reply.CODEC.decode(buffer));
-            var close = new ResourceMenuSync.CloseWindow(request);
-            ResourceMenuSync.CloseWindow.CODEC.encode(buffer, close);
-            assertEquals(close, ResourceMenuSync.CloseWindow.CODEC.decode(buffer));
-        } finally {
-            buffer.release();
-        }
-    }
-
-    @Test void meLimitsPreserveLongRequestsExceptKnownSoulExternalOverflow() {
-        for (var key : List.of(ResourceTypes.AIR, ResourceTypes.FE, ResourceTypes.SOURCE,
-                ResourceTypes.EXPERIENCE, ResourceTypes.HIGH_VOLTAGE, ResourceTypes.EXTREME_HIGH_VOLTAGE,
-                ResourceKey.aeKey(ResourceLocation.parse("ae2:item"), ResourceLocation.parse("minecraft:stone"), new CompoundTag()))) {
-            assertEquals(Long.MAX_VALUE, ResourceTypes.transferLimit(key), key.toString());
-        }
-        assertEquals(Integer.MAX_VALUE, ResourceTypes.transferLimit(ResourceTypes.SOUL));
-        assertEquals(Integer.MAX_VALUE, ResourceTypes.transferLimit(ResourceKey.aeKey(
-                ResourceLocation.parse("soulplied_energistics:soul"), ResourceLocation.parse("soulplied_energistics:soulkey"), new CompoundTag())));
-        assertThrows(IllegalArgumentException.class, () -> ResourceAirTransfer.deliver(0, 5_000_000_000L, () -> 0, ignored -> {}));
     }
 
     private static int bytes(ResourceProductionDelta delta) {

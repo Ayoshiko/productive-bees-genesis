@@ -20,23 +20,58 @@ import java.util.Set;
 final class PbCentrifugeRecipeSnapshot {
     private PbCentrifugeRecipeSnapshot() {}
 
+    record Snapshot(CompoundTag tag, RecipeHolder<CentrifugeRecipe> recipe) {}
+
     static CompoundTag capture(RecipeHolder<CentrifugeRecipe> selected, HolderLookup.Provider provider) {
+        return capture(selected, null, provider).tag();
+    }
+
+    /** 新建工作同时冻结运行值和存档值；外部存档仍只由 restore 严格解码。 */
+    static Snapshot capture(RecipeHolder<CentrifugeRecipe> selected, ItemStack input,
+            HolderLookup.Provider provider) {
         var tag = new CompoundTag();
         tag.putInt("version", 2);
         tag.putString("id", selected.id().toString());
         var items = new ListTag();
+        var outputs = input == null ? null : new ArrayList<ChancedOutput>();
         for (var entry : PbRecipeCompleter.getRecipeOutputsCached(selected.value()).entrySet()) {
             var item = new CompoundTag();
-            item.put("stack", entry.getKey().copyWithCount(1).save(provider));
+            ItemStack source = entry.getKey().copyWithCount(1);
+            Tag encoded = source.save(provider);
+            item.put("stack", encoded);
+            var amount = entry.getValue();
             // 固定三个数值合并存放，避免每个字段的 NBT 对象开销挤占已付工作预算。
-            item.putIntArray("amounts", new int[]{entry.getValue().min(), entry.getValue().max(),
-                    Float.floatToRawIntBits(entry.getValue().chance())});
+            item.putIntArray("amounts", new int[]{amount.min(), amount.max(),
+                    Float.floatToRawIntBits(amount.chance())});
             items.add(item);
+            if (outputs != null) {
+                if (!Float.isFinite(amount.chance())) {
+                    throw new IllegalArgumentException("Invalid frozen PB output");
+                }
+                // 带补丁的组件可能经 codec 规范化或丢弃瞬态值，继续沿存档解码语义。
+                ItemStack frozen = source.getComponentsPatch().isEmpty()
+                        ? new ItemStack(source.getItemHolder(), 1)
+                        : ItemStack.parse(provider, encoded).orElseThrow();
+                if (frozen.getCount() != 1) {
+                    throw new IllegalArgumentException("Invalid frozen PB template");
+                }
+                outputs.add(new ChancedOutput(Ingredient.of(frozen), amount.min(), amount.max(), amount.chance()));
+            }
         }
         tag.put("items", items);
         var fluid = selected.value().getFluidOutputs();
-        if (!fluid.isEmpty()) tag.put("fluid", fluid.save(provider));
-        return tag;
+        if (!fluid.isEmpty()) {
+            Tag encoded = fluid.save(provider);
+            tag.put("fluid", encoded);
+            if (outputs != null) {
+                fluid = fluid.getComponentsPatch().isEmpty()
+                        ? new FluidStack(fluid.getFluidHolder(), fluid.getAmount())
+                        : FluidStack.parse(provider, encoded).orElseThrow();
+            }
+        }
+        RecipeHolder<CentrifugeRecipe> recipe = outputs == null ? null
+                : new RecipeHolder<>(selected.id(), new FrozenRecipe(input, outputs, fluid));
+        return new Snapshot(tag, recipe);
     }
 
     static RecipeHolder<CentrifugeRecipe> restore(CompoundTag tag, ItemStack input, HolderLookup.Provider provider) {

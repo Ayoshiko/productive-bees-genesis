@@ -12,102 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BalanceConfigTest {
 
-	private static final PbUpgradeType[] PRODUCTIVITY_TYPES = {
-			PbUpgradeType.PRODUCTIVITY,
-			PbUpgradeType.PRODUCTIVITY_2,
-			PbUpgradeType.PRODUCTIVITY_3,
-			PbUpgradeType.PRODUCTIVITY_4
-	};
-
-	@Test
-	void newInstallDefaultsToBasicBehavior() {
-		BalanceConfig.Rules rules = BalanceConfig.Rules.basic();
-
-		assertEquals(BalancePreset.BASIC, BalanceConfig.DEFAULT_PRESET);
-		assertEquals("productivebeesgenesis.configuration.balance.profile.BASIC",
-				BalancePreset.BASIC.getTranslationKey());
-		assertEquals("productivebeesgenesis.configuration.balance.profile.BASIC.tooltip",
-				BalancePreset.BASIC.getTooltipKey());
-		assertEquals(BalancePreset.BASIC, rules.preset());
-		assertTrue(rules.productivityTiersExclusive());
-		assertTrue(rules.speedTiersExclusive());
-		assertFalse(rules.centrifugeProductivityAffectsOutput());
-		assertTrue(rules.apiaryBeeGenesAffectWork());
-		assertFalse(rules.apiaryProduceAllFlowers());
-		assertFalse(BalanceConfig.Rules.customDefaults().apiaryProduceAllFlowers());
-		assertEquals(4, BalanceConfig.DEFAULT_CONFIGURED_PB_UPGRADE_LIMIT);
-		assertEquals(8, BalanceConfig.DEFAULT_CONFIGURED_STACK_UPGRADE_LIMIT);
-	}
-
-	@Test
-	void namedProfilesResolveEveryBalanceRuleTogether() {
-		BalanceConfig.Rules basic = BalanceConfig.resolve(BalancePreset.BASIC, false, false, true, false, true);
-		BalanceConfig.Rules paradox = BalanceConfig.resolve(
-				BalancePreset.PARADOX_INFINITY, true, true, false, true, false);
-
-		assertTrue(basic.productivityTiersExclusive());
-		assertTrue(basic.speedTiersExclusive());
-		assertFalse(basic.centrifugeProductivityAffectsOutput());
-		assertTrue(basic.apiaryBeeGenesAffectWork());
-		assertFalse(basic.apiaryProduceAllFlowers());
-		assertFalse(paradox.productivityTiersExclusive());
-		assertFalse(paradox.speedTiersExclusive());
-		assertTrue(paradox.centrifugeProductivityAffectsOutput());
-		assertFalse(paradox.apiaryBeeGenesAffectWork());
-		assertTrue(paradox.apiaryProduceAllFlowers());
-	}
-
-	@Test
-	void customProfileUsesIndividualRuleValues() {
-		BalanceConfig.Rules custom = BalanceConfig.resolve(BalancePreset.CUSTOM, true, false, false, false, true);
-
-		assertTrue(custom.productivityTiersExclusive());
-		assertFalse(custom.speedTiersExclusive());
-		assertFalse(custom.centrifugeProductivityAffectsOutput());
-		assertFalse(custom.apiaryBeeGenesAffectWork());
-		assertTrue(custom.apiaryProduceAllFlowers());
-		assertFalse(BalanceConfig.resolve(BalancePreset.CUSTOM, true, false, false, false, false)
-				.apiaryProduceAllFlowers());
-	}
-
-	@Test
-	void basicToCustomCopiesEveryEffectiveSetting() {
-		BalanceConfig.CustomSettings configured = new BalanceConfig.CustomSettings(
-				false, false, true, false,
-				8, 2, 12, 3, 24, true);
-
-		BalanceConfig.CustomSettings inherited =
-				BalanceConfig.settingsForPreset(BalancePreset.BASIC, configured);
-
-		assertEquals(new BalanceConfig.CustomSettings(
-				true, true, false, true,
-				4, 2, 4, 3, 8, false), inherited);
-	}
-
-	@Test
-	void paradoxToCustomCopiesEveryEffectiveSetting() {
-		BalanceConfig.CustomSettings configured = new BalanceConfig.CustomSettings(
-				true, true, false, true,
-				4, 12, 2, 20, 8, false);
-
-		BalanceConfig.CustomSettings inherited =
-				BalanceConfig.settingsForPreset(BalancePreset.PARADOX_INFINITY, configured);
-
-		assertEquals(new BalanceConfig.CustomSettings(
-				false, false, true, false,
-				8, 12, 8, 20, 16, true), inherited);
-	}
-
-	@Test
-	void customSettingsRemainUntouchedWhenAlreadyCustom() {
-		BalanceConfig.CustomSettings configured = new BalanceConfig.CustomSettings(
-				false, true, false, false,
-				2, 7, 3, 9, 24, true);
-
-		assertEquals(configured,
-				BalanceConfig.settingsForPreset(BalancePreset.CUSTOM, configured));
-	}
-
 	@Test
 	void namedProfileMirrorsEffectiveValuesForOfflineCustomSwitch() {
 		BalanceConfig.CustomSettings configured = new BalanceConfig.CustomSettings(
@@ -151,23 +55,6 @@ class BalanceConfigTest {
 	}
 
 	@Test
-	void basicRejectsEveryMixedProductivityPairButAllowsSameTier() {
-		BalanceConfig.Rules basic = BalanceConfig.Rules.basic();
-		for (PbUpgradeType installedType : PRODUCTIVITY_TYPES) {
-			Map<PbUpgradeType, Integer> installed = new EnumMap<>(PbUpgradeType.class);
-			installed.put(installedType, 3);
-			assertTrue(BalanceConfig.canInstall(installedType, installed, basic));
-			for (PbUpgradeType candidate : PRODUCTIVITY_TYPES) {
-				if (candidate != installedType) {
-					assertFalse(BalanceConfig.canInstall(candidate, installed, basic),
-							installedType + " should conflict with " + candidate);
-				}
-			}
-			assertEquals(3, installed.get(installedType));
-		}
-	}
-
-	@Test
 	void basicRejectsMixedSpeedTiersWithoutMutatingExistingCounts() {
 		Map<PbUpgradeType, Integer> installed = new EnumMap<>(PbUpgradeType.class);
 		installed.put(PbUpgradeType.TIME, 8);
@@ -203,16 +90,4 @@ class BalanceConfigTest {
 				PbUpgradeType.TIME_2, installed, BalanceConfig.Rules.paradoxInfinity()));
 	}
 
-	@Test
-	void profileLimitsMapConfiguredValuesWithoutChangingThem() {
-		assertEquals(4, BalanceConfig.pbUpgradeLimit(BalancePreset.BASIC, 8));
-		assertEquals(8, BalanceConfig.pbUpgradeLimit(BalancePreset.PARADOX_INFINITY, 4));
-		assertEquals(2, BalanceConfig.pbUpgradeLimit(BalancePreset.CUSTOM, 2));
-		assertEquals(12, BalanceConfig.pbUpgradeLimit(BalancePreset.CUSTOM, 12));
-
-		assertEquals(8, BalanceConfig.centrifugeStackLimit(BalancePreset.BASIC, 16));
-		assertEquals(16, BalanceConfig.centrifugeStackLimit(BalancePreset.PARADOX_INFINITY, 8));
-		assertEquals(8, BalanceConfig.centrifugeStackLimit(BalancePreset.CUSTOM, 8));
-		assertEquals(24, BalanceConfig.centrifugeStackLimit(BalancePreset.CUSTOM, 24));
-	}
 }

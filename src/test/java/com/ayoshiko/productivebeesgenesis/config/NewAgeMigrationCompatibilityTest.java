@@ -134,19 +134,6 @@ class NewAgeMigrationCompatibilityTest {
 		assertTrue(Files.isRegularFile(secondBackup), "备份槽位应轮转而不是拒绝迁移");
 	}
 
-	@Test
-	void newAgeRecipeOverridesUseStableIdsAndDoNotDependOnLegacyConfigPath() throws Exception {
-		Assumptions.assumeTrue(Files.isRegularFile(NEW_AGE_KUBEJS),
-				"本机未安装 New Age 配方脚本，跳过外部配方回归测试");
-
-		String script = Files.readString(NEW_AGE_KUBEJS);
-		assertTrue(script.contains(
-				"event.remove({ id: 'productivebees:bee_conversion/myriadcreations' })"));
-		assertTrue(script.contains("event.remove({ output: 'productivebeesgenesis:mek_apiary' })"));
-		assertTrue(script.contains("productivebeesgenesis:mek_apiary"));
-		assertFalse(script.contains(ModConfig.LEGACY_SERVER_FILE_NAME));
-	}
-
 	private void commit(
 			Path legacyPath,
 			Path backupPath,

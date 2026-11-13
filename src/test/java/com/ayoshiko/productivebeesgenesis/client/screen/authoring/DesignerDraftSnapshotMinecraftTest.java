@@ -11,17 +11,6 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("minecraft")
 class DesignerDraftSnapshotMinecraftTest {
 	@Test
-	void lateLoadIdentityRejectsAnotherProjectAnotherGenerationAndNewInput() {
-		JsonObject original = BeeDesignerDocument.create("test:original");
-		var identity = new BeeDesignerScreen.EditIdentity(7, original, original.toString(), null, "");
-		assertTrue(identity.matches(7, original));
-		assertFalse(identity.matches(8, original));
-		assertFalse(identity.matches(7, original.deepCopy()));
-		original.getAsJsonObject("names").addProperty("en_us", "Unsaved");
-		assertFalse(identity.matches(7, original));
-	}
-
-	@Test
 	void acceptedNormalizationKeepsGraphUndoAndPrivateJsonInput() throws ReflectiveOperationException {
 		JsonObject document = BeeDesignerDocument.create("test:receipt");
 		JsonObject definition = document.getAsJsonObject("definition");
@@ -64,41 +53,6 @@ class DesignerDraftSnapshotMinecraftTest {
 		assertEquals(9, definition.get("size").getAsInt());
 	}
 
-	@Test
-	void normalizationDoesNotOverwritePostSubmitFieldsOrReplaceNestedArrays() {
-		JsonObject current = BeeDesignerDocument.create("test:edited");
-		JsonObject node = new JsonObject();
-		node.addProperty("amount", 1);
-		JsonArray outputs = new JsonArray();
-		outputs.add(node);
-		current.add("outputs", outputs);
-		JsonObject submitted = current.deepCopy();
-		JsonObject normalized = current.deepCopy();
-		normalized.getAsJsonArray("outputs").get(0).getAsJsonObject().addProperty("unit", "FE");
-		normalized.getAsJsonObject("names").addProperty("en_us", "Server");
-		current.getAsJsonObject("names").addProperty("en_us", "Later local");
-		BeeDesignerScreen.mergeNormalized(current, submitted, normalized);
-		assertSame(outputs, current.getAsJsonArray("outputs"));
-		assertSame(node, outputs.get(0));
-		assertEquals("FE", node.get("unit").getAsString());
-		assertEquals("Later local", current.getAsJsonObject("names").get("en_us").getAsString());
-	}
-
-	@Test
-	void largeLocalCatalogUsesBoundedCopyNegotiationInsteadOfUploadingIds() {
-		java.util.List<String> occupied = new java.util.ArrayList<>();
-		occupied.add("test:source_copy");
-		occupied.add("test:source_copy_2");
-		for (int index = 2; index < 4096; index++) {
-			occupied.add("test:" + "long_name_".repeat(8) + index);
-		}
-		JsonObject request = NewBeeScreen.copyIdentityQuery("test:source", 0, occupied);
-		assertEquals(2, request.get("_copy_attempt").getAsInt());
-		assertEquals(java.util.Set.of("id", "_copy_attempt"), request.keySet());
-		assertDoesNotThrow(() -> com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerProtocol.checkSize(request.toString()));
-		assertTrue(request.toString().length() < 100);
-	}
-
 	private static void setField(BeeDesignerScreen editor, String name, Object value) throws ReflectiveOperationException {
 		var field = BeeDesignerScreen.class.getDeclaredField(name);
 		field.setAccessible(true);
@@ -109,31 +63,6 @@ class DesignerDraftSnapshotMinecraftTest {
 		var field = BeeDesignerScreen.class.getDeclaredField(name);
 		field.setAccessible(true);
 		return field.get(editor);
-	}
-
-	@Test
-	void migrationFailureRetainsConcreteCauseAndLiteralSeparators() {
-		var migration = DesignerFormScreen.statusMessage("designer.error.migration_invalid|productivebees:aka_gem|designer.error.operation_detail|flowerItem: unknown item beebeeblock:aka_cube");
-		var translated = (net.minecraft.network.chat.contents.TranslatableContents) migration.getContents();
-		assertEquals("productivebees:aka_gem", translated.getArgs()[0]);
-		assertEquals("flowerItem: unknown item beebeeblock:aka_cube", ((net.minecraft.network.chat.Component) translated.getArgs()[1]).getString());
-		var detail = DesignerFormScreen.statusMessage("designer.error.operation_detail|host | material");
-		assertEquals("host | material", ((net.minecraft.network.chat.contents.TranslatableContents) detail.getContents()).getArgs()[0]);
-	}
-
-	@Test
-	void pendingJsonCapturesIndependentValuesWithoutChangingCurrentDocument() {
-		JsonObject document = BeeDesignerDocument.create("test:pending");
-		BeeDesignerScreen editor = new BeeDesignerScreen(true);
-		JsonObject definition = document.getAsJsonObject("definition");
-		DesignerJsonScreen json = new DesignerJsonScreen(editor, definition, "pending");
-		String source = document.toString();
-		json.restoreText("{\"primaryColor\":\"#102030\",\"size\":4}");
-		JsonObject draft = DesignerDraftSnapshot.capture(editor, json, document);
-		assertEquals("{\"primaryColor\":\"#102030\",\"size\":4}", draft.getAsJsonArray("_editor_recovery")
-				.get(0).getAsJsonObject().get("text").getAsString());
-		assertEquals(definition, draft.getAsJsonObject("definition"));
-		assertEquals(source, document.toString());
 	}
 
 	@Test

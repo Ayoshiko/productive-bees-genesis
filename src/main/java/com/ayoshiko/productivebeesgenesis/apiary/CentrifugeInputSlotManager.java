@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import mekanism.api.inventory.IInventorySlot;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -84,6 +85,25 @@ class CentrifugeInputSlotManager {
 				reusableInputRemaining[i] = limit - count;
 			}
 		}
+	}
+
+	/** 容量查询只需找到一个候选；实时读取避免为布尔判定构造整机排序索引。 */
+	boolean hasInputRoom(IMekCentrifugeTile centrifuge, ItemStack template, int slotCount) {
+		for (int index = 0; index < slotCount; index++) {
+			IInventorySlot slot = centrifuge.productivebeesgenesis$getInputSlot(index);
+			if (slot == null) continue;
+			ItemStack current = slot.getStack();
+			if (!(slot instanceof BasicInventorySlot)) {
+				if (!current.isEmpty() && !ItemStack.isSameItemSameComponents(current, template)) continue;
+				if (slot.getLimit(template) > current.getCount() && slot.isItemValid(template)) return true;
+				continue;
+			}
+			if (!current.isEmpty() && current.getItem() != template.getItem()) continue;
+			if (slot.getLimit(template) <= current.getCount()) continue;
+			if (!current.isEmpty() && !ItemStack.isSameItemSameComponents(current, template)) continue;
+			if (slot.isItemValid(template)) return true;
+		}
+		return false;
 	}
 
 	/**

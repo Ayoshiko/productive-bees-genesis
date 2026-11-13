@@ -10,6 +10,7 @@ import java.util.UUID;
 /** 服务器线程独占的能量请求；未知外部结果和未结清的 J 都随宿主保存。 */
 public final class Ae2EnergyTransfer {
     private static final String NBT_KEY = "productivebeesgenesis_ae_energy_transfer";
+    private static final BigDecimal MAX_JOULES = BigDecimal.valueOf(Long.MAX_VALUE);
     private static final Set<String> SOURCES = Set.of("applied_flux_fe", "ae_native");
     private UUID request;
     private String phase;
@@ -48,7 +49,7 @@ public final class Ae2EnergyTransfer {
     }
 
     public long knownJoules() {
-        return knownJoules.min(BigDecimal.valueOf(Long.MAX_VALUE)).longValue();
+        return knownJoules.signum() == 0 ? 0L : knownJoules.min(MAX_JOULES).longValue();
     }
 
     public String retainedJoules() {
@@ -189,7 +190,7 @@ public final class Ae2EnergyTransfer {
             };
             if (!validPhase || !Double.isFinite(savedConversion) || savedConversion <= 0
                     || savedKnown.signum() < 0 || savedKnown.scale() < 0 || savedKnown.scale() > 340
-                    || savedKnown.compareTo(BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE)) >= 0) {
+                    || savedKnown.compareTo(MAX_JOULES.add(BigDecimal.valueOf(savedConversion))) > 0) {
                 throw new IllegalArgumentException("Invalid energy transfer state");
             }
             request = tag.getUUID("request");

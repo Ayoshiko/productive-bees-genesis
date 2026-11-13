@@ -85,6 +85,7 @@ public final class DevModeCommand {
 										.executes(DevModeCommand::onMasterDisable))
 								.then(Commands.literal(STATUS_LITERAL)
 										.executes(DevModeCommand::onStatus))
+								.then(MachineDiagnostics.command())
 								.then(Commands.argument(FEATURE_ARG, StringArgumentType.string())
 										.suggests(FEATURE_SUGGESTIONS)
 										.then(Commands.literal(ON_LITERAL)

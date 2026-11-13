@@ -32,6 +32,19 @@ public final class FactoryUpgradeStateHelper {
 
 	// ===== 升级重算与查询 =====
 
+	/** 升级变更只撤销已有处理器的排队票据，构造期间不创建产物状态。 */
+	public static void cancelDeferredOutput(IMekCentrifugePbUpgradeHost tile) {
+		PbRecipeProcessor processor;
+		if (tile instanceof IFactoryPbDelegateAccess factory) {
+			processor = factory.productivebeesgenesis$getPbProcessor();
+		} else if (tile instanceof TileEntityMekCentrifuge centrifuge) {
+			processor = centrifuge.productivebeesgenesis$getPbProcessor();
+		} else {
+			return;
+		}
+		if (processor != null) processor.cancelDeferredOutput();
+	}
+
 	/**
 	 * 重算升级效果 — 复刻MEKExtras，支持STACK升级并行和CREATIVE无限能量。
 	 * <br/>
@@ -42,6 +55,7 @@ public final class FactoryUpgradeStateHelper {
 	 * @param upgrade	触发的升级类型
 	 */
 	public static void recalculateUpgrades(@NotNull AbstractMekCentrifugeFactory factory, @NotNull Upgrade upgrade) {
+		cancelDeferredOutput(factory);
 		if (MekCompatHooks.isMekanismExtrasLoaded()) {
 			MekCreativeEnergyHelper.recalculateCreativeEnergy(factory.energyContainer(), upgrade,
 					MekUpgradeSupport.hasCreativeUpgrade(factory));

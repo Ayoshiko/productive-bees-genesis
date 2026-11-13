@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.inventory;
 
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
+import java.util.Objects;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -120,9 +121,10 @@ public final class SlotLimitCache {
 		return baseLimit;
 	}
 
-	/** 普通蜜脾的 bee_type 不影响上限；显式修改或移除堆叠上限的组件不能复用 Item 缓存。 */
+	/** 比较上限值即可识别修改或移除；构造完整补丁还会触发写时复制，不能放在每次容量查询中。 */
 	private static boolean hasStackLimitPatch(ItemStack stack) {
-		return !stack.isEmpty() && stack.getComponentsPatch().get(DataComponents.MAX_STACK_SIZE) != null;
+		return !stack.isEmpty() && !Objects.equals(stack.get(DataComponents.MAX_STACK_SIZE),
+				stack.getPrototype().get(DataComponents.MAX_STACK_SIZE));
 	}
 
 	/**

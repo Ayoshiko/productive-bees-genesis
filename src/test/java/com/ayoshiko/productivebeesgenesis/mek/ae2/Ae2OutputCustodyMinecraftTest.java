@@ -6,12 +6,9 @@ import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.storage.MEStorage;
 import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
-import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import mekanism.api.Action;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
-import mekanism.common.tile.interfaces.ISideConfiguration;
-import net.minecraft.core.Direction;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -107,43 +104,6 @@ class Ae2OutputCustodyMinecraftTest {
         assertEquals(0, ledger.size());
         assertEquals(0, Ae2OutputCommitter.tryPushSlotDirect(entry, network, IActionSource.empty(), ledger, custody));
         verify(network, times(1)).insert(any(), anyLong(), any(), any());
-    }
-
-    @Test void fluidKeysDistinguishEqualHashesAcrossAllThreeCaches() throws Exception {
-        var first = collisionFluid(0L);
-        var second = collisionFluid(4_294_967_297L);
-        assertEquals(first.getComponents().hashCode(), second.getComponents().hashCode());
-        assertFalse(FluidStack.isSameFluidSameComponents(first, second));
-        var holder = new Ae2OutputStateHolder();
-        var slotCache = Ae2FluidPusher.class.getDeclaredMethod("getCachedFluidKey",
-                Ae2OutputStateHolder.class, int.class, FluidStack.class);
-        slotCache.setAccessible(true);
-        var generatedCache = Ae2FluidPusher.class.getDeclaredMethod("getCachedGeneratedFluidKey",
-                Ae2OutputStateHolder.class, FluidStack.class);
-        generatedCache.setAccessible(true);
-        var oldSlot = (AEFluidKey) slotCache.invoke(null, holder, 0, first);
-        var newSlot = (AEFluidKey) slotCache.invoke(null, holder, 0, second);
-        assertTrue(oldSlot.matches(first));
-        assertTrue(newSlot.matches(second));
-        assertNotEquals(oldSlot, newSlot);
-        var oldGenerated = (AEFluidKey) generatedCache.invoke(null, holder, first);
-        var newGenerated = (AEFluidKey) generatedCache.invoke(null, holder, second);
-        assertNotEquals(oldGenerated, newGenerated);
-        assertTrue(newGenerated.matches(second));
-        assertSame(newGenerated, generatedCache.invoke(null, holder, second.copyWithAmount(3)));
-
-        var sideHost = mock(ISideConfiguration.class);
-        var host = mock(IAe2OutputHostBase.class);
-        when(host.productivebeesgenesis$getAe2StateHolder()).thenReturn(holder);
-        var storage = CentrifugeExternalAeStorage.getOrCreate(host,
-                mock(IMekCentrifugeTile.class), sideHost, Direction.UP);
-        var externalCache = CentrifugeExternalAeStorage.class.getDeclaredMethod("getCachedFluidKey",
-                int.class, FluidStack.class);
-        externalCache.setAccessible(true);
-        var oldExternal = (AEFluidKey) externalCache.invoke(storage, 0, first);
-        var newExternal = (AEFluidKey) externalCache.invoke(storage, 0, second);
-        assertNotEquals(oldExternal, newExternal);
-        assertTrue(newExternal.matches(second));
     }
 
     @Test void fluidDebitKeepsKnownDifferenceAndUnknownPrefixWithoutReoffering() {

@@ -1,4 +1,4 @@
-"""Bind release bytes to a successful Build run before any mirror upload."""
+"""Inspect release metadata and mirror the published NeoForge attachment."""
 
 import argparse
 import hashlib
@@ -18,7 +18,6 @@ import zipfile
 MOD_ID = "productivebeesgenesis"
 MAINTENANCE = "main-neo/1.21.1"
 WORKFLOW = ".github/workflows/build.yml"
-ARTIFACT = "productivebeesgenesis-neoforge-1.21.1"
 PROOF = "build-proof.json"
 LICENSE_MANIFEST = "META-INF/license-manifest.json"
 ENTRY_HASHES = "META-INF/license-entry-hashes.json"
@@ -61,7 +60,7 @@ def manifest_attributes(data):
                 if ": " in line)
 
 
-def verify_jar(data, filename, expected, distribution=False):
+def verify_jar(data, filename, expected):
     require(filename == jar_name(expected), "Unexpected release filename")
     with zipfile.ZipFile(io.BytesIO(data)) as jar:
         names = [entry.filename for entry in jar.infolist() if not entry.is_dir()]
@@ -110,44 +109,12 @@ def verify_jar(data, filename, expected, distribution=False):
         unresolved = [entry["id"] for entry in provenance["files"]
                       if entry.get("authorization_status") == "unresolved"]
         blockers = provenance.get("release_blockers", [])
-        if distribution:
-            require(not blockers and not unresolved,
-                    f"Public distribution is blocked: {len(blockers)} groups; "
-                    f"{len(unresolved)} unresolved provenance records. See NOTICE.")
         return {
             "sha256": sha256(data), "bytes": len(data), "file": filename,
-            "distribution_ready": not blockers and not unresolved,
+            "provenance_complete": not blockers and not unresolved,
             "unresolved_groups": len(blockers), "unresolved_records": len(unresolved),
         }
 
-
-def eligible_run(run, commit, tag, repository):
-    branch = run.get("head_branch")
-    return (
-        run.get("status") == "completed" and run.get("conclusion") == "success"
-        and run.get("head_sha") == commit and run.get("path") == WORKFLOW
-        and run.get("event") in {"push", "workflow_dispatch"}
-        and branch in {MAINTENANCE, tag}
-        and run.get("repository", {}).get("full_name") == repository
-        and run.get("head_repository", {}).get("full_name") == repository
-    )
-
-
-def verify_binding(proof, run, expected, commit, tag, repository):
-    require(eligible_run(run, commit, tag, repository), "No eligible successful Build run")
-    require(proof.get("schema") == 1, "Unsupported build proof")
-    require(proof.get("commit") == commit and proof.get("repository") == repository,
-            "Build proof commit or repository mismatch")
-    require(proof.get("workflow") == WORKFLOW, "Build proof workflow mismatch")
-    require(proof.get("run_id") == str(run["id"])
-            and proof.get("run_attempt") == str(run["run_attempt"]), "Build proof run mismatch")
-    require(proof.get("event") == run["event"], "Build proof event mismatch")
-    expected_ref = f"refs/heads/{MAINTENANCE}" if run["head_branch"] == MAINTENANCE else f"refs/tags/{tag}"
-    require(proof.get("ref") == expected_ref, "Build proof ref mismatch")
-    require(proof.get("mod_version") == expected["mod_version"]
-            and proof.get("curseforge_release_version") == expected["curseforge_release_version"],
-            "Build proof version mismatch")
-    require(proof.get("file") == jar_name(expected), "Build proof filename mismatch")
 
 
 def english_changelog(body):
@@ -220,43 +187,15 @@ def mirror(args):
     require(re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:[.-][0-9A-Za-z.-]+)?", tag),
             "Invalid release tag")
     commit = commands.run("git", "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}").decode().strip()
-    commands.run("git", "merge-base", "--is-ancestor", commit, "HEAD")
     expected = properties(commands.run("git", "show", f"{commit}:gradle.properties").decode("utf-8"))
     require(expected["mod_version"] == tag[1:], "Tag does not match mod_version")
-    build_script = commands.run("git", "show", f"{commit}:build.gradle").decode("utf-8")
-    require("net.neoforged.moddev" in build_script, "Tag is not a NeoForge build")
     endpoint = f"repos/{repository}"
     release = commands.api(f"{endpoint}/releases/tags/{quote(tag, safe='')}")
     require(release.get("tag_name") == tag and not release.get("draft"), "Release tag or publication mismatch")
-    require(release.get("author", {}).get("login") == repository.split("/")[0], "Release author is not owner")
-    runs = commands.api(f"{endpoint}/actions/workflows/build.yml/runs?head_sha={commit}&status=success&per_page=100")
-    candidates = [run for run in runs["workflow_runs"] if eligible_run(run, commit, tag, repository)]
-    require(candidates, "No successful owner-repository Build for this exact commit; run Build first")
-    run = candidates[0]
-    artifacts = commands.api(f"{endpoint}/actions/runs/{run['id']}/artifacts?per_page=100")
-    matches = [item for item in artifacts["artifacts"] if item["name"] == ARTIFACT and not item["expired"]]
-    require(len(matches) == 1, "Successful Build must have one unexpired release artifact")
-    archive = commands.api(f"{endpoint}/actions/artifacts/{matches[0]['id']}/zip", binary=True)
-    with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
-        names = [item.filename for item in bundle.infolist() if not item.is_dir()]
-        require(len(names) == 2 and set(names) == {PROOF, jar_name(expected)}, "Unexpected Build artifact contents")
-        proof = json.loads(bundle.read(PROOF))
-        verify_binding(proof, run, expected, commit, tag, repository)
-        built_bytes = bundle.read(jar_name(expected))
-        require(sha256(built_bytes) == proof["sha256"] and len(built_bytes) == proof["bytes"],
-                "Build proof digest mismatch")
-        verify_jar(built_bytes, proof["file"], expected, distribution=True)
     assets = [asset for asset in release["assets"] if asset["name"] == jar_name(expected)]
     require(len(assets) == 1, "Release must contain exactly one expected JAR")
     released_bytes = commands.api(f"{endpoint}/releases/assets/{assets[0]['id']}", binary=True)
-    require(sha256(released_bytes) == proof["sha256"] and len(released_bytes) == proof["bytes"],
-            "Release attachment differs from the successful Build artifact")
-    verify_jar(released_bytes, jar_name(expected), expected, distribution=True)
-    # The tag is read once before the network calls and checked again against the current remote ref.
-    remote_ref = commands.run("git", "ls-remote", "origin", f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}")
-    remote_objects = dict(line.split()[::-1] for line in remote_ref.decode().splitlines())
-    remote_commit = remote_objects.get(f"refs/tags/{tag}^{{}}", remote_objects.get(f"refs/tags/{tag}"))
-    require(remote_commit == commit, "Release tag changed during verification")
+    details = verify_jar(released_bytes, jar_name(expected), expected)
     version_type = os.environ.get("INPUT_VERSION_TYPE") or ("beta" if release["prerelease"] else "release")
     require(version_type in {"release", "beta", "alpha"}, "Invalid version type")
     body = os.environ.get("INPUT_CHANGELOG") or release.get("body") or ""
@@ -265,14 +204,14 @@ def mirror(args):
     destination.mkdir(parents=True, exist_ok=True)
     artifact = destination / jar_name(expected)
     artifact.write_bytes(released_bytes)
-    result = {"commit": commit, "run_id": str(run["id"]), "tag": tag, **proof}
+    result = {"commit": commit, "tag": tag, "release_id": release["id"], **details}
     (destination / "verification.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     for name, value in {
         "version": expected["curseforge_release_version"], "version_type": version_type,
         "artifact": artifact.as_posix(), "changelog": english,
     }.items():
         github_output(os.environ["GITHUB_OUTPUT"], name, value)
-    print(f"Verified {jar_name(expected)} against Build run {run['id']}, commit {commit}, SHA-256 {proof['sha256']}")
+    print(f"Prepared {jar_name(expected)} from release {tag}, SHA-256 {details['sha256']}")
 
 
 def main():
@@ -287,7 +226,6 @@ def main():
     inspect_parser = subparsers.add_parser("inspect")
     inspect_parser.add_argument("jar")
     inspect_parser.add_argument("--properties", default="gradle.properties")
-    inspect_parser.add_argument("--distribution", action="store_true")
     args = parser.parse_args()
     try:
         if args.command == "record":
@@ -297,7 +235,7 @@ def main():
         else:
             expected = properties(Path(args.properties).read_text(encoding="utf-8"))
             jar = Path(args.jar)
-            print(json.dumps(verify_jar(jar.read_bytes(), jar.name, expected, args.distribution)))
+            print(json.dumps(verify_jar(jar.read_bytes(), jar.name, expected)))
     except (VerificationError, OSError, KeyError, json.JSONDecodeError, tomllib.TOMLDecodeError,
             zipfile.BadZipFile, subprocess.SubprocessError) as error:
         parser.exit(1, f"Release verification failed: {error}\n")

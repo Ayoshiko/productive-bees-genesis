@@ -1,9 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.recipe;
 
-import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryBlock;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeBlock;
+import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.mojang.serialization.MapCodec;
+import mekanism.common.attachments.containers.ContainerType;
 import mekanism.common.recipe.upgrade.MekanismShapedRecipe;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -13,72 +14,21 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.ShapedRecipe;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
-	 * 自定义 ShapedRecipe 子类 — 修复合成升级时蜜蜂数据丢失问题
-	 * <br/>
-	 * 继承 {@link MekanismShapedRecipe}，重写 {@link #assemble} 方法：
-	 * <ol>
-	 *   <li>先调用 {@code super.assemble()} 处理 MEK 标准升级数据（速度/能量等，走 RecipeUpgradeData 路径）</li>
-	 *   <li>super 返回非空后，从 {@link CraftingInput} 中查找输入的机器方块（通过 BlockItem 类型识别），
-	 *       读取输入机器方块的 BLOCK_ENTITY_DATA 并合并到结果（蜜蜂槽/PB升级/喂食槽等）</li>
-	 *   <li>super 返回 EMPTY 时（输出槽有物品导致 MEK ItemRecipeData 转移失败）走降级路径：
-	 *       手动转移完整 BLOCK_ENTITY_DATA，保证输出槽有物品时仍可合成且数据不丢失</li>
-	 * </ol>
-	 *
-	 * <p><b>根因 A（蜜蜂丢失）</b>：{@link MekanismShapedRecipe#assemble} 只处理 {@code RecipeUpgradeType}
-	 * 路径的 MEK 标准升级数据，不转移 BLOCK_ENTITY_DATA 中的自定义 NBT 字段。蜂箱内的蜜蜂/PB升级数据
-	 * 存储在 BLOCK_ENTITY_DATA 的自定义 NBT 字段，不在任何 RecipeUpgradeType 路径，合成升级时全部丢失。
-	 *
-	 * <p><b>根因 B（assemble 从未执行）</b>：MEK_DATA 序列化器反序列化配方时创建的是
-	 * {@link MekanismShapedRecipe} 实例（{@code MekanismShapedRecipe::new}），本类的 {@link #assemble}
-	 * 覆盖从未被调用。修复：注册自定义序列化器 {@link #SERIALIZER}（{@code productivebeesgenesis:apiary_shaped}），
-	 * 反序列化时创建本类实例，使 {@link #assemble} 覆盖真正生效。
-	 *
-	 * <p><b>方案优势</b>：相比事件处理器（{@code ItemCraftedEvent}），在 assemble 中转移数据更可靠：
-	 * CraftingInput 是合成前的完整快照，inv.getItem(i) 返回未消耗的输入物品，避免事件处理器在
-	 * 输入被消耗后读到空物品的时序问题。
-	 *
-	 * <p><b>合并策略</b>（多输入场景，如 4 个基础蜂箱合成 1 个 BASIC 工厂蜂箱）：
-	 * <ul>
-	 *   <li>蜜蜂槽：完整迁移并分配唯一索引，容量不足时拒绝合成（仅蜂箱适用）</li>
-	 *   <li>PB 升级数量：精确累加所有已持有数量，不按新安装上限裁剪</li>
-	 *   <li>其他字段（喂食槽/能量槽/流体罐/蜂笼 I/O 槽/选中槽位等）：取首个非空</li>
-	 * </ul>
-	 *
-	 * <p><b>设计原则</b>：
-	 * <ul>
-	 *   <li>SRP：仅负责合成路径的数据转移与合并，不涉及持久化序列化逻辑</li>
-	 *   <li>OCP：继承 MekanismShapedRecipe 扩展 assemble，不修改父类</li>
-	 * </ul>
-	 *
-	 * <p><b>线程安全</b>：assemble 在服务端主线程触发，CraftingInput 为合成矩阵快照，无需额外同步。
-	 */
+ * 蜂箱和离心机的合成升级按目标布局迁移库存与流体，单输入继承完整保存组件。
+ * 自定义 NBT 不属于 Mekanism 标准升级数据，必须在预览和实际合成时一并转移。
+ * 任一资产无法完整接收时返回空结果，所有输入快照保持只读。
+ */
 public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 
-	/**
-	 * 自定义配方序列化器 — 修复运行时反序列化丢失 assemble 覆盖的问题
-	 * <br/>
-	 * <b>根因</b>：MEK_DATA 序列化器（{@code SimpleCraftingRecipeSerializer} 包装
-	 * {@code MekanismShapedRecipe::new}）在游戏加载配方时创建的是 <b>MekanismShapedRecipe</b>
-	 * 实例，本类的 {@link #assemble} 覆盖从未被执行，导致合成升级时蜜蜂/PB升级数据丢失。
-	 * <p>
-	 * <b>修复</b>：注册本序列化器（id = {@code productivebeesgenesis:apiary_shaped}），
-	 * 反序列化时通过 {@link ApiaryShapedRecipeSerializer#fromJson} 创建 ApiaryShapedRecipe 实例，
-	 * 使 {@link #assemble} 覆盖生效。datagen 输出 JSON 格式与 vanilla ShapedRecipe 完全一致。
-	 */
+	/** JSON 与网络解码均包装本类，确保样板预览使用完整机器迁移流程。 */
 	public static final RecipeSerializer<ApiaryShapedRecipe> SERIALIZER = new ApiaryShapedRecipeSerializer();
-
-	// ===== NBT key 常量 — 统一引用 apiary 包内 public 常量（单一事实来源）=====
-	// ApiarySlotSerializer.NBT_KEY_BEE_SLOTS / ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS /
-	// ApiarySlotManager.DEFAULT_BEE_SLOT_COUNT 已提升为 public，此处直接引用避免跨包重复字面量
-
-	/** 用于 WARN 日志的 feature 标识（DevLog 节流） */
-	private static final String DEV_FEATURE = "crafting_upgrade";
 
 	/**
 	 * 构造自定义 ShapedRecipe
@@ -89,36 +39,20 @@ public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 		super(internal);
 	}
 
-	/**
-	 * 返回自定义序列化器 {@link #SERIALIZER}
-	 * <br/>
-	 * 必须返回本模组注册的 {@code apiary_shaped} 序列化器：datagen 按此序列化器 id 输出
-	 * 配方 JSON，游戏加载时经 {@link ApiaryShapedRecipeSerializer#fromJson} 创建
-	 * {@link ApiaryShapedRecipe} 实例，确保 {@link #assemble} 覆盖生效。
-	 */
 	@Override
 	public RecipeSerializer<?> getSerializer() {
 		return SERIALIZER;
 	}
 
-	/**
-	 * 重写 assemble — 在 super.assemble 处理 MEK 标准升级数据后，转移/合并 BLOCK_ENTITY_DATA
-	 * <br/>
-	 * CraftingInput 是合成前的完整快照，inv.getItem(i) 返回未消耗的输入物品，
-	 * 避免 ItemCraftedEvent 在输入被消耗后读到空物品的时序问题。
-	 *
-	 * @param inv      合成矩阵快照
-	 * @param provider 注册表访问器
-	 * @return 合成结果物品（已转移自定义 NBT）；无法完整转移时返回 EMPTY，拒绝消耗输入
-	 */
 	@Override
 	public boolean matches(CraftingInput input, Level level) {
-		return super.matches(input, level) && !assemble(input, level.registryAccess()).isEmpty();
+		return getInternal().matches(input, level) && !assemble(input, level.registryAccess()).isEmpty();
 	}
 
+	/** 完整转移库存、流体和自定义状态；任一资产无法容纳时拒绝消耗输入。 */
 	@Override
 	public ItemStack assemble(CraftingInput inv, HolderLookup.Provider provider) {
-		// 0. 预取输出模板，确定输出方块类型（super 可能因输出槽有物品返回 EMPTY，需先确定类型）
+		// 输出物品的注册布局决定库存与流体迁移目标。
 		ItemStack template = getResultItem(provider);
 		if (template.isEmpty()) {
 			return ItemStack.EMPTY;
@@ -136,40 +70,48 @@ public final class ApiaryShapedRecipe extends MekanismShapedRecipe {
 		}
 		// 扫描合成矩阵，收集同类型机器方块输入
 		List<ItemStack> machineInputs = ApiaryCraftingDataTransfer.collectMachineInputs(inv, isApiary, isCentrifuge);
+		for (ItemStack input : inv.items()) {
+			if (input.getItem() instanceof BlockItem ingredient
+					&& (ingredient.getBlock() instanceof MekApiaryBlock<?, ?>
+							|| ingredient.getBlock() instanceof MekCentrifugeBlock<?, ?>)
+					&& !machineInputs.contains(input) && !input.isComponentsPatchEmpty()) {
+				// 跨宿主辅助机器没有配置、蜜蜂和已付工作的接收方，只能消耗未携带数据的物品。
+				return ItemStack.EMPTY;
+			}
+		}
 		if (machineInputs.isEmpty()) {
 			// 无机器方块输入（新合成机器方块），委托 super
 			return super.assemble(inv, provider);
 		}
 
-		// 1. 调用 super 处理 MEK 标准升级数据（速度/能量等）
-		ItemStack result = super.assemble(inv, provider);
+		// MEK 通用合成会重建源流体罐，并按可插入顺序重排库存。
+		// 拆卸物品的保存布局由本模组迁移；标准升级、能量和权限仍交给 MEK。
+		List<ItemStack> standardInputs = new ArrayList<>(inv.size());
+		for (ItemStack input : inv.items()) {
+			ItemStack standard = input;
+			if (machineInputs.contains(input)) {
+				standard = input.copy();
+				standard.remove(ContainerType.ITEM.getComponentType());
+				standard.remove(ContainerType.FLUID.getComponentType());
+			}
+			standardInputs.add(standard);
+		}
+		ItemStack result = super.assemble(CraftingInput.of(inv.width(), inv.height(), standardInputs), provider);
 		if (result.isEmpty()) {
-			// 2. 降级路径：super 因输出槽有物品（MEK ItemRecipeData 转移失败）返回 EMPTY。
-			//    先复制输入机器的全部组件（mekanism:upgrades 升级/能量/流体/配置等），
-			//    再覆盖 BLOCK_ENTITY_DATA（含蜜蜂/PB升级/输出槽物品），
-			//    保证输出槽有物品时仍可合成且 MEK 升级与自定义数据均不丢失。
-			ItemStack fallback = template.copy();
-			fallback.applyComponents(machineInputs.get(0).getComponents());
-			if (isApiary) {
-				if (!ApiaryCraftingInventoryTransfer.transfer(machineInputs, fallback)) return ItemStack.EMPTY;
-			} else {
-				if (!ApiaryCraftingDataTransfer.mergeAttachedItemDataIntoFallback(machineInputs, fallback)) {
-					return ItemStack.EMPTY;
-				}
-			}
-			try {
-				ApiaryCraftingDataTransfer.transferAllBlockEntityData(machineInputs, fallback, outputBlock, isApiary);
-			} catch (RuntimeException e) {
-				DevLog.error("合成升级: 自定义数据无法完整转移，拒绝合成", e);
-				return ItemStack.EMPTY;
-			}
-			return fallback;
+			return ItemStack.EMPTY;
+		}
+		if (machineInputs.size() == 1) {
+			// 名称、红石、频率和其他保存组件沿单输入升级原样继承，不覆盖目标物品的默认定义。
+			result.applyComponents(machineInputs.getFirst().getComponentsPatch());
+		}
+		boolean inventoryTransferred = isApiary
+				? ApiaryCraftingInventoryTransfer.transfer(machineInputs, result)
+				: CentrifugeCraftingInventoryTransfer.transfer(machineInputs, result);
+		if (!inventoryTransferred || !MachineCraftingFluidTransfer.transfer(machineInputs, result)) {
+			return ItemStack.EMPTY;
 		}
 
-		// 覆盖 MEK 按可插入顺序重排的库存；源组件始终只读，不从错误结果反推槽位。
-		if (isApiary && !ApiaryCraftingInventoryTransfer.transfer(machineInputs, result)) return ItemStack.EMPTY;
-
-		// 3. 转移/合并自定义 BLOCK_ENTITY_DATA（蜜蜂槽/PB升级等）
+		// 蜜蜂、已付工作和自定义配置共用原有保存合同。
 		try {
 			ApiaryCraftingDataTransfer.transferAllBlockEntityData(machineInputs, result, outputBlock, isApiary);
 		} catch (RuntimeException e) {

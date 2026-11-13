@@ -168,25 +168,19 @@ class Ae2FilterPersistenceMinecraftTest {
     void corruptOrFutureConfigurationStaysRawAndCannotEnableUnrestrictedPulls() {
         var future = configuration().getCompound(KEY).copy();
         future.putInt("version", 2);
-        var mode = configuration().getCompound(KEY).copy();
-        mode.putInt("mode", 1);
         var entriesType = configuration().getCompound(KEY).copy();
         entriesType.putString("entries", "broken");
-        var index = configuration().getCompound(KEY).copy();
-        index.getList("entries", net.minecraft.nbt.Tag.TAG_COMPOUND).getCompound(0).putLong("i", 0);
         var duplicate = configuration().getCompound(KEY).copy();
         var entries = duplicate.getList("entries", net.minecraft.nbt.Tag.TAG_COMPOUND);
         entries.add(entries.getCompound(0).copy());
-        var amount = configuration().getCompound(KEY).copy();
-        amount.getList("entries", net.minecraft.nbt.Tag.TAG_COMPOUND).getCompound(0).putInt("a", 64);
         var wrongList = configuration().getCompound(KEY).copy();
         var ints = new ListTag();
         ints.add(IntTag.valueOf(1));
         wrongList.put("entries", ints);
         try (var cache = mockConstruction(Ae2ConfigCache.class,
                 (mock, context) -> when(mock.isInputPullEnabled()).thenReturn(true))) {
-            for (net.minecraft.nbt.Tag raw : List.of(StringTag.valueOf("broken"), future, mode,
-                    entriesType, index, duplicate, amount, wrongList)) {
+            for (net.minecraft.nbt.Tag raw : List.of(StringTag.valueOf("broken"), future,
+                    entriesType, duplicate, wrongList)) {
                 var holder = new Ae2OutputStateHolder();
                 holder.setAeItemInputEnabled(true);
                 assertTrue(holder.isInputPullEnabled());

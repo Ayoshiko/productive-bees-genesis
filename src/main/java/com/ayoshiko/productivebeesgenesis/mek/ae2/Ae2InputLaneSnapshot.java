@@ -2,7 +2,9 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.stacks.AEItemKey;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
+import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import mekanism.api.inventory.IInventorySlot;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
@@ -36,6 +38,11 @@ final class Ae2InputLaneSnapshot {
 	private IInventorySlot[] slots = new IInventorySlot[0];
 	/** 每车道仅保留最近实际内容的完整键；空槽续料沿用，替换槽位时失效。 */
 	private AEItemKey[] preferredKeys = new AEItemKey[0];
+	private AEItemKey[] currentKeys = new AEItemKey[0];
+	private final Object2LongOpenHashMap<AEItemKey> occupiedLaneMasks = new Object2LongOpenHashMap<>();
+	private final Object2LongOpenHashMap<AEItemKey> preferredLaneMasks = new Object2LongOpenHashMap<>();
+	private long emptyLaneMask;
+	private long customLaneMask;
 	/** 槽内物品（空槽为 null）— 用于零虚调用的身份剪枝 */
 	private Item[] items = new Item[0];
 	/** 槽内栈引用 — 组件匹配需要（值比较，引用仅用于记忆表命中） */
@@ -83,10 +90,15 @@ final class Ae2InputLaneSnapshot {
 		this.source = inputSlots == null ? List.of() : inputSlots;
 		int previousSize = this.size;
 		this.size = Math.max(0, laneCount);
+		occupiedLaneMasks.clear();
+		preferredLaneMasks.clear();
+		emptyLaneMask = 0L;
+		customLaneMask = 0L;
 		if (slots.length < size) {
 			int length = Math.max(size, slots.length << 1);
 			slots = Arrays.copyOf(slots, length);
 			preferredKeys = Arrays.copyOf(preferredKeys, length);
+			currentKeys = Arrays.copyOf(currentKeys, length);
 			items = new Item[length];
 			stacks = new ItemStack[length];
 			requiredInputs = new ItemStack[length];
@@ -98,6 +110,8 @@ final class Ae2InputLaneSnapshot {
 		for (int i = size; i < previousSize; i++) {
 			slots[i] = null;
 			preferredKeys[i] = null;
+			currentKeys[i] = null;
+			requiredInputs[i] = null;
 			items[i] = null;
 			stacks[i] = null;
 			beeTypes[i] = null;
@@ -105,7 +119,8 @@ final class Ae2InputLaneSnapshot {
 		for (int i = 0; i < size; i++) {
 			requiredInputs[i] = host == null ? null
 					: com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.requiredLaneInput(host, i);
-			refresh(i);
+			readLane(i, null);
+			indexLane(i);
 		}
 	}
 
@@ -114,10 +129,16 @@ final class Ae2InputLaneSnapshot {
 		return required == null || !required.isEmpty() && ItemStack.isSameItemSameComponents(required, input);
 	}
 
-	/** 只调整遍历起点，后续仍检查全部车道的实际容量与配对输出。 */
+	/** 只调整遍历起点，候选车道仍检查实际容量与配对输出。 */
 	int preferredStart(AEItemKey key, int fallback) {
 		if (size == 0) return 0;
 		int start = Math.floorMod(fallback, size);
+		if (isIndexed()) {
+			long mask = preferredLaneMasks.getLong(key);
+			if (mask == 0L) return start;
+			long afterStart = mask & (-1L << start);
+			return Long.numberOfTrailingZeros(afterStart == 0L ? mask : afterStart);
+		}
 		for (int offset = 0; offset < size; offset++) {
 			int index = (start + offset) % size;
 			if (key.equals(preferredKeys[index])) return index;
@@ -125,15 +146,34 @@ final class Ae2InputLaneSnapshot {
 		return start;
 	}
 
-	void remember(AEItemKey key, int index) {
-		if (index >= 0 && index < size) preferredKeys[index] = key;
-	}
-
 	/** 重新读取单条车道（我方插入之后必须调用，其余时刻内容不会变化）。 */
 	void refresh(int index) {
+		refresh(index, null);
+	}
+
+	/** 交付后的新偏好与实际库存一起更新，槽位替换仍撤销旧偏好。 */
+	void refresh(int index, AEItemKey acceptedKey) {
 		if (index < 0 || index >= size) return;
+		if (isIndexed()) {
+			long bit = 1L << index;
+			removeLane(occupiedLaneMasks, currentKeys[index], bit);
+			removeLane(preferredLaneMasks, preferredKeys[index], bit);
+			emptyLaneMask &= ~bit;
+			customLaneMask &= ~bit;
+		}
+		readLane(index, acceptedKey);
+		indexLane(index);
+	}
+
+	/** 整轮 capture 已清空索引，只读状态，不再逐槽删除旧位。 */
+	private void readLane(int index, AEItemKey acceptedKey) {
+		currentKeys[index] = null;
 		IInventorySlot slot = index < source.size() ? source.get(index) : null;
-		if (slots[index] != slot) preferredKeys[index] = null;
+		if (slots[index] != slot) {
+			preferredKeys[index] = null;
+		} else if (acceptedKey != null) {
+			preferredKeys[index] = acceptedKey;
+		}
 		slots[index] = slot;
 		if (slot == null) {
 			items[index] = null;
@@ -156,6 +196,7 @@ final class Ae2InputLaneSnapshot {
 			if (preferredKeys[index] == null || !preferredKeys[index].matches(stack)) {
 				preferredKeys[index] = AEItemKey.of(stack);
 			}
+			currentKeys[index] = preferredKeys[index];
 			Item item = stack.getItem();
 			items[index] = item;
 			counts[index] = stack.getCount();
@@ -164,6 +205,57 @@ final class Ae2InputLaneSnapshot {
 			patchSizes[index] = patchSize;
 			beeTypes[index] = singleBeeType(stack, item, patchSize);
 		}
+	}
+
+	/** 完整组件键索引仅保留当前槽与各槽最近输入；插入、换槽和重新采样都会更新。 */
+	private void indexLane(int index) {
+		if (!isIndexed()) return;
+		long bit = 1L << index;
+		if (slots[index] != null && !(slots[index] instanceof BasicInventorySlot)) customLaneMask |= bit;
+		if (currentKeys[index] == null) emptyLaneMask |= bit;
+		else addLane(occupiedLaneMasks, currentKeys[index], bit);
+		addLane(preferredLaneMasks, preferredKeys[index], bit);
+	}
+
+	private static void addLane(Object2LongOpenHashMap<AEItemKey> masks, AEItemKey key, long bit) {
+		if (key != null) masks.put(key, masks.getLong(key) | bit);
+	}
+
+	private static void removeLane(Object2LongOpenHashMap<AEItemKey> masks, AEItemKey key, long bit) {
+		if (key == null) return;
+		long remaining = masks.getLong(key) & ~bit;
+		if (remaining == 0L) masks.removeLong(key);
+		else masks.put(key, remaining);
+	}
+
+	boolean isIndexed() {
+		return size <= Long.SIZE;
+	}
+
+	/** 自定义槽的模拟容量不承诺整批接收，保留完整规划与后续车道。 */
+	boolean canBoundCapacityPlanning() {
+		return isIndexed() && customLaneMask == 0L;
+	}
+
+	long candidateLanes(AEItemKey key) {
+		return emptyLaneMask | customLaneMask | occupiedLaneMasks.getLong(key);
+	}
+
+	int occupiedLaneCount(AEItemKey key) {
+		if (isIndexed()) return Long.bitCount(occupiedLaneMasks.getLong(key));
+		int count = 0;
+		for (int index = 0; index < size; index++) {
+			if (key.matches(stack(index))) count++;
+		}
+		return count;
+	}
+
+	boolean hasEmptyLane() {
+		if (isIndexed()) return emptyLaneMask != 0L;
+		for (int index = 0; index < size; index++) {
+			if (items[index] == null) return true;
+		}
+		return false;
 	}
 
 	/**

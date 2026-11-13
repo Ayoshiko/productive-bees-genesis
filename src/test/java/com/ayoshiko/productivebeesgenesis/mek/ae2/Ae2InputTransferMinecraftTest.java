@@ -9,6 +9,7 @@ import appeng.api.storage.MEStorage;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -18,6 +19,8 @@ import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -50,10 +53,10 @@ class Ae2InputTransferMinecraftTest {
         var secondSlot = mekanism.common.inventory.slot.BasicInventorySlot.at(null, 0, 0);
         Ae2InputExecution.pullBatchForType(level, firstHolder, key, 64, 900, storage,
                 IActionSource.empty(), List.of(firstSlot), new long[]{64}, null, key.toStack(1), 0,
-                BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget());
+                BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget(), 1L);
         Ae2InputExecution.pullBatchForType(level, secondHolder, key, 64, 900, storage,
                 IActionSource.empty(), List.of(secondSlot), new long[]{64}, null, key.toStack(1), 0,
-                BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget());
+                BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget(), 1L);
         assertEquals(64, firstSlot.getCount());
         assertEquals(36, secondSlot.getCount());
         assertEquals(900, live[0]);
@@ -62,10 +65,21 @@ class Ae2InputTransferMinecraftTest {
         live[0] = 800;
         Ae2InputExecution.pullBatchForType(level, secondHolder, key, 28, 900, storage,
                 IActionSource.empty(), List.of(secondSlot), new long[]{28}, null, key.toStack(1), 0,
-                BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget());
+                BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget(), 1L);
         assertEquals(36, secondSlot.getCount());
         assertEquals(800, live[0]);
         verify(storage, times(2)).extract(eq(key), anyLong(), eq(Actionable.MODULATE), any());
+        var calls = inOrder(storage);
+        calls.verify(storage).extract(eq(key), eq(964L), eq(Actionable.SIMULATE), any());
+        calls.verify(storage).extract(eq(key), eq(64L), eq(Actionable.MODULATE), any());
+        calls.verify(storage).extract(eq(key), eq(964L), eq(Actionable.SIMULATE), any());
+        calls.verify(storage).extract(eq(key), eq(36L), eq(Actionable.MODULATE), any());
+        calls.verify(storage).extract(eq(key), eq(928L), eq(Actionable.SIMULATE), any());
+        calls.verifyNoMoreInteractions();
+        assertFalse(firstHolder.getPendingItemBuffer().isBlocked());
+        assertFalse(secondHolder.getPendingItemBuffer().isBlocked());
+        assertEquals(0, firstHolder.getPendingItemBuffer().getTotalAmount());
+        assertEquals(0, secondHolder.getPendingItemBuffer().getTotalAmount());
     }
 
     @Test
@@ -88,7 +102,7 @@ class Ae2InputTransferMinecraftTest {
             assertThrows(IllegalStateException.class, () -> Ae2InputExecution.pullBatchForType(
                     level, holder, key, 100, -1, storage, IActionSource.empty(),
                     List.of(slot), new long[] {100}, null, key.toStack(1), 0, BlockPos.ZERO,
-                    null, new Ae2FingerprintCache(), new Ae2ExtractBudget()));
+                    null, new Ae2FingerprintCache(), new Ae2ExtractBudget(), 1L));
             verifyNoInteractions(slot);
             assertTrue(holder.getPendingItemBuffer().isBlocked());
             var restored = new Ae2OutputStateHolder();
@@ -98,6 +112,121 @@ class Ae2InputTransferMinecraftTest {
             transfer.resolve(transfer.request(), 40, restored.getPendingItemBuffer(), 1);
             assertEquals(40, restored.getPendingItemBuffer().getTotalAmount());
         }
+    }
+
+    @Test
+    void sparseDeliveryKeepsCircularOrderAndIgnoresStaleCapacityValues() {
+        var level = mock(Level.class);
+        when(level.getGameTime()).thenReturn(40L);
+        when(level.registryAccess()).thenReturn(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+        var holder = new Ae2OutputStateHolder();
+        var key = AEItemKey.of(Items.IRON_INGOT);
+        var storage = mock(MEStorage.class);
+        long[] live = {14};
+        when(storage.extract(eq(key), anyLong(), eq(Actionable.MODULATE), any())).thenAnswer(call -> {
+            long extracted = Math.min((long) call.getArgument(1), live[0]);
+            live[0] -= extracted;
+            return extracted;
+        });
+        List<IInventorySlot> slots = new ArrayList<>();
+        for (int lane = 0; lane < 64; lane++) slots.add(BasicInventorySlot.at(null, 0, 0));
+        long[] capacities = new long[64];
+        Arrays.fill(capacities, 64L);
+        capacities[2] = 5;
+        capacities[31] = 6;
+        capacities[63] = 7;
+        long selected = (1L << 2) | (1L << 31) | (1L << 63);
+
+        var result = Ae2InputExecution.pullBatchForType(level, holder, key, 14, -1, storage,
+                IActionSource.empty(), slots, capacities, null, key.toStack(1), 60, BlockPos.ZERO,
+                null, new Ae2FingerprintCache(), new Ae2ExtractBudget(), selected);
+
+        assertEquals(14, result.insertedCount());
+        assertEquals(7, slots.get(63).getCount());
+        assertEquals(5, slots.get(2).getCount());
+        assertEquals(2, slots.get(31).getCount());
+        assertEquals(14, slots.stream().mapToInt(IInventorySlot::getCount).sum());
+        assertEquals(0, live[0]);
+        assertFalse(holder.getPendingItemBuffer().isBlocked());
+        assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
+    }
+
+    @Test
+    void largerFactoryDeliveryUsesEveryPositiveQuotaBeyondTheMask() {
+        var level = mock(Level.class);
+        when(level.registryAccess()).thenReturn(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+        var holder = new Ae2OutputStateHolder();
+        var key = AEItemKey.of(Items.IRON_INGOT);
+        var storage = mock(MEStorage.class);
+        when(storage.extract(eq(key), eq(11L), eq(Actionable.MODULATE), any())).thenReturn(11L);
+        List<IInventorySlot> slots = new ArrayList<>();
+        for (int lane = 0; lane < 65; lane++) slots.add(BasicInventorySlot.at(null, 0, 0));
+        long[] capacities = new long[65];
+        capacities[1] = 5;
+        capacities[64] = 7;
+
+        var result = Ae2InputExecution.pullBatchForType(level, holder, key, 11, -1, storage,
+                IActionSource.empty(), slots, capacities, null, key.toStack(1), 63, BlockPos.ZERO,
+                null, new Ae2FingerprintCache(), new Ae2ExtractBudget(), 0L);
+
+        assertEquals(11, result.insertedCount());
+        assertEquals(7, slots.get(64).getCount());
+        assertEquals(4, slots.get(1).getCount());
+        assertEquals(11, slots.stream().mapToInt(IInventorySlot::getCount).sum());
+        assertFalse(holder.getPendingItemBuffer().isBlocked());
+        assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
+    }
+
+    @Test
+    void sparseDeliveryPreservesConfirmedPrefixAndUnknownCurrentOffer() {
+        var level = mock(Level.class);
+        when(level.registryAccess()).thenReturn(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+        var holder = new Ae2OutputStateHolder();
+        var key = AEItemKey.of(Items.IRON_INGOT);
+        var storage = mock(MEStorage.class);
+        when(storage.extract(eq(key), eq(13L), eq(Actionable.MODULATE), any())).thenReturn(13L);
+        var prefix = BasicInventorySlot.at(null, 0, 0);
+        var suffix = BasicInventorySlot.at(null, 0, 0);
+        var actualFaultSlot = BasicInventorySlot.at(null, 0, 0);
+        var fault = mock(IInventorySlot.class);
+        when(fault.insertItem(any(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL))).thenAnswer(call -> {
+            ItemStack offered = call.getArgument(0);
+            actualFaultSlot.setStack(offered.copyWithCount(2));
+            throw new IllegalStateException("accepted two before failure");
+        });
+        List<IInventorySlot> slots = new ArrayList<>();
+        for (int lane = 0; lane < 8; lane++) slots.add(BasicInventorySlot.at(null, 0, 0));
+        slots.set(6, prefix);
+        slots.set(1, fault);
+        slots.set(4, suffix);
+        long[] capacities = new long[8];
+        Arrays.fill(capacities, 64L);
+        capacities[6] = 4;
+        capacities[1] = 5;
+        capacities[4] = 4;
+
+        assertThrows(IllegalStateException.class, () -> Ae2InputExecution.pullBatchForType(level,
+                holder, key, 13, -1, storage, IActionSource.empty(), slots, capacities, null,
+                key.toStack(1), 6, BlockPos.ZERO, null, new Ae2FingerprintCache(),
+                new Ae2ExtractBudget(), (1L << 6) | (1L << 1) | (1L << 4)));
+
+        assertEquals(4, prefix.getCount());
+        assertEquals(2, actualFaultSlot.getCount());
+        assertTrue(suffix.isEmpty());
+        assertTrue(holder.getPendingItemBuffer().isBlocked());
+        var transfer = holder.getPendingItemBuffer().transfer();
+        assertEquals("slot:1", transfer.destination());
+        assertEquals(4, transfer.knownAmount());
+        assertEquals(5, transfer.offeredAmount());
+        var saved = new CompoundTag();
+        holder.savePendingItems(saved);
+        var restored = new Ae2OutputStateHolder();
+        restored.loadPendingItems(saved);
+        var recovered = restored.getPendingItemBuffer().transfer();
+        recovered.resolve(recovered.request(), 2, restored.getPendingItemBuffer(), 41);
+        assertEquals(7, restored.getPendingItemBuffer().getTotalAmount());
+        assertEquals(13, prefix.getCount() + actualFaultSlot.getCount()
+                + restored.getPendingItemBuffer().getTotalAmount());
     }
 
     @Test

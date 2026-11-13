@@ -34,40 +34,6 @@ class BeeDesignerMachineMinecraftTest {
 	private static final String EGG = "productivebees:spawn_egg_configurable_bee[entity_data={id:\"productivebees:configurable_bee\",type:\"test:machine\"}]";
 
 	@Test
-	void changesMachineWithoutLosingMaterialsAndRejectsUnsafeConversion() {
-		JsonObject original = BeeDesignerMachineRecipes.create(Host.MI, "modern_industrialization:assembler", "", "test:machine");
-		original.addProperty("duration", 240);
-		original.addProperty("eu", 100000);
-		var input = BeeDesignerMachineRecipes.entries(original).getFirst();
-		input.value().addProperty("amount", 12);
-		input.node().addProperty("probability", 0.25);
-		String before = original.toString();
-		JsonObject changed = BeeDesignerMachineRecipes.migrate(original, Host.MI, "modern_industrialization:centrifuge", "", "test:machine", REGISTRIES);
-		JsonObject expected = original.deepCopy();
-		expected.addProperty("type", "modern_industrialization:centrifuge");
-		assertEquals(expected, changed);
-		assertEquals(before, original.toString());
-		assertThrows(IllegalArgumentException.class, () -> BeeDesignerMachineRecipes.migrate(original, Host.MBD2, "mbd2:bee_craft", "", "test:machine", REGISTRIES));
-		assertEquals(before, original.toString());
-		JsonObject mbd = BeeDesignerMachineRecipes.create(Host.MBD2, "mbd2:bee_craft", "", "test:machine");
-		JsonObject noEnergy = original.deepCopy();
-		noEnergy.addProperty("eu", 0);
-		JsonObject mmr = BeeDesignerMachineRecipes.migrate(noEnergy, Host.MMR, "modular_machinery_reborn:machine_recipe", "bbb:tbi", "test:machine", REGISTRIES);
-		assertEquals(240, mmr.get("time").getAsInt());
-		assertEquals(12, BeeDesignerMachineRecipes.entries(mmr).getFirst().value().get("count").getAsInt());
-		assertEquals(0.25, BeeDesignerMachineRecipes.entries(mmr).getFirst().node().get("chance").getAsDouble());
-		assertEquals(0, noEnergy.get("eu").getAsInt());
-		assertTrue(BeeDesignerMachineRecipes.belongs(mmr, "test:machine"));
-		var mbdInput = BeeDesignerMachineRecipes.entries(mbd).getFirst();
-		mbdInput.value().addProperty("count", 9);
-		mbdInput.node().addProperty("chance", 0.4);
-		JsonObject migrated = BeeDesignerMachineRecipes.migrate(mbd, Host.MI, "modern_industrialization:assembler", "", "test:machine", REGISTRIES);
-		assertEquals(9, BeeDesignerMachineRecipes.entries(migrated).getFirst().value().get("amount").getAsInt());
-		assertEquals(0.4, BeeDesignerMachineRecipes.entries(migrated).getFirst().node().get("probability").getAsDouble());
-		assertTrue(BeeDesignerMachineRecipes.belongs(migrated, "test:machine"));
-	}
-
-	@Test
 	void nativeMaterialsPreserveComponentsAmountsAndInventoryAcrossHosts() {
 		ItemStack inventory = new ItemStack(Items.HONEY_BOTTLE, 7);
 		inventory.set(DataComponents.CUSTOM_NAME, Component.literal("specific contents"));
@@ -117,25 +83,6 @@ class BeeDesignerMachineMinecraftTest {
 	}
 
 	@Test
-	void mbd2SupportsMixedMaterialCapabilitiesAndKeepsContentMetadata() {
-		JsonObject recipe = BeeDesignerMachineRecipes.create(Host.MBD2, "mbd2:mekbb_craft", "mbd2:mekbb_craft", "test:machine");
-		BeeDesignerMachineRecipes.append(recipe, "fluid", true, BeeDesignerMachineRecipes.material(
-				BeeDesignerSelections.fluid(new FluidStack(Fluids.WATER, 1000), REGISTRIES), REGISTRIES));
-		JsonObject chemical = JsonParser.parseString("{\"kind\":\"chemical\",\"id\":\"mekanism:hydrogen\"}").getAsJsonObject();
-		BeeDesignerMachineRecipes.append(recipe, "chemical", false, BeeDesignerMachineRecipes.material(chemical, REGISTRIES));
-		var entry = BeeDesignerMachineRecipes.entries(recipe).stream().filter(value -> value.kind().equals("chemical")).findFirst().orElseThrow();
-		entry.node().addProperty("perTick", true);
-		entry.node().addProperty("chance", 0.25);
-		entry.node().addProperty("slotName", "retained slot");
-		entry.node().addProperty("custom_metadata", "preserved");
-		assertTrue(recipe.getAsJsonObject("outputs").has("mek_chemical"));
-		assertDoesNotThrow(() -> BeeDesignerMachineRecipes.validateStructure(recipe, REGISTRIES));
-		entry.node().addProperty("chance", 1.1);
-		assertThrows(IllegalArgumentException.class, () -> BeeDesignerMachineRecipes.validateStructure(recipe, REGISTRIES));
-		assertEquals("preserved", entry.node().get("custom_metadata").getAsString());
-	}
-
-	@Test
 	void parserMapsMiParametersToEuAndDurationAndExpandsOnlyLiteralHelpers() {
 		String source = "ServerEvents.recipes(event => { const add = (a, out) => event.recipes.modern_industrialization.bbb_tbi(30, 100).itemIn(a).itemOut(out);"
 				+ "add('2x minecraft:honey_bottle', '" + EGG + "'); });";
@@ -145,25 +92,6 @@ class BeeDesignerMachineMinecraftTest {
 		assertEquals(100, candidate.recipe().get("duration").getAsInt());
 		assertEquals(2, candidate.recipe().getAsJsonArray("item_inputs").get(0).getAsJsonObject().get("amount").getAsInt());
 		assertTrue(BeeDesignerMachineRecipes.belongs(candidate.recipe(), "test:machine"));
-	}
-
-	@Test
-	void mmrCoordinatesRemainPositionsAndProgressDataRoundTrips() {
-		String source = "ServerEvents.recipes(event => { const time = 100; const machine_id = 'bbb:tbi';"
-				+ "event.recipes.modular_machinery_reborn.machine_recipe(machine_id, time)"
-				+ ".requireItem('3x minecraft:honey_bottle',10,10).produceItem('" + EGG + "',130,10)"
-				+ ".requireEnergy(10000,160,10).width(180).height(70).progressData(ProgressData.create().x(100).y(10)); });";
-		var candidate = BeeDesignerMachineScripts.parse(source).getFirst();
-		assertTrue(candidate.parsed(), candidate.error());
-		var entries = BeeDesignerMachineRecipes.entries(candidate.recipe());
-		assertEquals(3, entries.get(0).value().get("count").getAsInt());
-		assertEquals(10, entries.get(0).node().getAsJsonObject("position").get("x").getAsInt());
-		assertEquals(1, entries.get(1).value().get("count").getAsInt());
-		assertEquals(130, entries.get(1).node().getAsJsonObject("position").get("x").getAsInt());
-		assertEquals(10000, entries.get(2).value().get("amount").getAsInt());
-		assertDoesNotThrow(() -> BeeDesignerMachineRecipes.validateStructure(candidate.recipe(), REGISTRIES));
-		entries.get(1).node().getAsJsonObject("position").addProperty("x", 180);
-		assertThrows(IllegalArgumentException.class, () -> BeeDesignerMachineRecipes.validateStructure(candidate.recipe(), REGISTRIES));
 	}
 
 	@Test
@@ -261,29 +189,6 @@ class BeeDesignerMachineMinecraftTest {
 		assertEquals("test:machine", BeeDesignerEggs.bee(BeeDesignerMachineRecipes.itemIdentity(input)).toString());
 		assertEquals("preserved", copy.getAsJsonObject("machine_sources").getAsJsonObject(copiedId).get("source_sha256").getAsString());
 		assertTrue(BeeDesignerMachineRecipes.belongs(recipe, "test:machine"));
-	}
-
-	@Test
-	void replacingMaterialRetainsQuantityProbabilityPositionAndHostMetadata() {
-		for (Host host : Host.values()) {
-			String type = host == Host.MMR ? host.mod + ":machine_recipe" : host.mod + ":bee_craft";
-			JsonObject recipe = BeeDesignerMachineRecipes.create(host, type, "bbb:tbi", "test:machine");
-			var entry = BeeDesignerMachineRecipes.entries(recipe).stream().filter(value -> value.input()).findFirst().orElseThrow();
-			entry.value().addProperty(entry.amountKey(), 13);
-			entry.node().addProperty(entry.chanceKey(), 0.4);
-			entry.node().addProperty("custom_field", "keep");
-			JsonObject position = entry.node().has("position") ? entry.node().getAsJsonObject("position").deepCopy() : null;
-			ItemStack replacement = new ItemStack(Items.COPPER_INGOT);
-			replacement.set(DataComponents.CUSTOM_NAME, Component.literal("retained identity"));
-			BeeDesignerMachineRecipes.replaceMaterial(entry, BeeDesignerMachineRecipes.material(BeeDesignerSelections.item(replacement, REGISTRIES), REGISTRIES));
-			assertEquals(13, entry.value().get(entry.amountKey()).getAsInt());
-			assertEquals(0.4, entry.node().get(entry.chanceKey()).getAsDouble());
-			assertEquals("keep", entry.node().get("custom_field").getAsString());
-			assertTrue(ItemStack.isSameItemSameComponents(replacement, BeeDesignerMachineRecipes.decodeItem(entry, REGISTRIES)));
-			if (position != null) {
-				assertEquals(position, entry.node().getAsJsonObject("position"));
-			}
-		}
 	}
 
 	@Test

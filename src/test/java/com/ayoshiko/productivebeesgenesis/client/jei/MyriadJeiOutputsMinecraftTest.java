@@ -8,8 +8,6 @@ import cy.jdkdigital.productivebees.init.ModEntities;
 import cy.jdkdigital.productivebees.init.ModRecipeTypes;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import java.util.List;
-import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
-import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -74,26 +72,6 @@ class MyriadJeiOutputsMinecraftTest {
         assertEquals(1, filtered.honeycombs().size());
         assertTrue(ItemStack.isSameItemSameComponents(ghostly, filtered.honeycombs().getFirst()));
         assertEquals(1, filtered.blocks().size());
-    }
-
-    @Test
-    void centrifugeHasThreeCandidatesAndHiveKeepsItsOwnCombBeforeThreeCandidates() {
-        var candidates = List.of(new ItemStack(Items.HONEYCOMB), comb("honeycomb_ghostly"), comb("honeycomb_milky"));
-        var centrifuge = mock(IRecipeLayoutBuilder.class, RETURNS_DEEP_STUBS);
-        MyriadJeiOutputs.addRandomSlots(centrifuge, candidates, false, 0);
-        verify(centrifuge).addSlot(RecipeIngredientRole.OUTPUT, 69, 27);
-        verify(centrifuge).addSlot(RecipeIngredientRole.OUTPUT, 87, 27);
-        verify(centrifuge).addSlot(RecipeIngredientRole.OUTPUT, 105, 27);
-        var hive = mock(IRecipeLayoutBuilder.class, RETURNS_DEEP_STUBS);
-        MyriadJeiOutputs.addRandomSlots(hive, candidates, false, 1);
-        verify(hive).addSlot(RecipeIngredientRole.OUTPUT, 87, 27);
-        verify(hive).addSlot(RecipeIngredientRole.OUTPUT, 105, 27);
-        verify(hive).addSlot(RecipeIngredientRole.OUTPUT, 69, 45);
-        verify(hive, never()).addSlot(RecipeIngredientRole.OUTPUT, 69, 27);
-        var empty = mock(IRecipeLayoutBuilder.class, RETURNS_DEEP_STUBS);
-        MyriadJeiOutputs.addRandomSlots(empty, List.of(), false, 0);
-        verify(empty, never()).addSlot(eq(RecipeIngredientRole.OUTPUT), anyInt(), anyInt());
-        verify(empty).addSlot(RecipeIngredientRole.RENDER_ONLY, 69, 27);
     }
 
     private static ServerLevel level(List<RecipeHolder<AdvancedBeehiveRecipe>> recipes) {

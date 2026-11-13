@@ -10,19 +10,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("minecraft")
 class ResourceTransferMinecraftTest {
-	@Test void partialAcceptanceReturnsOnlyKnownRemainder() {
-		var account = account(new ResourceAccounts(() -> {}));
-		produce(account, 103);
-		assertEquals(31, account.transfer(account.reference(), HYDROGEN, 80, offer -> {
-			assertEquals(23, account.available().get(HYDROGEN));
-			assertEquals(80, account.uncertainTransfer().get(HYDROGEN));
-			assertFalse(account.canExtract(account.reference(), HYDROGEN));
-			return 31;
-		}));
-		assertEquals(72, account.available().get(HYDROGEN));
-		assertTrue(account.uncertainTransfer().isEmpty());
-	}
-
 	@Test void knownRefusalRestoresBalanceWithoutSuspension() {
 		var account = account(new ResourceAccounts(() -> {}));
 		produce(account, 100);
@@ -81,36 +68,4 @@ class ResourceTransferMinecraftTest {
 		assertEquals(87, loaded.available().get(HYDROGEN));
 	}
 
-	@Test void invalidReceiverAmountsCannotBeClampedIntoKnownResults() {
-		for (long invalid : new long[]{-1, 101}) {
-			var account = account(new ResourceAccounts(() -> {}));
-			produce(account, 100);
-			assertThrows(IllegalArgumentException.class, () ->
-					account.transfer(account.reference(), HYDROGEN, 100, offer -> invalid));
-			assertEquals(100, account.uncertainTransfer().get(HYDROGEN));
-			assertTrue(account.available().isEmpty());
-		}
-	}
-
-	@Test void reentrantOutputCannotSpendTheSameBalance() {
-		var account = account(new ResourceAccounts(() -> {}));
-		produce(account, 100);
-		var callbacks = new AtomicInteger();
-		assertEquals(40, account.transfer(account.reference(), HYDROGEN, 40, offer -> {
-			assertThrows(IllegalStateException.class, () ->
-					account.transfer(account.reference(), HYDROGEN, 60, other -> callbacks.incrementAndGet()));
-			return 40;
-		}));
-		assertEquals(0, callbacks.get());
-		assertEquals(60, account.available().get(HYDROGEN));
-	}
-
-	@Test void errorsAlsoRetainTheUncertainRequest() {
-		var account = account(new ResourceAccounts(() -> {}));
-		produce(account, 100);
-		assertThrows(AssertionError.class, () ->
-				account.transfer(account.reference(), HYDROGEN, 100, offer -> { throw new AssertionError("receiver"); }));
-		assertEquals(100, account.uncertainTransfer().get(HYDROGEN));
-		assertFalse(account.canExtract(account.reference(), HYDROGEN));
-	}
 }

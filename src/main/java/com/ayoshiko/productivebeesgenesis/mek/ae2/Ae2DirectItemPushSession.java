@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.config.Actionable;
+import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.storage.MEStorage;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
@@ -92,21 +93,77 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 		}
 	}
 
+	private boolean budgetExhausted() {
+		return spentInsertNanos >= Ae2PushLimits.INSERT_TIME_BUDGET_NANOS
+				|| zeroAcceptStreak >= Ae2PushLimits.CONSECUTIVE_ZERO_ACCEPT_LIMIT
+				|| attemptedCount >= insertQuota
+				|| costTracker != null && (costTracker.isExhausted(gameTick)
+						|| !costTracker.canInsertNow(gameTick, Ae2PushLimits.MAX_ITEM_KEYS_PER_TICK));
+	}
+
+	MEStorage batchTarget() {
+		return meStorage;
+	}
+
+	IActionSource batchSource() {
+		return Ae2PushLimits.ActionSourceHolder.INSTANCE;
+	}
+
+	long batchTick() {
+		return gameTick;
+	}
+
+	/** 排队不占次数；实际交付前沿用本机预算与该键的退避。 */
+	boolean canReserve(AEItemKey key) {
+		if (key == null || budgetExhausted()
+				|| keyBackoff != null && keyBackoff.shouldSkip(key, System.nanoTime())) {
+			deferredCount++;
+			return false;
+		}
+		return true;
+	}
+
+	long insertBatch(AEItemKey key, long amount) {
+		return measuredStorage.prepare(meStorage, gameTick, costTracker)
+				.insertShared(key, amount, batchSource());
+	}
+
+	long batchCostNanos() {
+		return measuredStorage.lastCostNanos();
+	}
+
+	/** 各宿主只承担本次共享调用的成本份额；未分到部分回执不等于网络拒收。 */
+	void recordBatch(MEStorage target, long tick, AEItemKey key, long accepted, boolean batchAccepted, long cost) {
+		if (meStorage != target || gameTick != tick) return;
+		attemptedCount++;
+		recordInsertCost(cost);
+		if (costTracker != null) costTracker.recordSharedForNetwork(target, tick, cost);
+		if (!batchAccepted) {
+			zeroAcceptStreak++;
+			if (keyBackoff != null) keyBackoff.recordFailure(key, System.nanoTime());
+		} else {
+			zeroAcceptStreak = 0;
+			if (keyBackoff != null) {
+				keyBackoff.recordSuccess(key, System.nanoTime(),
+						accepted <= 0 || costTracker == null ? 0 : costTracker.successDelayNanos());
+			}
+		}
+	}
+
 	@Override
 	public int applyAsInt(ItemStack stack) {
 		return push(stack, stack == null ? 0 : stack.getCount());
 	}
 
-	/** AEItemKey 不包含数量；请求量独立传递，绝不修改调用方的模板。 */
 	public int push(ItemStack stack, int amount) {
+		return SaturatingMath.saturatingToInt(push(stack, (long) amount));
+	}
+
+	/** AEItemKey 不包含数量；请求量独立传递，绝不修改调用方的模板。 */
+	public long push(ItemStack stack, long amount) {
 		if (stack == null || stack.isEmpty() || amount <= 0 || custody == null || custody.blocked()) return 0;
 		// 满存储/预算耗尽短路：不再发起 insert（即完整网络遍历），物品由调用方保留
-		if (spentInsertNanos >= Ae2PushLimits.INSERT_TIME_BUDGET_NANOS
-				|| zeroAcceptStreak >= Ae2PushLimits.CONSECUTIVE_ZERO_ACCEPT_LIMIT
-				|| attemptedCount >= insertQuota
-				|| (costTracker != null
-						&& (costTracker.isExhausted(gameTick)
-								|| !costTracker.canInsertNow(gameTick, Ae2PushLimits.MAX_ITEM_KEYS_PER_TICK)))) {
+		if (budgetExhausted()) {
 			deferredCount++;
 			return 0;
 		}
@@ -143,7 +200,6 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 		if (keyBackoff != null) {
 			keyBackoff.recordSuccess(key, System.nanoTime(), costTracker == null ? 0 : costTracker.successDelayNanos());
 		}
-		return SaturatingMath.saturatingToInt(
-				SaturatingMath.clampToRequest(inserted, amount));
+		return SaturatingMath.clampToRequest(inserted, amount);
 	}
 }

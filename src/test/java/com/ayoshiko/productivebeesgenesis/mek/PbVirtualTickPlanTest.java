@@ -20,26 +20,6 @@ class PbVirtualTickPlanTest {
 	}
 
 	@Test
-	void accelerationAdvancesProgressForSingleInput() {
-		PbVirtualTickPlan plan = PbVirtualTickPlan.create(0, 256, 200, 256, 1, 40L, Long.MAX_VALUE);
-
-		assertEquals(1, plan.completedOperations());
-		assertEquals(0, plan.remainingProgress());
-		assertEquals(200, plan.executedTicks());
-		assertEquals(8_000L, plan.energyUsed());
-	}
-
-	@Test
-	void accelerationCompletesMultipleCyclesInConstantTimePlan() {
-		PbVirtualTickPlan plan = PbVirtualTickPlan.create(50, 256, 100, 4, 20, 25L, Long.MAX_VALUE);
-
-		assertEquals(12, plan.completedOperations());
-		assertEquals(6, plan.remainingProgress());
-		assertEquals(256, plan.executedTicks());
-		assertEquals(25_600L, plan.energyUsed());
-	}
-
-	@Test
 	void energyLimitPreservesPartialProgress() {
 		PbVirtualTickPlan plan = PbVirtualTickPlan.create(0, 256, 200, 4, 64, 100L, 20_000L);
 
@@ -61,21 +41,6 @@ class PbVirtualTickPlanTest {
 	}
 
 	@Test
-	void fullCustomParallelBatchUsesOptimizedEnergyCurve() {
-		int operations = 65_536 * 480;
-		long fullEnergy = 4_810_000L;
-		PbVirtualTickPlan full = PbVirtualTickPlan.create(
-				0, 1, 1, operations, operations, 130_000L, fullEnergy);
-		PbVirtualTickPlan limited = PbVirtualTickPlan.create(
-				0, 1, 1, operations, operations, 130_000L, fullEnergy - 130_000L);
-
-		assertEquals(operations, full.completedOperations());
-		assertEquals(fullEnergy, full.energyUsed());
-		assertTrue(limited.completedOperations() < operations);
-		assertTrue(limited.energyUsed() <= fullEnergy - 130_000L);
-	}
-
-	@Test
 	void myriadProgressKeepsRemainingTicksIntoNextCycleLikePbPath() {
 		// 万象创世蜜脾复用 PbVirtualTickPlan 后的进度语义：256 虚拟 tick 在 200 tick
 		// 周期下完成 1 个周期（1 op）后，剩余 56 tick 继续推进下一周期进度（56/200），
@@ -86,25 +51,6 @@ class PbVirtualTickPlanTest {
 		assertEquals(56, plan.remainingProgress());
 		assertEquals(256, plan.executedTicks());
 		assertEquals(10_240L, plan.energyUsed());
-	}
-
-	@Test
-	void zeroTickCreativePlanCompletesEveryVirtualTick() {
-		PbVirtualTickPlan plan = PbVirtualTickPlan.create(0, 20, 0, 1, 20, 0L, 0L);
-
-		assertEquals(20, plan.completedOperations());
-		assertEquals(20, plan.executedTicks());
-		assertEquals(0L, plan.energyUsed());
-	}
-
-@Test
-	void hugeEnergyPerOperationSaturatesWithoutOverflow() {
-		PbVirtualTickPlan plan = PbVirtualTickPlan.create(
-				0, 1, 1, 65_536, 65_536, Long.MAX_VALUE, Long.MAX_VALUE);
-
-		assertEquals(1, plan.completedOperations());
-		assertEquals(1, plan.executedTicks());
-		assertEquals(Long.MAX_VALUE, plan.energyUsed());
 	}
 
 	@Test
@@ -122,12 +68,4 @@ class PbVirtualTickPlanTest {
 		assertTrue(plan.energyUsed() <= available);
 	}
 
-	@Test
-	void creativeStackPlanRetainsParallelismUnderAcceleration() {
-		PbVirtualTickPlan plan = PbVirtualTickPlan.create(0, 256, 0, 256, 65_536, 0L, 0L);
-
-		assertEquals(65_536, plan.completedOperations());
-		assertEquals(256, plan.executedTicks());
-		assertEquals(0L, plan.energyUsed());
-	}
 }

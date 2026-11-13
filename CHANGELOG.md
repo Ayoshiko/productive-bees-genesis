@@ -31,9 +31,11 @@
 
 ## [Unreleased]
 
-> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1、P2、P3 已实现步骤及合入的维护修复。P2 与 P3 最小玩家生产闭环已验收；网络默认关闭；D17 基础成员升级、M04 独立一体机和 D18a／d 终端入口已验收，后续按[生产功能包队列](docs/bee-processing-network-roadmap.md#s14)推进普通生产、物流与多方块联网，D18 未完成需求保留；完整内容兼容、性能及发布门仍待完成。
+> 范围：`bees-processing-network/1.21.1` 自 2026-09-17 创建以来的开发变更（以 `1.0.8` 发布提交 `f2ae0b8` 为基线），包含 P0、P1、P2、P3 已实现步骤及合入的维护修复。P2 与 P3 最小玩家生产闭环已验收；网络默认关闭；D17 基础成员升级、M04 独立一体机和 D18a／d 终端入口已验收，后续按[生产功能包队列](docs/bee-processing-network-roadmap.md#s14)推进普通生产、物流与多方块联网，D18 未完成需求保留；部分内容兼容、性能与真实玩家联合场景仍待验证。
 
-目标版本为 **1.2.4**，尚未发布。客户端与服务端须一起更新。 / Target version: **1.2.4**, not released yet. Update clients and servers together.
+网络开发尚未发布；已发行的维护版 **1.2.4** 记录在后文。客户端与服务端须使用同一网络开发版本。 / Network development remains unreleased; the published maintenance **1.2.4** notes follow below. Clients and servers must use the same network development version.
+
+> 下列阶段条目保留当时的实现、验证结果与范围，后续条目可能已补齐早期缺口。当前任务与未完成项以 [roadmap](docs/bee-processing-network-roadmap.md#s14) 为准；旧全量矩阵和发布门不再作为继续开发或发布的固定前置，检查按实际变化选择。
 
 ### 新增
 
@@ -143,9 +145,9 @@
 
 - **D17c1 核心升级页**：按成员显示实际升级及上限，从所选背包格安装／取回原生与 PB 升级，复用现有实物交换服务。正式协议绑定菜单、成员和升级快照，普通生产不会使选择失效，升级改回原数量也不能复活旧请求；仅所有者可修改。能力预估、批量、旧 GUI 代理与双玩家联合验收继续由 D17c2／c3 交付。
 
-- **D17b2b2b4 Ω／BLOCK 蜜脾块转换**：基础网络蜂箱支持 Ω 与 BLOCK 实物升级，按独立蜂箱规则 1:1 转换，保留数量及目标蜂种组件；两者并存只转换一次。计划分别保存原配方键和本周期实际键，安装／拆除不改旧付费结果，交还检查实际输出一致。checkpoint 升至 schema 8，兼容完整 schema 6／7；正式升级界面、批量及玩家联合门仍由 D17c 验收。
+- **D17b2b2b4 Ω／BLOCK 蜜脾块转换**：基础网络蜂箱支持 Ω 与 BLOCK 实物升级，按独立蜂箱规则 1:1 转换，保留数量及目标蜂种组件；两者并存只转换一次。计划分别保存原配方键和本周期实际键，安装／拆除不改旧付费结果，交还检查实际输出一致。checkpoint 升至 schema 8，兼容完整 schema 6／7；正式升级界面、批量及玩家联合场景在当时仍待 D17c 验证。
 
-- **D17b2b2b3 蜂箱生产力升级服务**：基础网络蜂箱支持 α／β／γ 实物安装与取回，沿用当前上限、等级互斥和完整组件校验。新倍率与耗时、费用在旧周期结清后随首次付款生效，升级及配置变化保留旧随机结果；小数倍率部分周期先结清再交还。本步复用 schema 7；Ω／蜜脾块转换见 b4，正式升级界面、批量和玩家联合门见 D17c。
+- **D17b2b2b3 蜂箱生产力升级服务**：基础网络蜂箱支持 α／β／γ 实物安装与取回，沿用当前上限、等级互斥和完整组件校验。新倍率与耗时、费用在旧周期结清后随首次付款生效，升级及配置变化保留旧随机结果；小数倍率部分周期先结清再交还。本步复用 schema 7；Ω／蜜脾块转换见 b4，正式升级界面、批量和玩家联合场景见 D17c。
 
 - **D17b2b2b2 付费周期随机恢复**：蜜蜂保存固定种子与周期游标，按预算冻结精确产物；候选丢弃、重放、分段和正常重启不重抽、不重复收费。网络 checkpoint 升至 schema 7，严格兼容 schema 6 的完整旧蜂状态；损坏或混合格式拒绝恢复。纯测试、实际文件、两组依赖的跨 JVM 与既有客户端回归通过；正式生产力服务由 b3 接入，蜜脾块转换由 b4 接入。
 
@@ -157,7 +159,7 @@
 
 - **维护版 1.0.9 同步**：吸收蜂箱自动化、离心机调度与 AE2 修复；补齐网络配方查询重试、补货资产接管边界和旧映像兼容，并修复新 ticker 在托管拦截前积累加速额度的问题。
 
-- **M06c2b 正十二面蜂巢与卫星蜜蜂**：中央主体采用光滑蜂蜜金分面、12 个大块封盖蜂房、琥珀蜜液和克制的金色边缘光；五只原版比例的几何蜜蜂沿独立倾角的莫比乌斯轨道反向飞行，保留清晰的双层金色拖尾和 18 秒渐隐。补齐蜜蜂眼部、触角、六腿、尾针及阶梯振翅，提供完整／降低／关闭设置，并修复成型部件仍显示整块模型遮挡核心的问题。无需贴图或世界实体；纯木纹及木板分段实验已撤销。客户端、结构生命周期、跨 JVM 恢复分层验证，兼容／性能联合门仍待完成。
+- **M06c2b 正十二面蜂巢与卫星蜜蜂**：中央主体采用光滑蜂蜜金分面、12 个大块封盖蜂房、琥珀蜜液和克制的金色边缘光；五只原版比例的几何蜜蜂沿独立倾角的莫比乌斯轨道反向飞行，保留清晰的双层金色拖尾和 18 秒渐隐。补齐蜜蜂眼部、触角、六腿、尾针及阶梯振翅，提供完整／降低／关闭设置，并修复成型部件仍显示整块模型遮挡核心的问题。无需贴图或世界实体；纯木纹及木板分段实验已撤销。客户端、结构生命周期、跨 JVM 恢复分层验证，兼容／性能联合场景仍待验证。
 
 - **M06c2a 几何核心基础（历史造型已由 c2b 替换）**：以分层悬浮核心、双轨道和公转节点替换静态蜂箱道具；按客户端时间播放环境动画，每帧共享 16 台详细配额，余者静态简化，成型方块保留固定标记。两种依赖的 24 台真实客户端验证六布局四向顶点、暂停／重载／卸载及专服恢复；974 项测试无失败（2 项既有跳过）。工作触发、效果设置和兼容／性能联合门另验。
 
@@ -193,7 +195,7 @@
 
 - **D16c1a 有限玩家喂食服务**：核心菜单服务器接口支持指定背包槽与喂食槽按实际量双向交换，保留完整组件、有限堆叠上限、禁用状态及共享组边界；校验权限、旧菜单和喂食版本，模拟不变，提交后单槽同步，满载／同步失败不生成掉落物或回滚已交付物品。玩家操作界面、产物取回与蜂笼交换仍按 D16c 后续步骤交付。
 
-- **D16b 自动关门工具**：顺序运行全量测试、构建、产物排除检查和两种依赖组合的累计／跨 JVM 回归；保存源码、依赖与报告哈希，拒绝不完整矩阵或运行中变更。设计文档明确本步、联合阶段及性能验收的不同边界。
+- **D16b 历史验证工具**：当时汇总测试、构建、产物排除和有／无 AE2 的累计／跨 JVM 结果，并保存源码、依赖与报告哈希。现已取消自动门禁和完整矩阵前置；既有结果保留原范围，功能、客户端与性能结论分别记录。
 
 - **P3／D16b2c3b 自动重启恢复**：接通九场景跨 JVM 专服探针，逐 tick 独立核对物品／流体、共享 FE、维护费及禁止补产／掉落物。修复关闭网络功能后已有网络无法重建拓扑、恢复永久等待的问题；新接管和新生产仍受开关限制。
 
@@ -201,7 +203,7 @@
 
 - **P3／D16b2c2 核心工作维护费**：按网络、真实 tick 收取一次，与成功的蜂箱／离心进度和 FE 原子提交；模拟、缺条件、缺电、暂停及已付费结算不收费，不追补休眠时间。费率可配置，研发默认 0，正式定价待平衡测试；双语配置文本同步。
 
-- **P3／D16b2c1 跨子系统总预算**：加载、保存回执、拓扑、交接和生产共用真实 tick 的检查次数及软时间预算；跨 tick 轮转保留公平性，保留各子系统上限。设计补齐进入、契约、真实接入、性能与交付五道检验门，阶段完成必须有联合验收证据。
+- **P3／D16b2c1 跨子系统总预算**：加载、保存回执、拓扑、交接和生产共用真实 tick 的检查次数及软时间预算；跨 tick 轮转保留公平性，保留各子系统上限。设计区分契约、真实接入、性能与交付结果，未验证范围保留为未完成，不再按固定门禁调度检查。
 
 - **P3／D16b2b 自动离心与蜂箱串联**：基础离心机可按输入规则和双层保留自动取用网络蜜脾／蜜脾块，逐真实 tick 消耗共享 FE；异构升级、固定作业种子及物品／流体结果保持独立。新增权重轮转与匹配状态，缺电、暂停和核心重建不免费补产；目标库存规则暂拒绝自动接单，正式玩家补料／取出仍待后续。
 - **P3／D16b2a 保留占料基础**：新增按预算构建、按变化键更新的可用库存与蜂型／基础物品组索引；保留检查分层排除 EXACT 例外，并以绑定当前账本的凭据限制离心占料，避免多个通道重复使用同一组额度。真实自动离心接入仍待下一步。
@@ -224,30 +226,25 @@
 - **P2／D09a 持久化边界**：新增世界网络目录、每网权威 checkpoint、严格 NBT 读取和恢复入口，完整保存现有 P1 的余额、预约／已付费结果、未知转移、动态发现、成员能力／通道和规则状态；缺失或损坏数据隔离，保留原文件。
 - **保存成功回执**：后台原子写入成功后才推进持久化 revision，失败保留待保存状态并退避重试；正常停服等待实际写入结果。新增 18 项行为测试及真实专服保存／停服探针；全量 705 项测试中 703 通过、2 项既有条件用例跳过。
 - **P2／D09b1 不可变余额页**：账本冻结只保留页根，后续增删使用写时复制，完整哈希碰撞仍精确区分组件；普通数量保留 long，超界使用 BigInteger，降级及归零回收。新增快照／恢复实例隔离测试、百万键捕获与变更基准，以及冻结后继续结算的专服保存验证。全量 711 项测试中 709 通过、2 项既有条件跳过，构建／产物核验及隔离专服验证通过。
-- **P2／D09b2 全域冻结与流式保存**：统一冻结余额、交易、转移、发现、成员／通道和规则状态；保存文件时主线程只提交不可变快照，后台逐项编码、压缩与原子替换。每服限制一个未完成快照和 32 KiB 流缓冲，等待请求合并最新版本，失败退避重试，旧回执不能清除新变更。新增大记录／慢写／失败恢复测试、百万键全域写入基准和跨 tick 专服保存探针；全量 730 项测试中 728 通过、2 项既有条件跳过，构建／产物核验及专服最终落盘通过。预算化加载仍为下一步闸门。
-- **P2／D09b3a 有界文件读取**：新增独立后台 NBT 事件传输、8 KiB 数组分片及按批次／字节双重背压，支持非阻塞消费、取消、失败隔离和完整压缩流 CRC 检查。新增截断／大声明长度／重复字段保留／停服交接回归，以及百万键事件摘要和真实 tick 专服探针。语法读取完成不授予可写资格，领域校验、索引恢复与非阻塞发布仍为后续闸门。
+- **P2／D09b2 全域冻结与流式保存**：统一冻结余额、交易、转移、发现、成员／通道和规则状态；保存文件时主线程只提交不可变快照，后台逐项编码、压缩与原子替换。每服限制一个未完成快照和 32 KiB 流缓冲，等待请求合并最新版本，失败退避重试，旧回执不能清除新变更。新增大记录／慢写／失败恢复测试、百万键全域写入基准和跨 tick 专服保存探针；全量 730 项测试中 728 通过、2 项既有条件跳过，构建／产物核验及专服最终落盘通过。预算化加载在当时仍待后续实现。
+- **P2／D09b3a 有界文件读取**：新增独立后台 NBT 事件传输、8 KiB 数组分片及按批次／字节双重背压，支持非阻塞消费、取消、失败隔离和完整压缩流 CRC 检查。新增截断／大声明长度／重复字段保留／停服交接回归，以及百万键事件摘要和真实 tick 专服探针。语法读取完成不授予可写资格，领域校验、索引恢复与非阻塞发布在当时仍待后续实现。
 
 - **P2／D09b3b–D12 阶段交付**：完成预算化领域校验、索引恢复与双回执发布，加入核心方块、单区块六面拓扑、托管父 ticker／能力／菜单／AE2 隔离和基础蜂箱／离心机资产往返协议。共享喂食实物、升级、储能与已付费 pending 原样保管，未知状态保留资产并隔离。全量 764 项中 762 通过、2 项既有跳过；无 AE2／有 AE2 专服、8 类故障、16 个跨进程阶段恢复和真实客户端菜单已通过，证据与限制见设计文档 10.21。
 
 ### 变更
 
-- 网络分支同步正式维护版 1.2.3，保留独立机器的扩展资源、蜂种设计与生产修正。带独立资源账户的机器和资源配方蜜蜂暂不允许接入旧网络，原账户与产物继续保管，后续通过统一资产转移协议开放。
-- 网络开发验证分为小步与阶段联合范围：D17c1 默认只启动升级专项专服及一组客户端；双依赖与跨 JVM 累计矩阵保留在联合验收。取消任意检查数量门槛，按行为和风险保留测试，失败只重跑受影响入口。
+- 网络分支已同步正式维护版 1.2.4，完整维护记录见后文；保留独立机器的扩展资源、蜂种设计与生产修正。带独立资源账户的机器和资源配方蜜蜂暂不允许接入旧网络，原账户与产物继续保管，后续通过统一资产转移协议开放。
+- 网络开发检查按本次行为变化与实际风险选择，复用有效的升级、依赖组合与跨 JVM 结果。旧 D17c1 固定场景和累计矩阵不再作为默认前置，未完成的联合场景仍如实记录。
 - 根据 D02 实测选择稀疏 long＋BigInteger 作为正式数量后端，保留后端替换边界；把预算化快照与保存成功回执提前至 P2，避免照搬百万键整表保存的主线程开销。
 - 增强发行包校验，禁止开发探针进入 JAR；本地规则、临时参考源码和测试证据保持在版本控制之外。
 - 同步 `main-neo/1.21.1` 的 `1.0.8-hotfix`，版本元数据更新为 `1.0.8-hotfix`；PB 离心配方缓存改为跨机器共享的有界缓存，并在配方重载及服务器停止时清理。
 - 更新本地参考至 DataEnergistics `1.21`／3.3.0（`dbdfe17e`）、NeoECOAEExtension `v21.1.2`（`1cae738a`）和 Useless 2.3.8（`267b38a6`），补充 D01–D32 逐步学习入口、整批数量交付与恢复回执边界。D09b 的余额冻结、流式保存、预算化加载与非阻塞发布均已交付。
 - 根据同数据测量将网络账本切换为哈希定位的写时复制页。百万合成组件键的余额捕获降至约 0.023–0.044 ms，但持续变更中位成本约为原后端的 1.7–2.4 倍；编码／磁盘／游戏性能不包含在该测量内，详细取舍记录于设计文档。
 
-- **双语手册**：更新空蜂笼材料、会话容量与重启、坏字段 JSON 修复、离线脚本条件复查，以及未知交接和升级失败的核实说明；时间升级按实际除数／倍率解释，不再写成每级固定降低 15%／30%。查询应用结果沿用原操作；完全重启客户端后，未决列表不会自动恢复，服务器记录仍保留。
-
-### 弃用
-
-- 供集成开发者使用的旧 `RecipeCacheManager` 标记为弃用，保留原公开接口与行为。正式生产已改用按完整物品组件匹配的共享配方缓存；旧缓存不再用于判断当前生产输入。
 
 ### 修复
 
-- **维护重构与网络接管**：同步维护 1.2.4 候选版修复；坏蜂位、坏流体、未结清升级及付款未知继续由独立机器保管，不能被网络接管为已清空资产；工厂接管使用合法空罐格式。升级沿用正式已付快照和旧周期迁移，独立与网络生产共用精确基因采样，保留网络任意精度数量。
+- **维护重构与网络接管**：同步维护 1.2.4 正式版修复；坏蜂位、坏流体、未结清升级及付款未知继续由独立机器保管，不能被网络接管为已清空资产；工厂接管使用合法空罐格式。升级沿用正式已付快照和旧周期迁移，独立与网络生产共用精确基因采样，保留网络任意精度数量。
 
 - 修复整合后读档可能清空已付蜂箱周期的问题；网络接管只转移一份静态周期，离槽保管、冻结产物、未知外部接收和损坏离心余量会阻止接管，避免重复生产或遗失工作。合并 JEI 运行时清理，保留网络终端和蜂种设计器的失效处理。
 - 新建隔离测试目录默认使用简体中文并跳过首次辅助功能／语言确认页，客户端设置正常保存，自动测试无需手动确认。
@@ -255,31 +252,9 @@
 - 修复核心同进程重建时误用旧目录回执的问题；交还必须等当前释放版本落盘后解锁。基础机流体恢复改为幂等替换，避免原生与自定义字段重复恢复；蜂箱已付费周期纳入保存与升级迁移。
 - 合入维护分支的石料蜂／木材蜂复制黑名单修复、全部 PB 蜜蜂刷怪蛋入驻支持及实体类型校验；禁用喂食槽不再参与特殊蜂种花源判断。详情见下方 `1.0.8-hotfix`。
 
-- **手册与槽位提示**：指南书合成只接受空蜂笼或空坚固蜂笼，保留命名等无关组件，避免消耗蜜蜂。未安装 AE2 时，Patchouli 保留通用过滤说明，不再因专属展示页而整本为空。小食与蜂笼空槽提示读取当前安装的 Productive Bees 纹理，资源包重载后更新，保留灰度、透明度及放入／取出方向。
-- **机器窗口**：AE 输入／输出继续使用原窗口内 14×14 的 A／I 按钮与 Mekanism 灰色样式，随窗口移动和关闭，切页及时更新；旧菜单不再发送请求，重复点击不会重复开窗。高槽数工厂的多流体窗口按屏宽换行，窄界面也能查看全部罐位。
-- **离心机已付工作**：修复普通蜜脾与万象离心的进度、冻结批次在读档和升级中丢失或重复结算。等待输出时保管原采样与完整数量，重试只排空原结果；速度变化可结清旧周期，零／单刻尾批按实际工作收费，未决付款先暂停核实。普通蜜脾中途换料后，新蜜脾正常生产，原蜜脾按完整组件身份保留本机已付进度，放回同一机器后继续原周期，不把费用转给新蜜脾或重复付款；旧工作数据与旧进度仍可读取。
-- **机器恢复与物品返还**：修复单罐重复恢复、升级后合法流体被当成坏数据、多罐碎片丢失及多机合成覆盖蜜蜂槽。容量不足的合成、拆机或配置卡操作保留原输入、机器与设置；配置卡只交换实际增减的升级，不生成掉落物。损坏蜂槽、流体和资源附件保留原文。蜂箱升级中途失败保管完整来源和失败阶段，暂停生产与主动输出，管理员核实后才解除暂停，恢复记录不补发资产。多台离心机合成遇未结清已付工作或待排产物时拒绝合成并保留材料；空工作外壳可正常合并，单机升级继续保管原工作。
-- **大批量生产**：修复蜂箱产出与 Wanna 抽蜂的数量截断、最高生产力的聚合分布偏差，以及截断概率倒数第二档遗漏结果的问题。蜂箱容量刷新后所有槽位一起失效，普通蜂箱不再误走父类熔炼配方；原有产量、保底与概率约定保持有效。
-- **扩展资源结算**：零概率资源不再阻止同批本地产物或采样器结清。生产在扣费前预留保存和恢复空间，未决资源账户在替换机器前阻止升级；管理员可按原请求分页查看完整恢复证据，未知结果继续保管。存在已适配 JDTE 资源周期 API 时，已提供或处理过的事件不会重复提交；官方版本缺少该 API 时继续禁用此能力。
-- **物流与 AE2 充能**：修复相邻容器返料、虚拟槽与充能部分执行失败后可能重复返还或继续扣费的问题，未确认请求随机器保存。虚拟槽右键保留真实零额度；充能按当前 FE／J 比率结算，保留库存每次真实提取前重新检查。流体缓存比较完整组件，入网后扣源不足保管待扣数量；坏账本、标签过滤与未知结果保留原文并暂停相关交接。
-- **配置与配方重载**：修复配置迁移失败后继续开服、后台重载直接改蜜蜂属性，以及重连沿用其它服务器容量或开发模式的问题。迁移恢复后重新读盘，本次会话容量在完整配置到达后确定，容量变更需正常重启。失败的数据包重载保留原配方，旧重试不覆盖新代际；转换表整体读取失败不发布半成品，单条坏配方隔离重试。蜜脾匹配保留完整组件，粗矿首次不足一批不再阻止之后的合法转换。
-- **跨整合包与脚本**：离线导入会汇总其它模组提供的蜂种配方和名称，大小写文件后缀一致处理；条件脚本不再被当作已执行，普通文本不再误触禁用判断。修复 KubeJS 插件发现、错误群系条件被放宽和进度图标加载失败；脚本示例、万象配置优先级及装饰蜜脾进度说明与实际行为一致，Useless 示例保留 PB 组合拒收。
-- **编辑字段与材料选择**：错误字段类型保留原文并提供 JSON 修复入口，未完成数值可以保存为草稿。修复装瓶流体丢失身份或数量、繁殖快捷选择丢弃材料组件；无法表达完整组件时明确提示并保留原字段。表单滚动、缩放、虚拟拖入与产物排序保持一致，失败预览不会清掉编辑内容。
-- **应用与共享配方**：丢失回执的操作可在重开编辑器或同一客户端重连原服务器后查询，最终规范化内容与草稿基准一致。旧工程不能覆盖后来停用或清除的状态；共享巢穴及机器配方需关联蜂种一致修改，含其它蜂种产物的机器配方须先拆分。合法最大深度的工程可以从修订归档读回，未确定结果仍保留原草稿。
-- **迟到响应与草稿**：载入、主题或发布的迟到响应不再替换新工程、清掉撤销或让子页写入旧对象。设置保存期间的新修改仍显示未保存，复制大草稿目录不再一次上传全部名单。
-- **JEI 展示**：超大数量区间只轮播有界代表值，保留原范围、概率与材料组件，最大整数数量不再显示为空。扩展资源类别只列支持的 Genesis 机械设备；配方刷新复用内容相同的条目，避免重复注册。
-- **预览与渲染**：预览绘制失败后恢复界面状态，补回资源后重新尝试，着色器重载失败撤销旧实例。原生蜜蜂光晕跟随身体姿态并保留透明度，包装物品使用原生左右手及资源包变换，Iris 阴影绘制不再进入主画面延迟队列。
-- **星空图集**：额外精灵只登记本模组需要的星纹理，不再扫描其它模组的方块、物品和杂项 PNG，避免覆盖裁切精灵。星空与地狱效果采样限制到首尾纹素中心，避免串入相邻纹理；缺少纹理时保留基础模型，资源恢复后重新启用效果。
-- **生产监控**：历史资源不再填满目录后隐藏新产物，当前资源保留稳定显示身份，过期历史自动退役；无变化的目录和资源摘要不再重复处理。
-- **构建与发布工具**：镜像附件必须对应标签提交的成功构建及摘要，并核验版本、完整通知与分发条件，英文 `EOF` 行不会截断说明。示例删除或改名后不会残留在后续合集；开发环境共用固定依赖来源、摘要校验及准备说明。
-- **第三方通知**：纠正许可名称与素材使用范围，补齐已确认版权、完整许可和随包文件清单，保留已有有效授权。PB 槽图改为运行时读取，已退役副本及旧变换／覆盖层的历史记录保留；Re:Avaritia 的 shader、图片来源与适用条件仍明确标为未决，6 个 Java 文件的历史映射和外部 GPL／LGPL 组合条件另行记录。
-
-### 安全
-
-- **机器访问权限**：修复旁观者保留旧菜单后仍可修改设置或返还物品，以及私有机器扳手拆卸缺少权限检查。相关操作重新核验当前玩家、菜单、机器与 Mekanism 访问权限。
-- **编辑器会话与名称同步**：失去手持或创造资格后撤销旧编辑会话，恢复资格不能复用原会话。畸形服务器名称批次在写入客户端前整体校验，旧连接响应无效，避免后续界面或 tick 抛错。编辑器协议已更新，客户端与服务端须一起更新。
-
 ### English
+
+> The stage entries below retain their original implementation and validation scope; later entries may complete earlier gaps. Current work and outstanding items follow the [roadmap](docs/bee-processing-network-roadmap.md#s14). Historical full matrices and release gates are not mandatory prerequisites for further work or publishing; checks are selected for the actual change.
 
 #### Added
 
@@ -375,7 +350,7 @@
 
 - **D18j2c AE2-style storage home**: Network terminals open with a continuous product grid, manual crafting and the real player inventory together; side tabs lead to bee and upgrade management. Search, sorting, type and direction controls follow familiar AE2 positions, with a draggable scrollbar and keyboard paging. ME storage pages show up to 36 entries within the existing 32 KiB reply limit. Compact layouts reduce visible rows while preserving slot size. Fluid containers are covered by j2b2a above; complete addon workflows remain in subsequent steps, with basic preference persistence covered by j3a.
 
-- **D20b1 bidirectional ME product storage**: Network-core bridges now require explicit automation authorization and transfer eligible bee items and fluids with full components and exact quantities, preserving balances beyond long and in-flight reservations. Product keys publish incrementally; optional safe display aggregation fails closed. Legacy bridges remain unauthorized, and standalone multiblock bridges retain connection and crafting access only. Crafting consumption, cancellation returns and the full D20 gate remain in progress.
+- **D20b1 bidirectional ME product storage**: Network-core bridges now require explicit automation authorization and transfer eligible bee items and fluids with full components and exact quantities, preserving balances beyond long and in-flight reservations. Product keys publish incrementally; optional safe display aggregation fails closed. Legacy bridges remain unauthorized, and standalone multiblock bridges retain connection and crafting access only. Crafting consumption, cancellation returns and remaining D20 scenarios are still in progress.
 
 - **D18d combined apiculture terminal**: Craft the standard bee and centrifuge terminals together in any arrangement. Switch between their management functions, manage upgrades for the selected member type, and access shared products. Switching creates a fresh session and rejects old selections; nonstandard input components are rejected to preserve unknown data. The full grid, wireless access, and 3x3 crafting remain in subsequent D18 steps.
 
@@ -383,7 +358,7 @@
 
 - Added D17c3 explicit upgrade permission for existing guests. Owners can authorize upgrade previews, installation and removal through the core and member menus while retaining exclusive structural controls. Permission changes invalidate old menus; revoking access also removes upgrade permission. Legacy access tables grant no upgrade rights, and invalid data remains preserved and denies guests. Access tables use version 2 and the terminal protocol uses version 7; network checkpoint format is unchanged.
 
-- Added D17c2b managed-member upgrade menus. A main-hand, non-sneaking right-click on a basic managed apiary or centrifuge opens that member's network upgrade page, with previews and real install/return operations using distance from the source machine. The menu excludes page batches and network-wide controls. Permission, binding, block-entity or topology invalidation revokes old menus; standalone machines keep their original GUI. Interaction neither places the held block nor creates dropped items. Terminal protocol is version 6 with unchanged persistence; D17c3 two-player and cross-JVM joint gates remain open.
+- Added D17c2b managed-member upgrade menus. A main-hand, non-sneaking right-click on a basic managed apiary or centrifuge opens that member's network upgrade page, with previews and real install/return operations using distance from the source machine. The menu excludes page batches and network-wide controls. Permission, binding, block-entity or topology invalidation revokes old menus; standalone machines keep their original GUI. Interaction neither places the held block nor creates dropped items. Terminal protocol is version 6 with unchanged persistence; D17c3 two-player and cross-JVM joint scenarios remain unverified.
 
 - Added D17c2a upgrade previews and page batches. Hover over install/remove to estimate the next work segment using the quantity actually transferable through the selected inventory slot; simulation neither reserves items nor changes assets or page expiry. Explicit member/page scope processes up to eight members in page order, with individual success, shortage, capacity and stale-selection results. Partial failures preserve earlier committed transfers. Terminal protocol is now version 5; persistence is unchanged. Managed legacy GUI routing and joint player validation remain in c2b/c3.
 
@@ -397,15 +372,15 @@
 
 - Added the D17b2b2b1 exact productivity-roll kernel: fixed rolls plus one fractional Bernoulli event per cycle, per-stack gene rounding, and exact totals beyond int/long. The pure kernel is accepted; b2 provides paid random recovery, while formal upgrade admission and comb-block conversion are separate steps.
 
-- Merged 1.0.10 maintenance with PB 13.14.0 conditional centrifuge Mixins, dependency and CI updates, preserving managed-network isolation and the PB 13.13.5 minimum. Network gates now read test/runtime reports explicitly as UTF-8, including Chinese test names under Windows PowerShell 5.1.
+- Merged 1.0.10 maintenance with PB 13.14.0 conditional centrifuge Mixins, dependency and CI updates, preserving managed-network isolation and the PB 13.13.5 minimum. Historical network validation tools read test/runtime reports explicitly as UTF-8, including Chinese test names under Windows PowerShell 5.1.
 
 - Added D16c3a per-controller guest access managed by owner-only UUID grant/revoke commands. Guests can use finite asset exchanges; controller management remains owner-only. Menus bind both the player and an access generation, so revocation followed by reauthorization cannot revive an old menu. Strict persistence preserves invalid access data; real multiplayer and player-file restart acceptance remain pending.
 
 - Merged 1.0.9 maintenance fixes, adapting recipe-index retries and gene-treat restock ownership to the network. Preserved legacy asset images and blocked acceleration accounting before the managed-member ticker boundary.
 
-- Added M06c2b regular dodecahedral hive cores with smooth honey-gold facets, 12 large sealed wax cells with broad bevels, amber honey and restrained edge glow. Five detailed bees at vanilla proportions fly in the opposite direction on separate tilted Möbius tracks, leaving visible two-layer golden trails that fade over 18 seconds. Added full/reduced/off settings and fixed formed parts obscuring the core. No textures or world entities are used; woodgrain and plank-pattern experiments were discarded. Client, structure lifecycle and cross-JVM recovery checks remain separate from the compatibility/performance gate.
+- Added M06c2b regular dodecahedral hive cores with smooth honey-gold facets, 12 large sealed wax cells with broad bevels, amber honey and restrained edge glow. Five detailed bees at vanilla proportions fly in the opposite direction on separate tilted Möbius tracks, leaving visible two-layer golden trails that fade over 18 seconds. Added full/reduced/off settings and fixed formed parts obscuring the core. No textures or world entities are used; woodgrain and plank-pattern experiments were discarded. Client, structure lifecycle and cross-JVM recovery checks remain separate from compatibility/performance validation.
 
-- Added the M06c2a foundation (its original appearance is superseded by c2b): layered geometric cores, twin orbits and orbiting nodes, replacing the static hive props. Ambient motion uses client game time with one shared 16-scene detail budget and a static overflow model. Both dependency configurations passed 24-machine client geometry/lifecycle checks and dedicated-server recovery; 974 tests passed with two existing skips. Production triggers, effect settings and compatibility/performance gates remain separate.
+- Added the M06c2a foundation (its original appearance is superseded by c2b): layered geometric cores, twin orbits and orbiting nodes, replacing the static hive props. Ambient motion uses client game time with one shared 16-scene detail budget and a static overflow model. Both dependency configurations passed 24-machine client geometry/lifecycle checks and dedicated-server recovery; 974 tests passed with two existing skips. Production triggers, effect settings and compatibility/performance validation remain separate.
 
 - Added M02c tall 7x7x5/7/9 layouts, preserving the original three indices and single set of work units. Layout 1 identities rescan under layout 2. Verified 24 structures with and without AE2, legacy-world recovery, and a tall-layout JVM restart. Abstract core visuals and effect settings remain separate steps.
 
@@ -423,7 +398,7 @@
 
 - Added immutable M02a combined apiary/centrifuge templates for 7×5×5, 7×5×7 and 7×5×9 layouts, with one core and two work units. Shared role/direction rules distinguish frames, shell/glass, outward ports and required air. Larger shells grant no extra production; block registration and formation remain subsequent work. Full test/build validation passed: 922 tests, including two existing skips.
 
-- Added the D16c2c core interface with overview, bee and product tabs, eight-row selection, a read-only inventory selector, and finite feeding, item/bucket and single-cage controls. Menu-owned request state survives resizing; expiry, timeout and completed actions require a refresh without automatic asset retries. Actual transfer results, cancelled progress and bounded component previews are displayed. Added bilingual text and real client-click validation to the joint gate. Networks remain disabled by default; the P3 two-player and player-file restart gates are still pending.
+- Added the D16c2c core interface with overview, bee and product tabs, eight-row selection, a read-only inventory selector, and finite feeding, item/bucket and single-cage controls. Menu-owned request state survives resizing; expiry, timeout and completed actions require a refresh without automatic asset retries. Actual transfer results, cancelled progress and bounded component previews are displayed. Added bilingual text and real client-click validation scenarios. Networks remain disabled by default; at that stage, P3 two-player and player-file restart scenarios were still pending.
 
 - Added the D16c2b bounded terminal protocol for feeding, finite item/bucket withdrawals, and single-cage exchanges through server selection tokens and real inventory slots. Menu UUIDs, monotonic sequences, shared player rate limits, bounded display packets, first-network binding, and cancellation prevent stale or repeated transfers. Large display values explicitly indicate a lower bound while authoritative balances remain exact. Validation: 909 tests passed, two existing skips, six dedicated-server runs with/without AE2, and existing client menu regression passed. New controls and real player-file recovery remain in c2c/c3.
 
@@ -439,7 +414,7 @@
 
 - Added the D16c1a server-side core-menu service for finite player/feeding-slot exchanges. Transfers preserve components, stack limits, disabled state, and explicit group boundaries, with permission/revision checks, pure simulation, and post-commit single-slot synchronization. Full inventories and sync failures never drop items or undo completed transfers. Player controls, product withdrawal, and bee-cage exchanges remain in subsequent D16c steps.
 
-- Added an executable D16b stage gate for tests, builds, probe-class exclusion, and cumulative/restart checks with and without AE2. Evidence binds source, dependencies, artifacts, and reports; incomplete matrices or changes during validation fail the gate. Functional acceptance remains separate from client and performance gates.
+- The historical D16b tool collected test, build, probe-exclusion and cumulative/restart results with and without AE2, recording source, dependency, artifact and report hashes. Automatic gates and complete-matrix prerequisites have been removed; existing evidence keeps its original scope, with functional, client and performance results recorded separately.
 
 - Added P3/D16b2c3b cross-JVM automatic restart probes for nine topology/state combinations, with independent per-tick item/fluid, FE, maintenance, and no-catch-up/drop checks. Existing networks can now rebuild topology and recover while the feature is disabled; new takeovers and production remain gated.
 
@@ -460,29 +435,24 @@
 - Added P2/D09a persistence for the existing P1 authority, including reservations, paid outputs, unknown transfers, discoveries, capacity/lane state, and scheduler progress. Strict loading quarantines damaged domains without overwriting their files.
 - Added successful-write receipts, bounded retry, and shutdown flushing. All 703 active tests passed, with 2 existing conditional skips; the dedicated-server probe also verified the final checkpoint after normal shutdown.
 - Added P2/D09b1 immutable balance pages, copy-on-write mutations, exact full-hash collision handling, and isolated restore branches. Added snapshot/model tests, million-key benchmarks, and a server probe that saves an earlier checkpoint after live work has settled. Validation passed: 709 tests, 2 existing conditional skips, build/artifact checks, and the isolated dedicated-server probe.
-- Added P2/D09b2 consistent full-domain capture and streamed saves. The server submits immutable checkpoints; one worker encodes nested records, compresses and atomically replaces the file. Pending requests coalesce revisions, with one unfinished snapshot and 32 KiB of stream buffers per server. Added large-record, backpressure, retry and failure-recovery tests, million-key write benchmarks, and a server probe spanning real ticks. Validation passed: 728 tests, 2 existing conditional skips, build/artifact checks, and final shutdown persistence. Budgeted loading remains a required gate.
-- Added P2/D09b3a bounded background NBT event reads, 8 KiB array chunks, byte/batch backpressure, nonblocking polling, cancellation and complete gzip CRC checks. Added malformed-file and shutdown-handoff regressions, million-key event digest validation, and a dedicated-server tick probe. Syntactic completion does not grant writable authority; domain validation, index recovery and nonblocking publication remain required.
+- Added P2/D09b2 consistent full-domain capture and streamed saves. The server submits immutable checkpoints; one worker encodes nested records, compresses and atomically replaces the file. Pending requests coalesce revisions, with one unfinished snapshot and 32 KiB of stream buffers per server. Added large-record, backpressure, retry and failure-recovery tests, million-key write benchmarks, and a server probe spanning real ticks. Validation passed: 728 tests, 2 existing conditional skips, build/artifact checks, and final shutdown persistence. Budgeted loading was still pending at that stage.
+- Added P2/D09b3a bounded background NBT event reads, 8 KiB array chunks, byte/batch backpressure, nonblocking polling, cancellation and complete gzip CRC checks. Added malformed-file and shutdown-handoff regressions, million-key event digest validation, and a dedicated-server tick probe. Syntactic completion does not grant writable authority; domain validation, index recovery and nonblocking publication were still pending at that stage.
 
 - Completed P2/D09b3b–D12: budgeted domain recovery, receipt-gated publication, core/topology, managed-machine isolation, and physical asset transfers for the base apiary and centrifuge. Validation: 762 passing tests, 2 existing skips, dedicated servers with and without AE2, eight fault cases, sixteen cross-process recovery stages, and real client menu actions. See design section 10.21 for evidence and limits.
 
 #### Changed
 
-- Updated the network branch to maintenance 1.2.3, retaining standalone extended resources, bee authoring and production fixes. Machines with independent resource accounts and resource-producing bees cannot join the old network yet; existing accounts and products remain held until unified asset transfer is implemented.
-- Split network validation into step and joint scopes. D17c1 defaults to one focused upgrade server and one client; the cumulative dependency and cross-JVM matrix remains a joint gate. Removed arbitrary check-count thresholds, kept behavior-based checks, and rerun only affected entries after a failure.
+- Updated the network branch to maintenance 1.2.4; its complete release notes follow below. Retained standalone extended resources, bee authoring and production fixes. Machines with independent resource accounts and resource-producing bees cannot join the old network yet; existing accounts and products remain held until unified asset transfer is implemented.
+- Network checks follow the current behavior changes and actual risks, reusing valid upgrade, dependency and cross-JVM results. The former fixed D17c1 scenarios and cumulative matrices are no longer default prerequisites; incomplete joint scenarios remain recorded.
 - Selected sparse long/BigInteger storage from D02 measurements and moved budgeted snapshots and durable-save receipts into P2. Development probes and local reference data are excluded from distributable artifacts.
-- Merged `1.0.8-hotfix`, including version metadata and the bounded shared PB recipe cache. Takeover remains disabled by default; managed machines do not produce yet.
+- Merged `1.0.8-hotfix`, including version metadata and the bounded shared PB recipe cache. At that historical stage, takeover was disabled by default and managed production was not yet implemented.
 - Updated local references to DataEnergistics `1.21`/3.3.0 (`dbdfe17e`), NeoECOAEExtension `v21.1.2` (`1cae738a`), and Useless 2.3.8 (`267b38a6`). Documented exact batch delivery and recovery receipt boundaries. All D09b capture, save, recovery and publication steps are complete.
 - Switched network balances to hash-indexed copy-on-write pages after comparative measurements. Capturing one million synthetic component keys took 0.023–0.044 ms, with 1.7–2.4 times the baseline median mutation cost. These measurements exclude encoding, disk I/O, and game performance.
 
-- **Bilingual guides**: updated guidance for empty-cage ingredients, session capacities and restarts, JSON repair of invalid fields, offline script conditions, and reconciliation of unknown transfers or failed upgrades. Time upgrades describe their actual divisors and multipliers instead of a fixed 15%/30% reduction per level. Application-result queries use the original operation; a complete client restart does not restore its pending list automatically, while server records remain retained.
-
-#### Deprecated
-
-- The legacy public `RecipeCacheManager` is deprecated for integration developers, with its existing interface and behavior retained. Production uses the shared recipe cache with complete item-component matching; the legacy cache no longer determines current production inputs.
 
 #### Fixed
 
-- **Maintenance integration and takeover**: integrated the maintenance 1.2.4 candidate fixes. Invalid bee data, invalid fluid data, unsettled upgrades and uncertain payments stay with their independent machine and cannot be treated as cleared network assets; factory takeover uses the valid empty-tank format. Upgrades preserve paid snapshots and legacy cycle migration; independent and network production share exact gene sampling while network quantities retain arbitrary precision.
+- **Maintenance integration and takeover**: integrated the maintenance 1.2.4 release fixes. Invalid bee data, invalid fluid data, unsettled upgrades and uncertain payments stay with their independent machine and cannot be treated as cleared network assets; factory takeover uses the valid empty-tank format. Upgrades preserve paid snapshots and legacy cycle migration; independent and network production share exact gene sampling while network quantities retain arbitrary precision.
 
 - Fixed paid apiary cycles being cleared on load after integration. Network takeover transfers static cycles once and refuses retained work, frozen outputs, unknown external receipts or malformed centrifuge output, preserving assets without replay. Combined JEI runtime cleanup now invalidates both network terminals and the bee designer.
 - Fresh isolated test directories now default to Simplified Chinese and skip first-run accessibility/language onboarding. Client settings persist without manual confirmation.
@@ -490,29 +460,98 @@
 - Fixed same-process core recovery to await the current directory revision before unlocking returned machines. Made base-machine fluid restoration idempotent and persisted paid apiary cycles across saves and upgrades.
 - Included the maintenance fixes for quarry/lumber bee blacklists, PB spawn-egg admission and entity validation, and disabled feeder-slot handling.
 
-- **Guides and slot hints**: guide-book recipes accept only empty bee cages or empty sturdy bee cages, retaining unrelated components such as names and protecting contained bees. Without AE2, Patchouli keeps general filtering guidance instead of becoming empty because of AE2-specific display pages. Empty gene-treat and cage slots read textures from the installed Productive Bees version and update on resource-pack reloads, preserving grayscale, transparency and input/output directions.
-- **Machine windows**: AE input/output retain the established 14×14 A/I controls inside the window and Mekanism grey styling. They move and close with their window, update on tab changes, reject stale-menu requests and avoid duplicate windows on repeated clicks. Multi-fluid windows in high-tier factories wrap to the screen width so all tanks remain accessible on narrow screens.
-- **Paid centrifuge work**: fixed ordinary and Myriad centrifuge progress and frozen batches being lost or settled twice during loading or upgrades. Output waits retain the original sample and complete quantities, and retries only drain those results. Speed changes can settle retained cycles, zero/single-tick tails charge for actual work, and unresolved payments pause for reconciliation. Switching ordinary comb input mid-cycle lets the replacement produce normally while the original comb's paid progress stays in the same machine under its complete component identity. Returning it resumes that cycle without transferring costs to the replacement or paying again; legacy work data and progress remain readable.
-- **Machine recovery and item returns**: fixed duplicate single-tank restoration, valid upgraded fluids being treated as damaged data, lost multi-tank fragments, and bee-slot overwrites in multi-machine crafting. Insufficient capacity leaves crafting inputs, machines and configuration intact; configuration cards exchange only the actual upgrade difference without dropping items. Invalid bee, fluid and resource-attachment data is retained. A failed apiary upgrade retains its complete source and failure stage, pauses production and active output, and resumes only after operator reconciliation; recovery records do not reissue assets. Combining centrifuges with unsettled paid work or pending products is rejected without consuming materials. Empty work shells can still merge, and a single-machine upgrade retains its original work.
-- **Bulk production**: fixed truncated apiary and WannaBee quantities, incorrect aggregation at the highest productivity gene, and a missing next-to-last outcome in truncated sampling. Capacity refreshes invalidate all apiary slots together, and ordinary apiaries no longer access the parent smelting-recipe path. Existing yields, guarantees and probability rules remain in effect.
-- **Extended resource settlement**: zero-chance resources no longer block local products or samplers in the same batch. Production reserves save and recovery space before charging, and unresolved resource accounts block upgrades before machine replacement. Operators can inspect complete recovery evidence by original request and page; unknown results remain retained. Where an adapted JDTE resource-cycle API is present, supplied or handled events are not submitted twice; versions without that API keep the capability disabled.
-- **Logistics and AE2 charging**: fixed partial failures in adjacent-container returns, virtual slots and charging potentially restoring items twice or continuing to debit energy. Unconfirmed requests are saved with the machine. Virtual-slot right-clicks preserve a genuine zero allowance; charging uses the current FE/J conversion and rechecks reserved stock before each extraction. Fluid caches compare complete components, incomplete source debits retain their pending amounts, and invalid ledgers, tag filters or unknown results remain retained while the affected transfers pause.
-- **Configuration and recipe reloads**: fixed startup continuing after migration failure, background reloads directly changing bee attributes, and reconnects retaining another server's capacities or developer mode. Recovery rereads the files; session capacities are set after complete configuration arrives, and changing them requires a normal restart. Failed datapack reloads retain existing recipes, and stale retries cannot replace a newer generation. Conversion tables publish only after a complete read; individual malformed recipes are isolated and retried. Comb matching preserves full components, and an initially incomplete raw-ore batch no longer blocks later valid conversions.
-- **Cross-instance imports and scripts**: offline imports include bee recipes and names supplied by other mods and handle uppercase and lowercase file extensions consistently. Conditional scripts are no longer treated as executed, and ordinary text cannot trigger recipe-disable detection. Fixed KubeJS plugin discovery, invalid biome conditions becoming unrestricted and advancement icons failing to load. Examples, Myriad configuration priorities and decorative-comb advancement guidance match their actual behavior; Useless examples preserve rejection of unsupported PB combinations.
-- **Editor fields and material selection**: invalid field types retain their original data and offer JSON repair, while unfinished numeric input can be saved as a draft. Fixed bottler selections losing fluid identity or amounts and breeding shortcuts discarding material components. Unsupported component selections show an error and preserve the original field. Forms use consistent scrolling, scaling, ghost inputs and output ordering, and failed previews do not discard edits.
-- **Application and shared recipes**: operations with lost replies can be queried after reopening the editor or reconnecting the same client to the original server, and normalized results match draft baselines. Stale projects cannot overwrite later retired or purged states. Shared nest and machine recipes require consistent changes from related bees; machine recipes producing other bees must be split before retiring one bee. Valid projects at the depth limit remain readable from revision archives, and unresolved results preserve the original drafts.
-- **Late replies and drafts**: late load, theme or publication replies no longer replace a newer project, erase undo history or leave subpages editing detached objects. Settings changed while a save is pending remain marked unsaved, and copying from a large draft library no longer uploads the whole directory at once.
-- **JEI displays**: very large count ranges cycle through bounded representative values while retaining their full range, chance and material components; maximum-integer outputs no longer appear empty. Extended resource categories list only supported Genesis machines, and refreshes reuse identical entries instead of registering duplicates.
-- **Previews and rendering**: failed preview draws restore UI state, restored resources allow another attempt, and failed shader reloads revoke old instances. Native bee glows follow body poses and preserve transparency, wrapped items use native hand and resource-pack transforms, and Iris shadow draws no longer enter the main-view deferred queue.
-- **Cosmic texture atlases**: additional sprites register only this mod's required star textures instead of scanning other mods' block, item and miscellaneous PNGs, preventing cropped sprites from being replaced. Cosmic and hell effects sample within the first and last texel centers to avoid neighboring textures. Missing textures leave the base model available, and restored resources re-enable the effects.
-- **Production monitoring**: historical resources no longer fill the directory and hide new products. Current resources keep stable display identities, expired history retires, and unchanged directories and summaries avoid repeated processing.
-- **Build and release tools**: mirrored attachments must match a successful build of the tagged commit and its digest, with checks for version, complete notices and distribution conditions. Standalone English `EOF` lines no longer truncate the notes. Deleted or renamed examples do not remain in later bundles, and development setup shares pinned dependency sources, digest checks and preparation guidance.
-- **Third-party notices**: corrected license names and asset-use descriptions, included confirmed copyrights, complete texts and a bundled file manifest, and preserved valid existing grants. PB slot artwork is read at runtime, while retired copies and historical transform/overlay records remain documented. Re:Avaritia shader and bitmap provenance and applicable conditions remain explicitly unresolved; the six Java files' historical mapping and external GPL/LGPL combination conditions are recorded separately.
+## [1.2.4] - 2026-11-13
+
+**生产、升级与编辑器维护更新。** 客户端与服务端须一起更新。 / **Production, upgrade and editor maintenance update.** Update clients and servers together.
+
+### 新增
+
+- **机器诊断**：管理员可按坐标查询已加载机器的实时 AE2 取料、过滤器保管、积压、等待与节点状态，并用请求标识关联回执。开发工具支持查询存档中的机器；离线结果只反映最后保存的状态。
+
+### 变更
+
+- **离心机与 AE2 批量输出**：减少多槽机器换料和处理积压时的重复准备。启用直接 AE 输出后，普通离心工厂在游戏刻末合并同一网络、完整组件相同的物品，仍遵守网络优先级、过滤和实际接收量；资源组合离心保留同机交付与资源确认顺序。保存、升级、输出开关或网络变化后，旧排队交付不再执行，原已付工作和剩余产物继续保管。
+- **蜂箱交付与回填**：合并同组件产物的 AE2 交付，以及连续冻结产物向相邻离心机的交付，减少逐源重复扫描。回填本地槽和探测满容器时减少重复比较，保留同类槽优先、完整组件、实际容量与逐次结算；精妙存储继续遵守过滤和锁定设置。
+- **自动取料与资源账户**：复用未变化的过滤规则、原料分类和资源统计，按当前请求规划槽位；单个精确库存条目、库存已足额或没有需求时减少重复候选查询。多类型仍按可用量筛选，每次真实提取前重新核对保留库存，费用与资源余额即时结算。
+- **双语手册**：补充空蜂笼材料、容量变更后的重启、坏字段 JSON 修复、离线脚本条件复查，以及未知交接和升级失败的核实说明。时间升级按实际除数与倍率说明。
+- **开发构建与发布**：普通构建只编译打包，测试、示例和产物检查按需显式执行；移除额外的项目门禁与重复检查，发布镜像直接复用 GitHub Release 附件。
+
+### 弃用
+
+- 供集成开发者使用的旧 `RecipeCacheManager` 标记为弃用，保留公开接口与行为；正式生产改用按完整物品组件匹配的共享配方缓存。
+
+### 修复
+
+- **供料等待**：满槽、健康库存达到保留线或没有可拉取候选时，不再累计额外的取料失败等待；一次成功未供满也不会延迟后续补货。无货、没有可用槽或等待资源出口的类型不再占用补齐轮空槽。相邻离心机或容器腾位后，蜂箱在下一真实游戏刻重新尝试；同刻内仍避免重复失败调用。
+- **共享 AE 输出**：部分接收时轮换优先交付的机器，未分到本次接收量的机器不再被误判为网络拒收。真实调用成本只计一次并由参与机器分摊，每批提交前重查网络预算；未交付物品和未知结果继续按原机器保管。
+- **加速生产与供能**：万象离心启用 AE 直输时，本地旧产物满槽不再把可支付的加速工作限制为一个周期。蜂箱的大批蜂蜜可沿原罐路在同刻内有界连续转运；加速熔炼继续使用可支付的剩余时间，异常时保留已发生的费用。电池已满或无需补能不再误触取电退避，不足一个 FE 的 J 缺口可补齐，换算尾数继续保管。
+- **离心机已付工作**：修复普通蜜脾与万象离心在读档、换料和升级中丢失进度或重复结算。换料后新蜜脾正常生产，旧蜜脾的已付进度按完整组件留在原机器，放回后继续；等待输出保留原随机结果与完整数量，不重新采样或收费。速度变化、零／单刻尾批按实际工作结算，旧工作和旧进度仍可读取，未决付款暂停等待核实。
+- **带内容机器的样板与升级**：修复 AE2 样板终端预览或编码带流体离心机升级配方时读取多罐越界。机器物品按真实等级和模式提供罐数与容量，旧单罐数据仍可读取；合成按输入／输出槽用途及完整流体组件迁移，单机升级保留名称、配置、蜜蜂和自定义数据，放置或恢复后重建流体输出。目标容量不足、单罐模式无法容纳多种流体，或辅助机器携带无接收方的数据时，拒绝合成并保留材料。
+- **恢复、合成与返还**：修复重复恢复单罐、升级后误拒合法流体、多罐碎片丢失和合成覆盖蜂槽。多台离心机合成遇已付工作、待交付产物、未结算 AE 输入或能量尾数时拒收；空工作外壳可合并，单机升级保留原工作。容量不足的拆机或配置卡操作保留机器、物品与设置，配置卡只交换实际增减的升级，不生成掉落物。蜂箱升级中途失败后保管原数据并暂停生产和主动输出，管理员核实后恢复，恢复记录不补发资产；损坏的蜂槽、流体和资源附件保留原文。
+- **大批量产量**：修复蜂箱与 Wanna 抽蜂数量截断、高生产力聚合偏差和截断概率采样遗漏结果。蜂箱容量刷新覆盖全部槽位，普通蜂箱不再误用父类熔炼配方；保留原产量、保底与概率约定。
+- **扩展资源**：零概率资源不再阻止同批本地产物或采样器结清。扣费前预留保存与恢复空间，减少多车道余额复制和已冻结工作的重复扫描；未决账户在替换机器前阻止升级，管理员可按原请求分页核实。已适配 JDTE 资源周期 API 时不重复提交已处理事件；官方版本缺少该 API 时继续禁用对应能力。
+- **物流、过滤与充能交接**：修复相邻返料、虚拟槽和充能部分失败后重复返还或继续扣费的问题，未确认请求随机器保存。虚拟槽右键保留真实零额度，充能使用当前 FE／J 比率；流体比较完整组件，已入网但未完成扣源的数量继续保管。坏账本、标签过滤和未知结果保留原文并暂停相关交接，后续槽位查询异常不抹掉已交付前缀。
+- **配置与配方重载**：配置迁移失败后不再继续开服，修复重载直接修改运行中的蜜蜂属性，以及重连沿用其它服务器容量或开发模式的问题。恢复迁移后重新读盘，会话容量等待完整配置后确定，容量变更需正常重启。失败的数据包重载保留原配方，旧重试不覆盖新结果；转换表整体失败不发布残缺内容，单条坏配方隔离重试。蜜脾保留完整组件匹配，粗矿首次不足一批不再阻止后续合法转换。
+- **跨整合包与脚本**：离线导入汇总其它模组提供的蜂种配方和名称，统一处理大小写文件后缀；条件脚本不再被当作已执行，普通文本不再误触禁用判断。修复 KubeJS 插件发现、错误群系条件被放宽和进度图标加载失败；示例与万象配置优先级、装饰蜜脾进度一致，Useless 示例仍拒收不支持的 PB 组合。
+- **编辑字段与材料**：错误字段保留原文并提供 JSON 修复，未完成数值可保存为草稿。装瓶与繁殖快捷选择保留材料身份、数量和组件；无法表达完整组件时提示并保留原字段。修复滚动、缩放、虚拟拖入和产物排序不一致，预览失败保留编辑内容。
+- **应用、重连与共享配方**：待确认应用按服务器和玩家分别显示与计额，切服不再被旧记录阻塞；同一客户端返回原服或重开编辑器可查询原操作，规范化结果与草稿基准一致。完全重启客户端后未决列表不会自动恢复，服务器记录仍保留。旧工程不能覆盖后来停用或清除的状态；共享巢穴和机器配方须由关联蜂种一致修改，含其它蜂种产物的机器配方须先拆分。合法深度上限的工程可从归档读回，未知应用结果保留草稿。
+- **迟到响应与草稿**：载入、主题或发布的迟到响应不再替换新工程、清空撤销或让子页写入旧对象。保存设置期间的新改动仍显示未保存，复制大草稿目录不再一次上传全部名单。
+- **机器窗口与手册**：AE 输入／输出按钮保留原 A／I 位置与 Mekanism 样式，随窗口移动、关闭和切页更新，旧菜单不再发请求，重复点击不重复开窗；窄屏的多流体窗口可换行显示全部罐位。指南书只消耗空蜂笼或空坚固蜂笼，保留命名等无关组件；未安装 AE2 时 Patchouli 仍显示通用手册。小食与蜂笼空槽提示使用当前 Productive Bees 纹理并响应资源包重载。
+- **JEI 与生产监控**：超大数量范围轮播有界代表值，保留范围、概率与组件，最大整数数量不再显示为空；扩展资源页面只列支持的 Genesis 机器，重载不重复注册相同内容。历史资源不再挤掉新产物，当前资源显示稳定；诊断区分正常能量尾数与未决请求，损坏的冻结物品标为待核对，不再误报零积压，并保留原 NBT。
+- **Celeritas 与 Iris**：接受 Celeritas 内置的 Iris 1.8.0 版本声明，修复最低版本检查阻止启动。着色器兼容接口缺少或不匹配时停用对应注入，保留现有 Iris 渲染阶段查询。
+- **预览、光晕与星空纹理**：预览失败恢复界面状态，资源补回后可重试，着色器重载失败撤销旧实例。蜜蜂光晕跟随身体姿态并保留透明度，包装物品遵守左右手与资源包变换，Iris 阴影绘制不再进入主画面队列。星空图集只登记本模组所需纹理，避免覆盖其它模组的裁切精灵；采样不再串入相邻纹理，缺图保留基础模型，资源恢复后重新启用效果。
+- **构建与第三方通知**：修复发布产物检查的配置缓存兼容性；镜像直接读取 GitHub Release 的同名 JAR 并检查版本与完整性，完整说明不再被英文 `EOF` 行截断，删除或改名的示例不残留到后续合集。补齐已确认许可、版权和随包文件清单，PB 槽图改为运行时读取。Re:Avaritia 部分着色器、图片的来源与分发条件，以及外部 GPL／LGPL 组合条件仍有未决项，保留明确记录。
+
+### 安全
+
+- **机器访问权限**：旁观者保留旧菜单后不能继续改设置或返还物品，扳手拆卸私有机器重新检查 Mekanism 访问权限。
+- **编辑器会话与名称同步**：失去手持编辑器或创造资格后撤销旧会话，恢复资格不能复用；畸形名称批次在写入客户端前整体校验，忽略旧连接响应。编辑器协议已更新，客户端与服务端须一起更新。
+
+### English
+
+#### Added
+
+- **Machine diagnostics**: operators can query loaded machines by coordinates for live AE2 input, retained filters, backlogs, waiting conditions and node state, with request IDs linking replies to queries. Development tools can also inspect machines in saved worlds; offline results reflect only the last saved state.
+
+#### Changed
+
+- **Centrifuge and AE2 batch output**: reduced repeated preparation when multi-lane machines switch inputs or drain backlogs. With direct AE output enabled, ordinary centrifuge factories combine items with identical complete components on the same network at the end of each game tick, while preserving network priorities, filters and actual acceptance. Combined resource centrifuging keeps delivery and resource confirmation within each machine. Saving, upgrading, changing output switches or changing networks invalidates old queued deliveries while retaining paid work and remaining products.
+- **Apiary delivery and local outputs**: combined matching AE2 output and consecutive frozen products sent to adjacent centrifuges, avoiding repeated scans for each source. Local refills and full-container checks perform fewer repeated comparisons while preserving matching-slot priority, complete components, real capacity and individual settlement. Sophisticated Storage filters and locks remain respected.
+- **Automatic input and resource accounts**: reused unchanged filters, input classifications and resource summaries, and planned slots against the current request. Single exact reserved-stock entries, sufficient reported stock and absent demand avoid redundant candidate queries. Multiple types still use available-stock screening, reserves are checked before every real extraction, and costs and balances settle immediately.
+- **Bilingual guides**: clarified empty-cage ingredients, restarting after capacity changes, JSON repair, offline script-condition checks, and reconciliation of unknown transfers or failed upgrades. Time upgrades now describe their actual divisors and multipliers.
+- **Development builds and publishing**: normal builds compile and package only; tests, examples and artifact checks run when explicitly selected. Removed additional project gates and redundant checks, and release mirrors reuse GitHub Release attachments directly.
+
+#### Deprecated
+
+- The legacy public `RecipeCacheManager` is deprecated for integration developers while retaining its interface and behavior. Production uses the shared recipe cache with complete item-component matching.
+
+#### Fixed
+
+- **Input waiting**: full slots, healthy stock at its reserve floor and empty candidate lists no longer accumulate extra input-failure waits. Successful partial refills do not delay replenishment. Unavailable items, items without a usable slot and items waiting for resource output no longer reserve empty lanes during refill. Apiaries retry adjacent centrifuges or containers on the next real game tick after space becomes available, while still avoiding repeated failed calls within one tick.
+- **Shared AE output**: partial acceptance rotates which machine receives priority, and contributors receiving no allocation are no longer treated as network rejection. Each real call is charged once and its cost is shared among contributors; the network budget is checked before every batch. Undelivered items and unknown results remain retained against their original machines.
+- **Accelerated production and energy**: full local Myriad centrifuge outputs no longer limit affordable accelerated work to one cycle when direct AE output is enabled. Large honey batches use bounded transfers through the existing apiary tanks within one tick. Accelerated smelting uses affordable remaining time and retains incurred costs after failures. Full batteries or absent demand no longer trigger energy-input backoff; joule shortfalls smaller than one FE can be filled while conversion remainders remain retained.
+- **Paid centrifuge work**: fixed ordinary and Myriad centrifuge progress being lost or settled twice during loading, input changes and upgrades. Replacement combs can produce while the original comb's paid progress remains in the same machine under its complete component identity and resumes when returned. Output waits retain the original random result and full quantities without rerolling or charging again. Speed changes and zero/single-tick tails settle actual work, legacy work and progress remain readable, and unresolved payments pause for reconciliation.
+- **Patterns and upgrades for machines with contents**: fixed multi-tank bounds errors when AE2 pattern terminals preview or encode upgrades for centrifuges containing fluids. Machine items expose tank counts and capacities for their actual tier and mode, with legacy single-tank data still readable. Crafting migrates items by input/output role and fluids by complete components. Single-machine upgrades retain names, configuration, bees and custom data, and fluid output is rebuilt after placement or recovery. Insufficient capacity, incompatible fluids in single-tank mode, or auxiliary machines carrying data without a destination reject crafting and preserve the ingredients.
+- **Recovery, crafting and returns**: fixed duplicate single-tank recovery, valid upgraded fluids being rejected, lost multi-tank fragments and overwritten bee slots. Combining centrifuges rejects paid work, pending products, unsettled AE input transfers or energy remainders. Empty work shells can still merge, and single-machine upgrades retain their work. Dismantling or configuration-card operations with insufficient capacity preserve machines, items and settings; cards exchange only the actual upgrade difference without dropping items. Failed apiary upgrades retain source data and pause production and active output until operator reconciliation; recovery records do not reissue assets. Invalid bee, fluid and resource-attachment data is preserved.
+- **Bulk yields**: fixed truncated apiary and Wanna Bee quantities, aggregation errors at high productivity and missing outcomes in truncated probability sampling. Capacity refreshes cover all apiary slots, and ordinary apiaries no longer enter the parent smelting-recipe path. Existing yields, guarantees and probability rules remain in effect.
+- **Extended resources**: zero-chance resources no longer block local products or samplers in the same batch. Production reserves save and recovery capacity before charging, with fewer repeated balance copies and scans of frozen work. Unresolved accounts block upgrades before machine replacement, and operators can inspect recovery information by original request and page. Adapted JDTE resource-cycle APIs no longer resubmit handled events; official versions lacking that API keep the capability disabled.
+- **Logistics, filters and charging transfers**: fixed partial failures in adjacent returns, virtual slots and charging restoring items twice or continuing to charge. Unconfirmed requests are saved with the machine. Virtual-slot right-clicks preserve a real zero allowance, charging uses the current FE/J ratio, and fluids compare complete components. Amounts accepted by the network but not yet debited from the source remain retained. Invalid ledgers, tag filters and unknown results preserve their data and pause affected transfers; later slot-query failures do not erase confirmed earlier deliveries.
+- **Configuration and recipe reloads**: migration failures no longer allow startup to continue. Fixed reloads directly changing active bee attributes and reconnects retaining another server's capacities or developer mode. Migration recovery rereads files, session capacities wait for complete configuration, and capacity changes require a normal restart. Failed datapack reloads retain existing recipes, stale retries cannot overwrite newer results, and conversion-table failures do not publish incomplete content. Individual malformed recipes are isolated and retried. Comb matching retains full components, and an initially incomplete raw-ore batch no longer blocks later valid conversions.
+- **Cross-instance imports and scripts**: offline imports include bee recipes and names supplied by other mods and handle file-extension case consistently. Conditional scripts are no longer treated as executed, and ordinary text does not trigger disable detection. Fixed KubeJS plugin discovery, invalid biome conditions becoming unrestricted and advancement icons failing to load. Examples match Myriad configuration priorities and decorative-comb advancements; Useless examples still reject unsupported PB combinations.
+- **Editor fields and materials**: invalid fields preserve their original data and offer JSON repair, and unfinished numeric input can be saved as a draft. Bottler and breeding shortcuts retain material identities, amounts and components. Unsupported component selections show an error and preserve the original field. Fixed inconsistent scrolling, scaling, ghost inputs and output ordering; failed previews retain edits.
+- **Application, reconnects and shared recipes**: pending applications are scoped to the server and player, so records from another server no longer block editing. Reopening the editor or returning to the original server with the same client can query the original operation, and normalized results match draft baselines. A full client restart does not restore the pending list automatically; server records remain retained. Stale projects cannot overwrite later retired or purged states. Shared nest and machine recipes require consistent changes from related bees, and machine recipes producing other bees must be split first. Projects at the valid depth limit remain readable from archives, and unknown application results preserve drafts.
+- **Late replies and drafts**: late load, theme or publication replies no longer replace newer projects, erase undo history or leave subpages editing old objects. Changes made during a settings save remain marked unsaved, and copying from a large draft library no longer uploads its entire listing at once.
+- **Machine windows and guides**: AE input/output controls retain their A/I positions and Mekanism styling, follow window movement and closure, and update on tab changes. Stale menus stop sending requests, repeated clicks do not open duplicate windows, and multi-fluid windows wrap on narrow screens. Guide-book recipes consume only empty cages or empty sturdy cages while preserving unrelated components such as names. Patchouli retains general guidance without AE2. Empty gene-treat and cage slots use the installed Productive Bees textures and respond to resource-pack reloads.
+- **JEI and production monitoring**: large count ranges cycle through bounded representative values while retaining ranges, chances and components; maximum-integer quantities no longer appear empty. Extended-resource pages list only supported Genesis machines, and reloads do not register duplicate content. Historical resources no longer hide new products, and current resource displays remain stable. Diagnostics distinguish normal energy remainders from unresolved requests and mark damaged frozen items for review instead of reporting an empty backlog, preserving the original NBT.
+- **Celeritas and Iris**: accepted Celeritas's bundled Iris 1.8.0 declaration, fixing startup blocked by the minimum-version check. Missing or incompatible shader interfaces disable the affected injection while retaining existing Iris render-pass queries.
+- **Previews, glows and cosmic textures**: failed previews restore UI state and can retry after resources return; failed shader reloads revoke old instances. Bee glows follow body poses and preserve transparency, wrapped items respect hand and resource-pack transforms, and Iris shadow draws no longer enter the main-view queue. Cosmic atlases register only this mod's required textures, avoiding replacement of other mods' cropped sprites. Sampling no longer bleeds into neighboring textures; missing textures retain the base model, and restored resources re-enable effects.
+- **Builds and third-party notices**: fixed configuration-cache compatibility in release-artifact checks. Mirrors read the same-named JAR from GitHub Release and check its version and integrity; English `EOF` lines no longer truncate release notes, and deleted or renamed examples do not remain in later bundles. Confirmed licenses, copyrights and bundled-file lists were completed, and PB slot art is read at runtime. Provenance and distribution conditions for some Re:Avaritia shaders and images, and external GPL/LGPL combination conditions, remain explicitly unresolved.
 
 #### Security
 
-- **Machine access permissions**: fixed retained menus allowing spectators to change settings or return items, and wrench dismantling missing private-machine permission checks. Affected actions recheck the current player, menu, machine and Mekanism access permissions.
-- **Editor sessions and synchronized names**: losing the held editor or creative eligibility revokes the old session, which cannot be reused after eligibility returns. Malformed server name batches are validated before replacing client data, and replies from old connections are ignored, avoiding later UI or tick failures. The editor protocol has changed; update clients and servers together.
+- **Machine access permissions**: spectators retaining an old menu can no longer change settings or return items, and wrench dismantling of private machines checks Mekanism access permissions.
+- **Editor sessions and synchronized names**: losing the held editor or creative eligibility revokes the old session, which cannot be reused after eligibility returns. Malformed name batches are validated before reaching client data, and old-connection replies are ignored. The editor protocol has changed; update clients and servers together.
+
 
 ## [1.2.3] - 2026-11-04
 

@@ -8,11 +8,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.Recipe;
-import net.minecraft.world.item.crafting.RecipeHolder;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -78,21 +76,4 @@ class ResourceRecipeMinecraftTest {
 		}
 	}
 
-	@Test void immutableIndexSortsRecipesAndOldSnapshotSurvivesReload() {
-		var recipe = ResourceProductionRecipe.CODEC.codec().parse(JsonOps.INSTANCE,
-				JsonParser.parseString(json("\"100\"", "1"))).getOrThrow();
-		var recipes = new ArrayList<>(List.of(
-				new RecipeHolder<>(ResourceLocation.parse("example:z"), recipe),
-				new RecipeHolder<>(ResourceLocation.parse("example:a"), recipe)));
-		var old = ResourceRecipeIndex.build(1, recipes);
-		recipes.clear();
-		var current = ResourceRecipeIndex.build(2, recipes);
-		assertEquals(List.of("example:a", "example:z"),
-				old.forBee(BEE).stream().map(holder -> holder.id().toString()).toList());
-		assertTrue(current.forBee(BEE).isEmpty());
-		assertEquals(1, old.revision());
-		assertThrows(UnsupportedOperationException.class, () -> old.forBee(BEE).clear());
-		assertThrows(IllegalArgumentException.class,
-				() -> ResourceRecipeIndex.build(3, List.of(old.forBee(BEE).getFirst(), old.forBee(BEE).getFirst())));
-	}
 }

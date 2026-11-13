@@ -4,6 +4,8 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceInputAdmission;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.ayoshiko.productivebeesgenesis.util.PbCombItemRefs;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
@@ -24,9 +26,8 @@ import java.util.List;
  * <p>
  * <b>比较成本优化：</b>PB 的所有蜜脾共用同一个 {@code Item}，仅靠 {@code BEE_TYPE} 数据组件区分，
  * 因此 {@code isSameItemSameComponents} 的快速失败（比 Item）在混养蜂箱里几乎从不生效，
- * 64 条缓存每次都要做深比较。这里额外存一份组件 hash 先做 int 比较，
- * 把「64 次组件深比较」降为「64 次 int 比较 + 至多 1 次深比较」
- * （与 {@code Ae2OutputStateHolder} 的流体 key 缓存同一手法）。
+ * 蜜脾按物品与蜂种分桶，其它产物按组件 hash 分桶，避免每次查询都对不同蜂种深比较。
+ * 同桶仍比较完整组件，名称、容量组件或其它差异不会共用可处理性结果。
  * <p>
  * 线程安全：仅服务端 tick 线程访问。
  */
@@ -55,16 +56,28 @@ final class ApiaryCentrifugeAcceptanceCache {
 	 * @return 位掩码，0 表示没有任何相邻离心机能处理
 	 */
 	long maskFor(ItemStack stack, List<ApiaryDirectEjectTargets.Target> targetList) {
+		return availableTargets(stack, targetList, matchingMaskFor(stack, targetList));
+	}
+
+	/** 只缓存配方和拓扑；调用方在当前容量或真实交付边界单独核验动态资源准入。 */
+	long matchingMaskFor(ItemStack stack, List<ApiaryDirectEjectTargets.Target> targetList) {
 		if (targetList != targetsRef || recipeVersion != ProductiveBeesGenesis.RECIPE_VERSION.get()) {
 			clear();
 			targetsRef = targetList;
 			recipeVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
 		}
-		int componentHash = stack.getComponents().hashCode();
+		var item = stack.getItem();
+		int componentHash;
+		if (item == PbCombItemRefs.honeycomb() || item == PbCombItemRefs.combBlock()) {
+			var beeType = stack.get(PbDataComponents.beeType());
+			componentHash = 31 * item.hashCode() + (beeType == null ? 0 : beeType.hashCode());
+		} else {
+			componentHash = stack.getComponents().hashCode();
+		}
 		for (int i = 0; i < size; i++) {
 			// int 预筛：hash 不同必然不是同一产物，跳过昂贵的组件深比较
 			if (componentHashes[i] != componentHash) continue;
-			if (ItemStack.isSameItemSameComponents(stacks[i], stack)) return availableTargets(stack, targetList, targetMasks[i]);
+			if (ItemStack.isSameItemSameComponents(stacks[i], stack)) return targetMasks[i];
 		}
 		long acceptedTargets = 0L;
 		int targetCount = Math.min(targetList.size(), Long.SIZE);
@@ -88,7 +101,7 @@ final class ApiaryCentrifugeAcceptanceCache {
 			targetMasks[size] = acceptedTargets;
 			size++;
 		}
-		return availableTargets(stack, targetList, acceptedTargets);
+		return acceptedTargets;
 	}
 
 	private static long availableTargets(ItemStack stack, List<ApiaryDirectEjectTargets.Target> targets, long matching) {

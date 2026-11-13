@@ -10,6 +10,7 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
+import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.TileEntityFactoryAccessor;
 import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
@@ -253,6 +254,14 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		super.collectImplicitComponents(builder);
 		builder.set(MekanismDataComponents.SORTING,
 				((TileEntityFactoryAccessor) this).productivebeesgenesis$getSorting());
+	}
+
+	@Override
+	protected void applyImplicitComponents(DataComponentInput input) {
+		super.applyImplicitComponents(input);
+		if (fluidOutputHolder instanceof MultiFluidTankHolder multi) {
+			multi.rebuildMappings();
+		}
 	}
 
 	/** 从配置卡数据读取 — 恢复AE2 per-tile状态 */

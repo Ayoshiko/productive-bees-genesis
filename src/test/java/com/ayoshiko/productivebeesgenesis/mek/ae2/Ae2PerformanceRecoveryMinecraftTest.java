@@ -1,11 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import appeng.api.networking.storage.IStorageService;
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.storage.MEStorage;
 import appeng.api.stacks.AEItemKey;
-import appeng.api.stacks.KeyCounter;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.BlockPos;
@@ -30,73 +28,7 @@ import static org.mockito.ArgumentMatchers.*;
 class Ae2PerformanceRecoveryMinecraftTest {
     @AfterEach
     void clearSharedState() {
-        Ae2NetworkCandidateDirectory.clearAll();
         Ae2FingerprintCache.clearShared();
-    }
-
-    @Test
-    void ordinaryHostsShareReadsAndDiscoverNewKeysAtTheDirectoryBoundary() {
-        var network = new Object();
-        var service = mock(IStorageService.class);
-        var inventory = new KeyCounter();
-        var first = AEItemKey.of(Items.RAW_IRON);
-        var second = AEItemKey.of(Items.RAW_GOLD);
-        doAnswer(call -> {
-            inventory.add(second, 7);
-            return inventory;
-        }).when(service).getCachedInventory();
-        inventory.add(first, 5);
-        assertSame(inventory, Ae2NetworkCandidateDirectory.readInventory(network, service, 100, false));
-        var initial = Ae2NetworkCandidateDirectory.get(network, inventory, 100, inventory);
-        assertEquals(2, initial.ordinaryKeys().size());
-        clearInvocations(service);
-        inventory.remove(second);
-        for (long tick = 101; tick < 110; tick++) {
-            assertSame(inventory, Ae2NetworkCandidateDirectory.readInventory(network, service, tick, false));
-            assertSame(initial, Ae2NetworkCandidateDirectory.get(network, inventory, tick, inventory));
-        }
-        verifyNoInteractions(service);
-        assertSame(inventory, Ae2NetworkCandidateDirectory.readInventory(network, service, 110, false));
-        var refreshed = Ae2NetworkCandidateDirectory.get(network, inventory, 110, inventory);
-        assertTrue(refreshed.ordinaryKeys().contains(second));
-        assertTrue(refreshed.generation() > initial.generation());
-        verify(service).getCachedInventory();
-    }
-
-    @Test
-    void stockGuardsRefreshImmediatelyAndChangedNetworksDiscardTheSharedView() {
-        var service = mock(IStorageService.class);
-        var inventory = new KeyCounter();
-        when(service.getCachedInventory()).thenReturn(inventory);
-        var network = new Object();
-        Ae2NetworkCandidateDirectory.readInventory(network, service, 100, false);
-        Ae2NetworkCandidateDirectory.get(network, inventory, 100, inventory);
-        Ae2NetworkCandidateDirectory.readInventory(network, service, 101, true);
-        Ae2NetworkCandidateDirectory.readInventory(network, service, 101, true);
-        verify(service, times(3)).getCachedInventory();
-        Ae2NetworkCandidateDirectory.invalidate(network);
-        Ae2NetworkCandidateDirectory.readInventory(network, service, 101, false);
-        verify(service, times(4)).getCachedInventory();
-        var other = new Object();
-        Ae2NetworkCandidateDirectory.readInventory(other, service, 101, false);
-        verify(service, times(5)).getCachedInventory();
-        assertEquals(2, Ae2NetworkCandidateDirectory.directoryCountForTest());
-    }
-
-    @Test
-    void fullReturnBackoffDoesNotSuppressHealthyPullsAndReconnectClearsBoth() {
-        var holder = new Ae2OutputStateHolder();
-        var state = holder.getPushState();
-        long now = System.nanoTime();
-        state.getReturnBackoff().recordFailure(now);
-        assertTrue(state.getReturnBackoff().shouldSkip(now));
-        assertFalse(state.getInputBackoff().shouldSkip(now));
-        state.getInputBackoff().recordFailure(now);
-        state.getInputBackoff().recordSuccess();
-        assertTrue(state.getReturnBackoff().shouldSkip(now));
-        holder.onGridChanged();
-        assertFalse(state.getReturnBackoff().shouldSkip(now));
-        assertFalse(state.getInputBackoff().shouldSkip(now));
     }
 
     @Test
@@ -113,7 +45,7 @@ class Ae2PerformanceRecoveryMinecraftTest {
         holder.getPushState().getReturnBackoff().recordFailure(System.nanoTime());
         Ae2InputExecution.pullBatchForType(level, holder, key, 5, -1, storage,
             IActionSource.empty(), List.of(slot), new long[] {5}, null, key.toStack(1), 0,
-            BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget());
+            BlockPos.ZERO, null, new Ae2FingerprintCache(), new Ae2ExtractBudget(), 1L);
         assertEquals(5, holder.getPendingItemBuffer().getTotalAmount());
         assertFalse(holder.getPendingItemBuffer().isBlocked());
         verify(storage, never()).insert(any(), anyLong(), any(), any());

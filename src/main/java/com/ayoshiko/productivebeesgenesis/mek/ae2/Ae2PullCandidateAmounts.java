@@ -22,16 +22,19 @@ final class Ae2PullCandidateAmounts {
 		flags.clear();
 	}
 
-	void put(AEItemKey key, int amount, Ae2PullDecision decision) {
+	void put(AEItemKey key, int amount, Ae2PullDecision decision,
+			Ae2ResourceInputGate.Decision resourceDecision) {
 		amounts.put(key, amount);
 		reserves.put(key, decision.reserveFloor);
-		flags.put(key, (decision.unlimited ? 1 : 0) | (decision.marked ? 2 : 0));
+		flags.put(key, (decision.unlimited ? 1 : 0) | (decision.marked ? 2 : 0)
+				| (resourceDecision == Ae2ResourceInputGate.Decision.DEFERRED ? 4 : 0));
 	}
 
 	void apply(AEItemKey key, Ae2InputExecution.PullEntry entry, boolean unlimitedMode) {
 		int value = flags.getInt(key);
 		entry.unlimited = unlimitedMode && (value & 1) != 0;
 		entry.marked = (value & 2) != 0;
+		entry.resourceDeferred = (value & 4) != 0;
 		entry.reserveFloor = reserves.getLong(key);
 	}
 

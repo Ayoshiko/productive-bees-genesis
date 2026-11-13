@@ -307,6 +307,12 @@ public interface PbRecipeContext {
 				: productivebeesgenesis$pushGeneratedItemToAe(template.copyWithCount(amount));
 	}
 
+	/** 网络库存使用 long 数量；旧宿主每次只接收其 int 能力内的一段，其余仍由来源持有。 */
+	default long productivebeesgenesis$pushGeneratedItemToAe(ItemStack template, long amount) {
+		return amount <= 0 || template.isEmpty() ? 0L
+				: productivebeesgenesis$pushGeneratedItemToAe(template, (int) Math.min(Integer.MAX_VALUE, amount));
+	}
+
 	/**
 	 * 尝试将新生成的流体直接写入 AE。
 	 *

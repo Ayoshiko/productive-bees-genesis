@@ -102,19 +102,21 @@ class Ae2PullDecisionMinecraftTest {
 		var iron = AEItemKey.of(Items.IRON_INGOT);
 		var gold = AEItemKey.of(Items.GOLD_INGOT);
 		decision.set(true, true, true, 1_000);
-		amounts.put(iron, 40, decision);
+		amounts.put(iron, 40, decision, Ae2ResourceInputGate.Decision.DEFERRED);
 		decision.set(true, false, false, -1);
-		amounts.put(gold, 60, decision);
+		amounts.put(gold, 60, decision, Ae2ResourceInputGate.Decision.ACCEPTED);
 		var entry = new Ae2InputExecution.PullEntry(iron, amounts.get(iron));
 		amounts.apply(iron, entry, true);
 		assertEquals(40, entry.remaining);
 		assertTrue(entry.unlimited);
 		assertTrue(entry.marked);
 		assertEquals(1_000, entry.reserveFloor);
+		assertTrue(entry.resourceDeferred);
 		amounts.apply(gold, entry, true);
 		assertFalse(entry.unlimited);
 		assertFalse(entry.marked);
 		assertEquals(-1, entry.reserveFloor);
+		assertFalse(entry.resourceDeferred);
 		amounts.clear();
 		assertEquals(0, amounts.get(iron));
 	}
@@ -147,6 +149,43 @@ class Ae2PullDecisionMinecraftTest {
 		assertTrue(entry.acceptsProbe(1, accepted, probe));
 		assertEquals(2, acceptedCalls.get());
 		assertEquals(2, rejectedCalls.get());
+		entry.clearComponentMatchCache();
+	}
+
+	@Test
+	void touchedCachesRevalidateSparseSlotsAfterClearAndEntryReuse() {
+		var iron = AEItemKey.of(Items.IRON_INGOT);
+		var entry = new Ae2InputExecution.PullEntry(iron, 8);
+		var probe = iron.toStack(1);
+		var stored = probe.copy();
+		boolean[] allowed = {true};
+		var slot = BasicInventorySlot.at(stack -> true, stack -> allowed[0], null, 0, 0);
+
+		entry.beginComponentMatchCache(65);
+		assertTrue(entry.matchesComponents(64, stored, probe, 0, null));
+		assertTrue(entry.acceptsProbe(64, slot, probe));
+		entry.clearComponentMatchCache();
+
+		allowed[0] = false;
+		stored.set(DataComponents.CUSTOM_NAME, Component.literal("changed"));
+		entry.beginComponentMatchCache(65);
+		assertFalse(entry.matchesComponents(64, stored, probe, 1, null));
+		assertFalse(entry.acceptsProbe(64, slot, probe));
+		entry.clearComponentMatchCache();
+
+		var gold = AEItemKey.of(Items.GOLD_INGOT);
+		entry.reset(gold, 5, false);
+		allowed[0] = true;
+		entry.beginComponentMatchCache(1);
+		assertTrue(entry.matchesComponents(0, gold.toStack(1), gold.toStack(1), 0, null));
+		assertTrue(entry.acceptsProbe(0, slot, gold.toStack(1)));
+		entry.clearComponentMatchCache();
+
+		entry.reset(iron, 3, false);
+		allowed[0] = false;
+		entry.beginComponentMatchCache(65);
+		assertFalse(entry.acceptsProbe(64, slot, probe));
+		assertFalse(entry.matchesComponents(64, stored, probe, 1, null));
 		entry.clearComponentMatchCache();
 	}
 

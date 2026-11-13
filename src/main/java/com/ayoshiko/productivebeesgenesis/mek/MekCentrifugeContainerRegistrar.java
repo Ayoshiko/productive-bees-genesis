@@ -4,6 +4,9 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.compat.emextras.EMEContainerSlotHelper;
 import com.ayoshiko.productivebeesgenesis.compat.mekanism_extras.MEContainerSlotHelper;
 import com.ayoshiko.productivebeesgenesis.init.ModItems;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeFluidTankMultipliers;
+import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.AutomationType;
 import mekanism.api.functions.ConstantPredicates;
 import mekanism.common.attachments.containers.ContainerType;
@@ -66,18 +69,7 @@ public class MekCentrifugeContainerRegistrar {
 		// ITEM — 根据工厂类型获取进程数
 		// 可选依赖隔离：ME/EME 类引用封装在 compat 包的辅助类中，
 		// 通过 isXxxLoaded() 守卫调用，本类不直接 import ME/EME 类，实现软依赖完全隔离。
-		int processes = 0;
-		FactoryTier factoryTier = Attribute.getTier(block, FactoryTier.class);
-		if (factoryTier != null) {
-			processes = factoryTier.processes;
-		} else {
-			if (MekCompatHooks.isMekanismExtrasLoaded()) {
-				processes = MEContainerSlotHelper.getProcesses(block);
-			}
-			if (processes == 0 && MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
-				processes = EMEContainerSlotHelper.getProcesses(block);
-			}
-		}
+		int processes = getProcesses(block);
 
 		if (processes > 0) {
 			int finalProcesses = processes;
@@ -87,10 +79,63 @@ public class MekCentrifugeContainerRegistrar {
 			ContainerType.ITEM.addDefaultCreators(null, item, MekCentrifugeContainerRegistrar::buildCentrifugeItemSlots);
 		}
 
-		ContainerType.FLUID.addDefaultCreators(null, item, () ->
-				FluidTanksBuilder.builder()
-						.addBasic(10000)
-						.build());
+		boolean factory = processes > 0;
+		int tankCount = factory ? processes : 1;
+		ContainerType.FLUID.addDefaultCreators(null, item, () -> {
+			FluidTanksBuilder builder = FluidTanksBuilder.builder();
+			for (int tank = 0; tank < tankCount; tank++) {
+				// 工厂拆卸组件包含全部并行罐；创建器也必须覆盖空罐及第二个以上的罐。
+				// 单罐旧物品仍按自身附件长度读取，不需要重写原有保存数据。
+				builder.addBasic(() -> getFluidCapacity(block));
+			}
+			return builder.build();
+		});
+	}
+
+	/** 物品创建器覆盖最大保存布局，合成结果则采用当前服务器模式的可放置布局。 */
+	public static int getCraftingFluidTankCount(ItemBlockMekCentrifuge item) {
+		int processes = getProcesses(item.getBlock());
+		return processes > 0 && ModConfig.SERVER.mekCentrifugeMultiFluidTank.get() ? processes : 1;
+	}
+
+	private static int getProcesses(MekCentrifugeBlock<?, ?> block) {
+		FactoryTier tier = Attribute.getTier(block, FactoryTier.class);
+		if (tier != null) {
+			return tier.processes;
+		}
+		int processes = 0;
+		if (MekCompatHooks.isMekanismExtrasLoaded()) {
+			processes = MEContainerSlotHelper.getProcesses(block);
+		}
+		if (processes == 0 && MekCompatHooks.isEvolvedMekanismExtrasLoaded()) {
+			processes = EMEContainerSlotHelper.getProcesses(block);
+		}
+		return processes;
+	}
+
+	private static int getFluidCapacity(MekCentrifugeBlock<?, ?> block) {
+		int processes = getProcesses(block);
+		int baseCapacity = ModConfig.SERVER.mekCentrifugeFluidTankCapacity.get();
+		if (processes == 0) {
+			return baseCapacity;
+		}
+		if (ModConfig.SERVER.mekCentrifugeMultiFluidTank.get()) {
+			return Integer.MAX_VALUE;
+		}
+		int multiplier;
+		FactoryTier tier = Attribute.getTier(block, FactoryTier.class);
+		if (tier != null) {
+			if (tier.ordinal() >= 4 && MekCompatHooks.isEvolvedMekanismLoaded()) {
+				multiplier = CentrifugeFluidTankMultipliers.forEMFactory(tier.ordinal() - 4).getAsInt();
+			} else {
+				multiplier = CentrifugeFluidTankMultipliers.forVanillaFactory(tier.ordinal()).getAsInt();
+			}
+		} else if (MekCompatHooks.isMekanismExtrasLoaded() && MEContainerSlotHelper.getProcesses(block) > 0) {
+			multiplier = MEContainerSlotHelper.getCentrifugeFluidMultiplier(block);
+		} else {
+			multiplier = EMEContainerSlotHelper.getCentrifugeFluidMultiplier(block);
+		}
+		return SaturatingMath.saturatingToInt(SaturatingMath.saturatingMultiply(baseCapacity, processes, multiplier));
 	}
 
 	private static ItemSlotListCreator buildCentrifugeItemSlots() {

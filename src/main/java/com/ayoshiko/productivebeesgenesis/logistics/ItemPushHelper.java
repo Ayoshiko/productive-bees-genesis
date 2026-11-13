@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.logistics;
 
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import java.util.function.BooleanSupplier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemHandlerHelper;
@@ -39,6 +41,46 @@ public final class ItemPushHelper {
 		return Math.max(0, stack.getCount() - remaining);
 	}
 
+	/** 与 NeoForge 相同的堆叠顺序；模拟期间能力失效后，不再返回旧目标的可抽取量。 */
+	static int simulateInsert(IItemHandler target, ItemStack stack, BooleanSupplier targetValid) {
+		if (target == null || stack.isEmpty() || !targetValid.getAsBoolean()) return 0;
+		if (target instanceof WholeInventoryItemSimulation simulation) {
+			int accepted = simulation.productivebeesgenesis$simulateWholeItemInsert(stack);
+			if (!targetValid.getAsBoolean()) return 0;
+			if (accepted != WholeInventoryItemSimulation.UNAVAILABLE) {
+				if (accepted < 0 || accepted > stack.getCount()) {
+					throw new IllegalStateException("Invalid whole-inventory simulation receipt");
+				}
+				return accepted;
+			}
+		}
+		ItemStack remaining = stack;
+		if (!stack.isStackable()) {
+			for (int slot = 0; !remaining.isEmpty(); slot++) {
+				int slots = target.getSlots();
+				if (!targetValid.getAsBoolean()) return 0;
+				if (slot >= slots) break;
+				remaining = target.insertItem(slot, remaining, true);
+				if (!targetValid.getAsBoolean()) return 0;
+			}
+		} else {
+			int slots = target.getSlots();
+			if (!targetValid.getAsBoolean()) return 0;
+			for (int pass = 0; pass < 2 && !remaining.isEmpty(); pass++) {
+				for (int slot = 0; slot < slots && !remaining.isEmpty(); slot++) {
+					ItemStack current = target.getStackInSlot(slot);
+					if (!targetValid.getAsBoolean()) return 0;
+					boolean candidate = pass == 0
+							? ItemStack.isSameItemSameComponents(current, remaining) : current.isEmpty();
+					if (!candidate) continue;
+					remaining = target.insertItem(slot, remaining, true);
+					if (!targetValid.getAsBoolean()) return 0;
+				}
+			}
+		}
+		return Math.max(0, stack.getCount() - (remaining.isEmpty() ? 0 : remaining.getCount()));
+	}
+
 	/**
 	 * 执行插入，返回未被接收的剩余部分。
 	 *
@@ -53,17 +95,37 @@ public final class ItemPushHelper {
 
 	/** 每个能力调用独立结算；后续槽位异常不能抹掉之前已知的接收量。 */
 	public static ItemStack insert(IItemHandler target, ItemStack stack, OutputCustody custody, String destination) {
+		return insert(target, stack, custody, destination, () -> true);
+	}
+
+	/** 能力在接收回调内失效时，已接收前缀照常结算，未交付余量不再访问旧目标。 */
+	static ItemStack insert(IItemHandler target, ItemStack stack, OutputCustody custody, String destination,
+			BooleanSupplier targetValid) {
 		ItemStack remaining = stack.copy();
+		if (!targetValid.getAsBoolean()) return remaining;
 		int slots;
-		try { slots = target.getSlots(); } catch (RuntimeException e) { return remaining; }
+		try {
+			slots = target.getSlots();
+		} catch (RuntimeException error) {
+			LogThrottle.error("item_output_slot_count", "物品输出目标槽数查询失败，target={}", destination, error);
+			return remaining;
+		}
 		for (int pass = 0; pass < 2 && !remaining.isEmpty() && !custody.blocked(); pass++) {
 			for (int i = 0; i < slots && !remaining.isEmpty() && !custody.blocked(); i++) {
+				if (!targetValid.getAsBoolean()) return remaining;
 				ItemStack current;
-				try { current = target.getStackInSlot(i); } catch (RuntimeException e) { return remaining; }
+				try {
+					current = target.getStackInSlot(i);
+				} catch (RuntimeException error) {
+					LogThrottle.error("item_output_slot_query", "物品输出目标槽查询失败，已交付前缀保留，target={} slot={} remaining={}",
+							destination, i, remaining.getCount(), error);
+					return remaining;
+				}
 				if (pass == 0 ? current.isEmpty() || !ItemStack.isSameItemSameComponents(current, remaining) : !current.isEmpty()) continue;
 				int slot = i;
 				int requested = remaining.getCount();
 				int handed = (int) custody.handoffItem(remaining, requested, destination + "/" + slot, () -> {
+					if (!targetValid.getAsBoolean()) return 0;
 					ItemStack rest = target.insertItem(slot, remaining.copy(), false);
 					return accepted(remaining, rest);
 				});

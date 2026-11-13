@@ -8,7 +8,6 @@ import mekanism.common.util.UnitDisplayUtils.EnergyUnit;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 
 /** 按宿主的 J 缺口从配置来源提取 FE，已知回执先结清，未知请求随宿主保管。 */
 public final class Ae2EnergyInjector {
@@ -37,30 +36,45 @@ public final class Ae2EnergyInjector {
 
         long injected = 0;
         try {
-            injected = creditKnownEnergy(host, container, transfer);
-            if (transfer.knownJoules() > 0) return injected;
+            if (transfer.isPresent()) {
+                injected = creditKnownEnergy(host, container, transfer);
+                if (transfer.knownJoules() > 0) return injected;
+            }
             long maxEnergy = container.getMaxEnergy();
             if (maxEnergy == Long.MAX_VALUE && host.hasCreativeUpgrade()) return injected;
+            boolean nativeEnabled = host.productivebeesgenesis$isAeNativeEnergyInputEnabled();
+            if (!nativeEnabled && !AppliedFluxIntegrationLoader.isAppliedFluxLoaded()) return injected;
+            // 满电或批次需求已满足时没有发生外部取电，不能因此阻止本刻生产后的补能。
+            double conversion = EnergyUnit.FORGE_ENERGY.getConversion();
+            long request = requestedFe(host, container, transfer, batchMultiplier, requiredEnergy, conversion);
+            if (request <= 0) {
+                return injected;
+            }
             Ae2PushBackoff backoff = holder.getPushState().getEnergyBackoff();
             if (backoff.shouldSkip(System.nanoTime())) return injected;
             IGrid grid = Ae2GridNodeManager.getCachedGrid(host);
             if (grid == null) return injected;
 
-            boolean nativeEnabled = host.productivebeesgenesis$isAeNativeEnergyInputEnabled();
+            BigDecimal retainedBefore = transfer.retainedEnergy();
             boolean preferFlux = host.productivebeesgenesis$getPreferAppliedFluxOverAeEnergy();
             if (preferFlux || !nativeEnabled) {
-                injected += extractAndCredit(host, container, transfer, grid, true, batchMultiplier, requiredEnergy);
+                injected += extractAndCredit(host, container, transfer, grid, true, request, conversion);
                 if (nativeEnabled && transfer.knownJoules() == 0) {
-                    injected += extractAndCredit(host, container, transfer, grid, false, batchMultiplier, requiredEnergy);
+                    long remaining = requestedFe(host, container, transfer, batchMultiplier, requiredEnergy, conversion);
+                    injected += extractAndCredit(host, container, transfer, grid, false, remaining, conversion);
                 }
             } else {
-                injected += extractAndCredit(host, container, transfer, grid, false, batchMultiplier, requiredEnergy);
+                injected += extractAndCredit(host, container, transfer, grid, false, request, conversion);
                 if (transfer.knownJoules() == 0) {
-                    injected += extractAndCredit(host, container, transfer, grid, true, batchMultiplier, requiredEnergy);
+                    long remaining = requestedFe(host, container, transfer, batchMultiplier, requiredEnergy, conversion);
+                    injected += extractAndCredit(host, container, transfer, grid, true, remaining, conversion);
                 }
             }
-            if (injected > 0) backoff.recordSuccess();
-            else backoff.recordFailure(System.nanoTime());
+            if (injected > 0 || transfer.retainedEnergy().compareTo(retainedBefore) > 0) {
+                backoff.recordSuccess();
+            } else {
+                backoff.recordFailure(System.nanoTime());
+            }
             return injected;
         } catch (RuntimeException | LinkageError error) {
             markChanged(host);
@@ -73,16 +87,8 @@ public final class Ae2EnergyInjector {
     }
 
     private static long extractAndCredit(IAe2OutputHostBase host, MachineEnergyContainer<?> container,
-            Ae2EnergyTransfer transfer, IGrid grid, boolean flux, int batchMultiplier, long requiredEnergy) {
+            Ae2EnergyTransfer transfer, IGrid grid, boolean flux, long requestedFe, double conversion) {
         if (flux && !AppliedFluxIntegrationLoader.isAppliedFluxLoaded()) return 0;
-        long currentEnergy = container.getEnergy();
-        long capacity = Ae2EnergyMath.remainingCapacity(currentEnergy, container.getMaxEnergy());
-        long required = Math.max(0L, requiredEnergy);
-        long shortfall = batchMultiplier > 0 && host.productivebeesgenesis$usesSmeltingEnergyBudget() && required > 0
-                ? Ae2EnergyMath.requiredShortfall(currentEnergy, required, capacity) : capacity;
-        if (shortfall <= 0) return 0;
-        double conversion = EnergyUnit.FORGE_ENERGY.getConversion();
-        long requestedFe = requestedFe(shortfall, transfer.retainedEnergy(), conversion);
         if (requestedFe <= 0) return 0;
 
         transfer.beginExtract(flux ? "applied_flux_fe" : "ae_native", requestedFe, conversion);
@@ -96,15 +102,15 @@ public final class Ae2EnergyInjector {
         return creditKnownEnergy(host, container, transfer);
     }
 
-    private static long requestedFe(long shortfallJoules, BigDecimal retainedJoules, double conversion) {
-        if (!Double.isFinite(conversion) || conversion <= 0) {
-            throw new IllegalStateException("Invalid Mekanism FE conversion: " + conversion);
-        }
-        BigDecimal available = BigDecimal.valueOf(shortfallJoules).subtract(retainedJoules);
-        if (available.signum() <= 0) return 0;
-        // 与 EnergyUnit 的运行比率一致，精确向下取整以免大 long 转 double 后多提取。
-        return available.divide(BigDecimal.valueOf(conversion), 0, RoundingMode.DOWN)
-                .min(BigDecimal.valueOf(Long.MAX_VALUE)).longValueExact();
+    private static long requestedFe(IAe2OutputHostBase host, MachineEnergyContainer<?> container,
+            Ae2EnergyTransfer transfer, int batchMultiplier, long requiredEnergy, double conversion) {
+        long currentEnergy = container.getEnergy();
+        long capacity = Ae2EnergyMath.remainingCapacity(currentEnergy, container.getMaxEnergy());
+        long required = Math.max(0L, requiredEnergy);
+        long shortfall = batchMultiplier > 0 && host.productivebeesgenesis$usesSmeltingEnergyBudget() && required > 0
+                ? Ae2EnergyMath.requiredShortfall(currentEnergy, required, capacity) : capacity;
+        if (shortfall <= 0) return 0;
+        return Ae2EnergyMath.requestedFe(shortfall, transfer.retainedEnergy(), conversion);
     }
 
     private static long creditKnownEnergy(IAe2OutputHostBase host, MachineEnergyContainer<?> container,

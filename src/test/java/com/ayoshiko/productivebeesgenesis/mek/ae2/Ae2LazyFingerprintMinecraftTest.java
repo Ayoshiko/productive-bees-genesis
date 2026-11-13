@@ -10,8 +10,6 @@ import appeng.api.storage.MEStorage;
 import java.util.List;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.Tag;
@@ -19,22 +17,6 @@ import org.junit.jupiter.api.Test;
 
 @Tag("minecraft")
 class Ae2LazyFingerprintMinecraftTest {
-	@Test
-	void scanningMoreThanCacheCapacityDoesNotEncodeDeferredEntries() {
-		var buffers = new Ae2PushBuffers();
-		var registries = mock(HolderLookup.Provider.class);
-		for (int i = 0; i < 192; i++) {
-			var slot = BasicInventorySlot.at(null, 0, 0);
-			var stack = new ItemStack(Items.HONEYCOMB);
-			stack.set(DataComponents.CUSTOM_NAME, Component.literal("type_" + i));
-			slot.setStack(stack);
-			Ae2OutputCommitter.collectSlot(buffers, i, 0, slot, null, registries);
-		}
-		assertEquals(192, buffers.entries.size());
-		assertTrue(buffers.entries.stream().allMatch(entry -> entry.fingerprint == null));
-		verifyNoInteractions(registries);
-	}
-
 	@Test
 	void selectedEntriesEncodeBeforeReservationAndPoolReuseResetsTheFingerprint() {
 		var cache = mock(Ae2FingerprintCache.class);

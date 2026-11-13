@@ -149,22 +149,24 @@ final class Ae2InputCandidatePolicy {
 				? filter.getDirectEntries() : List.of();
 		if (!directEntries.isEmpty()) {
 			boolean unresolved = directEntries.stream().anyMatch(entry -> entry.key() == null);
-			if (unresolved) availableStacks = storageService.getCachedInventory();
-			var resolvedKeys = Ae2ItemFingerprint.resolve(
-					directEntries, availableStacks, level.registryAccess());
-			for (Ae2InputFilter.DirectEntry direct : directEntries) {
-				if (direct.key() != null) continue;
-				AEItemKey resolved = resolvedKeys.get(direct.fingerprint());
-				if (resolved != null) filter.resolveDirectKey(direct.index(), resolved);
+			if (unresolved) {
+				availableStacks = storageService.getCachedInventory();
+				var resolvedKeys = Ae2ItemFingerprint.resolve(
+						directEntries, availableStacks, level.registryAccess());
+				for (Ae2InputFilter.DirectEntry direct : directEntries) {
+					if (direct.key() != null) continue;
+					AEItemKey resolved = resolvedKeys.get(direct.fingerprint());
+					if (resolved != null) filter.resolveDirectKey(direct.index(), resolved);
+				}
 			}
-			directEntries = filter.getDirectEntries();
 		}
+		Ae2FilterMatchCache filterSnapshot = filter == null ? null : filter.pullSnapshot(tagFilterActive);
+		if (filterSnapshot != null) directEntries = filterSnapshot.directEntries;
 		Ae2PullDecision decision = buffers.pullDecision;
-		boolean stockPolicyActive = filter != null
-				&& (filter.isGlobalNetworkStock() || filter.hasNetworkStockEntries());
-		boolean directOnly = filter != null
-				&& filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST
-				&& !filter.hasFuzzyEntries()
+		boolean stockPolicyActive = filterSnapshot != null && filterSnapshot.stockPolicyActive;
+		boolean directOnly = filterSnapshot != null
+				&& filterSnapshot.mode == Ae2InputFilter.FilterMode.WHITELIST
+				&& !filterSnapshot.hasFuzzyEntries
 				&& !ignoreNbt
 				&& !tagFilterActive
 				&& !directEntries.isEmpty();
@@ -172,13 +174,14 @@ final class Ae2InputCandidatePolicy {
 			for (Ae2InputFilter.DirectEntry direct : directEntries) {
 				// 非精确蜜脾条目还会匹配同 bee_type 的蜜脾块，不能只探测配置键。
 				if (direct.key() == null
-						|| (!filter.isPreciseMode() && CombFuzzyMatcher.isCombItem(direct.key()))) {
+						|| (!filterSnapshot.precise && CombFuzzyMatcher.isCombItem(direct.key()))) {
 					directOnly = false;
 					break;
 				}
 			}
 		}
-		if (!directOnly || stockPolicyActive) {
+		boolean singleDirectCandidate = directOnly && directEntries.size() == 1;
+		if (!directOnly || !singleDirectCandidate) {
 			availableStacks = Ae2NetworkCandidateDirectory.readInventory(
 					meStorage, storageService, currentTick, stockPolicyActive);
 		}
@@ -191,22 +194,36 @@ final class Ae2InputCandidatePolicy {
 				Ae2InputFilter.DirectEntry direct = directEntries.get(
 						(directStart + directOffset) % directEntries.size());
 				AEItemKey key = direct.key();
+				if (key == null || keyBackoff.shouldSkip(key, nanoNow)) continue;
 				Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
 						level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
 				if (!kind.isAllowed() || !pullKeys.add(key)) continue;
-				boolean liveStockEntry = direct.networkStock() || filter.isGlobalNetworkStock();
-				long available = liveStockEntry
-						? Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
-								availableStacks, meStorage, key, Long.MAX_VALUE, actionSource)
-						: inputCapacity;
-				long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive, decision);
+				long configuredLimit = filterSnapshot.pullLimit(key, Long.MAX_VALUE, ignoreNbt, decision);
 				if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 					pullKeys.remove(key);
 					continue;
 				}
+				long maximumDemand = Math.min(inputCapacity, configuredLimit < 0L ? inputCapacity : configuredLimit);
+				if (maximumDemand <= 0L) {
+					pullKeys.remove(key);
+					continue;
+				}
+				boolean liveStockEntry = direct.networkStock() || filterSnapshot.globalNetworkStock;
+				long available = singleDirectCandidate ? inputCapacity : Math.max(0L, availableStacks.get(key));
+				if (liveStockEntry) {
+					// 单个精确键无需候选探针；多类型只需确认保留量加本次需求。
+					available = Long.MAX_VALUE;
+					if (!singleDirectCandidate) {
+						long queryCap = SaturatingMath.saturatingAdd(decision.reserveFloor, maximumDemand);
+						available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
+								availableStacks, meStorage, key, queryCap, actionSource);
+					}
+					configuredLimit = filterSnapshot.pullLimit(key, available, ignoreNbt, decision);
+				}
 				if (configuredLimit >= 0L) {
 					available = Math.min(available, configuredLimit);
 				}
+				available = Math.min(available, inputCapacity);
 				if (available > 0) {
 					var resourceDecision = buffers.resourceInputGate.decision(key);
 					if (resourceDecision == Ae2ResourceInputGate.Decision.REJECTED) {
@@ -228,10 +245,9 @@ final class Ae2InputCandidatePolicy {
 			}
 		} else {
 			KeyCounter scanInventory = availableStacks;
-			// 白名单精确条目优先直探：过滤配置刚变更时无需等待候选缓存刷新，且单条
-			// SMELTING 指纹也不会依赖游标扫描。库存模式继续用实时可见量探测外部存储；
-			// 普通条目沿用 AE2 已聚合的 KeyCounter，避免额外网络模拟。黑名单仍只走扫描。
-			if (filter != null && filter.getFilterMode() != Ae2InputFilter.FilterMode.BLACKLIST) {
+			// 精确条目优先直探，配置变更不等待目录刷新。库存可用量参与多类型公平分配；
+			// 实际提取前仍逐次核对实时保留线，普通条目沿用 AE2 已聚合的 KeyCounter。
+			if (filterSnapshot != null && filterSnapshot.mode != Ae2InputFilter.FilterMode.BLACKLIST) {
 				int directStart = Ae2CursorScan.cursorStartIndex(
 						directEntries, candidateCursor, Ae2InputFilter.DirectEntry::key);
 				for (int directOffset = 0; directOffset < directEntries.size(); directOffset++) {
@@ -239,24 +255,36 @@ final class Ae2InputCandidatePolicy {
 					Ae2InputFilter.DirectEntry direct = directEntries.get(
 							(directStart + directOffset) % directEntries.size());
 					AEItemKey key = direct.key();
+					if (key == null || keyBackoff.shouldSkip(key, nanoNow)) continue;
 					Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
 							level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
-					boolean whitelistEntry = filter.getFilterMode() == Ae2InputFilter.FilterMode.WHITELIST;
-					boolean liveStockEntry = direct.networkStock() || filter.isGlobalNetworkStock();
+					boolean whitelistEntry = filterSnapshot.mode == Ae2InputFilter.FilterMode.WHITELIST;
+					boolean liveStockEntry = direct.networkStock() || filterSnapshot.globalNetworkStock;
 					if ((!whitelistEntry && !liveStockEntry)
 							|| !kind.isAllowed() || !pullKeys.add(key)) continue;
-					long available = liveStockEntry
-							? Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
-									availableStacks, meStorage, key, Long.MAX_VALUE, actionSource)
-							: Math.max(0L, availableStacks.get(key));
-					long configuredLimit = filter.getPullLimitIfAllowed(key, available, ignoreNbt, tagFilterActive, decision);
+					long configuredLimit = filterSnapshot.pullLimit(key, Long.MAX_VALUE, ignoreNbt, decision);
 					if (configuredLimit == Ae2InputFilter.PULL_DISALLOWED) {
 						pullKeys.remove(key);
 						continue;
 					}
+					long maximumDemand = Math.min(inputCapacity, configuredLimit < 0L ? inputCapacity : configuredLimit);
+					if (maximumDemand <= 0L) {
+						pullKeys.remove(key);
+						continue;
+					}
+					long available;
+					if (liveStockEntry) {
+						long queryCap = SaturatingMath.saturatingAdd(decision.reserveFloor, maximumDemand);
+						available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
+								availableStacks, meStorage, key, queryCap, actionSource);
+						configuredLimit = filterSnapshot.pullLimit(key, available, ignoreNbt, decision);
+					} else {
+						available = Math.max(0L, availableStacks.get(key));
+					}
 					if (configuredLimit >= 0L) {
 						available = Math.min(available, configuredLimit);
 					}
+					available = Math.min(available, inputCapacity);
 					if (available > 0) {
 						var resourceDecision = buffers.resourceInputGate.decision(key);
 						if (resourceDecision == Ae2ResourceInputGate.Decision.REJECTED) {
@@ -290,17 +318,23 @@ final class Ae2InputCandidatePolicy {
 			long recipeVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
 			Ae2NetworkCandidateDirectory.Snapshot networkDirectory = Ae2NetworkCandidateDirectory.get(
 					meStorage, availableStacks, currentTick, availableStacks);
-			if (buffers.needsScanCandidateRefresh(availableStacks, networkDirectory.generation(),
+			if (buffers.needsScanSmeltingRefresh(networkDirectory.ordinaryKeys(),
 					recipeVersion, smeltingEnabled, tagGeneration)) {
 				smeltingCandidateKeys.clear();
-				candidateKeys.clear();
-				// 共享目录只做与宿主无关的粗分类。普通物品才查询本机 SMELTING 配方；
-				// 蜜脾则保留标签表达式与本机可处理性判定，防止不同等级/配置机器互相污染。
-				for (AEItemKey itemKey : networkDirectory.ordinaryKeys()) {
-					Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
-							level, itemKey, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
-					if (kind.isSmelting()) smeltingCandidateKeys.add(itemKey);
+				if (smeltingEnabled) {
+					for (AEItemKey itemKey : networkDirectory.ordinaryKeys()) {
+						Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
+							level, itemKey, true, buffers.smeltingInputCache, tagGate, combGate);
+						if (kind.isSmelting()) smeltingCandidateKeys.add(itemKey);
+					}
 				}
+				buffers.markScanSmeltingRefresh(networkDirectory.ordinaryKeys(), recipeVersion,
+						smeltingEnabled, tagGeneration);
+			}
+			if (buffers.needsScanCandidateRefresh(availableStacks, networkDirectory.generation(),
+					recipeVersion, smeltingEnabled, tagGeneration)) {
+				candidateKeys.clear();
+				// 蜜脾资格可以随本机已付工作与临时探测预算变化，仍按原目录周期重验。
 				for (AEItemKey itemKey : networkDirectory.combKeys()) {
 					Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
 							level, itemKey, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
@@ -311,30 +345,38 @@ final class Ae2InputCandidatePolicy {
 			}
 			// 总收集上限与旧实现一致：whitelist 预置条目也计入 maxTypesToCollect
 			int scanCap = Math.max(0, maxTypesToCollect - pullList.size());
-			// Candidate selection remains cheap and bounded. A provisional high stock value
-			// keeps under-reporting external storage compatible; the final live reserve gate
-			// clamps every guarded key immediately before MODULATE. Keys in retry backoff do not
-			// occupy the bounded window, allowing eligible comb fallback behind deferred smelting keys.
+			// 库存候选按可用余量参与类型和车道分配；保留线以下的键不占候选窗口。
+			// 实际提取前仍核验实时保留线，外部存储的占位上报量由可见量探针补足。
 			Predicate<AEItemKey> acceptableCandidate = key -> {
 				if (pullKeys.contains(key)) return false;
 				if (keyBackoff.shouldSkip(key, nanoNow)) return false;
 				long cachedAvailable = scanInventory.get(key);
 				if (cachedAvailable <= 0L && !stockPolicyActive) return false;
 				long limit;
-				if (filter == null) {
+				if (filterSnapshot == null) {
 					decision.set(true, false, false, -1L);
 					limit = -1L;
 				} else {
-					limit = filter.getPullLimitIfAllowed(key, Long.MAX_VALUE, ignoreNbt, tagFilterActive, decision);
+					limit = filterSnapshot.pullLimit(key, Long.MAX_VALUE, ignoreNbt, decision);
 				}
 				if (!decision.admitted) return false;
-				long available = decision.reserveFloor >= 0L ? Long.MAX_VALUE : cachedAvailable;
+				long available = cachedAvailable;
+				if (decision.reserveFloor >= 0L) {
+					long maximumDemand = Math.min(inputCapacity, limit < 0L ? inputCapacity : limit);
+					long queryCap = SaturatingMath.saturatingAdd(decision.reserveFloor, maximumDemand);
+					available = Ae2NetworkInventoryView.visibleAmount(holder, currentTick,
+							scanInventory, meStorage, key, queryCap, actionSource);
+					limit = filterSnapshot.pullLimit(key, available, ignoreNbt, decision);
+				}
 				// 两个候选列表仅由上面的 classify 构建，并按配方/开关/标签代号失效；
 				// 此处不再为每次拉取重复查询候选类型。
-				int amount = SaturatingMath.saturatingToInt(limit < 0L ? available : Math.min(available, limit));
+				long demand = limit < 0L ? available : Math.min(available, limit);
+				int amount = SaturatingMath.saturatingToInt(Math.min(demand, inputCapacity));
 				if (amount <= 0) return false;
-				if (buffers.resourceInputGate.decision(key) == Ae2ResourceInputGate.Decision.REJECTED) return false;
-				candidateAmounts.put(key, amount, decision);
+				var resourceDecision = buffers.resourceInputGate.decision(key);
+				if (resourceDecision == Ae2ResourceInputGate.Decision.REJECTED) return false;
+				// 同次收集未写入库存，沿用已经检查的三态，不重复扫描账户容量与出口。
+				candidateAmounts.put(key, amount, decision, resourceDecision);
 				return true;
 			};
 			AEItemKey smeltingCursor = holder.getInputSmeltingCandidateCursor() instanceof AEItemKey key
@@ -343,14 +385,13 @@ final class Ae2InputCandidatePolicy {
 					? key : null;
 			int smeltingSelected = Ae2CursorScan.collectPrioritizedRotating(selectedKeys, seenKeys,
 					smeltingCandidateKeys, candidateKeys, smeltingCursor, combCursor,
-					scanCap, acceptableCandidate);
+					scanCap, acceptableCandidate, buffers.scanSmeltingPosition, buffers.scanCombPosition);
 			for (int index = 0; index < selectedKeys.size(); index++) {
 				AEItemKey key = selectedKeys.get(index);
 				int amount = candidateAmounts.get(key);
 				if (amount > 0 && pullKeys.add(key)) {
 					Ae2InputExecution.PullEntry entry = buffers.borrowPullEntry(key, amount);
 					candidateAmounts.apply(key, entry, unlimitedMode);
-					entry.resourceDeferred = buffers.resourceInputGate.decision(key) == Ae2ResourceInputGate.Decision.DEFERRED;
 					entry.smelting = index < smeltingSelected;
 					entry.combBlock = CombFuzzyMatcher.isCombBlock(key);
 					pullList.add(entry);

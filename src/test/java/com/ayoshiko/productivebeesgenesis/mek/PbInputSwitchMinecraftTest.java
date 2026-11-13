@@ -108,6 +108,49 @@ class PbInputSwitchMinecraftTest {
 	}
 
 	@Test
+	void clearingTransientCachesPreservesActivePausedAndCommittedOutputAssets() {
+		Fixture fixture = new Fixture(2);
+		ItemStack original = named(Items.HONEYCOMB, "paused original");
+		ItemStack replacement = named(Items.HONEYCOMB, "active replacement");
+		var originalRecipe = recipe("original", Items.DIAMOND);
+		fixture.inputs[0].setStack(original.copy());
+		assertTrue(fixture.run(0, originalRecipe, 7));
+		fixture.inputs[0].setStack(replacement.copy());
+		assertTrue(fixture.run(0, recipe("replacement", Items.EMERALD), 4));
+		for (var slot : List.of(fixture.context.primaryOutputSlot(1),
+				fixture.context.secondaryOutputSlot(1), fixture.context.tertiaryOutputSlot(1))) {
+			slot.setStack(new ItemStack(Items.STONE, 64));
+		}
+		when(fixture.context.productivebeesgenesis$isDirectAeOutputEnabled()).thenReturn(true);
+		fixture.inputs[1].setStack(named(Items.HONEYCOMB, "completed pending"));
+		assertTrue(fixture.run(1, recipe("pending", Items.IRON_INGOT), 20));
+		CompoundTag beforeClear = fixture.save();
+		assertEquals(1, beforeClear.getCompound(WORK).getList("entries", 10).size());
+		assertEquals(1, beforeClear.getCompound(WORK).getList("paused", 10).size());
+		assertEquals(1, beforeClear.getList("productivebeesgenesis_pb_committed_pending", 10).size());
+		assertEquals(310, fixture.spent);
+
+		fixture.processor.clearTransientCaches();
+		fixture.processor.clearTransientCaches();
+		assertEquals(beforeClear, fixture.save());
+		assertEquals(310, fixture.spent);
+		assertTrue(ItemStack.matches(replacement, fixture.inputs[0].getStack()));
+		assertTrue(fixture.inputs[1].isEmpty());
+
+		fixture.outputs[1].setStack(ItemStack.EMPTY);
+		assertTrue(fixture.processor.drainCommittedPendingOutputs(1));
+		assertTrue(fixture.outputs[1].getStack().is(Items.IRON_INGOT));
+		assertEquals(1, fixture.outputs[1].getCount());
+		assertEquals(310, fixture.spent);
+		fixture.inputs[0].setStack(original.copy());
+		assertTrue(fixture.run(0, originalRecipe, 13));
+		assertTrue(fixture.outputs[0].getStack().is(Items.DIAMOND));
+		assertEquals(1, fixture.outputs[0].getCount());
+		assertEquals(440, fixture.spent);
+		assertEquals(4, fixture.save().getCompound(WORK).getList("paused", 10).getCompound(0).getInt("progress"));
+	}
+
+	@Test
 	void sameIdentityAcrossLanesClaimsEachPausedCycleOnce() {
 		Fixture fixture = new Fixture(2);
 		ItemStack first = named(Items.HONEYCOMB, "same identity");
@@ -133,6 +176,38 @@ class PbInputSwitchMinecraftTest {
 		assertTrue(fixture.run(1, recipe, 11));
 		assertEquals(400, fixture.spent);
 		assertEquals(1, fixture.outputs[0].getCount());
+		assertEquals(1, fixture.outputs[1].getCount());
+	}
+
+	@Test
+	void laterLaneClaimsWorkParkedEarlierInTheSameReconciliationPass() {
+		Fixture fixture = new Fixture(2);
+		ItemStack original = named(Items.HONEYCOMB, "moved paid input");
+		ItemStack replacement = named(Items.HONEYCOMB, "new lane input");
+		var selected = recipe("moved", Items.DIAMOND);
+		fixture.inputs[0].setStack(original.copy());
+		assertTrue(fixture.run(0, selected, 7));
+		assertTrue(fixture.save().getCompound(WORK).getList("paused", 10).isEmpty());
+		fixture.inputs[0].setStack(replacement.copy());
+		fixture.inputs[1].setStack(original.copy());
+
+		fixture.processor.reconcileInputWork();
+		CompoundTag reconciled = fixture.save();
+		assertArrayEquals(new int[]{0, 7}, reconciled.getIntArray(PROGRESS));
+		assertTrue(reconciled.getCompound(WORK).getList("paused", 10).isEmpty());
+		ListTag entries = reconciled.getCompound(WORK).getList("entries", 10);
+		assertEquals(1, entries.size());
+		assertEquals(1, entries.getCompound(0).getInt("process"));
+		assertEquals(70, fixture.spent);
+		assertTrue(ItemStack.matches(replacement, fixture.inputs[0].getStack()));
+		assertTrue(ItemStack.matches(original, fixture.inputs[1].getStack()));
+		fixture.processor.reconcileInputWork();
+		assertEquals(reconciled, fixture.save());
+
+		assertTrue(fixture.run(1, selected, 13));
+		assertEquals(200, fixture.spent);
+		assertTrue(fixture.inputs[1].isEmpty());
+		assertTrue(fixture.outputs[1].getStack().is(Items.DIAMOND));
 		assertEquals(1, fixture.outputs[1].getCount());
 	}
 
@@ -252,6 +327,54 @@ class PbInputSwitchMinecraftTest {
 		assertTrue(fixture.run(0, recipe("normal", Items.DIAMOND), 20));
 		assertEquals(200, fixture.spent);
 		assertTrue(fixture.save().getCompound(WORK).getList("entries", 10).isEmpty());
+	}
+
+	@Test
+	void completedCyclesRefreshSameIdRecipeWithoutChangingCostsOrInputIdentity() {
+		Fixture fixture = new Fixture(1);
+		ItemStack input = named(Items.HONEYCOMB, "stable identity");
+		RecipeHolder<CentrifugeRecipe> original = recipe("same_id", Items.DIAMOND);
+		fixture.inputs[0].setStack(input.copyWithCount(3));
+		assertTrue(fixture.run(0, original, 20));
+		assertTrue(fixture.run(0, original, 20));
+		assertEquals(2, fixture.outputs[0].getCount());
+		assertEquals(400, fixture.spent);
+		fixture.outputs[0].setStack(ItemStack.EMPTY);
+		assertTrue(fixture.run(0, recipe("same_id", Items.EMERALD), 20));
+		assertTrue(fixture.outputs[0].getStack().is(Items.EMERALD));
+		assertEquals(1, fixture.outputs[0].getCount());
+		assertEquals(600, fixture.spent);
+		assertTrue(fixture.inputs[0].isEmpty());
+		assertFalse(fixture.processor.hasRetainedInput(input));
+	}
+
+	@Test
+	void repeatedTemplateStillReservesEveryPausedCycleAndReleasesOnlyCompletedWork() {
+		ItemStack input = named(Items.HONEYCOMB, "large but valid component");
+		CompoundTag component = new CompoundTag();
+		component.putByteArray("payload", new byte[1_100_000]);
+		input.set(DataComponents.CUSTOM_DATA, CustomData.of(component));
+		var cache = new PbPaidWorkCache(1);
+		var selected = recipe("budget", Items.DIAMOND);
+		var first = cache.get(0, input, selected, 20, REGISTRIES);
+		var buffer = new PbPausedWorkBuffer(1);
+		assertTrue(buffer.reserve(0, first, REGISTRIES));
+		assertTrue(buffer.park(0, 7, 20));
+		var second = cache.get(0, input.copy(), selected, 20, REGISTRIES);
+		assertFalse(buffer.reserve(0, second, REGISTRIES));
+		assertEquals(1, buffer.save().size());
+		cache.clear();
+		var resumed = buffer.take(0, input);
+		assertNotNull(resumed);
+		assertEquals(7, resumed.progress);
+		assertNull(buffer.take(0, input));
+		buffer.release(0);
+		assertTrue(buffer.reserve(0, second, REGISTRIES));
+		assertTrue(buffer.park(0, 3, 20));
+		CompoundTag saved = buffer.save().getCompound(0);
+		saved.getCompound("work").getCompound("input").putInt("count", 99);
+		assertEquals(1, buffer.save().getCompound(0).getCompound("work").getCompound("input").getInt("count"));
+		assertEquals(3, buffer.save().getCompound(0).getInt("progress"));
 	}
 
 	private static ItemStack named(Item item, String name) {

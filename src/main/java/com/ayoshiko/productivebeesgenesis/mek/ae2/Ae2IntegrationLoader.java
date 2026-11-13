@@ -2,7 +2,10 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.mek.DeferredItemOutput;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import com.google.gson.JsonObject;
+import net.minecraft.server.MinecraftServer;
 
 /**
 	 * AE2 集成加载器
@@ -80,10 +83,32 @@ public final class Ae2IntegrationLoader {
 	/** 服务器停止时清理按网络共享的静态状态，防止跨存档保留 AE2 身份与候选键。 */
 	public static void clearServerCaches() {
 		if (!isAe2Loaded()) return;
+		Ae2DeferredItemOutputs.clearAll();
 		Ae2NetworkCandidateDirectory.clearAll();
 		Ae2NetworkWorkCoordinator.clearAll();
 		Ae2FingerprintCache.clearShared();
 		CentrifugeDispatchScope.reset();
+	}
+
+	public static JsonObject machineDiagnostics(IAe2OutputHostBase host) {
+		if (isAe2Loaded()) {
+			return Ae2MachineDiagnostics.read(host);
+		}
+		JsonObject result = new JsonObject();
+		result.addProperty("installed", false);
+		return result;
+	}
+
+	public static boolean deferItemOutput(DeferredItemOutput output) {
+		return isAe2Loaded() && Ae2DeferredItemOutputs.enqueue(output);
+	}
+
+	public static void flushDeferredItemOutputs(MinecraftServer server) {
+		if (isAe2Loaded()) Ae2DeferredItemOutputs.flush(server);
+	}
+
+	public static void cancelDeferredItemOutputs(MinecraftServer server) {
+		if (isAe2Loaded()) Ae2DeferredItemOutputs.cancel(server);
 	}
 
 	/**

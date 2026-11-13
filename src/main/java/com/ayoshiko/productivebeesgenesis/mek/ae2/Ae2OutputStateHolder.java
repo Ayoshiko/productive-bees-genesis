@@ -94,6 +94,10 @@ public final class Ae2OutputStateHolder {
 
 	/** per-tile AE2 流体输出开关（默认 true，与全局配置 AND 关系） */
 	private volatile boolean aeFluidOutputEnabled = true;
+	/** 节点回调和出口开关变化使刻末票据失效；跨线程回调只更新代际。 */
+	private final AtomicLong outputRevision = new AtomicLong();
+
+	public long getOutputRevision() { return outputRevision.get(); }
 
 	// ===== per-tile AE2 输入拉取开关与状态（与全局配置 AND 关系） =====
 	/** per-tile AE2 输入拉取开关（默认 false，与全局配置 AND 关系） */
@@ -182,7 +186,10 @@ public final class Ae2OutputStateHolder {
 
 	// ===== 基础 getter/setter =====
 	public Object getAe2GridNode() { return ae2GridNode; }
-	public void setAe2GridNode(Object node) { this.ae2GridNode = node; }
+	public void setAe2GridNode(Object node) {
+		if (ae2GridNode != node) outputRevision.incrementAndGet();
+		this.ae2GridNode = node;
+	}
 	public Object getAeItemKeyCache() { return aeItemKeyCache; }
 	public void setAeItemKeyCache(Object cache) { this.aeItemKeyCache = cache; }
 	public boolean isAe2NodePending() { return ae2NodePending; }
@@ -214,6 +221,7 @@ public final class Ae2OutputStateHolder {
 	 * 重置节点、缓存和待创建标志，防止方块重建后残留旧状态。
 	 */
 	public void clear() {
+		outputRevision.incrementAndGet();
 		releaseNetworkCoordination();
 		ae2GridNode = null;
 		aeItemKeyCache = null;
@@ -286,6 +294,7 @@ public final class Ae2OutputStateHolder {
 	 * 因此不能调用 {@link #clear()} 丢弃尚未归还的物品。
 	 */
 	public void clearForChunkUnload() {
+		outputRevision.incrementAndGet();
 		releaseNetworkCoordination();
 		ae2GridNode = null;
 		aeItemKeyCache = null;
@@ -338,9 +347,12 @@ public final class Ae2OutputStateHolder {
 	}
 
 	public boolean isCentrifugeDirectAeOutputEnabled() { return centrifugeDirectAeOutputEnabled; }
-	public void setCentrifugeDirectAeOutputEnabled(boolean enabled) { centrifugeDirectAeOutputEnabled = enabled; }
+	public void setCentrifugeDirectAeOutputEnabled(boolean enabled) {
+		if (centrifugeDirectAeOutputEnabled != enabled) outputRevision.incrementAndGet();
+		centrifugeDirectAeOutputEnabled = enabled;
+	}
 	public void toggleCentrifugeDirectAeOutputEnabled() {
-		centrifugeDirectAeOutputEnabled = !centrifugeDirectAeOutputEnabled;
+		setCentrifugeDirectAeOutputEnabled(!centrifugeDirectAeOutputEnabled);
 	}
 
 	/** 获取 per-tile 产物直通（相邻容器）开关 */
@@ -432,6 +444,7 @@ public final class Ae2OutputStateHolder {
 
 	/** 节点供电、频道和启动状态改变只失效展示／出口判断，不触碰世界或重建网格。 */
 	public void onNodeStateChanged() {
+		outputRevision.incrementAndGet();
 		pushState.invalidateNodeStateCache();
 		if (reusableBuffers instanceof Ae2PushBuffers buffers) buffers.resourceInputGate.clear();
 		pushState.getReturnBackoff().reset();
@@ -440,6 +453,7 @@ public final class Ae2OutputStateHolder {
 
 	/** 失效 AE2 网格/存储缓存（gridChanged 回调触发） */
 	public void onGridChanged() {
+		outputRevision.incrementAndGet();
 		releaseNetworkCoordination();
 		if (cachedMeStorage != null && Ae2IntegrationLoader.isAe2Loaded()) {
 			Ae2NetworkCandidateDirectory.invalidate(cachedMeStorage);
@@ -594,9 +608,15 @@ public final class Ae2OutputStateHolder {
 
 	// ===== per-tile AE2 输出开关方法 =====
 	public boolean isAeItemOutputEnabled() { return aeItemOutputEnabled; }
-	public void setAeItemOutputEnabled(boolean enabled) { this.aeItemOutputEnabled = enabled; }
+	public void setAeItemOutputEnabled(boolean enabled) {
+		if (aeItemOutputEnabled != enabled) outputRevision.incrementAndGet();
+		this.aeItemOutputEnabled = enabled;
+	}
 	public boolean isAeFluidOutputEnabled() { return aeFluidOutputEnabled; }
-	public void setAeFluidOutputEnabled(boolean enabled) { this.aeFluidOutputEnabled = enabled; }
+	public void setAeFluidOutputEnabled(boolean enabled) {
+		if (aeFluidOutputEnabled != enabled) outputRevision.incrementAndGet();
+		this.aeFluidOutputEnabled = enabled;
+	}
 
 	// ===== per-tile AE2 输入拉取开关方法 =====
 

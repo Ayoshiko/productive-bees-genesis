@@ -159,6 +159,13 @@ public final class Ae2OutputPusher {
 		return session == null ? 0 : session.push(template, amount);
 	}
 
+	/** 合并后的数量直接交给网络，不为 ItemStack 的计数字段拆分请求。 */
+	public static long pushItemStack(IAe2OutputHostBase host, ItemStack template, long amount) {
+		if (template == null || template.isEmpty() || amount <= 0) return 0L;
+		Ae2DirectItemPushSession session = prepareDirectItemPush(host);
+		return session == null ? 0L : session.push(template, amount);
+	}
+
 	/** Resolves the AE target once so a bounded buffer drain does not repeat host/grid lookups per group. */
 	@Nullable
 	public static Ae2DirectItemPushSession prepareDirectItemPush(IAe2OutputHostBase host) {

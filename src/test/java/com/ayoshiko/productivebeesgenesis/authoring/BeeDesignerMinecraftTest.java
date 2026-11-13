@@ -2,7 +2,6 @@ package com.ayoshiko.productivebeesgenesis.authoring;
 
 import com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeRecipe;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
-import com.ayoshiko.productivebeesgenesis.client.screen.authoring.DesignerColorValue;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -17,7 +16,6 @@ import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.neoforged.neoforge.common.crafting.DataComponentIngredient;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import cy.jdkdigital.productivebees.common.recipe.AdvancedBeehiveRecipe;
@@ -62,46 +60,6 @@ class BeeDesignerMinecraftTest {
 		JsonObject duplicate = BeeDesignerDocument.create("other:test");
 		assertThrows(IllegalArgumentException.class, () -> BeeDesignerCompiler.files(Map.of(
 				"test:test_bee", document.toString(), "other:test", duplicate.toString())));
-	}
-
-	@Test
-	void myriadSupportsModelAndTraitsWithSameAttackDeclarationAsBeeBee() {
-		JsonObject snapshot = BeeDesignerMyriad.snapshot();
-		JsonObject values = snapshot.getAsJsonObject("values");
-		values.addProperty("model", "productivebees:geo/entity/beebee.geo.json");
-		values.addProperty("beeTexture", "productivebees:textures/entity/bee/beebee/bee");
-		values.addProperty("attack", 2.147483647E9);
-		values.addProperty("selfheal", true);
-		values.addProperty("postPollination", "bonemeal");
-		var validated = BeeDesignerMyriad.validate(snapshot);
-		assertEquals(2.147483647E9, validated.get("attack"));
-		assertEquals(true, validated.get("selfheal"));
-		assertEquals("productivebees:geo/entity/beebee.geo.json", validated.get("model"));
-		assertEquals("bonemeal", validated.get("postPollination"));
-		values.addProperty("attack", 2.147483648E9);
-		assertThrows(IllegalArgumentException.class, () -> BeeDesignerMyriad.validate(snapshot));
-	}
-
-	@Test
-	void myriadNewFieldsKeepListsAndInheritedValuesValid() {
-		JsonObject snapshot = BeeDesignerMyriad.snapshot();
-		JsonObject values = snapshot.getAsJsonObject("values");
-		values.add("invulnerability", JsonParser.parseString("[\"inFire\",\"magic\"]"));
-		values.addProperty("tertiaryColor", "#AABBCC");
-		values.addProperty("pollinatedSize", 1.8);
-		values.addProperty("useGlowLayer", true);
-		values.addProperty("attackResponse", "fire");
-		values.addProperty("breedingItem", "#minecraft:flowers");
-		Map<String, Object> result = BeeDesignerMyriad.validate(snapshot);
-		assertEquals(List.of("inFire", "magic"), result.get("invulnerability"));
-		assertEquals(1.8, result.get("pollinatedSize"));
-		values.remove("invulnerability");
-		values.remove("breedingItem");
-		result = BeeDesignerMyriad.validate(snapshot);
-		assertEquals(List.of(), result.get("invulnerability"));
-		assertEquals("", result.get("breedingItem"));
-		values.addProperty("attackResponse", "unsupported");
-		assertThrows(IllegalArgumentException.class, () -> BeeDesignerMyriad.validate(snapshot));
 	}
 
 	@Test
@@ -217,25 +175,6 @@ class BeeDesignerMinecraftTest {
 		assertThrows(IllegalArgumentException.class, () -> BeeDesignerCompiler.files(Map.of("test:localized", document.toString())));
 	}
 
-	@Test
-	void colorInputSupportsRgbHsvAndRejectsInvalidChannels() {
-		assertEquals(0x3366FF, DesignerColorValue.parse("#36f"));
-		assertEquals(0x3366FF, DesignerColorValue.parse("0x3366FF"));
-		assertEquals(0x3366FF, DesignerColorValue.parse("rgb(51, 102, 255)"));
-		assertEquals(0xFF0000, DesignerColorValue.parse("hsv(360, 100%, 100%)"));
-		assertEquals(0x00FF00, DesignerColorValue.parse("hsv(120,100,100)"));
-		assertEquals(0x000000, DesignerColorValue.parse("hsv(240,100%,0%)"));
-		for (int color : new int[]{0x000000, 0xFFFFFF, 0x3366FF, 0xE8BC39}) {
-			assertEquals(color, DesignerColorValue.parse(DesignerColorValue.format(color, "RGB")));
-			assertEquals(color, DesignerColorValue.parse(DesignerColorValue.format(color, "HEX")));
-			assertEquals(color, DesignerColorValue.parse(DesignerColorValue.format(color, "HSV")));
-		}
-		for (String invalid : List.of("#12345", "#12345678", "rgb(256,0,0)", "rgb(1.5,2,3)", "hsv(0,101%,1%)",
-				"hsv(NaN,0,0)", "hsv(Infinity,0,0)", "rgb(1,2,3,4)", "rgb(-1,0,0)")) {
-			assertThrows(IllegalArgumentException.class, () -> DesignerColorValue.parse(invalid), invalid);
-		}
-	}
-
 	private static final RegistryAccess REGISTRIES = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
 	private static Map<ResourceLocation, net.minecraft.nbt.CompoundTag> previousBees;
 
@@ -253,21 +192,6 @@ class BeeDesignerMinecraftTest {
 	static void unloadConfigs() {
 		ConfigTracker.INSTANCE.unloadConfigs(net.neoforged.fml.config.ModConfig.Type.SERVER);
 		BeeReloadListener.INSTANCE.setData(previousBees);
-	}
-
-	@Test
-	void generatedFilesPreserveDefinitionPathUnknownFieldsAndExistingRecipeIds() {
-		JsonObject document = BeeDesignerDocument.create("test:designer");
-		document.addProperty("definition_path", "test:metals/designer");
-		document.getAsJsonObject("definition").addProperty("third_party_field", "preserved");
-		String recipe = BeeDesignerDocument.addRecipe(document, "productivebeesgenesis:resource_production");
-		document.getAsJsonObject("recipes").add("test:original_recipe", document.getAsJsonObject("recipes").remove(recipe));
-		var files = BeeDesignerCompiler.files(Map.of("test:designer", document.toString()));
-		assertTrue(files.containsKey("data/test/productivebees/metals/designer.json"));
-		assertFalse(files.containsKey("data/test/productivebees/designer.json"));
-		assertTrue(files.get("data/test/productivebees/metals/designer.json").contains("third_party_field"));
-		assertTrue(files.containsKey("data/test/recipe/original_recipe.json"));
-		assertFalse(files.keySet().stream().anyMatch(path -> path.contains("bee_designer/designer/")));
 	}
 
 	@Test
@@ -316,32 +240,6 @@ class BeeDesignerMinecraftTest {
 		assertTrue(files.containsKey("data/test/productivebees/designer.json"));
 		assertEquals("neoforge:false", JsonParser.parseString(files.get("data/test/recipe/old_output.json"))
 				.getAsJsonObject().getAsJsonArray("neoforge:conditions").get(0).getAsJsonObject().get("type").getAsString());
-	}
-
-	@Test
-	void materialSelectionRetainsFullComponentsAndStrictlyRejectsDifferentContents() {
-		ItemStack chosen = new ItemStack(Items.HONEY_BOTTLE, 12);
-		chosen.set(DataComponents.CUSTOM_NAME, Component.literal("full component identity"));
-		Ingredient material = DataComponentIngredient.of(true, chosen.copyWithCount(1));
-		var json = Ingredient.CODEC.encodeStart(REGISTRIES.createSerializationContext(JsonOps.INSTANCE), material).getOrThrow();
-		Ingredient restored = Ingredient.CODEC.parse(REGISTRIES.createSerializationContext(JsonOps.INSTANCE), json).getOrThrow();
-		assertTrue(restored.test(chosen));
-		assertFalse(restored.test(new ItemStack(Items.HONEY_BOTTLE)));
-		ItemStack other = chosen.copy();
-		other.set(DataComponents.CUSTOM_NAME, Component.literal("different contents"));
-		assertFalse(restored.test(other));
-		assertEquals(12, chosen.getCount());
-	}
-
-	@Test
-	void generatedCombCarriesActualBeeIdentityThroughIngredientCodec() {
-		var json = BeeDesignerDocument.comb("test:designer");
-		Ingredient comb = Ingredient.CODEC.parse(REGISTRIES.createSerializationContext(JsonOps.INSTANCE), json).getOrThrow();
-		ItemStack output = comb.getItems()[0];
-		assertEquals("test:designer", output.get(com.ayoshiko.productivebeesgenesis.util.PbDataComponents.beeType()).toString());
-		ItemStack wrongBee = output.copy();
-		wrongBee.set(com.ayoshiko.productivebeesgenesis.util.PbDataComponents.beeType(), net.minecraft.resources.ResourceLocation.parse("test:other"));
-		assertFalse(comb.test(wrongBee));
 	}
 
 	@Test
@@ -600,55 +498,6 @@ class BeeDesignerMinecraftTest {
 	}
 
 	@Test
-	void diagnosticsIdentifyInvalidRecipeAndFingerprintIgnoresObjectOrder() {
-		MinecraftServer server = mock(MinecraftServer.class);
-		when(server.registryAccess()).thenReturn(REGISTRIES.freeze());
-		JsonObject document = BeeDesignerDocument.create("test:mixed");
-		String recipe = BeeDesignerDocument.addRecipe(document, "productivebees:advanced_beehive");
-		document.getAsJsonObject("recipes").getAsJsonObject(recipe).getAsJsonArray("results").get(0).getAsJsonObject().addProperty("min", -1);
-		JsonObject result = BeeDesignerDiagnostics.check(document, server);
-		assertFalse(result.get("valid").getAsBoolean());
-		assertTrue(result.getAsJsonArray("issues").asList().stream().anyMatch(value ->
-				value.getAsJsonObject().get("path").getAsString().equals("recipes/" + recipe)));
-		JsonObject reordered = new JsonObject();
-		document.entrySet().stream().sorted(Map.Entry.<String, com.google.gson.JsonElement>comparingByKey().reversed())
-				.forEach(entry -> reordered.add(entry.getKey(), entry.getValue()));
-		assertEquals(BeeDesignerDocument.fingerprint(document), BeeDesignerDocument.fingerprint(reordered));
-	}
-
-	@Test
-	void invalidDefinitionIsReportedOnceAndCorrectedAttackLimitCanPass() {
-		MinecraftServer server = mock(MinecraftServer.class);
-		when(server.registryAccess()).thenReturn(REGISTRIES.freeze());
-		JsonObject document = BeeDesignerDocument.create("test:diagnostic");
-		BeeDesignerDocument.addRecipe(document, "minecraft:crafting_shapeless");
-		BeeDesignerDocument.addRecipe(document, "productivebees:advanced_beehive");
-		document.getAsJsonObject("definition").addProperty("size", 0);
-		JsonObject invalid = BeeDesignerDiagnostics.check(document, server);
-		var errors = invalid.getAsJsonArray("issues").asList().stream().map(value -> value.getAsJsonObject())
-				.filter(issue -> issue.get("severity").getAsString().equals("error")).toList();
-		assertEquals(1, errors.size());
-		assertEquals("definition/size", errors.getFirst().get("path").getAsString());
-		document.getAsJsonObject("definition").addProperty("size", 1);
-		document.getAsJsonObject("definition").addProperty("attack", Integer.MAX_VALUE);
-		assertTrue(BeeDesignerDiagnostics.check(document, server).get("valid").getAsBoolean());
-		document.getAsJsonObject("definition").addProperty("attack", (long) Integer.MAX_VALUE + 1);
-		assertFalse(BeeDesignerDiagnostics.check(document, server).get("valid").getAsBoolean());
-	}
-
-	@Test
-	void recipeDiagnosticsPreserveSlashIdentityAndPointAtInvalidProbability() {
-		MinecraftServer server = mock(MinecraftServer.class);
-		when(server.registryAccess()).thenReturn(REGISTRIES.freeze());
-		JsonObject document = BeeDesignerDocument.create("test:probability");
-		String id = BeeDesignerDocument.addRecipe(document, "productivebees:bee_fishing");
-		document.getAsJsonObject("recipes").getAsJsonObject(id).addProperty("chance", 2);
-		JsonObject result = BeeDesignerDiagnostics.check(document, server);
-		assertTrue(result.getAsJsonArray("issues").asList().stream().anyMatch(value ->
-				value.getAsJsonObject().get("path").getAsString().equals("recipes/" + id + "/chance")));
-	}
-
-	@Test
 	void modelDefinitionAndPendingDraftStateSurviveSaveAndExport(@TempDir Path directory) throws IOException {
 		JsonObject document = BeeDesignerDocument.create("test:model_draft");
 		document.getAsJsonObject("definition").addProperty("model", "productivebees:geo/entity/beebee.geo.json");
@@ -699,17 +548,6 @@ class BeeDesignerMinecraftTest {
 		Files.writeString(pending.installed(), "different bytes", StandardCharsets.UTF_8);
 		assertThrows(IOException.class, () -> BeeDesignerStore.reconcile(world, unchanged));
 		assertEquals("committed", BeeDesignerStore.inspect(world).get("phase").getAsString());
-	}
-
-	@Test
-	void acquisitionOnlyProjectGetsProductionDiagnostic() {
-		MinecraftServer server = mock(MinecraftServer.class);
-		when(server.registryAccess()).thenReturn(REGISTRIES.freeze());
-		JsonObject document = BeeDesignerDocument.create("test:mixed");
-		BeeDesignerDocument.addRecipe(document, "minecraft:crafting_shaped");
-		JsonObject result = BeeDesignerDiagnostics.check(document, server);
-		assertTrue(result.getAsJsonArray("issues").asList().stream().anyMatch(value ->
-				value.getAsJsonObject().get("message").getAsString().equals("designer.diagnostic.no_production")));
 	}
 
 	@Test

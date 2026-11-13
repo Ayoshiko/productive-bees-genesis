@@ -84,8 +84,8 @@ public class MyriadCreationsHandler {
 		long energy = Math.min(context.energyContainer().getEnergy(), Math.max(0L, energyBudget));
 		if (effectiveOps <= 0) return false;
 		fluidOutputHandler.initFluidTankFullCache();
-		boolean blocked = MyriadCreationsCache.areOutputSlotsFull(context, processIndex)
-				|| !context.productivebeesgenesis$isDirectAeOutputEnabled() && fluidOutputHandler.isFluidTankFull();
+		boolean blocked = !context.productivebeesgenesis$isDirectAeOutputEnabled()
+				&& (MyriadCreationsCache.areOutputSlotsFull(context, processIndex) || fluidOutputHandler.isFluidTankFull());
 		if (blocked || resumePaidCycle) {
 			virtualTicks = Math.min(virtualTicks, Math.max(1, processingTime - pbOperatingTicks[processIndex]));
 		}
@@ -103,7 +103,7 @@ public class MyriadCreationsHandler {
 		}
 		pbProcessing[processIndex] = true;
 		context.productivebeesgenesis$markForSave();
-		if (completed > 0) PbRecipeFlushHelper.flushCompleted(completer, processIndex);
+		if (completed > 0) completer.flushCompletedBatch(processIndex);
 		fluidOutputHandler.refreshFluidTankFullCache();
 		return true;
 	}

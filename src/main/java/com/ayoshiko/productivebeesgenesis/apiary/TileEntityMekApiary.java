@@ -6,6 +6,8 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCompatHooks;
 import com.ayoshiko.productivebeesgenesis.mek.MekCreativeEnergyHelper;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
@@ -49,6 +51,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.LongConsumer;
 
 /**
 	 * MEK通用机械蜂箱方块实体 — 继承 TileEntityElectricMachine，复用能量/侧面/升级/GUI 体系。
@@ -179,8 +182,20 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 		return nbtSerializer != null && nbtSerializer.hasInvalidFluidData();
 	}
 	int pushGeneratedItemToAe(ItemStack stack) { return ae2HostAdapter.pushGeneratedItem(stack); }
+	long pushGeneratedItemToAe(ItemStack stack, long amount) {
+		return ae2HostAdapter.pushGeneratedItem(stack, amount);
+	}
 	long pushGeneratedFluidToAe(FluidStack stack, long amount) {
 		return ae2HostAdapter.pushGeneratedFluid(stack, amount);
+	}
+
+	/** 蜂箱使用自己的直出开关；本地罐排空仍遵守 AE 流体开关、预算和保管协议。 */
+	@Override
+	public void productivebeesgenesis$onLocalFluidOutputCommitted() {
+		if (isDirectAeOutputEnabled() || hasInvalidFluidData() || !Ae2IntegrationLoader.isAe2Loaded()) {
+			return;
+		}
+		Ae2FluidPusher.pushLocalTankContentsNow(this);
 	}
 
 	long getPendingHoneyFluidAmount() {
@@ -397,6 +412,10 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	 */
 	List<ItemStack> directTransferProducedToCentrifuges(List<ItemStack> stacks) {
 		return directEjectHandler.transferProducedStacks(stacks);
+	}
+
+	long directTransferProducedToCentrifuges(ItemStack template, long amount, LongConsumer debit) {
+		return directEjectHandler.transferProduced(template, amount, debit);
 	}
 
 	/** Called when item-side routing changes, so same-tick direct-eject caches cannot stay stale. */

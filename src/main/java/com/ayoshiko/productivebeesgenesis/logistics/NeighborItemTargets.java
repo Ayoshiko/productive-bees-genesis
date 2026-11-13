@@ -7,11 +7,11 @@ import mekanism.common.tile.component.config.ConfigInfo;
 import mekanism.common.tile.component.config.DataType;
 import mekanism.common.tile.interfaces.ISideConfiguration;
 import mekanism.api.RelativeSide;
-import mekanism.common.capabilities.Capabilities;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
+import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
 
@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * 输出面相邻容器目标解析与缓存（每台机器一份）。
@@ -43,10 +44,12 @@ public final class NeighborItemTargets {
 
 	/** 所属机器 */
 	private final TileEntityMekanism tile;
+	private final Consumer<Direction> invalidationListener;
 
 	/** 每个方向的相邻容器能力缓存（坐标固定，可长期持有） */
 	private final Map<Direction, BlockCapabilityCache<IItemHandler, @Nullable Direction>> caches =
 			new EnumMap<>(Direction.class);
+	private final long[] cacheGenerations = new long[6];
 
 	/** 当前输出方向列表（按侧面配置解析） */
 	private final List<Direction> outputSides = new ArrayList<>(6);
@@ -62,7 +65,12 @@ public final class NeighborItemTargets {
 	 * @param tile 所属机器（需实现 Mekanism 的侧面配置接口）
 	 */
 	public NeighborItemTargets(TileEntityMekanism tile) {
+		this(tile, ignored -> {});
+	}
+
+	NeighborItemTargets(TileEntityMekanism tile, Consumer<Direction> invalidationListener) {
 		this.tile = tile;
+		this.invalidationListener = invalidationListener;
 	}
 
 	/** 侧面配置或朝向变化时调用，下次访问重新解析方向集合。 */
@@ -93,14 +101,36 @@ public final class NeighborItemTargets {
 	@Nullable
 	public IItemHandler handler(Direction side) {
 		Level level = tile.getLevel();
-		if (!(level instanceof ServerLevel serverLevel)) return null;
+		if (!(level instanceof ServerLevel serverLevel) || tile.isRemoved()) {
+			caches.clear();
+			for (Direction outputSide : Direction.values()) invalidationListener.accept(outputSide);
+			return null;
+		}
 		BlockCapabilityCache<IItemHandler, @Nullable Direction> cache = caches.get(side);
+		if (cache != null && cache.level() != serverLevel) {
+			caches.remove(side);
+			invalidationListener.accept(side);
+			cache = null;
+		}
 		if (cache == null) {
-			cache = Capabilities.ITEM.createCache(serverLevel,
-					tile.getBlockPos().relative(side), side.getOpposite());
+			long generation = ++cacheGenerations[side.ordinal()];
+			cache = BlockCapabilityCache.create(Capabilities.ItemHandler.BLOCK,
+					serverLevel, tile.getBlockPos().relative(side), side.getOpposite(),
+					() -> isListenerValid(serverLevel, side, generation),
+					() -> invalidationListener.accept(side));
 			caches.put(side, cache);
 		}
 		return cache.getCapability();
+	}
+
+	private boolean isListenerValid(ServerLevel level, Direction side, long generation) {
+		if (cacheGenerations[side.ordinal()] != generation) return false;
+		BlockCapabilityCache<IItemHandler, @Nullable Direction> cache = caches.get(side);
+		if (cache == null || cache.level() != level) return false;
+		if (!tile.isRemoved() && tile.getLevel() == level) return true;
+		caches.remove(side);
+		invalidationListener.accept(side);
+		return false;
 	}
 
 	/** 是否存在任何输出方向（快速短路用）。 */
@@ -109,6 +139,9 @@ public final class NeighborItemTargets {
 	}
 
 	private void rebuild(@Nullable ConfigInfo itemConfig, Direction facing) {
+		if (cachedFacing != null && cachedFacing != facing) {
+			for (Direction side : Direction.values()) invalidationListener.accept(side);
+		}
 		outputSides.clear();
 		cachedFacing = facing;
 		sidesValid = true;

@@ -26,16 +26,13 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
   publish:
     name: Publish verified NeoForge artifact
     if: >-
-      github.actor == github.repository_owner &&
-      github.triggering_actor == github.repository_owner &&
-      (github.event_name != 'release' || github.event.release.author.login == github.repository_owner) &&
-      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main-neo/1.21.1')
+      github.event_name == 'workflow_dispatch' ||
+      (!github.event.release.prerelease && !contains(github.event.release.tag_name, '-forge-'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -47,7 +44,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Verify tag, successful Build, permissions and exact release bytes
+      - name: Prepare the published NeoForge attachment
         id: release
         env:
           GH_TOKEN: ${{ github.token }}

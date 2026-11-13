@@ -183,6 +183,8 @@ final class PbRecipeProcessorStateHelper {
 		final int baseTicks;
 		final CompoundTag recipeSnapshot;
 		final RecipeHolder<CentrifugeRecipe> recipe;
+		private PbPausedWorkBuffer.Entry reservation;
+		private HolderLookup.Provider reservationProvider;
 
 		private PaidWork(ItemStack input, boolean myriad, int baseTicks, CompoundTag recipeSnapshot,
 				RecipeHolder<CentrifugeRecipe> recipe) {
@@ -195,9 +197,8 @@ final class PbRecipeProcessorStateHelper {
 
 		static PaidWork create(ItemStack input, RecipeHolder<CentrifugeRecipe> recipe, int baseTicks,
 				HolderLookup.Provider provider) {
-			CompoundTag snapshot = PbCentrifugeRecipeSnapshot.capture(recipe, provider);
-			return new PaidWork(input, false, baseTicks, snapshot,
-					PbCentrifugeRecipeSnapshot.restore(snapshot, input, provider));
+			var snapshot = PbCentrifugeRecipeSnapshot.capture(recipe, input, provider);
+			return new PaidWork(input, false, baseTicks, snapshot.tag(), snapshot.recipe());
 		}
 
 		static PaidWork myriad(ItemStack input, int baseTicks) {
@@ -206,6 +207,14 @@ final class PbRecipeProcessorStateHelper {
 
 		boolean matches(ItemStack current) {
 			return ItemStack.isSameItemSameComponents(input, current);
+		}
+
+		PbPausedWorkBuffer.Entry reservation(HolderLookup.Provider provider) {
+			if (reservation == null || reservationProvider != provider) {
+				reservation = PbPausedWorkBuffer.Entry.paid(this, provider);
+				reservationProvider = provider;
+			}
+			return reservation;
 		}
 
 		CompoundTag save(HolderLookup.Provider provider) {

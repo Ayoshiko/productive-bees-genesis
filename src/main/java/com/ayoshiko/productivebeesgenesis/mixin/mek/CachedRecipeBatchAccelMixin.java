@@ -327,9 +327,8 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 	 * v1.0.2 能量批量扣除：原实现每虚拟 tick 调一次 {@code useEnergy(ops)}
 	 * （每次触发容器 extract → onContentsChanged → setChanged → markChunkDirty），
 	 * 1024 倍加速下每 gameTick 执行 1024 次容器写与 chunk 标脏。现改为循环前一次
-	 * 计算能量预算（可支撑的虚拟 tick 数），循环后一次 {@code useEnergy.accept}
-	 * 扣除总额（共享的高并行边际计费 × {@code ran}），与本模组完整配方 tick 的
-	 * 能量曲线一致，同时将容器写次数从 N 次降为 1 次。
+	 * 计算能量预算（可支撑的虚拟 tick 数），每步在资产回调前记入共享账本，
+	 * 批次结束只写一次能量容器；异常也保留已经开始的工作费用。
 	 */
 	@Inject(method = "process", at = @At("HEAD"), cancellable = true, require = 0)
 	private void productivebeesgenesis$onProcessHead(CallbackInfo ci) {
@@ -356,16 +355,14 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		int ticksRequired = requiredTicks.getAsInt();
 		// 能量预算：storedEnergy 可支撑的虚拟 tick 数（与原版 capAtMaxForEnergy 语义一致）
 		int ticksToRun = ticksLeft;
+		long perVirtualTick = MekCentrifugeEnergyScaling.batchEnergyCost(energyPerTick, ops, 1);
 		if (energyPerTick > 0L) {
 			long stored = productivebeesgenesis$availableStoredEnergy();
-			long perVirtualTick = MekCentrifugeEnergyScaling.batchEnergyCost(energyPerTick, ops, 1);
 			ticksToRun = (int) Math.min(ticksLeft, stored / perVirtualTick);
 			if (ticksToRun <= 0) {
-				// 能量不足以支撑当前操作数：终止批量，交给原版逻辑
-				// （原版会 cap 降 ops 继续或标记 NOT_ENOUGH_ENERGY，语义与逐 tick 一致）
-				productivebeesgenesis$batchTicksLeft = 0;
+				// 剩余电量仍可能支付较小并行数，由原生计算裁剪或报告真正缺电。
 				productivebeesgenesis$batchFastOps = 0;
-				ci.cancel();
+				productivebeesgenesis$awaitingFinalOperations = true;
 				return;
 			}
 		}
@@ -373,6 +370,7 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		setActive.accept(true);
 		int ran = 0;
 		while (ran < ticksToRun) {
+			productivebeesgenesis$chargeEnergy(perVirtualTick);
 			ran++;
 			operatingTicks++;
 			if (operatingTicks >= ticksRequired) {
@@ -389,21 +387,13 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 			}
 			useResources(ops);
 		}
-		// 批量能量一次性扣除（等价于逐虚拟 tick useEnergy(ops) 的累加总额）
-		if (energyPerTick > 0L && ran > 0) {
-			productivebeesgenesis$chargeEnergy(
-					MekCentrifugeEnergyScaling.batchEnergyCost(energyPerTick, ops, ran));
-		}
 		// 这些额外 process 调用发生在同一服务端 tick 内，进度只需发布最终值一次；
 		// operatingTicksChanged 在本模组工厂中只写入同步数组，逐虚拟刻回调没有观察者。
 		if (ticksRequired > 1 && ran > 0) {
 			operatingTicksChanged.accept(operatingTicks);
 		}
-		// 剩余预算处理（区分退出原因）：
-		// - 能量预算耗尽（ticksToRun < ticksLeft）：终止批量，下个虚拟 tick 走原版完整重算，
-		//   由原版 cap 降 ops 或标记 NOT_ENOUGH_ENERGY（对齐原实现能量不足即终止的语义）
-		// - 能量充足但周期完成 break：保留剩余批量（原实现语义），下次调用完整重算后继续快速推进
-		productivebeesgenesis$batchTicksLeft = ticksToRun < ticksLeft ? 0 : ticksLeft - ran;
+		// 周期完成不能丢弃尚可支付的虚拟刻；下一次完整计算继续检查输入、输出和电量。
+		productivebeesgenesis$batchTicksLeft = ticksLeft - ran;
 		ci.cancel();
 	}
 

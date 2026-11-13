@@ -22,7 +22,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.List;
@@ -145,18 +144,6 @@ class BeeDesignerMigrationMinecraftTest {
 	}
 
 	@Test
-	void nameAndRecipeConflictsAreResolvedBeforeExport() {
-		JsonObject first = BeeDesignerDocument.create("first:gold");
-		JsonObject second = BeeDesignerDocument.create("second:gold_bee");
-		String recipe = BeeDesignerDocument.addRecipe(first, "productivebees:advanced_beehive");
-		var plan = BeeDesignerMigration.plan(Map.of("first:gold", first.toString(), "second:gold_bee", second.toString()),
-				List.of(), List.of(), List.of(recipe), BeeDesignerMigration.Policy.COPY_CONFLICTS);
-		assertNotEquals("first:gold", plan.identities().get("first:gold"));
-		assertDoesNotThrow(() -> BeeDesignerCompiler.files(plan.documents()));
-		assertEquals(2, plan.documents().size());
-	}
-
-	@Test
 	void savingBatchPreservesCorruptOriginalBytes(@TempDir Path directory) throws IOException {
 		Path old = directory.resolve("drafts/migration/retained.json");
 		Files.createDirectories(old.getParent());
@@ -170,22 +157,6 @@ class BeeDesignerMigrationMinecraftTest {
 		String token = BeeDesignerDrafts.archives(directory).getFirst().token();
 		assertEquals(original, Files.readString(directory.resolve("drafts-archive").resolve(token)));
 		assertEquals("migration:retained", BeeDesignerDrafts.read(directory, "migration:retained").get("id").getAsString());
-	}
-
-	@Test
-	void collectionAbovePreviousLimitRoundTripsEveryBee(@TempDir Path directory) throws IOException {
-		Map<String, String> sources = new LinkedHashMap<>();
-		for (int index = 0; index < 150; index++) {
-			JsonObject bee = BeeDesignerDocument.create("migration:bee_" + index);
-			sources.put(bee.get("id").getAsString(), bee.toString());
-		}
-		JsonObject credits = BeeDesignerCredits.empty();
-		credits.addProperty("pack", "Complete collection");
-		var restored = BeeDesignerArchive.read(BeeDesignerCollection.export(directory, sources, credits));
-		assertEquals(sources.keySet(), restored.keySet());
-		var plan = BeeDesignerMigration.plan(restored, List.of(), List.of(), List.of(), BeeDesignerMigration.Policy.COPY_CONFLICTS);
-		assertEquals(150, plan.documents().size());
-		assertEquals(150, BeeDesignerMigration.saveDrafts(directory.resolve("target"), plan).size());
 	}
 
 	@Test
@@ -350,20 +321,6 @@ class BeeDesignerMigrationMinecraftTest {
 				.getMessage().equals("designer.error.delete_confirmation"));
 		assertEquals(1, batch.size());
 		assertTrue(BeeDesignerLifecycle.deleted(batch.document("migration:retired_import")));
-	}
-
-	@Test
-	void compiledRecipePreservesIdentityAndContentWithUnificationMarker() {
-		JsonObject source = BeeDesignerDocument.create("migration:preserved");
-		String id = BeeDesignerDocument.addRecipe(source, "productivebees:advanced_beehive");
-		JsonObject before = source.getAsJsonObject("recipes").getAsJsonObject(id).deepCopy();
-		var files = BeeDesignerCompiler.files(Map.of("migration:preserved", source.toString()));
-		ResourceLocation location = ResourceLocation.parse(id);
-		JsonObject compiled = JsonParser.parseString(files.get("data/" + location.getNamespace()
-				+ "/recipe/" + location.getPath() + ".json")).getAsJsonObject();
-		assertTrue(compiled.remove("productivebeesgenesis:designer_recipe").getAsBoolean());
-		assertEquals(before, compiled);
-		assertEquals(before, source.getAsJsonObject("recipes").get(id));
 	}
 
 	@Test

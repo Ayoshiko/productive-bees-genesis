@@ -69,6 +69,66 @@ public final class OutputCustody {
         return handoff(template.copyWithCount(1), FluidStack.EMPTY, requested, target, insert);
     }
 
+    /** 合并交付先登记每台机器的贡献；外部调用前所有来源都必须处于可保存的执行状态。 */
+    public boolean beginSharedItem(UUID request, ItemStack template, long requested, String target) {
+        if (request == null || template == null || template.isEmpty() || requested <= 0) {
+            throw new IllegalArgumentException("Invalid shared item request");
+        }
+        if (blocked()) return false;
+        ItemStack snapshot = template.copyWithCount(1);
+        sequence = request;
+        item = snapshot;
+        fluid = FluidStack.EMPTY;
+        amount = requested;
+        destination = target;
+        failure = "";
+        resolved = false;
+        receiptKnown = false;
+        sourceDebitPending = requested;
+        sourceDebitUnknown = false;
+        executing = true;
+        changed.run();
+        return true;
+    }
+
+    /** 先保存本来源的已知回执，再由原产物所有者扣量并调用 confirmSourceDebit。 */
+    public void sharedItemReceipt(long accepted) {
+        if (!executing || item.isEmpty() || sequence == null || sourceDebitUnknown
+                || accepted < 0 || accepted > amount) {
+            throw new IllegalStateException("Invalid shared item receipt");
+        }
+        if (accepted == 0) {
+            executing = false;
+            clear();
+            return;
+        }
+        amount = accepted;
+        sourceDebitPending = accepted;
+        receiptKnown = true;
+        try {
+            changed.run();
+        } finally {
+            executing = false;
+        }
+    }
+
+    /** 未知回执保留本来源的完整贡献，禁止将其当成拒收再次提交。 */
+    public void sharedItemUncertain(Throwable error) {
+        if (!executing || item.isEmpty() || sequence == null || sourceDebitPending <= 0) {
+            throw new IllegalStateException("No shared item handoff to isolate");
+        }
+        failure = error.getClass().getSimpleName() + ": " + String.valueOf(error.getMessage());
+        if (failure.length() > 512) failure = failure.substring(0, 512);
+        receiptKnown = false;
+        try {
+            changed.run();
+        } finally {
+            executing = false;
+        }
+        ProductiveBeesGenesis.LOGGER.error("Shared item output suspended: request={}, target={}, amount={}",
+                sequence, destination, amount, error);
+    }
+
     public long handoffFluid(FluidStack template, long requested, String target, LongSupplier insert) {
         if (blocked() || template.isEmpty() || requested <= 0) return 0;
         return handoff(ItemStack.EMPTY, template.copyWithAmount(1), requested, target, insert);
@@ -123,12 +183,13 @@ public final class OutputCustody {
     public boolean sourceDebitUnknown() { return sourceDebitUnknown; }
 
     public void confirmSourceDebit(long actual) {
-        if (sourceDebitUnknown || actual < 0 || actual > sourceDebitPending) {
+        if (executing || sourceDebitUnknown || actual < 0 || actual > sourceDebitPending) {
             throw new IllegalStateException("Invalid source debit confirmation");
         }
         sourceDebitPending -= actual;
         if (sourceDebitPending == 0 && receiptKnown) {
             clear();
+            return;
         }
         changed.run();
     }
@@ -145,7 +206,7 @@ public final class OutputCustody {
 
     /** 管理员核验并完成源端实际扣量后确认；此方法不补扣或再次对外输出。 */
     public void confirmSourceSettled(UUID expected) {
-        if (expected == null || !expected.equals(sequence) || sourceDebitPending <= 0) {
+        if (executing || expected == null || !expected.equals(sequence) || sourceDebitPending <= 0) {
             throw new IllegalStateException("Stale source debit confirmation");
         }
         sourceDebitPending = 0;
@@ -229,7 +290,8 @@ public final class OutputCustody {
     }
 
     public ItemStack recoveredItem() {
-        return invalid == null && resolved && !item.isEmpty() ? item.copyWithCount((int) Math.min(Integer.MAX_VALUE, amount)) : ItemStack.EMPTY;
+        return invalid == null && sourceDebitPending == 0 && !sourceDebitUnknown && resolved && !item.isEmpty()
+                ? item.copyWithCount((int) Math.min(Integer.MAX_VALUE, amount)) : ItemStack.EMPTY;
     }
 
     public FluidStack recoveredFluid() {
@@ -308,6 +370,7 @@ public final class OutputCustody {
     }
 
     public void load(HolderLookup.Provider provider, CompoundTag tag) {
+        if (executing) throw new IllegalStateException("Cannot replace custody during an output handoff");
         invalid = null;
         clear();
         if (tag.isEmpty()) return;
@@ -340,7 +403,9 @@ public final class OutputCustody {
                         || tag.getLong("source_debit_pending") <= 0
                         || tag.getLong("source_debit_pending") > amount
                         || !tag.contains("source_debit_unknown", Tag.TAG_BYTE)
-                        || !tag.contains("receipt_known", Tag.TAG_BYTE) || fluid.isEmpty() || resolved) {
+                        || tag.getByte("source_debit_unknown") < 0 || tag.getByte("source_debit_unknown") > 1
+                        || !tag.contains("receipt_known", Tag.TAG_BYTE)
+                        || tag.getByte("receipt_known") < 0 || tag.getByte("receipt_known") > 1 || resolved) {
                     throw new IllegalArgumentException("Invalid source debit record");
                 }
                 sourceDebitPending = tag.getLong("source_debit_pending");

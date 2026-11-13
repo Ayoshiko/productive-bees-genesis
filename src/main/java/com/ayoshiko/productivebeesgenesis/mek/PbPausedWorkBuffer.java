@@ -29,7 +29,7 @@ final class PbPausedWorkBuffer {
 	boolean reserve(int lane, PbRecipeProcessorStateHelper.PaidWork work, HolderLookup.Provider provider) {
 		Entry previous = reserved[lane];
 		if (previous != null && previous.work == work) return true;
-		Entry next = Entry.paid(work, provider);
+		Entry next = work.reservation(provider);
 		long replacementBytes = usedBytes - (previous == null ? 0 : previous.bytes) + next.bytes;
 		if (replacementBytes > MAX_WORK_BYTES) return false;
 		reserved[lane] = next;
@@ -41,7 +41,7 @@ final class PbPausedWorkBuffer {
 	void restoreReservation(int lane, PbRecipeProcessorStateHelper.PaidWork work,
 			ItemStack legacyInput, HolderLookup.Provider provider) {
 		if (work == null && legacyInput.isEmpty()) return;
-		Entry entry = work == null ? Entry.legacy(legacyInput, provider) : Entry.paid(work, provider);
+		Entry entry = work == null ? Entry.legacy(legacyInput, provider) : work.reservation(provider);
 		release(lane);
 		reserved[lane] = entry;
 		usedBytes += entry.bytes;
@@ -54,6 +54,10 @@ final class PbPausedWorkBuffer {
 				.add(entry.withProgress(progress, processingTime));
 		reserved[lane] = null;
 		return true;
+	}
+
+	boolean hasPausedWork() {
+		return !paused.isEmpty();
 	}
 
 	Entry take(int lane, ItemStack input) {
@@ -180,6 +184,10 @@ final class PbPausedWorkBuffer {
 			sizeProbe.set(0, active);
 			long activeBytes = sizeProbe.sizeInBytes() - emptyBytes;
 			return new Entry(work, input, 0, 0, encoded, Math.max(pausedBytes, activeBytes));
+		}
+
+		long bytes() {
+			return bytes;
 		}
 
 		Entry withProgress(int paid, int required) {

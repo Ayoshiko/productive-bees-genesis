@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mixin;
 
+import com.ayoshiko.productivebeesgenesis.compat.sophisticated.SophisticatedStorageMixinContract;
 import com.ayoshiko.productivebeesgenesis.resource.PbResourceMixinContract;
 import net.neoforged.fml.loading.FMLLoader;
 import org.objectweb.asm.ClassReader;
@@ -154,6 +155,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 
 	private static final Set<String> AE2_CREATE_MIXINS = Set.of("CreateBottomlessBulkPullMixin");
 	private static final Set<String> AE2_INFINITY_CELL_MIXINS = Set.of("InfinityCellKeySupplierMixin");
+	private static final Set<String> SOPHISTICATED_SIMULATION_MIXINS = Set.of(
+			"SophisticatedSimpleInserterSimulationMixin",
+			"SophisticatedCachedInsertSimulationMixin");
 
 	/** 引用 mekenergistics 类的 Mixin 简单类名集合（目标类仅当该 mod 加载时存在） */
 	private static final Set<String> MEKENERGISTICS_MIXINS = Set.of(
@@ -194,6 +198,7 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 		static final boolean AE2_LOADED = isModLoaded(AE2_MOD_ID);
 		static final boolean CREATE_LOADED = isModLoaded("create");
 		static final boolean ME_INFINITY_CELL_LOADED = isModLoaded("meinfinitycell");
+		static final boolean SOPHISTICATED_CORE_LOADED = isModLoaded("sophisticatedcore");
 		/** Mek Energistics 是否加载（Mixin 阶段检测，仅计算一次） */
 		static final boolean MEKENERGISTICS_LOADED = isModLoaded(MEKENERGISTICS_MOD_ID);
 		/** Building Gadgets 2 是否加载（Mixin 阶段检测，仅计算一次） */
@@ -361,6 +366,9 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
 		String simpleName = simpleClassName(mixinClassName);
+		if (SOPHISTICATED_SIMULATION_MIXINS.contains(simpleName)) {
+			return Holder.SOPHISTICATED_CORE_LOADED && SophisticatedStorageMixinContract.supported();
+		}
 		if (simpleName.equals("DesignerRecipeUnificationMixin")) {
 			return isModLoaded("almostunified") && FMLLoader.getLoadingModList().getMods().stream()
 					.anyMatch(mod -> mod.getModId().equals("almostunified") && mod.getVersion().toString().equals("1.21.1-1.4.2"));

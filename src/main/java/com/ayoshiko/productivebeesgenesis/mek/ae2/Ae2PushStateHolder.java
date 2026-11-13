@@ -217,6 +217,10 @@ public final class Ae2PushStateHolder {
 
 	// ===== Grid Node 状态缓存方法（模块2.1） =====
 
+	int peekCachedNodeState() {
+		return cachedNodeState;
+	}
+
 	/**
 	 * 获取 grid node 状态（带缓存）
 	 * <br/>

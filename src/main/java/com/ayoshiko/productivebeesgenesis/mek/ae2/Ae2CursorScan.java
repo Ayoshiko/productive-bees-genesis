@@ -135,27 +135,53 @@ final class Ae2CursorScan {
 	static <T> int collectPrioritizedRotating(List<T> out, Set<T> seen,
 			List<T> prioritizedKeys, List<T> fallbackKeys,
 			T prioritizedCursor, T fallbackCursor, int maxTypes, Predicate<T> acceptable) {
+		return collectPrioritizedRotating(out, seen, prioritizedKeys, fallbackKeys,
+				prioritizedCursor, fallbackCursor, maxTypes, acceptable, null, null);
+	}
+
+	/** 位置提示只用于键唯一的稳定目录；目录重建时调用方必须清除提示。 */
+	static <T> int collectPrioritizedRotating(List<T> out, Set<T> seen,
+			List<T> prioritizedKeys, List<T> fallbackKeys,
+			T prioritizedCursor, T fallbackCursor, int maxTypes, Predicate<T> acceptable,
+			CursorPosition prioritizedPosition, CursorPosition fallbackPosition) {
 		int initialSize = out.size();
-		collectRotating(out, seen, prioritizedKeys, prioritizedCursor, maxTypes, acceptable);
+		collectRotating(out, seen, prioritizedKeys, prioritizedCursor, maxTypes, acceptable, prioritizedPosition);
 		int prioritizedCount = out.size() - initialSize;
-		collectRotating(out, seen, fallbackKeys, fallbackCursor, maxTypes, acceptable);
+		collectRotating(out, seen, fallbackKeys, fallbackCursor, maxTypes, acceptable, fallbackPosition);
 		return prioritizedCount;
 	}
 
 	private static <T> void collectRotating(List<T> out, Set<T> seen, List<T> values,
-			T cursor, int maxTypes, Predicate<T> acceptable) {
+			T cursor, int maxTypes, Predicate<T> acceptable, CursorPosition position) {
 		if (values.isEmpty() || maxTypes <= out.size()) return;
-		int start = cursorNextIndex(values, cursor);
+		int start = cursorNextIndex(values, cursor, position);
 		for (int visited = 0; visited < values.size() && out.size() < maxTypes; visited++) {
-			T key = values.get((start + visited) % values.size());
-			if (key != null && !seen.contains(key) && acceptable.test(key)) select(out, seen, key);
+			int index = (start + visited) % values.size();
+			T key = values.get(index);
+			if (key != null && !seen.contains(key) && acceptable.test(key)) {
+				select(out, seen, key);
+				if (position != null) position.index = index;
+			}
 		}
 	}
 
-	private static <T> int cursorNextIndex(List<T> values, T cursor) {
+	private static <T> int cursorNextIndex(List<T> values, T cursor, CursorPosition position) {
 		if (values.isEmpty() || cursor == null) return 0;
-		int index = cursorStartIndex(values, cursor, Function.identity());
-		return cursor.equals(values.get(index)) ? (index + 1) % values.size() : 0;
+		int index = position == null ? -1 : position.index;
+		if (index < 0 || index >= values.size() || !cursor.equals(values.get(index))) {
+			index = cursorStartIndex(values, cursor, Function.identity());
+			if (!cursor.equals(values.get(index))) index = -1;
+		}
+		if (position != null) position.index = index;
+		return index >= 0 ? (index + 1) % values.size() : 0;
+	}
+
+	static final class CursorPosition {
+		private int index = -1;
+
+		void clear() {
+			index = -1;
+		}
 	}
 
 	/**

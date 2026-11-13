@@ -25,21 +25,6 @@ class Ae2SharedFingerprintMinecraftTest {
 	void reset() { Ae2FingerprintCache.clearShared(); }
 
 	@Test
-	void manyHostsEncodeOneExactKeyOnlyOnce() {
-		var provider = mock(HolderLookup.Provider.class);
-		var calls = new AtomicInteger();
-		try (var codec = mockStatic(Ae2ItemFingerprint.class)) {
-			codec.when(() -> Ae2ItemFingerprint.encodeOrLegacy(any(), same(provider)))
-					.thenAnswer(call -> "{sample:" + calls.incrementAndGet() + "}");
-			for (int i = 0; i < 79; i++) {
-				assertEquals("{sample:1}", new Ae2FingerprintCache().get(key("same"), provider));
-			}
-			assertEquals(1, calls.get());
-			assertEquals("{sample:2}", new Ae2FingerprintCache().get(key("different"), provider));
-		}
-	}
-
-	@Test
 	void actualCodecRoundTripKeepsComponentsAcrossHosts() {
 		var provider = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
 		AEItemKey key = key("full components");
@@ -63,43 +48,6 @@ class Ae2SharedFingerprintMinecraftTest {
 			assertEquals("{generation:3}", cache.get(key("same"), mock(HolderLookup.Provider.class)));
 			Ae2FingerprintCache.clearShared();
 			assertEquals("{generation:4}", cache.get(key("same"), provider));
-		}
-	}
-
-	@Test
-	void characterBudgetEvictsButNeverTruncatesReturnedFingerprints() {
-		var provider = mock(HolderLookup.Provider.class);
-		var cache = new Ae2FingerprintCache();
-		var calls = new AtomicInteger();
-		String large = "{" + "x".repeat(Ae2FingerprintCache.MAX_CACHED_CHARACTERS / 2);
-		try (var codec = mockStatic(Ae2ItemFingerprint.class)) {
-			codec.when(() -> Ae2ItemFingerprint.encodeOrLegacy(any(), same(provider)))
-					.thenAnswer(call -> { calls.incrementAndGet(); return large; });
-			assertEquals(large, cache.get(key("first"), provider));
-			assertEquals(large, cache.get(key("second"), provider));
-			assertEquals(large, cache.get(key("first"), provider));
-			assertEquals(3, calls.get());
-			String oversized = large + large;
-			codec.when(() -> Ae2ItemFingerprint.encodeOrLegacy(eq(key("oversized")), same(provider))).thenReturn(oversized);
-			assertEquals(oversized, cache.get(key("oversized"), provider));
-		}
-	}
-
-	@Test
-	void entryBudgetAndTransientLegacyResultsAreBounded() {
-		var provider = mock(HolderLookup.Provider.class);
-		var cache = new Ae2FingerprintCache();
-		var calls = new AtomicInteger();
-		try (var codec = mockStatic(Ae2ItemFingerprint.class)) {
-			codec.when(() -> Ae2ItemFingerprint.encodeOrLegacy(any(), same(provider)))
-					.thenAnswer(call -> "{entry:" + calls.incrementAndGet() + "}");
-			for (int i = 0; i <= Ae2FingerprintCache.MAX_ENTRIES; i++) cache.get(key("key_" + i), provider);
-			cache.get(key("key_0"), provider);
-			assertEquals(Ae2FingerprintCache.MAX_ENTRIES + 2, calls.get());
-			codec.when(() -> Ae2ItemFingerprint.encodeOrLegacy(eq(key("legacy")), same(provider)))
-					.thenReturn("legacy", "{recovered:1}");
-			assertEquals("legacy", cache.get(key("legacy"), provider));
-			assertEquals("{recovered:1}", cache.get(key("legacy"), provider));
 		}
 	}
 

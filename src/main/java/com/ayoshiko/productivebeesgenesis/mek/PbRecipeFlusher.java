@@ -96,6 +96,15 @@ public final class PbRecipeFlusher {
 	 * @return 见 {@link Outcome}
 	 */
 	Outcome flush(PbRecipeCompleter completer, int processIndex, int maxDeferredPerType) {
+		return flush(completer, processIndex, maxDeferredPerType, true);
+	}
+
+	boolean flushAfterFactoryAe(PbRecipeCompleter completer, int processIndex) {
+		return flush(completer, processIndex, 0, false) == Outcome.COMMITTED;
+	}
+
+	private Outcome flush(PbRecipeCompleter completer, int processIndex, int maxDeferredPerType,
+			boolean allowDirectAe) {
 		if (completer.invalidPending() || completer.paymentPending()) return Outcome.BLOCKED;
 		if (completer.isPreparedOutput() && !completer.commitCompletedInput(processIndex)) return Outcome.BLOCKED;
 		if (!completer.hasPendingOutputs() && completer.getPendingInputShrink() <= 0) {
@@ -132,7 +141,7 @@ public final class PbRecipeFlusher {
 		}
 		context.productivebeesgenesis$beginOutputBatch();
 		try {
-			if (context.productivebeesgenesis$isDirectAeOutputEnabled()) {
+			if (allowDirectAe && context.productivebeesgenesis$isDirectAeOutputEnabled()) {
 				boolean committedToAe = pushPendingDirectToAe(completer, context);
 				if (committedToAe) {
 					// AE 写入不可回滚。先提交一次输入，剩余产物保留 pending 重试，
@@ -412,12 +421,12 @@ public final class PbRecipeFlusher {
 		while (iterator.hasNext() && !outputBlocked(context)) {
 			Map.Entry<ItemStack, Long> entry = iterator.next();
 			long remaining = Math.max(0, entry.getValue());
-			int requested = (int) Math.min(Integer.MAX_VALUE, remaining);
+			long requested = remaining;
 			if (requested <= 0) {
 				iterator.remove();
 				continue;
 			}
-			int accepted = directItem(context, entry.getKey(), requested, true);
+			long accepted = directItemToAe(context, entry.getKey(), requested);
 			if (accepted <= 0) continue;
 			acceptedAny = true;
 			completer.consumePendingItemCount(accepted);
@@ -463,7 +472,7 @@ public final class PbRecipeFlusher {
 				iterator.remove();
 				continue;
 			}
-			int accepted = directItem(context, entry.getKey(), requested, false);
+			int accepted = directItemToNeighbors(context, entry.getKey(), requested);
 			if (accepted <= 0) continue;
 			acceptedAny = true;
 			completer.consumePendingItemCount(accepted);
@@ -476,21 +485,33 @@ public final class PbRecipeFlusher {
 		return acceptedAny;
 	}
 
-	private static int directItem(PbRecipeContext context, ItemStack template, int amount, boolean ae) {
+	private static int directItemToNeighbors(PbRecipeContext context, ItemStack template, int amount) {
 		try {
-			int handed = ae ? context.productivebeesgenesis$pushGeneratedItemToAe(template, amount)
-					: context.productivebeesgenesis$pushGeneratedItemToNeighbors(template, amount);
+			int handed = context.productivebeesgenesis$pushGeneratedItemToNeighbors(template, amount);
 			if (handed < 0 || handed > amount) throw new IllegalStateException("Invalid direct output receipt");
 			return handed;
 		} catch (RuntimeException | LinkageError failure) {
 			var custody = custody(context);
 			if (custody == null || custody.blocked()) throw failure;
-			return (int) custody.handoffItem(template, amount, ae ? "centrifuge-direct-ae" : "centrifuge-direct-neighbor",
+			return (int) custody.handoffItem(template, amount, "centrifuge-direct-neighbor",
 					() -> { throw new IllegalStateException("Direct output outcome uncertain", failure); });
 		}
 	}
 
-	private static long directFluid(PbRecipeContext context, FluidStack template, long amount) {
+	static long directItemToAe(PbRecipeContext context, ItemStack template, long amount) {
+		try {
+			long handed = context.productivebeesgenesis$pushGeneratedItemToAe(template, amount);
+			if (handed < 0 || handed > amount) throw new IllegalStateException("Invalid direct output receipt");
+			return handed;
+		} catch (RuntimeException | LinkageError failure) {
+			var custody = custody(context);
+			if (custody == null || custody.blocked()) throw failure;
+			return custody.handoffItem(template, amount, "centrifuge-direct-ae",
+					() -> { throw new IllegalStateException("Direct output outcome uncertain", failure); });
+		}
+	}
+
+	static long directFluid(PbRecipeContext context, FluidStack template, long amount) {
 		try {
 			long handed = context.productivebeesgenesis$pushGeneratedFluidToAe(template, amount);
 			if (handed < 0 || handed > amount) throw new IllegalStateException("Invalid direct fluid receipt");

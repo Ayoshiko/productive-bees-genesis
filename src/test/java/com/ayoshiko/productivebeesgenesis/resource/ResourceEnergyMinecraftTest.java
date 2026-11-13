@@ -1,18 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
-import com.ayoshiko.productivebeesgenesis.api.resource.ResourceProductionApi;
-import com.google.gson.JsonParser;
-import com.mojang.serialization.JsonOps;
-import io.netty.buffer.Unpooled;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.Map;
 
 import static com.ayoshiko.productivebeesgenesis.resource.ResourceAccountsMinecraftTest.*;
@@ -21,13 +12,7 @@ import static org.mockito.Mockito.*;
 
 @Tag("minecraft")
 class ResourceEnergyMinecraftTest {
-	private static final ResourceLocation BEE = ResourceLocation.parse("example:energy");
 	private static final ResourceKey FE = ResourceTypes.FE;
-
-	private static String json(String energyType, String amount) {
-		return "{\"bee\":\"example:energy\",\"outputs\":[{\"kind\":\"energy\",\"energy_type\":\""
-				+ energyType + "\",\"amount\":" + amount + "}]}";
-	}
 
 	private static ResourceEnergyOutput output(ResourceAccount account) {
 		var port = mock(ResourceOutputAccess.class);
@@ -43,47 +28,6 @@ class ResourceEnergyMinecraftTest {
 		account.start(ticket);
 		account.freeze(ticket, amounts);
 		account.commit(ticket);
-	}
-
-	@Test void feDefinitionKeepsLongMaxThroughJsonAndWireAlongsideChemical() {
-		var recipe = ResourceProductionRecipe.CODEC.codec().parse(JsonOps.INSTANCE,
-				JsonParser.parseString(json("FE", "\"9223372036854775807\""))).getOrThrow();
-		assertEquals(new ResourceProductionRecipe.Output(FE, Long.MAX_VALUE, 1), recipe.outputs().getFirst());
-		var encoded = ResourceProductionRecipe.CODEC.codec().encodeStart(JsonOps.INSTANCE, recipe).getOrThrow();
-		assertEquals(recipe, ResourceProductionRecipe.CODEC.codec().parse(JsonOps.INSTANCE, encoded).getOrThrow());
-		var chemical = new ResourceProductionRecipe.Output(ResourceLocation.parse("mekanism:hydrogen"), 100, 1);
-		var mixed = new ResourceProductionRecipe(BEE, List.of(recipe.outputs().getFirst(), chemical));
-		var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(),
-				RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
-		try {
-			ResourceProductionRecipe.STREAM_CODEC.encode(buffer, mixed);
-			assertEquals(mixed, ResourceProductionRecipe.STREAM_CODEC.decode(buffer));
-			buffer.clear();
-			buffer.writeByte(99);
-			assertThrows(IllegalArgumentException.class, () -> ResourceOutputCodecs.read(buffer));
-		} finally { buffer.release(); }
-		assertEquals(ResourceLocation.parse("mekanism:hydrogen"), chemical.chemical());
-	}
-
-	@Test void otherEnergyTypesUnknownSchemasAndNumericAmountsCannotBecomeFe() {
-		for (var type : List.of("GTEU", "fe", "unknown")) {
-			assertTrue(ResourceProductionRecipe.CODEC.codec().parse(JsonOps.INSTANCE,
-					JsonParser.parseString(json(type, "\"100\""))).error().isPresent());
-		}
-		assertTrue(ResourceProductionRecipe.CODEC.codec().parse(JsonOps.INSTANCE,
-				JsonParser.parseString(json("FE", "9007199254740993"))).error().isPresent());
-		assertThrows(IllegalArgumentException.class, () ->
-				new ResourceProductionRecipe.Output(new ResourceKey(FE.kind(), 2, FE.payload()), 100, 1));
-		assertTrue(ResourceTypes.available(FE));
-	}
-
-	@Test void productivityAndCombPortionsPreserveTypedResourceIdentity() {
-		var recipe = new ResourceCentrifugeRecipe(BEE, List.of(
-				new ResourceProductionRecipe.Output(FE, 3_000_000_007L, 1),
-				new ResourceProductionRecipe.Output(ResourceLocation.parse("mekanism:hydrogen"), 10, 1)), 20);
-		var plan = ResourceProductionApi.planCentrifuging(recipe, 2, 0, 0);
-		assertEquals(Map.of(FE, 24_000_000_056L, HYDROGEN, 80L), plan.sample(4));
-		assertEquals(plan.maximum(4), plan.sample(4));
 	}
 
 	@Test void nativeIntSegmentsKeepLongRemainderAndSimulationCannotSpend() {

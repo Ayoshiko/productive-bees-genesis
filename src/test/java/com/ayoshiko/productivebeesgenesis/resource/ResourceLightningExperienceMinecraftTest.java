@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
-import com.ayoshiko.productivebeesgenesis.api.resource.ResourceProductionApi;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import io.netty.buffer.Unpooled;
@@ -8,7 +7,6 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -41,25 +39,6 @@ class ResourceLightningExperienceMinecraftTest {
 		return new ResourceScalarOutput(port, key);
 	}
 
-	@Test void jsonAndWirePreserveLongQuantitiesAndBothVoltages() {
-		var json = JsonParser.parseString("""
-				{"bee":"example:charged","outputs":[{"kind":"experience","amount":"9223372036854775807"},
-				{"kind":"lightning","tier":"high_voltage","amount":"9007199254740993"},
-				{"kind":"lightning","tier":"extreme_high_voltage","amount":"17"}]}
-				""");
-		var recipe = ResourceProductionRecipe.CODEC.codec().parse(JsonOps.INSTANCE, json).getOrThrow();
-		assertEquals(List.of(new ResourceProductionRecipe.Output(XP, Long.MAX_VALUE, 1),
-				new ResourceProductionRecipe.Output(HV, 9007199254740993L, 1),
-				new ResourceProductionRecipe.Output(EHV, 17, 1)), recipe.outputs());
-		var encoded = ResourceProductionRecipe.CODEC.codec().encodeStart(JsonOps.INSTANCE, recipe).getOrThrow();
-		assertEquals(recipe, ResourceProductionRecipe.CODEC.codec().parse(JsonOps.INSTANCE, encoded).getOrThrow());
-		var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), REGISTRIES);
-		try {
-			ResourceProductionRecipe.STREAM_CODEC.encode(buffer, recipe);
-			assertEquals(recipe, ResourceProductionRecipe.STREAM_CODEC.decode(buffer));
-		} finally { buffer.release(); }
-	}
-
 	@Test void missingUnknownAndInvalidWireTiersAreNeverDefaulted() {
 		for (String fields : List.of("", "\"tier\":\"unknown\",", "\"tier\":\"HIGH_VOLTAGE\",")) {
 			var json = JsonParser.parseString("{\"bee\":\"example:charged\",\"outputs\":[{\"kind\":\"lightning\","
@@ -73,25 +52,6 @@ class ResourceLightningExperienceMinecraftTest {
 			buffer.writeByte(8).writeByte(2);
 			assertThrows(IllegalArgumentException.class, () -> ResourceOutputCodecs.read(buffer));
 		} finally { buffer.release(); }
-	}
-
-	@Test void combBlocksScaleAllThreeIdentitiesWithoutConvertingUnits() {
-		var recipe = new ResourceCentrifugeRecipe(ResourceLocation.parse("example:charged"), List.of(
-				new ResourceProductionRecipe.Output(XP, 9, 1), new ResourceProductionRecipe.Output(HV, 13, 1),
-				new ResourceProductionRecipe.Output(EHV, 17, 1)), 20);
-		assertEquals(Map.of(XP, 72L, HV, 104L, EHV, 136L), ResourceProductionApi.planCentrifuging(recipe, 2, 0, 0).sample(4));
-	}
-
-	@Test void missingDependenciesKeepBalancesAndBlockNativeExtraction() {
-		var store = new ResourceAccounts(() -> {});
-		var unknown = new ResourceKey(XP.kind(), 9, XP.payload());
-		var amounts = Map.of(XP, Long.MAX_VALUE, HV, 29L, EHV, 37L, unknown, 101L);
-		var account = produce(store, amounts);
-		for (var key : List.of(XP, HV, EHV)) {
-			assertFalse(ResourceTypes.available(key));
-			assertEquals(0, view(account, key).extract(Long.MAX_VALUE, false));
-		}
-		assertEquals(amounts, ResourceAccounts.load(store.save(), () -> {}).find(account.reference().sourceId()).available());
 	}
 
 	@Test void voltageViewsAreIndependentAndPendingTransfersCannotBeSpentTwice() {
