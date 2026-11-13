@@ -11,7 +11,7 @@
 
 **语言**: [English](README.md) · [中文](README_zh.md)
 
-**1.2.4：生产、升级与编辑器维护更新。** 本版修复蜂箱与离心机的供料／输出等待、已付工作恢复、带内容机器的 AE2 样板、访问权限和编辑器交互。客户端与服务端须一起更新，完整记录见 [1.2.4 变更](CHANGELOG.md#124---2026-11-13)。公开发布进行中，当前附件与平台可用状态以 [1.2.4 Release](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.4) 为准。
+**1.2.4：生产、升级与编辑器维护更新。** 本版修复蜂箱与离心机的供料／输出等待、已付工作恢复、带内容机器的 AE2 样板、访问权限和编辑器交互。客户端与服务端须一起更新，完整记录见 [1.2.4 变更](CHANGELOG.md#124---2026-11-13)。[1.2.4 Release](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.4) 已在 GitHub 正式发布，CurseForge 上传工作流已成功。
 
 **下载**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
