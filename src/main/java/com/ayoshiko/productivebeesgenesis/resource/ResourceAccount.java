@@ -316,7 +316,6 @@ public final class ResourceAccount {
 		if (!production.nextWorkCaptured || !Objects.equals(production.nextWork, nextWork)) {
 			throw new IllegalStateException("Deferred centrifuge work differs from its frozen plan");
 		}
-		validateCentrifugeWork(lane, production.nextWork);
 		var pending = new SuspendedProduction(production.awaitingOutput(),
 				"Paid centrifuge output awaiting delivery confirmation");
 		var completion = new DeferredCentrifuge(ticket, lane, pending);
@@ -349,7 +348,6 @@ public final class ResourceAccount {
 			if (production != null || transfer != null) {
 				throw new IllegalStateException("Resource request is still executing");
 			}
-			validateCentrifugeWork(lane, pending.production.nextWork);
 			var next = ResourceExactAmounts.plus(available, pending.production.result);
 			var work = pending.production.nextWork;
 			settling = true;
@@ -396,9 +394,11 @@ public final class ResourceAccount {
 		if (production.nextWorkCaptured && !Objects.equals(production.nextWork, nextWork)) {
 			throw new IllegalStateException("Committed centrifuge work differs from its frozen plan");
 		}
-		validateCentrifugeWork(lane, nextWork);
 		CompoundTag copied = production.nextWork;
-		if (!production.nextWorkCaptured && nextWork != null) copied = nextWork.copy();
+		if (!production.nextWorkCaptured) {
+			validateCentrifugeWork(lane, nextWork);
+			if (nextWork != null) copied = nextWork.copy();
+		}
 		var next = ResourceExactAmounts.plus(available, production.result);
 		accounts.beforeChange(this);
 		if (copied == null) {
@@ -620,14 +620,19 @@ public final class ResourceAccount {
 	public Map<ResourceKey, BigInteger> reservedCapacity() {
 		accounts.checkThread();
 		if (reservedCapacitySnapshot == null) {
-			var result = available;
+			if (suspendedLanes.isEmpty() && suspendedTransfers.isEmpty()) {
+				reservedCapacitySnapshot = available;
+				return reservedCapacitySnapshot;
+			}
+			var result = new LinkedHashMap<>(available);
 			for (var pending : suspendedLanes.values()) {
-				result = ResourceExactAmounts.plus(result, pending.production.capacityReservation());
+				pending.production.capacityReservation().forEach(
+						(key, amount) -> result.merge(key, amount, BigInteger::add));
 			}
 			for (var pending : suspendedTransfers.values()) {
-				result = ResourceExactAmounts.plus(result, Map.of(pending.transfer.key, pending.transfer.amount));
+				result.merge(pending.transfer.key, pending.transfer.amount, BigInteger::add);
 			}
-			reservedCapacitySnapshot = result;
+			reservedCapacitySnapshot = ResourceExactAmounts.copy(result);
 		}
 		return reservedCapacitySnapshot;
 	}

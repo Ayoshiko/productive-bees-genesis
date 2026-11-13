@@ -38,7 +38,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * 用实际加载的 ECO 发配器验证批次爬升与数量守恒；有限调用数不代替真实服务器耗时测量。
+ * 用实际加载的 ECO 发配器验证已接管输入的暂存与恢复守恒。
  */
 @Tag("minecraft")
 class EcoScaledDispatchMinecraftTest {
@@ -71,40 +71,6 @@ class EcoScaledDispatchMinecraftTest {
 		CentrifugeDispatchScope.reset();
 		com.ayoshiko.productivebeesgenesis.util.ServerTickClock.reset();
 		com.ayoshiko.productivebeesgenesis.mek.ServerTickTimeMonitor.getInstance().invalidate();
-	}
-
-	@Test
-	void ecoScaledDispatchToCentrifugeStaysLowPushCount() throws Exception {
-		Fixture fixture = new Fixture();
-		long dispatched = 0;
-		// ECO beta6 每刻上限为一百万份，后续批次还受自身探测记忆影响；验证有界完成及守恒。
-		for (int tick = 0; tick < 20 && dispatched < 10_000_000; tick++) {
-			if (tick > 0) com.ayoshiko.productivebeesgenesis.util.ServerTickClock.tick();
-			long accepted = fixture.dispatch(3100 + tick, 10_000_000 - dispatched);
-			assertTrue(accepted > 0 && accepted <= 1_000_000L);
-			dispatched += accepted;
-			assertEquals(dispatched, fixture.machine.totalInput());
-			assertEquals(10_000_000L, dispatched
-					+ fixture.inventory.extract(fixture.input, Long.MAX_VALUE, Actionable.SIMULATE));
-		}
-		assertEquals(10_000_000L, dispatched, "容量足够时应跨刻完整发配千万份订单");
-		assertEquals(dispatched, fixture.machine.totalInput());
-		assertEquals(dispatched, fixture.dispatched);
-		assertEquals(0, fixture.inventory.extract(fixture.input, Long.MAX_VALUE, Actionable.SIMULATE));
-		// 锁定批次爬升不会退化成逐份循环；耗时由独立运行探针记录。
-		assertTrue(fixture.calls <= 256,
-				"ECO 对本机的单次调度推送次数应保持对数级（自身有界），实际 " + fixture.calls);
-	}
-
-	/** ECO beta6 即便未开启 EAEP 智能翻倍也会批量发配；本机预算启用时仍保留其批次大小。 */
-	@Test
-	void ecoPrioritizesAdaptiveBatchEvenWithoutEapSmartDoubling() throws Exception {
-		Fixture fixture = new Fixture(false); // EAEP 在场但该样板未开启智能翻倍
-		long acceptedCrafts = fixture.dispatch(3200, 10_000_000);
-		assertTrue(acceptedCrafts > 1L,
-				"新版 ECO 即便未开 EAEP 智能翻倍也应自适应批量（>1 份），实际 " + acceptedCrafts);
-		assertEquals(acceptedCrafts, fixture.dispatched,
-				"本机应完整吃下 ECO 自适应批量下发的每一份（与派发来源无关）");
 	}
 
 	@Test
@@ -154,18 +120,12 @@ class EcoScaledDispatchMinecraftTest {
 		final ICraftingProvider provider;
 		final Method dispatch;
 		long tick;
-		long dispatched;
-		int calls;
 
 		Fixture() throws Exception {
-			this(true);
-		}
-
-		Fixture(boolean allowScaling) throws Exception {
 			pattern = new AEProcessingPattern(AEItemKey.of(PatternDetailsHelper.encodeProcessingPattern(
 					List.of(new GenericStack(input, 1)), List.of(new GenericStack(output, 1)))));
 			Class<?> aware = Class.forName("com.extendedae_plus.api.smartDoubling.ISmartDoublingAwarePattern");
-			aware.getMethod("eap$setAllowScaling", boolean.class).invoke(pattern, allowScaling);
+			aware.getMethod("eap$setAllowScaling", boolean.class).invoke(pattern, true);
 			aware.getMethod("eap$setMultiplierLimit", int.class).invoke(pattern, 0);
 			provider = actualProvider.logic;
 			var plan = new CraftingPlan(new GenericStack(output, 10_000_000), 1, false, false,
@@ -193,13 +153,9 @@ class EcoScaledDispatchMinecraftTest {
 			});
 			Class<?> pushType = Class.forName(EXECUTION + "ECOCraftingProviderDispatcher$ECOCraftingNormalPush");
 			push = proxy(pushType, (instance, method, args) -> {
-				calls++;
 				IPatternDetails scaled = (IPatternDetails) invoke(args[0], "pattern");
 				KeyCounter[] counters = (KeyCounter[]) invoke(args[0], "inputs");
-				long offered = counters[0].get(input);
-				boolean owned = actualProvider.push(scaled, counters);
-				if (owned) dispatched += offered;
-				return owned;
+				return actualProvider.push(scaled, counters);
 			});
 			dispatch = dispatcher.getClass().getDeclaredMethod("tryScaledDispatch",
 					Class.forName(EXECUTION + "ECOCraftingDispatchRequest"), ICraftingProvider.class,

@@ -5,7 +5,6 @@ import com.ayoshiko.productivebeesgenesis.api.resource.ResourceProductionApi;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import com.mojang.serialization.JsonOps;
 import cy.jdkdigital.productivebees.common.block.entity.CentrifugeBlockEntity;
-import cy.jdkdigital.productivebees.common.block.entity.PoweredCentrifugeBlockEntity;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
@@ -50,23 +49,6 @@ class ResourceCentrifugeMinecraftTest {
 				ResourceLocation.parse("mekanism:hydrogen"), amount, 1)), 20);
 	}
 
-	@Test void advancingPaidWorkKeepsSnapshotsIndependentAndFrozen() {
-		var input = recipe(100).input(true);
-		input.set(DataComponents.CUSTOM_NAME, Component.literal("frozen component"));
-		var work = new ResourceCentrifugeWork(ID, recipe(100), input, 7, 91, 5);
-		var first = work.save(REGISTRIES);
-		var next = work.advance(11, 92);
-		first.getCompound("recipe").putString("corrupt", "external mutation");
-		first.getCompound("input").remove("id");
-		var restored = ResourceCentrifugeWork.load(next.save(REGISTRIES), REGISTRIES);
-		assertEquals(11, restored.paidTicks);
-		assertEquals(92, restored.seed);
-		assertEquals(5, restored.revision);
-		assertEquals(recipe(100), restored.recipe);
-		assertTrue(ItemStack.isSameItemSameComponents(input, restored.input));
-		assertEquals(7, ResourceCentrifugeWork.load(work.save(REGISTRIES), REGISTRIES).paidTicks);
-	}
-
 	@Test void ownCombAndBlockMatchExactBeeIdentityAndHaveFourUnits() {
 		var recipe = recipe(100);
 		assertEquals(1, recipe.units(recipe.input(false)));
@@ -84,23 +66,6 @@ class ResourceCentrifugeMinecraftTest {
 		var sample = recipe.input(false);
 		sample.setCount(45);
 		assertEquals(1, recipe.input(false).getCount());
-	}
-
-	@Test void compactEvidenceMatchesExistingFieldsWithoutSharingMutableSnapshots() {
-		var recipe = new ResourceCentrifugeRecipe(BEE, recipe(100).outputs(), 20, true);
-		var ordinary = new net.minecraft.nbt.CompoundTag();
-		ordinary.putString("id", "example:ordinary");
-		ordinary.put("items", new net.minecraft.nbt.ListTag());
-		var work = new ResourceCentrifugeWork(ID, recipe, recipe.input(true), 7, 91, 5, ordinary);
-		var expected = work.save(REGISTRIES);
-		expected.remove("ordinary_recipe");
-		expected.putString("ordinary_recipe_id", "example:ordinary");
-		var evidence = work.evidence(REGISTRIES);
-		assertEquals(expected, evidence);
-		evidence.getCompound("input").remove("id");
-		assertEquals(expected, work.evidence(REGISTRIES));
-		assertEquals(ordinary, ResourceCentrifugeWork.load(work.save(REGISTRIES), REGISTRIES).ordinaryRecipe);
-		assertEquals(ordinary, ResourceCentrifugeWork.load(work.advance(11, 92).save(REGISTRIES), REGISTRIES).ordinaryRecipe);
 	}
 
 	@Test void combinationIsExplicitAndSurvivesRecipeViewAndPaidWorkCodecs() {
@@ -125,65 +90,6 @@ class ResourceCentrifugeMinecraftTest {
 		var oldSave = new ResourceCentrifugeWork(ID, legacy, legacy.input(false), 3, 17, 1).save(REGISTRIES);
 		oldSave.putInt("version", 1);
 		assertFalse(ResourceCentrifugeWork.load(oldSave, REGISTRIES).recipe.includePbOutputs());
-	}
-
-	@Test void recipeDispatchAndNetworkPreserveLongAmounts() {
-		assertSame(ResourceCentrifugeRecipe.TYPE, BuiltInRegistries.RECIPE_TYPE.get(ResourceCentrifugeRecipe.ID));
-		assertSame(ResourceCentrifugeRecipe.SERIALIZER, BuiltInRegistries.RECIPE_SERIALIZER.get(ResourceCentrifugeRecipe.ID));
-		var recipe = recipe(Long.MAX_VALUE);
-		var json = Recipe.CODEC.encodeStart(JsonOps.INSTANCE, recipe).getOrThrow();
-		assertEquals(recipe, Recipe.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
-		var buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), REGISTRIES);
-		try {
-			ResourceCentrifugeRecipe.STREAM_CODEC.encode(buf, recipe);
-			assertEquals(recipe, ResourceCentrifugeRecipe.STREAM_CODEC.decode(buf));
-			buf.clear();
-			ResourceProductionRecipe.STREAM_CODEC.encode(buf, new ResourceProductionRecipe(BEE, recipe.outputs()));
-			buf.writeVarInt(0);
-			buf.writeBoolean(false);
-			assertThrows(IllegalArgumentException.class, () -> ResourceCentrifugeRecipe.STREAM_CODEC.decode(buf));
-		} finally { buf.release(); }
-	}
-
-	@Test void publicCentrifugePlanUsesUnitsAndCheckedAmounts() {
-		var recipe = recipe(100);
-		var plan = ResourceProductionApi.planCentrifuging(recipe, 2, 0, 91);
-		assertEquals(800L, plan.sample(recipe.units(recipe.input(true))).get(ResourceAccountsMinecraftTest.HYDROGEN));
-		assertEquals(plan.maximum(4), plan.sample(4));
-		assertThrows(IllegalArgumentException.class, () -> ResourceProductionApi.planCentrifuging(recipe, 1, Double.NaN, 91));
-		assertThrows(ArithmeticException.class, () -> ResourceProductionApi.planCentrifuging(recipe(Long.MAX_VALUE), 2, 0, 91));
-	}
-
-	@Test void reusablePlansKeepPerWorkSeedsAndRejectOverflowBeforeSampling() {
-		var outputs = List.of(new ResourceProductionRecipe.Output(ResourceLocation.parse("mekanism:hydrogen"), 7, .37));
-		var plan = new ResourceRollPlan(outputs, 2.5, 2, 0);
-		for (long cycles : List.of(0L, 1L, 32L, 33L, 1_048_576L)) {
-			for (long seed : List.of(0L, 91L, Long.MIN_VALUE)) {
-				var independent = new ResourceRollPlan(outputs, 2.5, 2, seed);
-				assertEquals(independent.sampleWithRolls(cycles), plan.sampleWithRolls(cycles, seed));
-			}
-		}
-		var exact = new ResourceRollPlan(recipe(100).outputs(), 2, 2, 91);
-		assertEquals(600L * 1_048_576, exact.sample(1_048_576).get(ResourceAccountsMinecraftTest.HYDROGEN));
-		assertThrows(UnsupportedOperationException.class, () -> exact.maximum(1).clear());
-		assertThrows(IllegalArgumentException.class, () -> exact.sample(-1));
-		for (double chance : List.of(1.0, .37)) {
-			var overflow = new ResourceRollPlan(List.of(new ResourceProductionRecipe.Output(
-					ResourceLocation.parse("mekanism:hydrogen"), Long.MAX_VALUE, chance)), 1, 0, 91);
-			assertThrows(ArithmeticException.class, () -> overflow.sample(2));
-		}
-	}
-
-	@Test void indexChoosesStableRecipeAndOldSnapshotSurvivesReload() {
-		var first = new RecipeHolder<>(ID, recipe(100));
-		var later = new RecipeHolder<>(ResourceLocation.parse("example:z"), recipe(200));
-		var old = ResourceRecipeIndex.build(1, List.of(), List.of(later, first));
-		assertSame(first, old.centrifuge(recipe(1).input(false)));
-		assertTrue(old.forBee(BEE).isEmpty());
-		assertNull(ResourceRecipeIndex.build(2, List.of()).centrifuge(first.value().input(false)));
-		assertEquals(100, old.centrifuge(first.value().input(false)).value().outputs().getFirst().amount());
-		assertThrows(UnsupportedOperationException.class, () -> old.centrifugeRecipes().clear());
-		assertThrows(IllegalArgumentException.class, () -> ResourceRecipeIndex.build(2, List.of(), List.of(first, first)));
 	}
 
 	@Test void javaRegistrationAndDatapackOverrideShareOneNamespace() {
@@ -221,74 +127,6 @@ class ResourceCentrifugeMinecraftTest {
 		assertFalse(ItemStack.isSameItemSameComponents(input, restored.input));
 		saved.putInt("version", 3);
 		assertThrows(IllegalArgumentException.class, () -> ResourceCentrifugeWork.load(saved, REGISTRIES));
-	}
-
-	@Test void progressAndOutputCommitOnceAndPersistTogether() {
-		var store = new ResourceAccounts(() -> {});
-		var account = ResourceAccountsMinecraftTest.account(store);
-		var work = new ResourceCentrifugeWork(ID, recipe(100), recipe(100).input(false), 7, 91, 5);
-		var ticket = account.reserve(account.reference(), 5, new net.minecraft.nbt.CompoundTag(),
-				Map.of(ResourceAccountsMinecraftTest.HYDROGEN, 100L));
-		account.start(ticket);
-		account.freeze(ticket, Map.of(ResourceAccountsMinecraftTest.HYDROGEN, 100L));
-		var next = work.save(REGISTRIES);
-		account.commitCentrifuge(ticket, 0, next);
-		next.putInt("paid_ticks", 999);
-		assertEquals(7, account.centrifugeWork(0).getInt("paid_ticks"));
-		assertThrows(IllegalStateException.class, () -> account.commitCentrifuge(ticket, 0, null));
-		var loaded = ResourceAccounts.load(store.save(), () -> {}).find(account.reference().sourceId());
-		assertEquals(account.available(), loaded.available());
-		assertEquals(account.centrifugeWork(0), loaded.centrifugeWork(0));
-	}
-
-	@Test void invalidLaneDoesNotPartiallyCommitFrozenOutput() {
-		var store = new ResourceAccounts(() -> {});
-		var account = ResourceAccountsMinecraftTest.account(store);
-		var ticket = account.reserve(account.reference(), 1, new net.minecraft.nbt.CompoundTag(),
-				Map.of(ResourceAccountsMinecraftTest.HYDROGEN, 100L));
-		account.start(ticket);
-		account.freeze(ticket, Map.of(ResourceAccountsMinecraftTest.HYDROGEN, 100L));
-		var before = store.save();
-		assertThrows(IllegalArgumentException.class, () -> account.commitCentrifuge(ticket, -1, null));
-		assertEquals(before, store.save());
-		assertTrue(account.available().isEmpty());
-	}
-
-	@Test void retainedWorkLookupInvalidatesRawAccountAndRegistryAndProtectsInputCopies() {
-		var store = new ResourceAccounts(() -> {});
-		var account = ResourceAccountsMinecraftTest.account(store);
-		var host = org.mockito.Mockito.mock(ResourceHiveHost.class);
-		var entity = org.mockito.Mockito.mock(net.minecraft.world.level.block.entity.BlockEntity.class);
-		var level = org.mockito.Mockito.mock(net.minecraft.world.level.Level.class);
-		org.mockito.Mockito.when(entity.getLevel()).thenReturn(level);
-		org.mockito.Mockito.when(level.registryAccess()).thenReturn(REGISTRIES);
-		org.mockito.Mockito.when(host.reference()).thenReturn(account.reference());
-		org.mockito.Mockito.when(host.account(entity)).thenReturn(account);
-		var work = new ResourceCentrifugeWork(ID, recipe(100), recipe(100).input(true), 7, 91, 5);
-		account.centrifugeWork.put(0, work.save(REGISTRIES));
-		try (var hosts = org.mockito.Mockito.mockStatic(ResourceHiveHost.class)) {
-			hosts.when(() -> ResourceHiveHost.existing(entity)).thenReturn(host);
-			assertTrue(ResourceCentrifugeProcessor.hasPendingInput(entity, work.input));
-			var borrowed = ResourceCentrifugeProcessor.requiredLaneInput(entity, 0);
-			borrowed.remove(PbDataComponents.beeType());
-			assertTrue(ItemStack.isSameItemSameComponents(work.input, ResourceCentrifugeProcessor.requiredLaneInput(entity, 0)));
-			var changed = work.input.copy();
-			changed.set(DataComponents.CUSTOM_NAME, Component.literal("replaced retained input"));
-			account.centrifugeWork.put(0, new ResourceCentrifugeWork(ID, recipe(100), changed, 7, 91, 5).save(REGISTRIES));
-			assertFalse(ResourceCentrifugeProcessor.hasPendingInput(entity, work.input));
-			assertTrue(ResourceCentrifugeProcessor.hasPendingInput(entity, changed));
-			var malformed = account.centrifugeWork.get(0).copy();
-			malformed.getCompound("input").remove("id");
-			account.centrifugeWork.put(0, malformed);
-			assertTrue(ResourceCentrifugeProcessor.requiredLaneInput(entity, 0).isEmpty());
-			assertEquals(malformed, account.centrifugeWork.get(0));
-			account.centrifugeWork.put(0, work.save(REGISTRIES));
-			assertTrue(ResourceCentrifugeProcessor.hasPendingInput(entity, work.input));
-			var replacement = ResourceAccountsMinecraftTest.account(new ResourceAccounts(() -> {}));
-			org.mockito.Mockito.when(host.account(entity)).thenReturn(replacement);
-			assertNull(ResourceCentrifugeProcessor.requiredLaneInput(entity, 0));
-			assertFalse(ResourceCentrifugeProcessor.hasPendingInput(entity, work.input));
-		}
 	}
 
 

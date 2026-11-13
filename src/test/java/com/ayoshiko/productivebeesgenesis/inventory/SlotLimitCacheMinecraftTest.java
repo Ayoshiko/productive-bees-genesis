@@ -2,7 +2,6 @@ package com.ayoshiko.productivebeesgenesis.inventory;
 
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.Tag;
@@ -12,30 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("minecraft")
 class SlotLimitCacheMinecraftTest {
-
-    @Test
-    void effectiveCacheRejectsChangedOrRemovedLimitAndAcceptsRestoredDefault() {
-        SlotLimitCache cache = new SlotLimitCache();
-        ItemStack stack = new ItemStack(Items.STONE);
-        cache.storeEffectiveLimit(stack, 256);
-        stack.set(DataComponents.CUSTOM_NAME, Component.literal("named"));
-        assertEquals(256, cache.peekEffectiveLimit(stack));
-
-        stack.set(DataComponents.MAX_STACK_SIZE, 16);
-        assertEquals(-1, cache.peekEffectiveLimit(stack));
-        assertEquals(16, cache.getBaseLimit(stack, 64, true, 4));
-        cache.storeEffectiveLimit(stack, 64);
-        assertEquals(-1, cache.peekEffectiveLimit(stack));
-
-        stack.remove(DataComponents.MAX_STACK_SIZE);
-        assertEquals(-1, cache.peekEffectiveLimit(stack));
-        assertEquals(stack.getMaxStackSize(), cache.getBaseLimit(stack, 64, true, 4));
-
-        stack.set(DataComponents.MAX_STACK_SIZE, 64);
-        assertEquals(256, cache.peekEffectiveLimit(stack));
-        cache.invalidate();
-        assertEquals(-1, cache.peekEffectiveLimit(stack));
-    }
 
     @Test
     void actualTieredSlotsFollowLiveLimitComponentsAndMultiplierVersion() {

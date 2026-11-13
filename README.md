@@ -1,7 +1,7 @@
 # Productive Bees Genesis
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-Download-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.2.4--dev-blue?style=flat-square)
+[![Version](https://img.shields.io/badge/version-1.2.4-blue?style=flat-square)](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.4)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![Code license](https://img.shields.io/badge/project_code-MIT-blue?style=flat-square)
@@ -11,7 +11,7 @@
 
 **Languages**: [English](README.md) · [中文](README_zh.md)
 
-**Version 1.2.4 is in development.** This maintenance update covers machine access, asset recovery, editor behavior and build reliability. The changes are not released yet; see [Unreleased changes](CHANGELOG.md#unreleased). The latest published version remains [1.2.3](CHANGELOG.md#123---2026-11-04).
+**Version 1.2.4 — production, upgrades and editor maintenance.** This update addresses apiary and centrifuge input/output delays, paid-work recovery, AE2 patterns for machines with contents, access permissions and editor behavior. Update clients and servers together. See the complete [1.2.4 changes](CHANGELOG.md#124---2026-11-13). Publication is in progress; current files and platform availability are recorded in the [1.2.4 release](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.4).
 
 **Download**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
@@ -19,7 +19,7 @@
 
 **Translations and contributions:** everyone can submit a pull request through a [fork](https://github.com/Ayoshiko/productive-bees-genesis/fork). Start from the branch for your target platform: **`main-neo/1.21.1` for NeoForge 1.21.1 / Java 21**, **`forge/1.20.1` for Forge 1.20.1 / Java 17**, or `bees-processing-network/1.21.1` for network development. Keep the same base branch when opening the PR. `Alpha` is archival; do not merge entire platform or experimental branches into maintenance. Shared fixes need separate adaptations for each loader.
 
-PRs must pass the target-platform policy and the corresponding build, receive a current approval, and resolve review conversations. CI, publishing, build inputs, and platform metadata need owner review. External contributors may need a maintainer to approve Actions execution. Write access is not required for fork PRs; the Forge maintainer also uses reviewed PRs for updates. Translation files belong under `src/main/resources/assets/productivebeesgenesis/lang/` (for example `fr_fr.json`). If GitHub blocks the flow, include the exact error and compare-page URL in an issue.
+Fork pull requests remain available to everyone, and collaborators with write access can update their platform branch directly. Mandatory branch-policy checks, owner-review rules and CODEOWNERS restrictions have been removed. Select builds and reviews according to the actual change. Translation files belong under `src/main/resources/assets/productivebeesgenesis/lang/` (for example `fr_fr.json`). If GitHub blocks the flow, include the exact error and compare-page URL in an issue.
 
 You can also [open a blank issue](https://github.com/Ayoshiko/productive-bees-genesis/issues/new) and attach the translation JSON. If GitHub does not accept the JSON attachment, put it in a ZIP file.
 
@@ -168,7 +168,7 @@ The apiary and the centrifuge form an industrialized **"produce → process"** p
 2. When an apiary's adjacent block is a centrifuge, the apiary **bypasses the MEK Ejector throttling** and transfers honeycombs directly into the centrifuge's input slot — with centrifuge priority enabled, fresh honeycomb output is written straight into centrifuge inputs without even passing through the apiary's output slots.
 3. The centrifuge processes the honeycombs and outputs the bee products.
 
-This short-circuit eliminates the throughput bottleneck introduced by the MEK Ejector's per-tick limits and busy/block cooldowns, allowing full-rate industrial production when machines are placed back-to-back. Blocked centrifuge inputs back off over wall-clock time (250ms→2s) while fresh output stays zero-delay, and the retry behavior stays correct under tick-acceleration mods.
+Direct delivery sends combs into adjacent centrifuge inputs without the ordinary ejector delay. When an input is full, failed attempts are reused only within the same real game tick; the next tick retries current capacity, including under tick acceleration. Products that cannot be accepted remain in the apiary.
 
 ### PB Upgrade System
 
@@ -797,7 +797,7 @@ Mekanism Extras deliberately compiles against 1.4.1 and runs against 1.4.0; JEI 
 
 `./gradlew runClient --no-daemon` loads resource-bee examples through the development-only `devExamples` source set. Optional resource types require their owning mods. Native `-PminecraftTests` scenarios use the additional explicit `run/mods` inputs in [build.gradle](build.gradle), including their transitive dependencies; the standard preparation list is not a complete test-mod pack. Examples stay outside release JARs. Generated reference and bundle files are synchronized from the current manifest, so removed or renamed examples do not remain in later ZIPs.
 
-Formal distribution also requires `verifyDistributionPermissions` and the checks in [PLATFORM_RELEASE.md](PLATFORM_RELEASE.md). Ordinary development builds remain available while recorded permission questions are unresolved.
+Normal `build` compiles and packages without implicitly running tests, example checks or artifact checks. Select those tasks explicitly when needed. The publishing workflow mirrors the same-named GitHub Release JAR and checks its version and integrity; the current process is documented in [PLATFORM_RELEASE.md](PLATFORM_RELEASE.md). Third-party notices retain the recorded source and license facts.
 
 ## Architecture
 

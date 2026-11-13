@@ -1,7 +1,10 @@
 # 第三方来源与许可证 / Third-Party Sources and Licenses
 
-2026-11-08 勘误：本文件纠正以前发布说明的错误许可名称和使用范围，不改写历史 tag、附件或已有效授予的权利。当前仍有未决来源和授权；登记或署名不等于取得授权。正式分发前必须处理下列未决项。
-Correction dated 2026-11-08: this notice corrects earlier license names and use descriptions without rewriting historical tags, artifacts, or valid grants. Unresolved provenance and permissions remain; recording or crediting a work is not permission. The unresolved items below require resolution before a new public distribution.
+2026-11-08 勘误：本文件纠正以前发布说明的错误许可名称和使用范围，不改写历史 tag、附件或已有效授予的权利。当前仍有未决来源和授权；登记或署名不等于取得授权。
+Correction dated 2026-11-08: this notice corrects earlier license names and use descriptions without rewriting historical tags, artifacts, or valid grants. Unresolved provenance and permissions remain; recording or crediting a work is not permission.
+
+2026-11-13 流程调整：项目取消以未决清单作为自动开发和发布门禁，以下来源记录、第三方条款及实际未决事实保持原状，不由此新增或撤销授权。
+Process update dated 2026-11-13: unresolved records no longer act as automatic development or release gates. The provenance records, third-party terms and unresolved facts below remain unchanged; this does not add or revoke a grant.
 
 Productive Bees Genesis 自有且可由其权利人授权的代码、文档、技术资源及已有效采用 MIT 的既有自有素材继续采用 MIT。第三方代码、派生实现、字体及素材保持原始许可；普通运行依赖与实际随包复制内容分别列出。明确文件头和原始第三方许可在其范围内优先，致谢不等于转载许可。
 Project-owned code, documentation, technical resources, and existing project artwork validly licensed under MIT remain under MIT to the extent their rights holders can grant it. Third-party code, derived implementations, fonts, and assets retain their original terms. Runtime dependencies are distinguished from copied material included in this distribution. Applicable file notices and original third-party terms take precedence within their scope; attribution is not permission.

@@ -12,6 +12,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -93,9 +95,22 @@ final class Ae2DeferredItemOutputs {
                     log(ticket, "prepare", failure);
                 }
             }
+            pass.keyRotations.keySet().retainAll(keys.keySet());
             for (var entry : keys.entrySet()) {
                 if (pass.cancelled) break;
                 try {
+                    List<Contribution> contributions = entry.getValue();
+                    int rotation = Math.floorMod(pass.keyRotations.getOrDefault(entry.getKey(), 0), contributions.size());
+                    while (rotation > 0 && rotation < contributions.size()
+                            && contributions.get(rotation - 1).endpoint == contributions.get(rotation).endpoint) {
+                        rotation++;
+                    }
+                    if (rotation == contributions.size()) rotation = 0;
+                    int next = rotation + 1;
+                    while (next < contributions.size()
+                            && contributions.get(next).endpoint == contributions.get(rotation).endpoint) next++;
+                    pass.keyRotations.put(entry.getKey(), next % contributions.size());
+                    Collections.rotate(contributions, -rotation);
                     flushKey(entry.getKey(), entry.getValue());
                 } catch (RuntimeException | LinkageError failure) {
                     for (Contribution contribution : entry.getValue()) {
@@ -194,6 +209,9 @@ final class Ae2DeferredItemOutputs {
         for (Participant participant : part.participants) {
             if (!eligible(participant.endpoint, part.key.key)) return Execution.RETRY_PREPARATION;
         }
+        Endpoint leader = part.sources.getFirst().contribution.endpoint;
+        // 会话在整轮开始时已准备；前一键的真实调用可能已经耗尽网络预算。
+        if (!leader.ticket.holder.tryAcquireNetworkWork(leader.storage, leader.tick)) return Execution.STOP_KEY;
         UUID request = UUID.randomUUID();
         boolean externalStarted = false;
         try {
@@ -220,7 +238,6 @@ final class Ae2DeferredItemOutputs {
                     return Execution.RETRY_PREPARATION;
                 }
             }
-            Endpoint leader = part.sources.getFirst().contribution.endpoint;
             long accepted;
             Throwable unknown = null;
             try {
@@ -263,10 +280,18 @@ final class Ae2DeferredItemOutputs {
                     log(endpoint.ticket, "source debit", failure);
                 }
             }
+            long sharedCost = cost / part.participants.size();
+            long costRemainder = cost % part.participants.size();
             for (Participant participant : part.participants) {
                 Endpoint endpoint = participant.endpoint;
+                long participantCost = sharedCost;
+                if (costRemainder > 0) {
+                    participantCost++;
+                    costRemainder--;
+                }
                 endpoint.session.recordBatch(endpoint.storage, endpoint.tick, part.key.key,
-                        unknown == null ? participant.accepted : 0, cost, endpoint == leader);
+                        unknown == null ? participant.accepted : 0,
+                        unknown == null && accepted > 0, participantCost);
             }
             return unknown == null && accepted == part.amount ? Execution.COMPLETE : Execution.STOP_KEY;
         } catch (RuntimeException | LinkageError failure) {
@@ -341,6 +366,8 @@ final class Ae2DeferredItemOutputs {
     private static final class Pass {
         private final List<Ticket> tickets = new ArrayList<>();
         private final Map<DeferredItemOutput, Ticket> owners = new IdentityHashMap<>();
+        /** 只保留本刻活跃网络键；部分接收时轮换首个贡献来源。 */
+        private final Map<NetworkKey, Integer> keyRotations = new HashMap<>();
         private long tick = Long.MIN_VALUE;
         private int groups;
         private boolean flushing;

@@ -32,16 +32,13 @@ final class Ae2InputFilterNbtCodec {
 
 	/** 持久化边界拒绝会被宽松读取跳过、截断或覆盖的配置，旧紧凑列表仍可迁移。 */
 	static boolean isReadable(CompoundTag tag) {
-		if (!optionalType(tag, KEY_VERSION, Tag.TAG_INT)
-				|| (tag.contains(KEY_VERSION) && tag.getInt(KEY_VERSION) != CURRENT_FORMAT_VERSION)
-				|| !optionalType(tag, KEY_CAPACITY, Tag.TAG_INT)
-				|| (tag.contains(KEY_CAPACITY) && (tag.getInt(KEY_CAPACITY) < 0
-						|| tag.getInt(KEY_CAPACITY) > Ae2InputFilter.getMaxFilterSlots()))
-				|| !optionalType(tag, "mode", Tag.TAG_BYTE)
-				|| tag.getByte("mode") < 0 || tag.getByte("mode") >= Ae2InputFilter.FilterMode.values().length
-				|| !optionalBoolean(tag, "precise") || !optionalBoolean(tag, "unlimitedAllFallback")
-				|| !optionalBoolean(tag, "globalNetworkStock")
-				|| !optionalAmount(tag, "globalReserveAmount") || !optionalType(tag, "entries", Tag.TAG_LIST)) {
+		if (!optionalInteger(tag, KEY_VERSION, CURRENT_FORMAT_VERSION, CURRENT_FORMAT_VERSION)
+				|| !optionalInteger(tag, KEY_CAPACITY, 0, Ae2InputFilter.getMaxFilterSlots())
+				|| !optionalInteger(tag, "mode", 0, Ae2InputFilter.FilterMode.values().length - 1)
+				|| !optionalInteger(tag, "precise", 0, 1) || !optionalInteger(tag, "unlimitedAllFallback", 0, 1)
+				|| !optionalInteger(tag, "globalNetworkStock", 0, 1)
+				|| !optionalInteger(tag, "globalReserveAmount", 0, Long.MAX_VALUE)
+				|| (tag.contains("entries") && !tag.contains("entries", Tag.TAG_LIST))) {
 			return false;
 		}
 		if (!(tag.get("entries") instanceof ListTag entries) || entries.isEmpty()) return true;
@@ -51,26 +48,34 @@ final class Ae2InputFilterNbtCodec {
 		boolean[] occupied = new boolean[Ae2InputFilter.getMaxFilterSlots()];
 		for (Tag raw : entries) {
 			CompoundTag entry = (CompoundTag) raw;
-			if (!entry.contains("i", Tag.TAG_INT) || !entry.contains("v", Tag.TAG_STRING)
-					|| !optionalAmount(entry, "a") || !optionalAmount(entry, "r")
-					|| !optionalBoolean(entry, "u") || !optionalBoolean(entry, "n")) return false;
-			int index = entry.getInt("i");
-			if (index < 0 || index >= occupied.length || occupied[index]) return false;
-			occupied[index] = true;
+			if (!hasInteger(entry, "i") || !entry.contains("v", Tag.TAG_STRING)
+					|| !optionalInteger(entry, "a", 0, Long.MAX_VALUE)
+					|| !optionalInteger(entry, "r", 0, Long.MAX_VALUE)
+					|| !optionalInteger(entry, "u", 0, 1) || !optionalInteger(entry, "n", 0, 1)) return false;
+			long index = entry.getLong("i");
+			if (index < 0 || index >= occupied.length || occupied[(int) index]) return false;
+			occupied[(int) index] = true;
 		}
 		return true;
 	}
 
-	private static boolean optionalType(CompoundTag tag, String key, int type) {
-		return !tag.contains(key) || tag.contains(key, type);
+	/** 整数标签可无损提升为 long；排除浮点，避免取整或窄化后误认合法值。 */
+	private static boolean hasInteger(CompoundTag tag, String key) {
+		return switch (tag.getTagType(key)) {
+			case Tag.TAG_BYTE, Tag.TAG_SHORT, Tag.TAG_INT, Tag.TAG_LONG -> true;
+			default -> false;
+		};
 	}
 
-	private static boolean optionalBoolean(CompoundTag tag, String key) {
-		return optionalType(tag, key, Tag.TAG_BYTE) && tag.getByte(key) >= 0 && tag.getByte(key) <= 1;
+	private static boolean optionalInteger(CompoundTag tag, String key, long min, long max) {
+		if (!tag.contains(key)) return true;
+		if (!hasInteger(tag, key)) return false;
+		long value = tag.getLong(key);
+		return value >= min && value <= max;
 	}
 
-	private static boolean optionalAmount(CompoundTag tag, String key) {
-		return optionalType(tag, key, Tag.TAG_LONG) && tag.getLong(key) >= 0;
+	private static long integerValue(CompoundTag tag, String key, long fallback) {
+		return hasInteger(tag, key) ? tag.getLong(key) : fallback;
 	}
 
 	/**
@@ -132,27 +137,24 @@ final class Ae2InputFilterNbtCodec {
 	 */
 	static LoadResult load(CompoundTag tag) {
 		Ae2InputFilter.FilterMode filterMode = Ae2InputFilter.FilterMode.DISABLED;
-		if (tag.contains("mode")) {
-			int ordinal = tag.getByte("mode");
-			Ae2InputFilter.FilterMode[] modes = Ae2InputFilter.FilterMode.values();
-			if (ordinal >= 0 && ordinal < modes.length) {
-				filterMode = modes[ordinal];
-			}
+		long ordinal = integerValue(tag, "mode", -1L);
+		Ae2InputFilter.FilterMode[] modes = Ae2InputFilter.FilterMode.values();
+		if (ordinal >= 0 && ordinal < modes.length) {
+			filterMode = modes[(int) ordinal];
 		}
-		boolean preciseMode = tag.contains("precise") && tag.getByte("precise") == 1;
-		boolean unlimitedAllFallback = tag.contains("unlimitedAllFallback") && tag.getBoolean("unlimitedAllFallback");
-		boolean globalNetworkStock = tag.contains("globalNetworkStock") && tag.getBoolean("globalNetworkStock");
-		long globalReserveAmount = tag.contains("globalReserveAmount", Tag.TAG_ANY_NUMERIC)
-				? Ae2InputFilter.clampDirectReserveAmount(Math.max(0L, tag.getLong("globalReserveAmount"))) : 0L;
+		boolean preciseMode = integerValue(tag, "precise", 0L) == 1;
+		boolean unlimitedAllFallback = integerValue(tag, "unlimitedAllFallback", 0L) == 1;
+		boolean globalNetworkStock = integerValue(tag, "globalNetworkStock", 0L) == 1;
+		long globalReserveAmount = Ae2InputFilter.clampDirectReserveAmount(
+				Math.max(0L, integerValue(tag, "globalReserveAmount", 0L)));
 		if (!tag.contains("entries", Tag.TAG_LIST)) {
 			return new LoadResult(filterMode, preciseMode, unlimitedAllFallback, globalNetworkStock,
 					globalReserveAmount, false,
 					new String[0], new long[0], new long[0], new boolean[0], new boolean[0]);
 		}
 		// 局部构建新数组，最后一次性返回，由调用方 volatile 发布
-		int persistedCapacity = tag.contains(KEY_CAPACITY, Tag.TAG_ANY_NUMERIC)
-				? tag.getInt(KEY_CAPACITY) : Ae2InputFilter.getDefaultCapacity();
-		int initialCapacity = Math.max(Ae2InputFilter.getDefaultCapacity(),
+		long persistedCapacity = integerValue(tag, KEY_CAPACITY, Ae2InputFilter.getDefaultCapacity());
+		int initialCapacity = (int) Math.max(Ae2InputFilter.getDefaultCapacity(),
 				Math.min(Ae2InputFilter.getMaxFilterSlots(), persistedCapacity));
 		String[] newSlots = new String[initialCapacity];
 		long[] newAmounts = new long[initialCapacity];
@@ -164,17 +166,13 @@ final class Ae2InputFilterNbtCodec {
 			// V15 新格式：CompoundTag 含 index
 			for (int i = 0; i < entriesTag.size(); i++) {
 				CompoundTag entryTag = entriesTag.getCompound(i);
-				// 损坏 NBT 容错：缺失/类型不符的 i 键直接跳过该条目，
-				// 避免 getInt 默认返回 0 导致条目错误覆盖索引 0 的既有条目
-				if (!entryTag.contains("i", Tag.TAG_ANY_NUMERIC)) {
+				// 直接加载的旧升级路径也先校验原值，防止窄化后覆盖其它槽。
+				long rawIndex = integerValue(entryTag, "i", -1L);
+				if (rawIndex < 0 || rawIndex >= Ae2InputFilter.getMaxFilterSlots()) {
 					continue;
 				}
-				int idx = entryTag.getInt("i");
+				int idx = (int) rawIndex;
 				String val = entryTag.getString("v");
-				// 防御恶意 index 导致 OOM
-				if (idx < 0 || idx >= Ae2InputFilter.getMaxFilterSlots()) {
-					continue;
-				}
 				// 局部扩容
 				if (idx >= newSlots.length) {
 					newSlots = grow(newSlots, idx + 1);
@@ -184,16 +182,15 @@ final class Ae2InputFilterNbtCodec {
 					newNetworkStock = grow(newNetworkStock, idx + 1);
 				}
 				newSlots[idx] = val.isEmpty() ? null : val;
-				newAmounts[idx] = Ae2InputFilter.isDirectFingerprint(newSlots[idx])
-						? Math.min(Ae2InputFilter.getMaxDirectAmount(), Math.max(0L, entryTag.contains("a", Tag.TAG_LONG)
-							? entryTag.getLong("a") : Ae2InputFilter.DEFAULT_DIRECT_AMOUNT)) : 0L;
-				newReserveAmounts[idx] = Ae2InputFilter.isDirectFingerprint(newSlots[idx])
-						? Ae2InputFilter.clampDirectReserveAmount(Math.max(0L,
-							entryTag.contains("r", Tag.TAG_LONG) ? entryTag.getLong("r") : 0L)) : 0L;
-				boolean legacyStock = entryTag.getBoolean("u");
-				newUnlimited[idx] = Ae2InputFilter.isDirectFingerprint(newSlots[idx]) && legacyStock;
-				newNetworkStock[idx] = Ae2InputFilter.isDirectFingerprint(newSlots[idx])
-						&& (entryTag.contains("n", Tag.TAG_BYTE) ? entryTag.getBoolean("n") : legacyStock);
+				if (Ae2InputFilter.isDirectFingerprint(newSlots[idx])) {
+					long amount = integerValue(entryTag, "a", Ae2InputFilter.DEFAULT_DIRECT_AMOUNT);
+					newAmounts[idx] = Math.min(Ae2InputFilter.getMaxDirectAmount(), Math.max(0L, amount));
+					newReserveAmounts[idx] = Ae2InputFilter.clampDirectReserveAmount(
+							Math.max(0L, integerValue(entryTag, "r", 0L)));
+					boolean legacyStock = integerValue(entryTag, "u", 0L) == 1;
+					newUnlimited[idx] = legacyStock;
+					newNetworkStock[idx] = integerValue(entryTag, "n", legacyStock ? 1L : 0L) == 1;
+				}
 			}
 		} else {
 			// 向后兼容：旧紧凑 StringTag 格式，按顺序填入 0,1,2...

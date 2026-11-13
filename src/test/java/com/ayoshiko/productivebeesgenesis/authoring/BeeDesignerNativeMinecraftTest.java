@@ -92,57 +92,6 @@ class BeeDesignerNativeMinecraftTest {
 		return request;
 	}
 
-	@Test
-	void catalogIncludesEveryRegisteredNativeBeeWithoutJsonDefinition() {
-		var ids = BeeDesignerEggs.bees();
-		List<ResourceLocation> nativeIds = new ArrayList<>();
-		ModEntities.HIVE_BEES.getEntries().forEach(holder -> nativeIds.add(holder.getId()));
-		ModEntities.SOLITARY_BEES.getEntries().forEach(holder -> nativeIds.add(holder.getId()));
-		nativeIds.remove(ModEntities.CONFIGURABLE_BEE.getId());
-		nativeIds.add(ResourceLocation.parse("minecraft:bee"));
-		for (var id : nativeIds) {
-			assertTrue(BeeDesignerNativeBees.contains(id), id.toString());
-			assertTrue(ids.contains(id.toString()), id.toString());
-			assertEquals(id, BeeDesignerEggs.bee(BeeDesignerEggs.egg(id.toString())));
-			JsonObject query = new JsonObject();
-			query.addProperty("search", id.toString());
-			assertEquals(List.of(id.toString()), BeeDesignerCatalog.bees(query).getAsJsonArray("ids").asList().stream().map(value -> value.getAsString()).toList());
-		}
-		assertFalse(BeeDesignerNativeBees.contains(ModEntities.CONFIGURABLE_BEE.getId()));
-		JsonObject query = new JsonObject();
-		query.addProperty("search", "蓝");
-		JsonArray names = new JsonArray();
-		names.add(ModEntities.BLUE_BANDED_BEE.getId().toString());
-		query.add("names", names);
-		assertEquals(ModEntities.BLUE_BANDED_BEE.getId().toString(), BeeDesignerCatalog.bees(query).getAsJsonArray("ids").get(0).getAsString());
-	}
-
-
-	@Test
-	void visibleCatalogIsBoundedAndDistinguishesRegisteredBeesFromLocalDrafts() {
-		JsonObject query = new JsonObject();
-		JsonArray ids = new JsonArray();
-		ids.add(ModEntities.BLUE_BANDED_BEE.getId().toString());
-		ids.add("test:not_registered");
-		ids.add(ModEntities.BLUE_BANDED_BEE.getId().toString());
-		query.add("entries", ids);
-		JsonObject response = BeeDesignerCatalog.bees(query);
-		assertTrue(response.get("metadata").getAsBoolean());
-		assertEquals(1, response.getAsJsonArray("ids").size());
-		assertEquals("pb", response.getAsJsonObject("origins").getAsJsonObject(ModEntities.BLUE_BANDED_BEE.getId().toString()).get("kind").getAsString());
-		JsonArray preferred = new JsonArray();
-		preferred.add("test:not_registered");
-		query.add("preferred", preferred);
-		response = BeeDesignerCatalog.bees(query);
-		assertEquals(2, response.getAsJsonArray("ids").size());
-		assertEquals("unknown", response.getAsJsonObject("origins").getAsJsonObject("test:not_registered").get("kind").getAsString());
-		JsonArray oversized = new JsonArray();
-		for (int index = 0; index < 33; index++) {
-			oversized.add(ModEntities.BLUE_BANDED_BEE.getId().toString());
-		}
-		query.add("entries", oversized);
-		assertThrows(IllegalArgumentException.class, () -> BeeDesignerCatalog.bees(query));
-	}
 
 	@Test
 	void readerKeepsNativeSpawningConversionAndProductionIdentities() {

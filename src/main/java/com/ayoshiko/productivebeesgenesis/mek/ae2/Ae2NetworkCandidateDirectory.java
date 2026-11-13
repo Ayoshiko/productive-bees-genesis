@@ -87,10 +87,6 @@ final class Ae2NetworkCandidateDirectory {
 		}
 	}
 
-	static void resetForTest() {
-		clearAll();
-	}
-
 	static int directoryCountForTest() {
 		reapStaleNetworks();
 		return DIRECTORIES.size();
@@ -116,30 +112,6 @@ final class Ae2NetworkCandidateDirectory {
 
 	record Snapshot(List<AEItemKey> combKeys, List<AEItemKey> ordinaryKeys, long generation) {
 		private static final Snapshot EMPTY = new Snapshot(List.of(), List.of(), 0L);
-	}
-
-	/** 纯目录刷新状态，供不加载 Minecraft 注册表的单元测试验证共享与失效语义。 */
-	static final class RefreshState {
-		private Object inventorySource;
-		private long refreshTick = Long.MIN_VALUE;
-		private long generation;
-
-		boolean refresh(Object source, long gameTick) {
-			if (source == null) return false;
-			boolean due = inventorySource != source
-					|| refreshTick == Long.MIN_VALUE
-					|| gameTick < refreshTick
-					|| gameTick - refreshTick >= REFRESH_INTERVAL_TICKS;
-			if (!due) return false;
-			inventorySource = source;
-			refreshTick = gameTick;
-			generation++;
-			return true;
-		}
-
-		long generation() {
-			return generation;
-		}
 	}
 
 	private static final class Directory {

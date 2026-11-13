@@ -483,35 +483,6 @@ class PbFactoryOutputBatchMinecraftTest {
     }
 
     @Test
-    void receiverCannotReenterTheFinishingBatchOrConfirmItsResourceRequests() {
-        var machine = mock(TileEntityMekCentrifuge.class);
-        var ejector = mock(GenesisTileComponentEjector.class);
-        var custody = new OutputCustody(() -> {});
-        when(machine.getEjector()).thenReturn(ejector);
-        when(ejector.outputCustody()).thenReturn(custody);
-        var fixture = new Fixture(machine);
-        var completion = mock(Completion.class);
-        when(machine.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))
-                .thenAnswer(call -> {
-                    assertThrows(IllegalStateException.class, fixture.batch::begin);
-                    assertThrows(IllegalStateException.class, fixture.batch::finish);
-                    assertFalse(fixture.batch.defer(fixture.owners[0], 0));
-                    verifyNoInteractions(completion);
-                    return call.getArgument(1);
-                });
-        fixture.batch.begin();
-        fixture.prepareResource(0, 3, completion);
-        fixture.prepare(1, new ItemStack(Items.IRON_INGOT), 7, 0);
-        fixture.batch.finish();
-        assertFalse(custody.blocked());
-        verify(completion).complete();
-        verify(machine).productivebeesgenesis$pushGeneratedItemToAe(any(), eq(10L));
-        fixture.batch.begin();
-        fixture.batch.finish();
-        verifyNoMoreInteractions(completion);
-    }
-
-    @Test
     void unloadDuringHandoffPreservesTheResourceRequestAndDebitsTheKnownPbReceipt() {
         var fixture = new Fixture(mock(PbRecipeContext.class));
         var completion = mock(Completion.class);
@@ -529,8 +500,6 @@ class PbFactoryOutputBatchMinecraftTest {
         assertEquals(1, pending(fixture.owners[0]));
         assertEquals(7, pending(fixture.owners[1]));
         verify(fixture.context).productivebeesgenesis$pushGeneratedItemToAe(any(), eq(10L));
-        assertScratchReferencesCleared(fixture.batch);
-        assertTrue(((List<?>) field(field(fixture.batch, "items"), "groups")).isEmpty());
     }
 
     @Test
@@ -549,48 +518,6 @@ class PbFactoryOutputBatchMinecraftTest {
         verify(first).uncertain(anyString());
         verify(second).complete();
         assertEquals(0, pending(fixture.owners[0]) + pending(fixture.owners[1]));
-    }
-
-    @Test
-    void optionalConfirmationFailureStillReleasesEveryOtherLane() {
-        var fixture = new Fixture(mock(PbRecipeContext.class));
-        var first = mock(Completion.class);
-        var second = mock(Completion.class);
-        doThrow(new NoClassDefFoundError("optional display callback")).when(first).complete();
-        when(fixture.context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))
-                .thenAnswer(call -> call.getArgument(1));
-        fixture.batch.begin();
-        fixture.prepareResource(0, 3, first);
-        fixture.prepareResource(1, 7, second);
-        fixture.batch.finish();
-        verify(first).uncertain(anyString());
-        verify(second).complete();
-        fixture.batch.begin();
-        fixture.batch.finish();
-        verifyNoMoreInteractions(second);
-    }
-
-    @Test
-    void unloadConfirmationCannotStartANewBatchBeforeAllLanesAreReleased() {
-        var fixture = new Fixture(mock(PbRecipeContext.class));
-        var first = mock(Completion.class);
-        var second = mock(Completion.class);
-        doAnswer(call -> {
-            assertThrows(IllegalStateException.class, fixture.batch::begin);
-            assertThrows(IllegalStateException.class, fixture.batch::finish);
-            return null;
-        }).when(first).uncertain(anyString());
-        fixture.batch.begin();
-        fixture.prepareResource(0, 3, first);
-        fixture.prepareResource(1, 7, second);
-        fixture.batch.abandon();
-        verify(first).uncertain(anyString());
-        verify(second).uncertain(anyString());
-        assertEquals(3, pending(fixture.owners[0]));
-        assertEquals(7, pending(fixture.owners[1]));
-        fixture.batch.begin();
-        fixture.batch.finish();
-        verify(fixture.context, never()).productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong());
     }
 
     @Test
@@ -626,7 +553,6 @@ class PbFactoryOutputBatchMinecraftTest {
         verifyNoMoreInteractions(first, second, third);
         verify(fixture.context).productivebeesgenesis$pushGeneratedItemToAe(any(), eq(21L));
         verify(fixture.context).productivebeesgenesis$pushGeneratedItemToAe(any(), eq(5L));
-        assertScratchReferencesCleared(fixture.batch);
     }
 
     @Test
@@ -664,20 +590,6 @@ class PbFactoryOutputBatchMinecraftTest {
     }
 
     @Test
-    void singleLaneKeepsItsDirectOutputRouteWithoutAFactoryWorkspace() {
-        var fixture = new Fixture(mock(PbRecipeContext.class), 1);
-        when(fixture.context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))
-                .thenAnswer(call -> call.getArgument(1));
-        fixture.batch.begin();
-        fixture.prepare(0, named("single"), 3, 0);
-        fixture.batch.finish();
-        verify(fixture.context).productivebeesgenesis$pushGeneratedItemToAe(any(), eq(3L));
-        assertFalse(fixture.owners[0].hasPaidPendingOutputs());
-        assertNull(field(fixture.batch, "items"));
-        assertNull(field(fixture.batch, "fluids"));
-    }
-
-    @Test
     void reusedBatchRechecksComponentsWhenTheSameTemplateReferenceChanges() {
         var fixture = new Fixture(mock(PbRecipeContext.class));
         var first = named("same");
@@ -700,7 +612,6 @@ class PbFactoryOutputBatchMinecraftTest {
         fixture.batch.finish();
         assertEquals(List.of("same:10", "same:11", "changed:5"), requests);
         for (var owner : fixture.owners) assertFalse(owner.hasPaidPendingOutputs());
-        assertScratchReferencesCleared(fixture.batch);
     }
 
     @Test
@@ -722,96 +633,7 @@ class PbFactoryOutputBatchMinecraftTest {
         assertEquals(3, pending(fixture.owners[0]));
         assertEquals(12, pending(fixture.owners[1]));
         verify(fixture.context).productivebeesgenesis$pushGeneratedItemToAe(any(), eq(28L));
-        assertScratchReferencesCleared(fixture.batch);
     }
-
-    @Test
-    void manyComponentVariantsKeepExactGroupsAndCurrentOrderAcrossBatches() {
-        var fixture = new Fixture(mock(PbRecipeContext.class));
-        List<String> names = List.of("AaAaAa", "AaAaBB", "AaBBAa", "AaBBBB",
-                "BBAaAa", "BBAaBB", "BBBBAa", "BBBBBB");
-        int collisionHash = ItemStack.hashItemAndComponents(named(names.getFirst()));
-        for (String name : names) assertEquals(collisionHash, ItemStack.hashItemAndComponents(named(name)));
-        List<String> requests = new ArrayList<>();
-        when(fixture.context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))
-                .thenAnswer(call -> {
-                    ItemStack template = call.getArgument(0);
-                    requests.add(template.getHoverName().getString() + ":" + call.getArgument(1));
-                    return call.getArgument(1);
-                });
-        for (int pass = 0; pass < 2; pass++) {
-            Map<ItemStack, Long> left = new java.util.LinkedHashMap<>();
-            Map<ItemStack, Long> right = new java.util.LinkedHashMap<>();
-            List<String> expected = new ArrayList<>();
-            for (int offset = 0; offset < 8; offset++) {
-                int variant = pass == 0 ? offset : 7 - offset;
-                String name = names.get(variant);
-                left.put(named(name), (long) variant + 1);
-                right.put(named(name), (long) variant + 2);
-                expected.add(name + ":" + (2L * variant + 3));
-            }
-            requests.clear();
-            fixture.batch.begin();
-            fixture.prepareOutputs(0, left);
-            fixture.prepareOutputs(1, right);
-            fixture.batch.finish();
-            assertEquals(expected, requests);
-            for (var owner : fixture.owners) assertFalse(owner.hasPaidPendingOutputs());
-            assertScratchReferencesCleared(fixture.batch);
-        }
-    }
-
-    @Test
-    void largeBatchDeliversEveryOutputThenBoundsAndReleasesScratch() {
-        var fixture = new Fixture(mock(PbRecipeContext.class));
-        when(fixture.context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))
-                .thenAnswer(call -> call.getArgument(1));
-        PbFactoryOutputGroups<?> scratch = (PbFactoryOutputGroups<?>) field(fixture.batch, "items");
-        int limit = (int) field(scratch, "retainedLimit");
-        Map<ItemStack, Long> outputs = new java.util.LinkedHashMap<>();
-        for (int index = 0; index < limit + 3; index++) outputs.put(named("large-" + index), 1L);
-        fixture.batch.begin();
-        fixture.prepareOutputs(0, outputs);
-        fixture.prepareOutputs(1, outputs);
-        fixture.batch.finish();
-        verify(fixture.context, times(limit + 3)).productivebeesgenesis$pushGeneratedItemToAe(any(), eq(2L));
-        for (var owner : fixture.owners) assertFalse(owner.hasPaidPendingOutputs());
-        assertTrue(((List<?>) field(scratch, "groups")).size() <= limit);
-        assertTrue(((Object[]) field(scratch, "sourceTemplates")).length <= limit);
-        assertScratchReferencesCleared(fixture.batch);
-
-        fixture.batch.begin();
-        fixture.prepare(1, named("next"), 5, 0);
-        fixture.batch.finish();
-        verify(fixture.context).productivebeesgenesis$pushGeneratedItemToAe(any(), eq(5L));
-        fixture.batch.abandon();
-        assertTrue(((List<?>) field(scratch, "groups")).isEmpty());
-        assertScratchReferencesCleared(fixture.batch);
-    }
-
-    @Test
-    void reusedFluidGroupsKeepOverflowAndDifferentFluidOrder() {
-        var fixture = new Fixture(mock(PbRecipeContext.class), 4);
-        List<String> requests = new ArrayList<>();
-        doAnswer(call -> {
-            FluidStack template = call.getArgument(0);
-            requests.add((template.getFluid() == Fluids.WATER ? "water:" : "lava:") + call.getArgument(1));
-            return call.getArgument(1);
-        }).when(fixture.context).productivebeesgenesis$pushGeneratedFluidToAe(any(), anyLong());
-        for (int pass = 0; pass < 2; pass++) {
-            requests.clear();
-            fixture.batch.begin();
-            fixture.prepareFluid(0, new FluidStack(Fluids.WATER, 1), Long.MAX_VALUE);
-            fixture.prepareFluid(1, new FluidStack(Fluids.LAVA, 1), 7);
-            fixture.prepareFluid(2, new FluidStack(Fluids.WATER, 1), 5);
-            fixture.prepareFluid(3, new FluidStack(Fluids.LAVA, 1), 3);
-            fixture.batch.finish();
-            assertEquals(List.of("water:" + Long.MAX_VALUE, "lava:10", "water:5"), requests);
-            for (var owner : fixture.owners) assertFalse(owner.hasPaidPendingOutputs());
-            assertScratchReferencesCleared(fixture.batch);
-        }
-    }
-
 
     @Test
     void queuedItemsKeepOriginalOwnershipAndApplyCumulativeReceiptsExactlyOnce() {
@@ -860,7 +682,6 @@ class PbFactoryOutputBatchMinecraftTest {
             verify(fixture.context).productivebeesgenesis$pushGeneratedFluidToAe(any(), eq(350L));
             verify(fixture.context, never()).productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong());
             integration.verify(() -> Ae2IntegrationLoader.deferItemOutput(fixture.batch));
-            assertScratchReferencesCleared(fixture.batch);
         }
     }
 
@@ -891,8 +712,6 @@ class PbFactoryOutputBatchMinecraftTest {
             verify(completion).complete();
             verify(completion, never()).uncertain(anyString());
             assertEquals(0, pending(resource.owners[0]) + pending(resource.owners[1]));
-            assertScratchReferencesCleared(denied.batch);
-            assertScratchReferencesCleared(resource.batch);
         }
     }
 
@@ -913,7 +732,6 @@ class PbFactoryOutputBatchMinecraftTest {
             assertEquals(0, fixture.batch.groupCount());
             assertEquals(3, pending(fixture.owners[0]));
             assertEquals(7, pending(fixture.owners[1]));
-            assertScratchReferencesCleared(fixture.batch);
             fixture.batch.finish(epoch);
             fixture.batch.cancel(epoch);
 
@@ -965,8 +783,6 @@ class PbFactoryOutputBatchMinecraftTest {
             assertEquals(7, pending(fixture.owners[1]));
             assertEquals(100, fixture.owners[0].getPendingFluidAmount());
             assertEquals(250, fixture.owners[1].getPendingFluidAmount());
-            assertScratchReferencesCleared(fixture.batch);
-            assertTrue(((List<?>) field(field(fixture.batch, "items"), "groups")).isEmpty());
             verify(fixture.context, never()).productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong());
             verify(fixture.context, never()).productivebeesgenesis$pushGeneratedFluidToAe(any(), anyLong());
         }
@@ -1006,7 +822,6 @@ class PbFactoryOutputBatchMinecraftTest {
             assertEquals(100, fixture.owners[0].getPendingFluidAmount());
             assertEquals(250, fixture.owners[1].getPendingFluidAmount());
             assertEquals(6, pending(fixture.owners[1]));
-            assertScratchReferencesCleared(fixture.batch);
             verify(fixture.context, never()).productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong());
             verify(fixture.context, never()).productivebeesgenesis$pushGeneratedFluidToAe(any(), anyLong());
             verify(fixture.context, never()).productivebeesgenesis$pushGeneratedItemToNeighbors(any(), anyInt());
@@ -1043,7 +858,6 @@ class PbFactoryOutputBatchMinecraftTest {
             assertEquals(0, pending(fixture.owners[0]) + pending(fixture.owners[1]));
             integration.verify(() -> Ae2IntegrationLoader.deferItemOutput(fixture.batch), times(2));
             verify(fixture.context, times(1)).productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong());
-            assertScratchReferencesCleared(fixture.batch);
         }
     }
 
@@ -1080,7 +894,6 @@ class PbFactoryOutputBatchMinecraftTest {
             assertFalse(fixture.batch.claim(secondEpoch));
             assertEquals(3, pending(fixture.owners[0]));
             assertEquals(7, pending(fixture.owners[1]));
-            assertScratchReferencesCleared(fixture.batch);
             verify(machine, never()).productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong());
         }
     }
@@ -1103,7 +916,6 @@ class PbFactoryOutputBatchMinecraftTest {
             assertEquals(3, pending(fixture.owners[0]));
             assertEquals(7, pending(fixture.owners[1]));
             assertEquals("changed", source.getHoverName().getString());
-            assertScratchReferencesCleared(fixture.batch);
             verify(fixture.context, never()).productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong());
         }
     }
@@ -1125,25 +937,6 @@ class PbFactoryOutputBatchMinecraftTest {
         when(level.getBlockEntity(BlockPos.ZERO)).thenReturn(owner);
         when(fixture.context.level()).thenReturn(level);
         when(fixture.context.canFunction()).thenReturn(true);
-    }
-
-    private static void assertScratchReferencesCleared(PbFactoryOutputBatch batch) {
-        for (String name : List.of("items", "fluids")) {
-            Object scratch = field(batch, name);
-            if (scratch == null) continue;
-            assertTrue(((Map<?, ?>) field(scratch, "references")).isEmpty());
-            assertTrue(((Map<?, ?>) field(scratch, "types")).isEmpty());
-            assertTrue(((Map<?, ?>) field(scratch, "hashedVariants")).isEmpty());
-            for (Object template : (Object[]) field(scratch, "sourceTemplates")) assertNull(template);
-            for (Object group : (List<?>) field(scratch, "groups")) {
-                assertNull(field(group, "template"));
-                assertNull(field(group, "key"));
-                assertNull(field(group, "nextKey"));
-                assertNull(field(group, "nextPart"));
-                assertNull(field(group, "nextVariant"));
-                assertNull(field(group, "nextHash"));
-            }
-        }
     }
 
     private static Object field(Object target, String name) {

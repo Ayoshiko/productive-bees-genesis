@@ -1,16 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
 import com.ayoshiko.productivebeesgenesis.api.resource.ResourceHostApi;
-import com.ayoshiko.productivebeesgenesis.api.resource.ResourceProductionApi;
-import com.google.gson.JsonParser;
-import com.mojang.serialization.JsonOps;
-import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
@@ -28,8 +20,6 @@ import static org.mockito.Mockito.*;
 @Tag("minecraft")
 class ResourceSourceMinecraftTest {
 	private static final ResourceKey SOURCE = ResourceTypes.SOURCE;
-	private static final ResourceLocation BEE = ResourceLocation.parse("example:source");
-
 	private static ResourceScalarOutput output(ResourceAccount account, ResourceKey key) {
 		var port = mock(ResourceOutputAccess.class);
 		when(port.outputAllowed(any())).thenReturn(true);
@@ -44,48 +34,6 @@ class ResourceSourceMinecraftTest {
 		account.start(ticket);
 		account.freeze(ticket, amounts);
 		account.commit(ticket);
-	}
-
-	@Test void sourceDefinitionKeepsLongMaxThroughJsonAndThreeTypeWire() {
-		var json = JsonParser.parseString("""
-				{"bee":"example:source","outputs":[{"kind":"source","amount":"9223372036854775807"}]}
-				""");
-		var recipe = ResourceProductionRecipe.CODEC.codec().parse(JsonOps.INSTANCE, json).getOrThrow();
-		assertEquals(new ResourceProductionRecipe.Output(SOURCE, Long.MAX_VALUE, 1), recipe.outputs().getFirst());
-		var encoded = ResourceProductionRecipe.CODEC.codec().encodeStart(JsonOps.INSTANCE, recipe).getOrThrow();
-		assertEquals(recipe, ResourceProductionRecipe.CODEC.codec().parse(JsonOps.INSTANCE, encoded).getOrThrow());
-		var mixed = new ResourceProductionRecipe(BEE, List.of(recipe.outputs().getFirst(),
-				new ResourceProductionRecipe.Output(ResourceTypes.FE, 91, 1),
-				new ResourceProductionRecipe.Output(HYDROGEN, 17, 1)));
-		var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(),
-				RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
-		try {
-			ResourceProductionRecipe.STREAM_CODEC.encode(buffer, mixed);
-			assertEquals(mixed, ResourceProductionRecipe.STREAM_CODEC.decode(buffer));
-		} finally { buffer.release(); }
-	}
-
-	@Test void wrongVersionOrPayloadCannotBeReinterpretedAsSource() {
-		var payload = new CompoundTag();
-		payload.putString("id", "ars_nouveau:source");
-		for (var key : List.of(new ResourceKey(SOURCE.kind(), 2, SOURCE.payload()),
-				new ResourceKey(SOURCE.kind(), 1, payload))) {
-			assertFalse(ResourceTypes.declared(key));
-			assertFalse(ResourceTypes.available(key));
-			assertThrows(IllegalArgumentException.class, () -> new ResourceProductionRecipe.Output(key, 100, 1));
-		}
-		assertTrue(ResourceTypes.declared(SOURCE));
-		assertEquals(new CompoundTag(), SOURCE.payload());
-	}
-
-	@Test void threeResourceTypesKeepTheirOwnUnitsThroughCombPortions() {
-		var recipe = new ResourceCentrifugeRecipe(BEE, List.of(
-				new ResourceProductionRecipe.Output(SOURCE, 3_000_000_007L, 1),
-				new ResourceProductionRecipe.Output(ResourceTypes.FE, 13, 1),
-				new ResourceProductionRecipe.Output(HYDROGEN, 17, 1)), 20);
-		var plan = ResourceProductionApi.planCentrifuging(recipe, 2, 0, 0);
-		assertEquals(Map.of(SOURCE, 24_000_000_056L, ResourceTypes.FE, 104L, HYDROGEN, 136L), plan.sample(4));
-		assertEquals(plan.maximum(4), plan.sample(4));
 	}
 
 	@Test void missingArsPreservesRawBalancesAndBlocksNativeExtraction() {

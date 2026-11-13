@@ -40,6 +40,15 @@ final class Ae2MeasuredStorage implements MEStorage {
 
     @Override
     public long insert(AEKey key, long amount, Actionable mode, IActionSource source) {
+        return insert(key, amount, mode, source, true);
+    }
+
+    /** 共享调用先记一次网络总成本，回执阶段再分摊各来源的单机成本。 */
+    long insertShared(AEKey key, long amount, IActionSource source) {
+        return insert(key, amount, Actionable.MODULATE, source, false);
+    }
+
+    private long insert(AEKey key, long amount, Actionable mode, IActionSource source, boolean recordTile) {
         var current = target;
         var currentTracker = tracker;
         var currentNetwork = networkState;
@@ -52,7 +61,10 @@ final class Ae2MeasuredStorage implements MEStorage {
             Ae2GlobalInsertBudget.recordCost(currentTick, lastCostNanos);
             Ae2NetworkWorkCoordinator.recordResolvedCost(currentNetwork, currentTick, lastCostNanos,
                     Ae2NetworkWorkCoordinator.HEALTHY_INSERT_NANOS);
-            if (currentTracker != null) currentTracker.recordForNetwork(current, currentTick, lastCostNanos);
+            if (currentTracker != null) {
+                if (recordTile) currentTracker.recordForNetwork(current, currentTick, lastCostNanos);
+                else currentTracker.recordSharedTotal(currentTick, lastCostNanos);
+            }
         }
     }
 

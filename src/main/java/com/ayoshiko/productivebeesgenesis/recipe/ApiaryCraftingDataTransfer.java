@@ -347,6 +347,10 @@ final class ApiaryCraftingDataTransfer {
 
 	/** 多台机器不能共享同一笔未结算资产；未完成的工作留在原机器。 */
 	private static void validateMergeableAssets(CompoundTag nbt) {
+		if (nbt.contains("productivebeesgenesis_ae_input_transfer")
+				|| nbt.contains("productivebeesgenesis_ae_energy_transfer")) {
+			throw new IllegalArgumentException("Unsettled AE transfer cannot be merged");
+		}
 		requireEmptyList(nbt, "productivebeesgenesis_pb_committed_pending");
 		if (nbt.contains("productivebeesgenesis_pb_progress")) {
 			if (!nbt.contains("productivebeesgenesis_pb_progress", Tag.TAG_INT_ARRAY)) {

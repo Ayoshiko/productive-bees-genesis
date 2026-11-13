@@ -16,8 +16,6 @@ import net.neoforged.neoforge.items.IItemHandler;
 final class NeighborItemTransferState {
 
 	private static final int REJECT_CAPACITY = 64;
-	private static final long INITIAL_RETRY_NANOS = 50_000_000L;
-	private static final long MAX_RETRY_NANOS = 200_000_000L;
 	final IItemHandler target;
 	final ItemEjectionBudget budget = new ItemEjectionBudget();
 	int slotCursor;
@@ -32,17 +30,17 @@ final class NeighborItemTransferState {
 		this.target = target;
 	}
 
-	boolean isRejected(ItemStack stack, long nanos) {
-		return isRejected(stack, stack.getCount(), nanos);
+	boolean isRejected(ItemStack stack, long gameTime) {
+		return isRejected(stack, stack.getCount(), gameTime);
 	}
 
-	boolean isRejected(ItemStack stack, int count, long nanos) {
+	boolean isRejected(ItemStack stack, int count, long gameTime) {
 		RejectedRequest request = find(stack, count);
-		return isRejected(request, nanos);
+		return isRejected(request, gameTime);
 	}
 
-	void rememberRejected(ItemStack stack, long nanos) {
-		rememberRejected(stack, nanos, null);
+	void rememberRejected(ItemStack stack, long gameTime) {
+		rememberRejected(stack, gameTime, null);
 	}
 
 	void prepareSlots(List<IInventorySlot> slots) {
@@ -66,15 +64,15 @@ final class NeighborItemTransferState {
 		return binding;
 	}
 
-	boolean isRejected(SlotBinding binding, long nanos) {
-		return binding != null && binding.isCurrent() && isRejected(binding.request, nanos);
+	boolean isRejected(SlotBinding binding, long gameTime) {
+		return binding != null && binding.isCurrent() && isRejected(binding.request, gameTime);
 	}
 
-	boolean isRejected(ItemStack stack, long nanos, SlotBinding binding) {
-		return isRejected(match(stack, binding), nanos);
+	boolean isRejected(ItemStack stack, long gameTime, SlotBinding binding) {
+		return isRejected(match(stack, binding), gameTime);
 	}
 
-	void rememberRejected(ItemStack stack, long nanos, SlotBinding binding) {
+	void rememberRejected(ItemStack stack, long gameTime, SlotBinding binding) {
 		if (!valid || stack.isEmpty()) return;
 		RejectedRequest request = match(stack, binding);
 		if (request == null) {
@@ -88,13 +86,9 @@ final class NeighborItemTransferState {
 			request = new RejectedRequest(stack.copy());
 			rejectedByItem.computeIfAbsent(stack.getItem(), ignored -> new ArrayList<>(1)).add(request);
 			rejectedOrder.addLast(request);
-		} else if (request.generation == successGeneration) {
-			request.retryNanos = Math.min(MAX_RETRY_NANOS, request.retryNanos * 2L);
-		} else {
-			request.retryNanos = INITIAL_RETRY_NANOS;
 		}
 		request.generation = successGeneration;
-		request.failedAtNanos = nanos;
+		request.failedTick = gameTime;
 		if (binding != null && binding.isCurrent() && binding.count == stack.getCount()) {
 			binding.request = request;
 		}
@@ -118,9 +112,9 @@ final class NeighborItemTransferState {
 		return valid;
 	}
 
-	private boolean isRejected(RejectedRequest request, long nanos) {
+	private boolean isRejected(RejectedRequest request, long gameTime) {
 		return valid && request != null && request.live && request.generation == successGeneration
-				&& nanos - request.failedAtNanos < request.retryNanos;
+				&& gameTime == request.failedTick;
 	}
 
 	private RejectedRequest match(ItemStack stack, SlotBinding binding) {
@@ -144,8 +138,7 @@ final class NeighborItemTransferState {
 
 	private static final class RejectedRequest {
 		private final ItemStack stack;
-		private long failedAtNanos;
-		private long retryNanos = INITIAL_RETRY_NANOS;
+		private long failedTick;
 		private long generation = Long.MIN_VALUE;
 		private boolean live = true;
 

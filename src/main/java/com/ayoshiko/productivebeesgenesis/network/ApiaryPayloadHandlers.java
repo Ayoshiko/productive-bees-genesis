@@ -5,14 +5,12 @@ import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.MekApiaryFactoryContainer;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
-import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.common.inventory.container.tile.MekanismTileContainer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
@@ -50,9 +48,9 @@ final class ApiaryPayloadHandlers {
 		if (!MachineMenuAccess.canAccess(context.player(), payload.pos())) {
 			return;
 		}
-		if (!(context.player() instanceof ServerPlayer player)
-				|| !(player.containerMenu instanceof MekanismTileContainer<?> container)
-				|| !(container.getTileEntity() instanceof TileEntityMekApiary apiary)) {
+		ServerPlayer player = (ServerPlayer) context.player();
+		var container = (MekanismTileContainer<?>) player.containerMenu;
+		if (!(container.getTileEntity() instanceof TileEntityMekApiary apiary)) {
 			return;
 		}
 		if (!PayloadRateLimiter.tryAccept(player, "gene_treat_restock_toggle",
@@ -64,17 +62,11 @@ final class ApiaryPayloadHandlers {
 		if (!MachineMenuAccess.canAccess(context.player(), payload.pos())) {
 			return;
 		}
-        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handleToggleApiaryDirectEject",
-                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
-		if (!(context.player() instanceof ServerPlayer serverPlayer)
-				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
-				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
-			return;
-		}
-		BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());
-		if (!(blockEntity instanceof TileEntityMekApiary apiary)) return;
-		if (serverPlayer.distanceToSqr(payload.pos().getCenter())
-				> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
+		ServerPlayer serverPlayer = (ServerPlayer) context.player();
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, "apiary_handleToggleApiaryDirectEject",
+				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
+		var tileContainer = (MekanismTileContainer<?>) serverPlayer.containerMenu;
+		if (!(tileContainer.getTileEntity() instanceof TileEntityMekApiary apiary)) return;
 		apiary.toggleDirectEject();
 	}
 
@@ -89,17 +81,11 @@ final class ApiaryPayloadHandlers {
 		if (!MachineMenuAccess.canAccess(context.player(), payload.pos())) {
 			return;
 		}
-        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handleToggleApiaryFeederConversion",
-                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
-		if (!(context.player() instanceof ServerPlayer serverPlayer)
-				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
-				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
-			return;
-		}
-		BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());
-		if (!(blockEntity instanceof TileEntityMekApiary apiary)) return;
-		if (serverPlayer.distanceToSqr(payload.pos().getCenter())
-				> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
+		ServerPlayer serverPlayer = (ServerPlayer) context.player();
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, "apiary_handleToggleApiaryFeederConversion",
+				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
+		var tileContainer = (MekanismTileContainer<?>) serverPlayer.containerMenu;
+		if (!(tileContainer.getTileEntity() instanceof TileEntityMekApiary apiary)) return;
 		apiary.toggleFeederConversion();
 	}
 
@@ -117,15 +103,9 @@ final class ApiaryPayloadHandlers {
 		if (!MachineMenuAccess.canAccess(context.player(), payload.pos())) {
 			return;
 		}
-		if (!(context.player() instanceof ServerPlayer serverPlayer)
-				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
-				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
-			return;
-		}
-		BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());
-		if (!(blockEntity instanceof TileEntityMekApiary apiary)) return;
-		if (serverPlayer.distanceToSqr(payload.pos().getCenter())
-				> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
+		ServerPlayer serverPlayer = (ServerPlayer) context.player();
+		var tileContainer = (MekanismTileContainer<?>) serverPlayer.containerMenu;
+		if (!(tileContainer.getTileEntity() instanceof TileEntityMekApiary apiary)) return;
 		int slotIndex = payload.slotIndex();
 		if (slotIndex < 0 || slotIndex >= apiary.getFeederSlotManager().getFeederSlotCount()) {
 			LogThrottle.warn("feeder_slot_toggle_invalid", "玩家 {} 尝试切换无效喂食槽位：{}（总槽位 {}）",
@@ -152,15 +132,9 @@ final class ApiaryPayloadHandlers {
 		if (!MachineMenuAccess.canAccess(context.player(), payload.pos())) {
 			return;
 		}
-		if (!(context.player() instanceof ServerPlayer serverPlayer)
-				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
-				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
-			return;
-		}
-		BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());
-		if (!(blockEntity instanceof TileEntityMekApiary apiary)) return;
-		if (serverPlayer.distanceToSqr(payload.pos().getCenter())
-				> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
+		ServerPlayer serverPlayer = (ServerPlayer) context.player();
+		var tileContainer = (MekanismTileContainer<?>) serverPlayer.containerMenu;
+		if (!(tileContainer.getTileEntity() instanceof TileEntityMekApiary apiary)) return;
 		if (!PayloadRateLimiter.tryAccept(serverPlayer, FEEDER_SLOT_TOGGLE_RATE_KEY,
 				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) {
 			return;
@@ -178,37 +152,11 @@ final class ApiaryPayloadHandlers {
 		if (!MachineMenuAccess.canAccess(context.player(), payload.pos())) {
 			return;
 		}
-        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handleApiarySelectBee",
-                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
-		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
-			return;
-		}
-		if (serverPlayer.containerMenu == null || serverPlayer.level() == null) {
-			return;
-		}
-		// 强制容器一致性校验：玩家当前打开的容器必须是 MekanismTileContainer 且坐标一致
-		// 防止玩家打开任意容器（如工作台、背包）后远程操作 8 格内他人蜂箱（IDOR 攻击）
-		if (!(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)) {
-			return;
-		}
-		if (!tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
-			LogThrottle.warn("apiary_select_pos_mismatch",
-					"玩家 {} 当前打开容器位置 {} 与目标选中蜂箱位置 {} 不一致",
-					serverPlayer.getName().getString(),
-					tileContainer.getTileEntity().getBlockPos(),
-					payload.pos());
-			return;
-		}
-		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
-		if (!(be instanceof TileEntityMekApiary apiary)) {
-			return;
-		}
-		double distance = serverPlayer.distanceToSqr(payload.pos().getCenter());
-		if (distance > NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) {
-			LogThrottle.warn("apiary_select_distance", "玩家 {} 尝试远距离选中蜜蜂槽：距离 {} 格",
-					serverPlayer.getName().getString(), Math.sqrt(distance));
-			return;
-		}
+		ServerPlayer serverPlayer = (ServerPlayer) context.player();
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, "apiary_handleApiarySelectBee",
+				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
+		var tileContainer = (MekanismTileContainer<?>) serverPlayer.containerMenu;
+		if (!(tileContainer.getTileEntity() instanceof TileEntityMekApiary apiary)) return;
 		int slotIndex = payload.slotIndex();
 		if (slotIndex != -1 && (slotIndex < 0 || slotIndex >= apiary.getBeeSlotCount())) {
 			LogThrottle.warn("apiary_select_invalid", "玩家 {} 尝试选中无效蜜蜂槽位：{}（总槽位 {}）",
@@ -233,40 +181,11 @@ final class ApiaryPayloadHandlers {
 		if (!MachineMenuAccess.canAccess(context.player(), payload.pos())) {
 			return;
 		}
-        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handleApiaryCageOperation",
-                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
-		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
-			return;
-		}
-		if (serverPlayer.containerMenu == null || serverPlayer.level() == null) {
-			return;
-		}
-		// 强制容器一致性校验：玩家当前打开的容器必须是 MekanismTileContainer 且坐标一致
-		// 防止玩家打开任意容器（如工作台、背包）后远程操作 8 格内他人蜂箱（IDOR 攻击）
-		// 特别风险：本 Handler 访问 containerMenu.getCarried()（光标物品），
-		// 若容器非 MekanismTileContainer 可能导致物品逻辑混乱
-		if (!(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)) {
-			return;
-		}
-		if (!tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
-			LogThrottle.warn("apiary_cage_pos_mismatch",
-					"玩家 {} 当前打开容器位置 {} 与目标蜂笼操作蜂箱位置 {} 不一致",
-					serverPlayer.getName().getString(),
-					tileContainer.getTileEntity().getBlockPos(),
-					payload.pos());
-			return;
-		}
-		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
-		if (!(be instanceof TileEntityMekApiary apiary)) {
-			return;
-		}
-		// 距离校验：标准 8 格 GUI 交互距离
-		double distance = serverPlayer.distanceToSqr(payload.pos().getCenter());
-		if (distance > NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) {
-			LogThrottle.warn("apiary_cage_distance", "玩家 {} 尝试远距离桶式操作蜜蜂槽：距离 {} 格",
-					serverPlayer.getName().getString(), Math.sqrt(distance));
-			return;
-		}
+		ServerPlayer serverPlayer = (ServerPlayer) context.player();
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, "apiary_handleApiaryCageOperation",
+				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
+		var tileContainer = (MekanismTileContainer<?>) serverPlayer.containerMenu;
+		if (!(tileContainer.getTileEntity() instanceof TileEntityMekApiary apiary)) return;
 		// 槽位索引校验
 		int slotIndex = payload.slotIndex();
 		if (slotIndex < 0 || slotIndex >= apiary.getBeeSlotCount()) {
@@ -277,7 +196,6 @@ final class ApiaryPayloadHandlers {
 		// 获取玩家光标手持物品
 		ItemStack cursor = serverPlayer.containerMenu.getCarried();
 		ApiaryCageOperationPayload.OperationType operation = payload.operation();
-		if (operation == null) return;
 		if (operation == ApiaryCageOperationPayload.OperationType.EXTRACT) {
 			// 取出操作：按光标→物品栏→cageOutSlot 优先级分配蜂笼去向
 			handleCageExtraction(serverPlayer, apiary, slotIndex, cursor);
@@ -311,17 +229,11 @@ final class ApiaryPayloadHandlers {
 		if (!MachineMenuAccess.canAccess(context.player(), payload.pos())) {
 			return;
 		}
-        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handleApiaryFeedBee",
-                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
-		if (!(context.player() instanceof ServerPlayer serverPlayer)
-				|| !(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)
-				|| !tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
-			return;
-		}
-		BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());
-		if (!(blockEntity instanceof TileEntityMekApiary apiary)) return;
-		if (serverPlayer.distanceToSqr(payload.pos().getCenter())
-				> NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) return;
+		ServerPlayer serverPlayer = (ServerPlayer) context.player();
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, "apiary_handleApiaryFeedBee",
+				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
+		var tileContainer = (MekanismTileContainer<?>) serverPlayer.containerMenu;
+		if (!(tileContainer.getTileEntity() instanceof TileEntityMekApiary apiary)) return;
 
 		int slotIndex = payload.slotIndex();
 		if (slotIndex < 0 || slotIndex >= apiary.getBeeSlotCount()) return;
@@ -392,50 +304,20 @@ final class ApiaryPayloadHandlers {
 	 * <br/>
 	 * 校验玩家当前打开的容器是否指向目标方块实体，防止恶意客户端随意切换任意蜂箱。
 	 * <p>
-	 * 安全校验链：
-	 * <ol>
-	 *   <li>containerMenu 必须是 {@link MekApiaryFactoryContainer} — 防止玩家打开任意容器后操作 8 格内他人蜂箱</li>
-	 *   <li>容器绑定的 BlockPos 必须与 payload.pos() 一致 — 防止玩家打开自己的蜂箱后操作附近他人蜂箱</li>
-	 *   <li>方块实体类型必须为 {@link TileEntityMekApiaryFactory} — 防御性校验</li>
-	 *   <li>玩家与方块实体距离不超过 8 格 — 标准 GUI 交互距离</li>
-	 * </ol>
+	 * 统一入口复核权限、位置和距离；此处限定工厂蜂箱容器和宿主。
 	 */
 	static void handleApiaryToggleSorting(ApiaryToggleSortingPayload payload, IPayloadContext context) {
 		if (!MachineMenuAccess.canAccess(context.player(), payload.pos())) {
 			return;
 		}
-        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handleApiaryToggleSorting",
-                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
-		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
-			return;
-		}
-		if (serverPlayer.level() == null) {
-			return;
-		}
+		ServerPlayer serverPlayer = (ServerPlayer) context.player();
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, "apiary_handleApiaryToggleSorting",
+				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 		// 安全校验：玩家当前打开的容器必须是工厂版蜂箱容器
 		if (!(serverPlayer.containerMenu instanceof MekApiaryFactoryContainer factoryContainer)) {
 			return;
 		}
-		// 容器绑定的方块坐标必须与 payload 目标坐标一致
-		if (!factoryContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
-			LogThrottle.warn("apiary_sort_pos_mismatch",
-					"玩家 {} 当前打开容器位置 {} 与目标排序蜂箱位置 {} 不一致",
-					serverPlayer.getName().getString(),
-					factoryContainer.getTileEntity().getBlockPos(),
-					payload.pos());
-			return;
-		}
-		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
-		if (be instanceof TileEntityMekApiaryFactory factory) {
-			// 二次校验：玩家与方块实体距离不超过 8 格（标准 GUI 交互距离）
-			double distance = serverPlayer.distanceToSqr(payload.pos().getCenter());
-			if (distance > NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) {
-				LogThrottle.warn("apiary_sort_distance", "玩家 {} 尝试远距离切换蜂箱排序：距离 {} 格",
-						serverPlayer.getName().getString(), Math.sqrt(distance));
-				return;
-			}
-			factory.toggleSorting();
-		}
+		factoryContainer.getTileEntity().toggleSorting();
 	}
 
 	/**
@@ -453,51 +335,19 @@ final class ApiaryPayloadHandlers {
 		if (!MachineMenuAccess.canAccess(context.player(), payload.pos())) {
 			return;
 		}
-        if (!PayloadRateLimiter.tryAccept((ServerPlayer) context.player(), "apiary_handlePbUpgradeExtract",
-                NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
-		if (!(context.player() instanceof ServerPlayer serverPlayer)) {
-			return;
-		}
-		if (serverPlayer.containerMenu == null || serverPlayer.level() == null) {
-			return;
-		}
-		// 防御性字符串长度校验：StreamCodec 已限制 64 字符，此处冗余校验防止协议层变更后绕过
-		String upgradeTypeId = payload.upgradeTypeId();
-		if (upgradeTypeId == null || upgradeTypeId.length() > NetworkSecurityConstants.MAX_UPGRADE_TYPE_ID_LENGTH) {
-			LogThrottle.warn("apiary_upgrade_invalid_length", "玩家 {} 尝试卸载PB升级类型ID长度异常：{}",
-					serverPlayer.getName().getString(),
-					upgradeTypeId == null ? "null" : upgradeTypeId.length());
-			return;
-		}
+		ServerPlayer serverPlayer = (ServerPlayer) context.player();
+		if (!PayloadRateLimiter.tryAccept(serverPlayer, "apiary_handlePbUpgradeExtract",
+				NetworkSecurityConstants.PAYLOAD_RATE_LIMIT_INTERVAL_MS)) return;
 		PbUpgradeType type = payload.getUpgradeType();
 		if (type == null || type.isBuiltin()) {
 			LogThrottle.warn("apiary_upgrade_invalid", "玩家 {} 尝试卸载无效PB升级类型：{}",
 					serverPlayer.getName().getString(), payload.upgradeTypeId());
 			return;
 		}
-		// 强制容器一致性校验：玩家当前打开的容器必须是 MekanismTileContainer 且坐标一致
-		// 防止玩家打开任意容器（如工作台、背包）后远程卸载 8 格内他人方块升级（IDOR 攻击）
-		if (!(serverPlayer.containerMenu instanceof MekanismTileContainer<?> tileContainer)) {
-			return;
-		}
-		if (!tileContainer.getTileEntity().getBlockPos().equals(payload.pos())) {
-			LogThrottle.warn("pb_upgrade_extract_pos_mismatch",
-					"玩家 {} 当前打开容器位置 {} 与目标卸载升级方块位置 {} 不一致",
-					serverPlayer.getName().getString(),
-					tileContainer.getTileEntity().getBlockPos(),
-					payload.pos());
-			return;
-		}
-		BlockEntity be = serverPlayer.level().getBlockEntity(payload.pos());
+		var tileContainer = (MekanismTileContainer<?>) serverPlayer.containerMenu;
 		// 接口多态判定 — 所有蜂箱和离心机均实现 IPbUpgradeProvider
 		// 通过接口统一获取升级上限和提取函数，避免引用 ME/EME 可选依赖的具体子类
-		if (!(be instanceof IPbUpgradeProvider provider)) {
-			return;
-		}
-		double distance = serverPlayer.distanceToSqr(payload.pos().getCenter());
-		if (distance > NetworkSecurityConstants.GUI_INTERACTION_DISTANCE_SQ) {
-			LogThrottle.warn("apiary_upgrade_distance", "玩家 {} 尝试远距离卸载PB升级：距离 {} 格",
-					serverPlayer.getName().getString(), Math.sqrt(distance));
+		if (!(tileContainer.getTileEntity() instanceof IPbUpgradeProvider provider)) {
 			return;
 		}
 		if (payload.removeAll()) {

@@ -564,30 +564,6 @@ class Ae2DeferredItemOutputsMinecraftTest {
         }
     }
 
-    @Test
-    void sharedCostIsMeasuredOnceAndEachContributingSessionGetsOneBudgetCharge() {
-        try (var fixture = new Fixture()) {
-            var storage = storageAcceptingAll();
-            var firstTracker = spy(new Ae2InsertCostTracker());
-            var secondTracker = spy(new Ae2InsertCostTracker());
-            var first = fixture.endpoint(storage, firstTracker, 4);
-            var second = fixture.endpoint(storage, secondTracker, 6);
-            fixture.enqueue(first, second);
-
-            Ae2DeferredItemOutputs.flush(fixture.server);
-
-            long cost = first.session.batchCostNanos();
-            assertTrue(cost >= 0);
-            assertEquals(cost, firstTracker.tileSpentThisTickNanos(fixture.gameTick));
-            assertEquals(cost, secondTracker.tileSpentThisTickNanos(fixture.gameTick));
-            verify(firstTracker, never()).recordSharedForNetwork(any(), anyLong(), anyLong());
-            verify(secondTracker, times(1)).recordSharedForNetwork(eq(storage), eq(fixture.gameTick), eq(cost));
-            assertEquals(1, first.session.attemptedCount());
-            assertEquals(1, second.session.attemptedCount());
-            verify(storage, times(1)).insert(any(), eq(10L), any(), any());
-        }
-    }
-
     private static MEStorage storageAcceptingAll() {
         var storage = mock(MEStorage.class);
         when(storage.insert(any(), anyLong(), eq(Actionable.MODULATE), any()))

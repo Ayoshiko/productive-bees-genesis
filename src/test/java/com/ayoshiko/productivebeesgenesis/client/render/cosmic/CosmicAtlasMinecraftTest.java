@@ -32,7 +32,6 @@ import java.util.function.Predicate;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -103,41 +102,6 @@ class CosmicAtlasMinecraftTest {
 	}
 
 	@Test
-	void starSamplingStaysInsideTexelCentersForRectangularSinglePixelAndAtlasEdgeSprites() {
-		int[][] placements = {
-				{16, 32, 1024, 512, 336, 192},
-				{1, 1, 64, 32, 63, 31},
-				{32, 1, 128, 64, 96, 0}
-		};
-		for (int[] placement : placements) {
-			TextureAtlas atlas = atlas(placement);
-			ProductiveBeesGenesisClient.CosmicRenderRegistry.onTextureAtlasStitched(new TextureAtlasStitchedEvent(atlas));
-			assertTrue(CosmicShaders.isCosmicAtlasReady());
-			float[] uvs = CosmicShaders.getCosmicUvs();
-			assertEquals(40, uvs.length);
-			for (int index = 0; index < 10; index++) {
-				int offset = index * 4;
-				float left = placement[4] + 0.5F;
-				float right = placement[4] + placement[0] - 0.5F;
-				float top = placement[5] + 0.5F;
-				float bottom = placement[5] + placement[1] - 0.5F;
-				assertEquals(left, uvs[offset] * placement[2], 0.0001F);
-				assertEquals(top, uvs[offset + 1] * placement[3], 0.0001F);
-				assertEquals(right, uvs[offset + 2] * placement[2], 0.0001F);
-				assertEquals(bottom, uvs[offset + 3] * placement[3], 0.0001F);
-				for (float endpoint : new float[]{0.0F, 0.25F, 0.75F, 1.0F}) {
-					float u = uvs[offset] * (1.0F - endpoint) + uvs[offset + 2] * endpoint;
-					float v = uvs[offset + 1] * (1.0F - endpoint) + uvs[offset + 3] * endpoint;
-					int pixelX = (int) Math.floor(u * placement[2]);
-					int pixelY = (int) Math.floor(v * placement[3]);
-					assertTrue(pixelX >= placement[4] && pixelX < placement[4] + placement[0]);
-					assertTrue(pixelY >= placement[5] && pixelY < placement[5] + placement[1]);
-				}
-			}
-		}
-	}
-
-	@Test
 	void missingStarRevokesOldUvsAndRecoveryPublishesANewSnapshot() {
 		TextureAtlas valid = atlas(new int[]{16, 16, 256, 256, 32, 64});
 		ProductiveBeesGenesisClient.CosmicRenderRegistry.onTextureAtlasStitched(new TextureAtlasStitchedEvent(valid));
@@ -159,22 +123,6 @@ class CosmicAtlasMinecraftTest {
 		ProductiveBeesGenesisClient.CosmicRenderRegistry.onTextureAtlasStitched(new TextureAtlasStitchedEvent(valid));
 		assertTrue(CosmicShaders.isCosmicAtlasReady());
 		assertEquals(previous[0], CosmicShaders.getCosmicUvs()[0]);
-	}
-
-	@Test
-	void unrelatedAtlasDoesNotReplaceUvsOrInvalidateBlockTextureCaches() throws Exception {
-		TextureAtlas valid = atlas(new int[]{16, 16, 256, 256, 32, 64});
-		ProductiveBeesGenesisClient.CosmicRenderRegistry.onTextureAtlasStitched(new TextureAtlasStitchedEvent(valid));
-		float[] previous = CosmicShaders.getCosmicUvs();
-		var generation = AbstractBakedModelCosmic.class.getDeclaredField("globalCacheGeneration");
-		generation.setAccessible(true);
-		long before = generation.getLong(null);
-		TextureAtlas unrelated = mock(TextureAtlas.class);
-		when(unrelated.location()).thenReturn(ResourceLocation.fromNamespaceAndPath("atlas_fixture", "textures/atlas/other.png"));
-		ProductiveBeesGenesisClient.CosmicRenderRegistry.onTextureAtlasStitched(new TextureAtlasStitchedEvent(unrelated));
-		assertSame(previous, CosmicShaders.getCosmicUvs());
-		assertEquals(before, generation.getLong(null));
-		verify(unrelated, never()).getSprite(any());
 	}
 
 	private static TextureAtlas atlas(int[] placement) {

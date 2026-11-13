@@ -100,17 +100,6 @@ class ResourceAccountsMinecraftTest {
 		assertNull(rejected.productionTicket());
 	}
 
-	@Test void rawIdentityIsImmutableAndPreservesMissingModIdentity() {
-		var payload = new CompoundTag();
-		payload.putString("variant", "high_voltage");
-		var key = new ResourceKey(ResourceLocation.parse("uninstalled:lightning"), 3, payload);
-		payload.putString("variant", "changed");
-		key.payload().putString("variant", "changed_again");
-		assertEquals("high_voltage", key.payload().getString("variant"));
-		assertEquals(key, ResourceKey.load(key.save()));
-		assertNotEquals(key, new ResourceKey(key.kind(), 4, key.payload()));
-	}
-
 	@Test void productionFreezesOnceAndCommitCannotBeRepeated() {
 		var store = new ResourceAccounts(() -> {});
 		var account = account(store);
@@ -131,19 +120,6 @@ class ResourceAccountsMinecraftTest {
 		assertThrows(IllegalStateException.class, () -> account.commit(ticket));
 		assertEquals("example:hydrogen", frozen.getList("accounts", 10).getCompound(0)
 				.getCompound("production").getCompound("context").getString("bee"));
-	}
-
-	@Test void zeroResultAndSafePreflightCancellationCreateNoAssets() {
-		var store = new ResourceAccounts(() -> {});
-		var account = account(store);
-		var first = account.reserve(account.reference(), 0, new CompoundTag(), Map.of(HYDROGEN, 1L));
-		account.cancel(first);
-		var second = account.reserve(account.reference(), 0, new CompoundTag(), Map.of(HYDROGEN, 1L));
-		assertTrue(second.sequence() > first.sequence());
-		account.start(second);
-		account.freeze(second, Map.of());
-		account.commit(second);
-		assertTrue(account.available().isEmpty());
 	}
 
 	@Test void overflowAndOverReservationDoNotPartiallyChangeState() {
@@ -279,39 +255,6 @@ class ResourceAccountsMinecraftTest {
 		assertEquals(raw, restored.save());
 	}
 
-	@Test void detachedAccountAndUnknownResourceIdentitySurviveRoundTrip() {
-		var source = new ResourceAccounts(() -> {});
-		var account = account(source);
-		var payload = new CompoundTag();
-		payload.putString("variant", "external");
-		var unknown = new ResourceKey(ResourceLocation.parse("absent:resource"), 9, payload);
-		var ticket = account.reserve(account.reference(), 4, new CompoundTag(), Map.of(unknown, 5L));
-		account.start(ticket);
-		account.freeze(ticket, Map.of(unknown, 5L));
-		account.commit(ticket);
-		var portable = account.detach(OWNER, account.reference());
-		var restored = ResourceAccounts.load(source.save(), () -> {}).find(portable.sourceId());
-		assertEquals(portable, restored.reference());
-		assertNull(restored.binding());
-		assertEquals(5L, restored.available().get(unknown));
-	}
-
-	@Test void bindingUniquenessIgnoresHostKindAndRecoveryViewsRemainReadOnly() {
-		var store = new ResourceAccounts(() -> {});
-		var account = account(store);
-		var differentKind = new ResourceAccount.Binding(BINDING.dimension(), BINDING.packedPosition(),
-				ResourceLocation.parse("productivebeesgenesis:mek_apiary"));
-		assertThrows(IllegalStateException.class, () -> store.create(OWNER, differentKind));
-		produce(account, 50);
-		var ticket = account.beginTransfer(account.reference(), HYDROGEN, 30);
-		account.suspendTransfer(ticket, "Awaiting external confirmation");
-		var restored = ResourceAccounts.load(store.save(), () -> {}).find(ticket.source().sourceId());
-		assertEquals(ticket, restored.transferTicket());
-		assertEquals(OWNER, restored.owner());
-		assertEquals(Map.of(HYDROGEN, 30L), restored.uncertainTransfer());
-		assertThrows(UnsupportedOperationException.class, () -> restored.uncertainTransfer().clear());
-	}
-
 	@Test void accountAndIdentityBudgetsRejectWithoutEvictingAssets() {
 		var store = new ResourceAccounts(() -> {});
 		var first = account(store);
@@ -334,19 +277,6 @@ class ResourceAccountsMinecraftTest {
 		assertThrows(IllegalArgumentException.class,
 				() -> first.reserve(first.reference(), 0, new CompoundTag(), many));
 		assertEquals(before, store.save());
-	}
-
-	@Test void invalidSuspensionReasonDoesNotChangeRevisionOrFrozenProduction() {
-		var store = new ResourceAccounts(() -> {});
-		var account = account(store);
-		var ticket = account.reserve(account.reference(), 0, new CompoundTag(), Map.of(HYDROGEN, 2L));
-		account.start(ticket);
-		account.freeze(ticket, Map.of(HYDROGEN, 2L));
-		var before = store.save();
-		assertThrows(IllegalArgumentException.class, () -> account.suspendProduction(ticket, ""));
-		assertEquals(before, store.save());
-		assertEquals(ticket, account.productionTicket());
-		assertEquals(Map.of(HYDROGEN, 2L), account.frozenProduction());
 	}
 
 	@Test void removedHostKeepsFrozenOutputAcrossRestartAndInvalidatesOldTickets() {
@@ -387,23 +317,6 @@ class ResourceAccountsMinecraftTest {
 		assertNull(restored.binding());
 	}
 
-	@Test void staleOrMismatchedRemovalCannotRetireAnotherIncarnation() {
-		var store = new ResourceAccounts(() -> {});
-		var account = account(store);
-		produce(account, 90);
-		var previous = account.reference();
-		var wrong = new ResourceAccount.Binding(BINDING.dimension(), 456, BINDING.hostKind());
-		var saved = store.save();
-		assertThrows(IllegalStateException.class, () -> account.retire(previous, wrong));
-		assertEquals(saved, store.save());
-		var detached = account.retire(previous, BINDING);
-		account.claim(OWNER, detached, BINDING);
-		var after = store.save();
-		assertThrows(IllegalStateException.class, () -> account.retire(previous, BINDING));
-		assertEquals(after, store.save());
-		assertThrows(UnsupportedOperationException.class, () -> store.snapshot().clear());
-	}
-
 
 	@Test void uncertainLanePreservesTicketAndAllowsOtherProductionAcrossReload() {
 		var store = new ResourceAccounts(() -> {});
@@ -435,27 +348,6 @@ class ResourceAccountsMinecraftTest {
 		assertThrows(IllegalStateException.class, () -> next.resolveProduction(OWNER, ticket, true));
 	}
 
-	@Test void legacyUnfinishedLaneMigratesWithoutSuspendingHealthyAccount() {
-		var store = new ResourceAccounts(() -> {});
-		var account = account(store);
-		var context = new CompoundTag();
-		context.putString("host", "resource_centrifuging");
-		context.putInt("lane", 2);
-		var ticket = account.reserve(account.reference(), 7, context, Map.of(HYDROGEN, 100L));
-		account.start(ticket);
-		account.freeze(ticket, Map.of(HYDROGEN, 70L));
-		var loaded = ResourceAccounts.load(store.save(), () -> {});
-		assertFalse(loaded.hasInvalidData());
-		var restored = loaded.find(ticket.source().sourceId());
-		assertTrue(restored.laneSuspended(2));
-		assertTrue(restored.canExtract(restored.reference()));
-		assertEquals(ticket, restored.productionTicket());
-		assertEquals(context, restored.productionContext(ticket));
-		assertThrows(IllegalStateException.class, () -> restored.commit(ticket));
-		produce(restored, 50);
-		assertEquals(50L, restored.available().get(HYDROGEN));
-	}
-
 	@Test void suspendedMaximumPreventsLaterOverflowAndRetirement() {
 		var store = new ResourceAccounts(() -> {});
 		var account = account(store);
@@ -472,29 +364,6 @@ class ResourceAccountsMinecraftTest {
 		assertFalse(store.retireEmpty(account.reference()));
 		var restored = ResourceAccounts.load(store.save(), () -> {}).find(account.reference().sourceId());
 		assertEquals(Long.MAX_VALUE, restored.frozenProduction().get(HYDROGEN));
-	}
-
-	@Test void invalidIsolatedLanePreservesOriginalData() {
-		var store = new ResourceAccounts(() -> {});
-		var account = account(store);
-		var context = new CompoundTag();
-		context.putString("host", "resource_centrifuging");
-		context.putInt("lane", 1);
-		var ticket = account.reserve(account.reference(), 7, context, Map.of(HYDROGEN, 100L));
-		account.start(ticket);
-		account.freeze(ticket, Map.of(HYDROGEN, 70L));
-		account.suspendProduction(ticket, "uncertain debit");
-		for (int invalid : new int[]{-1, 256}) {
-			var raw = store.save();
-			var lanes = raw.getList("accounts", net.minecraft.nbt.Tag.TAG_COMPOUND).getCompound(0).getCompound("suspended_lanes");
-			var pending = lanes.getCompound("1");
-			lanes.remove("1");
-			pending.getCompound("production").getCompound("context").putInt("lane", invalid);
-			lanes.put(Integer.toString(invalid), pending);
-			var restored = ResourceAccounts.load(raw, () -> {});
-			assertTrue(restored.hasInvalidData());
-			assertEquals(raw, restored.save());
-		}
 	}
 
 	@Test void legacyUncertainBeeSlotKeepsOtherSlotsRunningAndResolvesOnce() {

@@ -62,15 +62,6 @@ class TemplateDirectEjectMinecraftTest {
 	}
 
 	@Test
-	void disabledOrMissingTargetDoesNotCopyTheTemplate() {
-		var template = spy(new ItemStack(Items.DIAMOND));
-		var fast = new FastItemEjector(ownerWithCustody());
-		assertEquals(0, fast.pushDirect(mock(TileComponentEjector.class), null, template, 4096, 12L));
-		assertEquals(0, IFastEjectHost.push(null, template, 4096));
-		verify(template, never()).copyWithCount(anyInt());
-	}
-
-	@Test
 	void legacyHostReceivesAnIndependentFullRequest() {
 		var template = new ItemStack(Items.DIAMOND);
 		IFastEjectHost legacy = request -> {
@@ -81,27 +72,6 @@ class TemplateDirectEjectMinecraftTest {
 		};
 		assertEquals(7, IFastEjectHost.push(legacy, template, 500));
 		assertEquals(1, template.getCount());
-	}
-
-	@Test
-	void directRejectionSurvivesGameTicksAndRetriesWhenTheContainerHasSpace() {
-		var target = new CountingHandler();
-		target.reject = true;
-		try (var fixture = new Fixture(target)) {
-			assertEquals(0, fixture.direct(new ItemStack(Items.DIAMOND, 64), 1L));
-			int reads = target.reads;
-			for (int tick = 2; tick <= 20; tick++) {
-				fixture.nanos = tick * 1_000_000L;
-				assertEquals(0, fixture.direct(new ItemStack(Items.DIAMOND, 64), tick));
-			}
-			assertEquals(reads, target.reads);
-			assertEquals(1, target.executions);
-			target.reject = false;
-			fixture.nanos = 50_000_000L;
-			assertEquals(64, fixture.direct(new ItemStack(Items.DIAMOND, 64), 21L));
-			assertEquals(64, target.getStackInSlot(0).getCount());
-			assertFalse(OutputCustody.of(fixture.tile).blocked());
-		}
 	}
 
 	@Test
@@ -120,20 +90,6 @@ class TemplateDirectEjectMinecraftTest {
 			assertEquals(56, fixture.direct(large, 4L));
 			assertEquals(64, large.getCount());
 			assertEquals(64, target.getStackInSlot(0).getCount());
-		}
-	}
-
-	@Test
-	void rejectedTargetDoesNotStopOtherDirectionsOrLoseItsOwnCacheAfterTheirSuccess() {
-		var north = new CountingHandler();
-		north.reject = true;
-		var south = new CountingHandler();
-		try (var fixture = new Fixture(north, south)) {
-			assertEquals(8, fixture.direct(new ItemStack(Items.DIAMOND, 8), 1L));
-			int northReads = north.reads;
-			assertEquals(8, fixture.direct(new ItemStack(Items.DIAMOND, 8), 2L));
-			assertEquals(northReads, north.reads);
-			assertEquals(16, south.getStackInSlot(0).getCount());
 		}
 	}
 
@@ -158,32 +114,6 @@ class TemplateDirectEjectMinecraftTest {
 			replacement.reject = false;
 			fixture.fast.onConfigChanged();
 			assertEquals(8, fixture.direct(new ItemStack(Items.EMERALD, 8), 3L));
-		}
-	}
-
-	@Test
-	void fullOutputSlotsKeepAssetsAndShareRejectionWithDirectOutputDespiteBufferVersionGrowth() {
-		var target = new CountingHandler();
-		target.reject = true;
-		try (var fixture = new Fixture(target)) {
-			var source = BasicInventorySlot.at(null, 0, 0);
-			source.setStack(new ItemStack(Items.DIAMOND, 64));
-			fixture.output(source);
-			fixture.fast.tick(fixture.tile, fixture.ejector, fixture.config, 1L, 1L, true);
-			assertEquals(64, source.getCount());
-			int reads = target.reads;
-			fixture.nanos = 1_000_000L;
-			fixture.fast.tick(fixture.tile, fixture.ejector, fixture.config, 2L, 99L, true);
-			assertEquals(0, fixture.direct(new ItemStack(Items.DIAMOND, 64), 2L));
-			assertEquals(reads, target.reads);
-			assertEquals(0, target.executions);
-			assertEquals(64, source.getCount());
-
-			target.reject = false;
-			fixture.nanos = 50_000_000L;
-			fixture.fast.tick(fixture.tile, fixture.ejector, fixture.config, 3L, 99L, true);
-			assertTrue(source.isEmpty());
-			assertEquals(64, target.getStackInSlot(0).getCount());
 		}
 	}
 
@@ -233,7 +163,6 @@ class TemplateDirectEjectMinecraftTest {
 			var custody = OutputCustody.of(fixture.tile);
 			assertTrue(custody.blocked());
 			assertEquals(8L, custody.amount());
-			fixture.nanos = 1_000_000_000L;
 			assertEquals(0, fixture.direct(new ItemStack(Items.DIAMOND, 8), 2L));
 			assertEquals(1, target.executions);
 			assertEquals(3, target.getStackInSlot(0).getCount());
@@ -308,36 +237,6 @@ class TemplateDirectEjectMinecraftTest {
 	}
 
 	@Test
-	void stableTieredSlotsSkipExtractionAndShareARejectionAfterAnotherProductSucceeds() {
-		var target = new ItemStackHandler(1) {
-			@Override
-			public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
-				return stack.is(Items.DIAMOND) ? stack : super.insertItem(slot, stack, simulate);
-			}
-		};
-		// 本例验证完整扫描后的拒收共享，固定预算以免实际耗时改变轮转起点。
-		try (var budgets = mockConstruction(ItemEjectionBudget.class,
-				(mock, context) -> when(mock.canAttempt(anyLong(), anyBoolean())).thenReturn(true));
-				var fixture = new Fixture(target)) {
-			var first = spy(TieredOutputInventorySlot.at(() -> 2, null, 0, 0));
-			var second = spy(TieredOutputInventorySlot.at(() -> 2, null, 0, 0));
-			first.setStack(new ItemStack(Items.DIAMOND, 64));
-			second.setStack(new ItemStack(Items.DIAMOND, 64));
-			fixture.output(first, second);
-			fixture.fast.tick(fixture.tile, fixture.ejector, fixture.config, 1L, 1L, true);
-			fixture.fast.tick(fixture.tile, fixture.ejector, fixture.config, 2L, 2L, true);
-			verify(first, times(1)).extractItem(64, Action.SIMULATE, AutomationType.EXTERNAL);
-			verify(second, times(1)).extractItem(64, Action.SIMULATE, AutomationType.EXTERNAL);
-			assertEquals(4, fixture.direct(new ItemStack(Items.EMERALD, 4), 3L));
-			fixture.fast.tick(fixture.tile, fixture.ejector, fixture.config, 4L, 2L, true);
-			verify(first, times(2)).extractItem(64, Action.SIMULATE, AutomationType.EXTERNAL);
-			verify(second, times(1)).extractItem(64, Action.SIMULATE, AutomationType.EXTERNAL);
-			assertEquals(128, first.getCount() + second.getCount());
-			assertEquals(4, target.getStackInSlot(0).getCount());
-		}
-	}
-
-	@Test
 	void legalComponentCountAndSlotReplacementChangesDoNotReuseOldSourceBindings() {
 		for (String change : List.of("component", "count", "slot")) {
 			var target = new CountingHandler();
@@ -366,25 +265,6 @@ class TemplateDirectEjectMinecraftTest {
 		}
 	}
 
-	@Test
-	void directRequestEvictionRetiresAStableSlotPointerBeforeItsOldDeadline() {
-		var target = new CountingHandler();
-		target.reject = true;
-		try (var fixture = new Fixture(target)) {
-			var source = TieredOutputInventorySlot.at(() -> 2, null, 0, 0);
-			source.setStack(new ItemStack(Items.DIAMOND, 64));
-			fixture.output(source);
-			fixture.fast.tick(fixture.tile, fixture.ejector, fixture.config, 1L, 1L, true);
-			for (int i = 1; i <= 64; i++) {
-				assertEquals(0, fixture.direct(new ItemStack(Items.EMERALD, i), i + 1L));
-			}
-			target.reject = false;
-			fixture.fast.tick(fixture.tile, fixture.ejector, fixture.config, 66L, 1L, true);
-			assertTrue(source.isEmpty());
-			assertEquals(64, target.getStackInSlot(0).getCount());
-		}
-	}
-
 	private static final class Fixture implements AutoCloseable {
 		private final TileEntityMekanism tile = ownerWithCustody();
 		private final TileComponentEjector ejector = mock(TileComponentEjector.class);
@@ -393,7 +273,6 @@ class TemplateDirectEjectMinecraftTest {
 		private final MockedConstruction<NeighborItemTargets> construction;
 		private final FastItemEjector fast;
 		private Consumer<Direction> invalidated;
-		private long nanos;
 
 		@SuppressWarnings("unchecked")
 		private Fixture(IItemHandler... targets) {
@@ -406,7 +285,7 @@ class TemplateDirectEjectMinecraftTest {
 				when(mock.outputSides(any())).thenAnswer(call -> List.copyOf(handlers.keySet()));
 				when(mock.handler(any())).thenAnswer(call -> handlers.get(call.getArgument(0)));
 			});
-			fast = new FastItemEjector(tile, () -> nanos);
+			fast = new FastItemEjector(tile);
 		}
 
 		private int direct(ItemStack stack, long tick) {

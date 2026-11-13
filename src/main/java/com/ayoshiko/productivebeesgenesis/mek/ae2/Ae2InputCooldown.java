@@ -27,22 +27,9 @@ final class Ae2InputCooldown {
 		cooldownN = unlimited ? UNLIMITED_SUCCESS_TICKS : NORMAL_SUCCESS_TICKS;
 	}
 
-	/**
-	 * Supply-aware success (AE2LT {@code CooldownTracker} / {@code KeyModel} parity):
-	 * when a normal pull could not reach its per-tick quota the network is
-	 * replenishing slowly, so lengthen the next interval to avoid useless scans;
-	 * unlimited pulls always stay at 1 tick.
-	 */
+	/** 少于总配额也可能只是本地容量不足，成功供料不额外延迟后续补货。 */
 	void onSuccess(boolean unlimited, long pulledAmount, long expectedQuota) {
-		if (unlimited) {
-			cooldownN = UNLIMITED_SUCCESS_TICKS;
-			return;
-		}
-		if (expectedQuota > 0L && pulledAmount < expectedQuota) {
-			cooldownN = Math.min(MAX_BACKOFF_TICKS, NORMAL_SUCCESS_TICKS + 5);
-		} else {
-			cooldownN = NORMAL_SUCCESS_TICKS;
-		}
+		onSuccess(unlimited);
 	}
 
 	void onFail(boolean unlimited) {

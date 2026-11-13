@@ -151,13 +151,12 @@ def storage_family(identifier):
     return None
 
 
-def machine_row(tag, dimension, saved, report, energy, inputs, neighbors):
+def machine_row(tag, dimension, saved, report, energy, inputs, neighbors, accelerated):
     paid = tag.get(PREFIX + "pb_paid_work", {})
     pending = tag.get(PREFIX + "pb_committed_pending", [])
     output_buffer = tag.get(PREFIX + "output_buffer", {})
     production = output_buffer.get("production", {})
     coord = position(tag)
-    accelerated = {position(row) for row in report.get("accelerated_targets", [])}
     acceleration = "未知（保存状态不含运行时倍率）"
     if coord in accelerated:
         acceleration = f"探针统一加速 ×{report.get('acceleration_multiplier', '?')}"
@@ -170,15 +169,35 @@ def machine_row(tag, dimension, saved, report, energy, inputs, neighbors):
     upgrades = {key.removeprefix(PREFIX): value for key, value in tag.items() if "upgrade" in key}
     pending_items = sum(sum(item.get(PREFIX + "count", 0) for item in entry.get("items", []))
                         for entry in pending)
-    pending_fluid = sum(entry.get("fluid_amount", 0) for entry in pending)
+    pending_items += sum(item.get(PREFIX + "count", item.get("count", 1))
+                         for item in output_buffer.get("stacks", []))
+    frozen_items = production.get("items", [])
+    invalid_frozen_items = not isinstance(frozen_items, list)
+    if not invalid_frozen_items:
+        for entry in frozen_items:
+            if (not isinstance(entry, dict) or not isinstance(entry.get("count"), int)
+                    or entry["count"] <= 0 or entry["count"] > 2_147_483_647):
+                invalid_frozen_items = True
+                continue
+            pending_items += entry["count"]
+    if invalid_frozen_items:
+        # 原始冻结项仍在 output_buffer 中；缺失数量不能报告为零。
+        pending_items = None
+    pending_fluid = sum(entry.get("fluid_amount", 0) for entry in pending) + production.get("fluid_amount", 0)
     custody = tag.get("component_ejector", {}).get("output_custody", {})
-    if custody or any(value and (key.startswith("invalid") or "unknown" in key)
-                      for key, value in production.items()):
+    energy_transfer = tag.get(PREFIX + "ae_energy_transfer")
+    retained_energy = isinstance(energy_transfer, dict) and energy_transfer.get("phase") == "known"
+    if (invalid_frozen_items or custody or production.get("request")
+            or PREFIX + "ae_input_transfer" in tag or energy_transfer is not None and not retained_energy
+            or any(value and (key.startswith("invalid") or "unknown" in key)
+                   for section in (output_buffer, production) for key, value in section.items())):
         state = "有待核对状态"
-    elif pending or production.get("items") or production.get("fluid_amount"):
+    elif pending or pending_items or pending_fluid:
         state = "有待排产物"
     elif tag.get("active_state"):
         state = "保存时活跃"
+    elif retained_energy:
+        state = "保存时未活跃（有已确认能量余量）"
     else:
         state = "保存时未活跃"
     return {
@@ -186,6 +205,7 @@ def machine_row(tag, dimension, saved, report, energy, inputs, neighbors):
         "kind": "蜂箱" if "apiary" in tag["id"] else "离心机" if "centrifuge" in tag["id"] else "其它",
         "state": state, "saved_utc": saved, "acceleration": acceleration,
         "energy": sum(entry.get("stored", 0) for entry in tag.get("energy_containers", [])),
+        "retained_energy_joules": energy_transfer.get("known_joules") if retained_energy else None,
         "inventory_count": inventory_count, "occupied_slots": len(items),
         "slots": items, "bee_slots": tag.get(PREFIX + "apiary_bee_slots", []),
         "feeder_slots": tag.get(PREFIX + "feeder_slots", []),
@@ -247,6 +267,7 @@ def inspect(source, latest=False):
                        "probe_passed": report.get("passed"),
                        "snapshot_phase": selected.stem.removesuffix("-machines")}
     energy, inputs = report_rows(report, "machine_energy"), report_rows(report, "input_flow")
+    accelerated = {position(row) for row in report.get("accelerated_targets", [])}
     rows = []
     for tag, dimension, saved in machines:
         x, y, z = position(tag)
@@ -255,7 +276,7 @@ def inspect(source, latest=False):
             key = dimension, x + dx, y + dy, z + dz
             if key in entities:
                 adjacent.append({"position": list(key[1:]), "type": entities[key]})
-        rows.append(machine_row(tag, dimension, saved, report, energy, inputs, adjacent))
+        rows.append(machine_row(tag, dimension, saved, report, energy, inputs, adjacent, accelerated))
     rows.sort(key=lambda row: (row["dimension"], *row["position"]))
     coverage = {
         "machine_types": dict(Counter(row["type"] for row in rows)),

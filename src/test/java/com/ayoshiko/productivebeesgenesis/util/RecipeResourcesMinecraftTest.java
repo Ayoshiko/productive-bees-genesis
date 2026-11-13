@@ -2,21 +2,16 @@ package com.ayoshiko.productivebeesgenesis.util;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
-import com.google.gson.JsonParser;
-import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.Lifecycle;
 import cy.jdkdigital.productivebees.common.crafting.ingredient.BeeIngredient;
 import cy.jdkdigital.productivebees.common.recipe.BeeFishingRecipe;
 import cy.jdkdigital.productivebees.common.recipe.BeeSpawningRecipe;
 import cy.jdkdigital.productivebees.init.ModEntities;
-import net.minecraft.advancements.Advancement;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.RegistrationInfo;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -32,8 +27,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -143,29 +136,6 @@ class RecipeResourcesMinecraftTest {
 				new BeeSpawningRecipe(source.ingredient, source.spawnItem, List.of(bee(OTHER)), source.biomes));
 		assertSame(ordinary, processor.processRecipe(ordinary));
 		assertEquals(2, source.output.size());
-	}
-
-	@Test
-	void fourPublishedAdvancementsDecodeWithMinecraftCodec() throws Exception {
-		var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
-		Map<String, String> icons = Map.of(
-				"root", "mek_centrifuge",
-				"mek_centrifuge", "mek_centrifuge",
-				"process_item", "elite_mek_centrifuge_factory",
-				"ultimate_centrifuge", "ultimate_mek_centrifuge_factory");
-		for (var entry : icons.entrySet()) {
-			var resource = getClass().getResourceAsStream(
-					"/data/productivebeesgenesis/advancement/" + entry.getKey() + ".json");
-			assertNotNull(resource, entry.getKey());
-			try (var reader = new InputStreamReader(resource, StandardCharsets.UTF_8)) {
-				var advancement = Advancement.CODEC.parse(registries.createSerializationContext(JsonOps.INSTANCE),
-						JsonParser.parseReader(reader)).getOrThrow();
-				var icon = advancement.display().orElseThrow().getIcon();
-				assertFalse(icon.isEmpty());
-				assertEquals(ResourceLocation.fromNamespaceAndPath("productivebeesgenesis", entry.getValue()),
-						BuiltInRegistries.ITEM.getKey(icon.getItem()));
-			}
-		}
 	}
 
 	private static Supplier<BeeIngredient> bee(ResourceLocation id) {

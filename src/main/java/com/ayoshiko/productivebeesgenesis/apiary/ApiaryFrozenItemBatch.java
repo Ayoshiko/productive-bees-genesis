@@ -80,7 +80,9 @@ final class ApiaryFrozenItemBatch {
     /** 直交只合并连续来源；每个目的槽的已知回执立即扣原源，后续异常不能重放前缀。 */
     boolean pushToCentrifuges(int sourceIndex, TileEntityMekApiary apiary) {
         int first = sourceGroups[sourceIndex];
-        if (first < 0 || attempted[first] || nextSources[first] < 0) return false;
+        if (first < 0 || nextSources[first] < 0) return false;
+        // 组内剩余源已参与首个长数量请求，只需继续本地回落。
+        if (attempted[first]) return true;
         attempted[first] = true;
         long requested = 0;
         for (int index = first; index >= 0; index = nextSources[index]) {

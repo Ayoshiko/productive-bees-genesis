@@ -4,6 +4,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 
+import java.math.BigInteger;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -23,27 +25,38 @@ final class ResourceAccountData {
 	static long storageBudget(ResourceAccount account, Map<ResourceKey, java.math.BigInteger> available,
 			ResourceAccount.Production production, ResourceAccount.Transfer transfer) {
 		long bytes = STORAGE_BASE;
-		var recoverable = available;
 		for (var work : account.centrifugeWork.entrySet()) {
 			bytes += fieldBytes(Integer.toString(work.getKey()), work.getValue().sizeInBytes());
 		}
+		if (production == null && transfer == null && account.suspendedLanes.isEmpty()
+				&& account.suspendedTransfers.isEmpty()) {
+			return bytes + amountsBytes(available) - new net.minecraft.nbt.ListTag().sizeInBytes();
+		}
+		var recoverable = new LinkedHashMap<>(available);
 		for (var pending : account.suspendedLanes.values()) {
-			recoverable = ResourceExactAmounts.plus(recoverable, pending.production().capacityReservation());
+			pending.production().capacityReservation().forEach(
+					(key, amount) -> recoverable.merge(key, amount, BigInteger::add));
 			bytes += productionBudget(pending.production());
 		}
 		if (production != null) {
-			recoverable = ResourceExactAmounts.plus(recoverable, production.capacityReservation());
+			production.capacityReservation().forEach(
+					(key, amount) -> recoverable.merge(key, amount, BigInteger::add));
 			bytes += productionBudget(production);
 		}
 		for (var pending : account.suspendedTransfers.values()) {
 			var request = pending.transfer();
-			recoverable = ResourceExactAmounts.plus(recoverable, Map.of(request.key(), request.amount()));
+			recoverable.merge(request.key(), request.amount(), BigInteger::add);
 			bytes += transferBudget(request);
 		}
 		if (transfer != null) {
-			recoverable = ResourceExactAmounts.plus(recoverable, Map.of(transfer.key(), transfer.amount()));
+			recoverable.merge(transfer.key(), transfer.amount(), BigInteger::add);
 			bytes += transferBudget(transfer);
 		}
+		// 各请求已在账户入口验证；只核对累计恢复量，不逐车道复制整份余额。
+		if (recoverable.size() > ResourceAmounts.MAX_KEYS) {
+			throw new IllegalArgumentException("Too many resource identities");
+		}
+		recoverable.forEach(ResourceExactAmounts::validate);
 		return bytes + amountsBytes(recoverable) - new net.minecraft.nbt.ListTag().sizeInBytes();
 	}
 

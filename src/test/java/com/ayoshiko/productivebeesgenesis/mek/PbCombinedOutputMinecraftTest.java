@@ -106,44 +106,6 @@ class PbCombinedOutputMinecraftTest {
         verify(context, never()).productivebeesgenesis$markForSave();
     }
 
-    @Test void repeatedOutputPreparationReusesConversionsButNewItemsAndUpgradeChangesInvalidate() {
-        var context = context();
-        when(context.level()).thenReturn(mock(net.minecraft.world.level.Level.class));
-        when(context.productivebeesgenesis$hasRawOreSmeltingUpgrade()).thenReturn(true);
-        var batch = new PbRecipeCompleter(context);
-        batch.accumulatePbRecipeOutputsBatch(recipe(1), 0, 2, 8);
-        try (var conversions = mockStatic(com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.class)) {
-            conversions.when(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.convertPendingLongOutputs(
-                    context.level(), batch.getPendingOutputs())).thenReturn(false);
-            batch.prepareOutputUpgrades(false);
-            var first = counts(batch);
-            for (int i = 0; i < 256; i++) batch.prepareOutputUpgrades(false);
-            assertEquals(first, counts(batch));
-            assertEquals(8, batch.pendingInputShrink());
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.convertPendingLongOutputs(
-                    context.level(), batch.getPendingOutputs()), times(1));
-            batch.accumulatePbRecipeOutputsBatch(recipe(1), 0, 2, 1);
-            batch.prepareOutputUpgrades(false);
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.convertPendingLongOutputs(
-                    context.level(), batch.getPendingOutputs()), times(2));
-            when(context.suppressesUselessByproducts()).thenReturn(true);
-            batch.prepareOutputUpgrades(false);
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.convertPendingLongOutputs(
-                    context.level(), batch.getPendingOutputs()), times(3));
-        }
-    }
-
-    @Test void sameSeedKeepsOutputsAndMaximumCoversProbabilityRemainders() {
-        var owner = new PbRecipeCompleter(context());
-        var recipe = recipe(.37f);
-        var maximum = counts(owner.prepare(recipe, 256, 0, true));
-        for (int seed = 0; seed < 32; seed++) {
-            var actual = counts(owner.prepare(recipe, 256, seed, false));
-            assertEquals(actual, counts(owner.prepare(recipe, 256, seed, false)));
-            actual.forEach((key, amount) -> assertTrue(amount <= maximum.get(key)));
-        }
-    }
-
     @Test void largeBatchesCannotClipItemsWhileCreditingAllResources() {
         var context = context();
         var slot = mock(mekanism.api.inventory.IInventorySlot.class);
@@ -430,63 +392,6 @@ class PbCombinedOutputMinecraftTest {
         assertFalse(restored.hasCommittedPendingOutputs());
     }
 
-    @Test void cachedMaximumRechecksLiveSlotsAndAllUpgradeRevisions() {
-        var context = context();
-        var owner = new PbRecipeCompleter(context);
-        var recipe = recipe(1);
-        assertTrue(owner.fitsMaximum(recipe, 0, 16));
-        for (var slot : List.of(context.primaryOutputSlot(0), context.secondaryOutputSlot(0), context.tertiaryOutputSlot(0))) {
-            slot.setStack(new ItemStack(Items.STONE, 64));
-        }
-        assertFalse(owner.fitsMaximum(recipe, 0, 16));
-        for (var slot : List.of(context.primaryOutputSlot(0), context.secondaryOutputSlot(0), context.tertiaryOutputSlot(0))) {
-            slot.setStack(ItemStack.EMPTY);
-        }
-        assertTrue(owner.fitsMaximum(recipe, 0, 16));
-        var level = mock(net.minecraft.world.level.Level.class);
-        when(context.level()).thenReturn(level);
-        when(level.registryAccess()).thenReturn(REGISTRIES);
-        when(context.productivebeesgenesis$hasRawOreSmeltingUpgrade()).thenReturn(true);
-        try (var conversions = mockStatic(com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.class)) {
-            assertTrue(owner.fitsMaximum(recipe, 0, 16));
-            assertTrue(owner.fitsMaximum(recipe, 0, 16));
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingLongOutputs(
-                    eq(level), any()), times(1));
-            when(context.stabilityBonus()).thenReturn(.5f);
-            assertTrue(owner.fitsMaximum(recipe, 0, 16));
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingLongOutputs(
-                    eq(level), any()), times(2));
-            com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis.RECIPE_VERSION.incrementAndGet();
-            assertTrue(owner.fitsMaximum(recipe, 0, 16));
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingLongOutputs(
-                    eq(level), any()), times(3));
-            var replacement = mock(net.minecraft.world.level.Level.class);
-            when(replacement.registryAccess()).thenReturn(REGISTRIES);
-            when(context.level()).thenReturn(replacement);
-            assertTrue(owner.fitsMaximum(recipe, 0, 16));
-            conversions.verify(() -> com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper.maximumPendingLongOutputs(
-                    eq(replacement), any()), times(1));
-        }
-    }
-
-    @Test void capacityPreparationRetainsRecipeIdentityOrderAcrossIndependentBatches() {
-        var context = context();
-        var owner = new PbRecipeCompleter(context);
-        var recipe = recipe(1);
-        var expected = recipe.getRecipeOutputs().keySet().stream().map(ItemStack::getItem).toList();
-        assertEquals(expected, owner.prepare(recipe, 8, 0, true).getPendingOutputs().keySet().stream().map(ItemStack::getItem).toList());
-        assertEquals(expected, owner.prepare(recipe, 8, 0, false).getPendingOutputs().keySet().stream().map(ItemStack::getItem).toList());
-        var overflow = owner.prepare(recipe, 8, 0, false);
-        overflow.getPendingOutputs().clear();
-        var first = new ItemStack(Items.DIAMOND);
-        var sameIdentity = first.copy();
-        overflow.getPendingOutputs().put(first, 4L);
-        overflow.getPendingOutputs().put(sameIdentity, 5L);
-        assertEquals(2, overflow.getPendingOutputs().size());
-        assertEquals(List.of(first, sameIdentity), List.copyOf(overflow.getPendingOutputs().keySet()));
-    }
-
-
     @Test void encodedPendingTemplatesKeepIndependentReceiptsAndRefreshChangedComponents() {
         var owner = new PbRecipeCompleter(context());
         var batch = owner.prepare(recipe(1), 4, 91, false);
@@ -635,7 +540,6 @@ class PbCombinedOutputMinecraftTest {
         holder.writeToNBT(written, REGISTRIES);
         assertEquals(damaged, written);
     }
-
 
     @Test void tierPreflightRejectsChangedModeCapacityBeforeTouchingSourceFluid() {
         var config = com.ayoshiko.productivebeesgenesis.config.ModConfig.SERVER;

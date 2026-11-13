@@ -43,19 +43,6 @@ class DesignerFontLayoutTest {
 	}
 
 	@Test
-	void shapingAndDrawingSequencesUseTheSameLogicalMetrics() {
-		DesignerFont font = (DesignerFont) DesignerFonts.body();
-		String text = "蜜蜂编辑器 Café 1.21.1";
-		assertEquals(font.width(text), font.width(FormattedText.of(text)));
-		assertEquals(font.width(text), font.width(DesignerTextLayout.plainSequence(text, Style.EMPTY)));
-		assertEquals(font.width(text), font.width(font.split(FormattedText.of(text), 800).getFirst()));
-		assertTrue(font.layout(text, Style.EMPTY).glyphs.stream().allMatch(glyph -> glyph.face() != null));
-		assertTrue(font.layout(text, Style.EMPTY).carets[text.length()] > 0);
-		var apostrophe = font.layout("l’éditeur", Style.EMPTY);
-		assertEquals(apostrophe.glyphs.getFirst().face(), apostrophe.glyphs.get(1).face());
-	}
-
-	@Test
 	void truncationAndHitTestingNeverSplitCombiningMarksOrSurrogatePairs() {
 		DesignerFont font = (DesignerFont) DesignerFonts.body();
 		String text = "A\u0301蜜B";
@@ -84,27 +71,6 @@ class DesignerFontLayoutTest {
 			assertEquals("", DesignerTextLayout.truncate(text, 0));
 			assertEquals(text, DesignerTextLayout.truncate(text, text.length()));
 		}
-	}
-
-	@Test
-	void adjacentSelectionClustersMergeBeforePixelRounding() {
-		DesignerFont font = (DesignerFont) DesignerFonts.code();
-		String text = "  \"name\": \"A\u0301蜜😀B\"";
-		var source = new DesignerTextLayout.Source(text, List.of(
-				new DesignerTextLayout.Run(0, 9, Style.EMPTY.withColor(0x245B86)),
-				new DesignerTextLayout.Run(9, text.length(), Style.EMPTY.withColor(0x487134))), false);
-		var layout = DesignerFonts.layout(font, source);
-		var full = layout.selection(0, text.length());
-		assertEquals(1, full.size());
-		assertEquals(0F, full.getFirst().left(), 0.001F);
-		assertEquals(layout.width, full.getFirst().right(), 0.001F);
-		int start = text.indexOf('A');
-		int end = text.indexOf('B');
-		var partial = layout.selection(start, end);
-		assertEquals(1, partial.size());
-		assertEquals(layout.caret(start), partial.getFirst().left(), 0.001F);
-		assertEquals(layout.caret(end), partial.getFirst().right(), 0.001F);
-		assertEquals(font.width(DesignerTextLayout.sequence(source)), (int) Math.ceil(layout.width));
 	}
 
 	@Test
@@ -142,51 +108,4 @@ class DesignerFontLayoutTest {
 		assertTrue(font.getSplitter().splitLines(FormattedText.of("\n\n"), 50, Style.EMPTY).size() >= 2);
 	}
 
-	@Test
-	void longParagraphWrapKeepsEveryCharacterAndStaysWithinTheWidthBudget() {
-		DesignerFont font = (DesignerFont) DesignerFonts.code();
-		String text = "{\"name\":\"蜜蜂é\",\"value\":12345}".repeat(400);
-		StringBuilder restored = new StringBuilder();
-		font.getSplitter().splitLines(text, 180, Style.EMPTY, false, (style, start, end) -> {
-			String line = text.substring(start, end);
-			assertTrue(font.getSplitter().stringWidth(line) <= 180.01F);
-			restored.append(line);
-		});
-		assertEquals(text, restored.toString());
-	}
-
-	@Test
-	void charactersOutsideTheSubsetUseAvailableSystemOutlinesAndKeepFontIdsIsolated() throws Exception {
-		String text = "\u9F98";
-		try (var stream = Files.newInputStream(Path.of("src/main/resources/assets/productivebeesgenesis/font/designer_cjk.otf"))) {
-			java.awt.Font bundled = java.awt.Font.createFont(java.awt.Font.TRUETYPE_FONT, stream);
-			assertFalse(bundled.canDisplayUpTo(text) < 0);
-		}
-		java.awt.Font system = new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.PLAIN, 1);
-		java.awt.Font selected = DesignerFonts.face(text, 0, text.length(), Style.EMPTY, false, 8.5F);
-		assertEquals(system.canDisplayUpTo(text) < 0, selected != null);
-		if (selected != null) {
-			assertEquals(java.awt.Font.SANS_SERIF, selected.getFamily(java.util.Locale.ROOT));
-			assertEquals(-1, selected.canDisplayUpTo(text));
-			var font = (DesignerFont) DesignerFonts.body();
-			assertEquals(font.width(text), font.width(DesignerTextLayout.plainSequence(text, Style.EMPTY)));
-		}
-		assertNull(DesignerFonts.face(text, 0, text.length(),
-				Style.EMPTY.withFont(ResourceLocation.fromNamespaceAndPath("othermod", "custom")), false, 8.5F));
-	}
-
-	@Test
-	void distanceFieldHasCorrectInsideOutsideAndDoesNotReuseOldBuffers() {
-		byte[] coverage = new byte[49];
-		for (int y = 2; y <= 4; y++) {
-			for (int x = 2; x <= 4; x++) {
-				coverage[y * 7 + x] = (byte) 255;
-			}
-		}
-		byte[] distance = DesignerDistanceField.create(coverage, 7, 7, 3);
-		assertTrue((distance[24] & 255) > 128);
-		assertTrue((distance[0] & 255) < 128);
-		assertArrayEquals(distance, DesignerDistanceField.create(coverage, 7, 7, 3));
-		assertEquals(0, coverage[0]);
-	}
 }

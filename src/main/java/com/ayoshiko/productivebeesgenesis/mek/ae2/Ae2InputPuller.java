@@ -168,10 +168,7 @@ public final class Ae2InputPuller {
 		boolean unlimitedMode = filter != null && filter.hasUnlimitedEntries();
 		long inputCapacity = calculateInputCapacity(inputSlots);
 		if (inputCapacity <= 0) {
-			// Input slots are full; treat as a failed attempt so the cooldown backs off.
-			holder.onInputPullFail(unlimitedMode);
-			holder.updateLastPullTick(currentTick);
-			holder.updateLastPullCounter(pullCounter);
+			// 满槽没有请求网络；槽位重新腾出容量后仍按原有间隔及时补料。
 			return;
 		}
 		long baseRate = holder.getCachedInputRatePerTick();
@@ -215,7 +212,7 @@ public final class Ae2InputPuller {
 				host, holder, buffers, level, storageService, meStorage, currentTick, inputCapacity,
 				processCount, filter, unlimitedMode, keyBackoff, ActionSourceHolder.INSTANCE);
 		if (pullList.isEmpty()) {
-			holder.onInputPullFail(unlimitedMode);
+			// 候选可能都在等待库存保留线，未执行提取的扫描不累计失败退避。
 			holder.updateLastPullTick(currentTick);
 			holder.updateLastPullCounter(pullCounter);
 			return;

@@ -2,7 +2,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
-import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2PushBackoff;
+import com.ayoshiko.productivebeesgenesis.mek.SameTickFailureGate;
 import com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver;
 import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
@@ -59,10 +59,8 @@ public class BeeProduceProcessor {
 	final ApiaryProductionState production;
 	final ApiaryOutputEvidenceCache outputEvidence = new ApiaryOutputEvidenceCache();
 	private final ApiaryFrozenItemBatch frozenItemBatch = new ApiaryFrozenItemBatch();
-	private final Ae2PushBackoff frozenOutputBackoff = new Ae2PushBackoff(50_000_000L, 200_000_000L);
-	private long frozenOutputVersion = Long.MIN_VALUE;
+	private final SameTickFailureGate frozenOutputFailure = new SameTickFailureGate();
 	private long frozenProductionVersion = Long.MIN_VALUE;
-	private long frozenAeRetryNanos;
 	private int frozenTankAmount = -1;
 	private int frozenRoutingFlags = -1;
 	/** 产物分发器（直写输出槽 + 分段流体注入，复用数组跨 tick 零扩容） */
@@ -272,7 +270,7 @@ public class BeeProduceProcessor {
         var custody = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(apiary);
         if (production.suspended() || custody.blocked() || frozenItemBatch.active()) return false;
         if (!production.hasFrozen()) {
-            frozenOutputBackoff.reset();
+            frozenOutputFailure.clear();
             return true;
         }
         long outputVersion = apiary.getOutputBuffer().getOutputVersion();
@@ -281,17 +279,13 @@ public class BeeProduceProcessor {
         int routingFlags = (upgrades.directAeOutputEnabled() ? 1 : 0)
                 | (upgrades.centrifugeDirectTransferEnabled() ? 2 : 0)
                 | (upgrades.directContainerOutputEnabled() ? 4 : 0);
-        // 只节流整批零接收的冻结结果。新批次、本地腾位或路由变化立即重试；
-        // 外部容器无空间通知时，含相位抖动的单调时钟等待至多 250ms，不随加速倍率增长。
-        if (outputVersion != frozenOutputVersion || productionVersion != frozenProductionVersion
+        // 同刻只复用整批零接收结果；接收方腾位不改变本机版本，下一真实刻必须重试。
+        if (productionVersion != frozenProductionVersion
                 || tankAmount != frozenTankAmount || routingFlags != frozenRoutingFlags) {
-            frozenOutputBackoff.reset();
+            frozenOutputFailure.clear();
         }
-        long now = System.nanoTime();
-        // 已记录的 AE 等待到期只唤醒一次，避免冻结等待再次推迟存储的合法重试。
-        boolean aeRetryDue = frozenAeRetryNanos > 0 && now >= frozenAeRetryNanos;
-        if (frozenOutputBackoff.shouldSkip(now) && !aeRetryDue) return false;
-        frozenAeRetryNanos = 0;
+        long gameTick = apiary.getLevel().getGameTime();
+        if (frozenOutputFailure.shouldSkip(gameTick, outputVersion)) return false;
         boolean itemsChanged = false;
         long originalFluidAmount = production.fluidAmount();
         List<ItemStack> frozenItems = production.items();
@@ -353,24 +347,18 @@ public class BeeProduceProcessor {
         }
         boolean completed = !production.hasFrozen() && !custody.blocked();
         if (completed || itemsChanged || originalFluidAmount != production.fluidAmount() || fluidBudgetDeferred) {
-            frozenOutputBackoff.recordSuccess();
+            frozenOutputFailure.clear();
         } else if (!custody.blocked()) {
-            frozenOutputBackoff.recordFailure(System.nanoTime());
+            frozenOutputFailure.recordFailure(gameTick, apiary.getOutputBuffer().getOutputVersion());
         }
-        frozenOutputVersion = apiary.getOutputBuffer().getOutputVersion();
         frozenProductionVersion = production.frozenVersion();
         frozenTankAmount = apiary.getFluidTank().getFluidAmount();
         frozenRoutingFlags = routingFlags;
-        if (upgrades.directAeOutputEnabled() && !completed && !custody.blocked()) {
-            long retry = apiary.productivebeesgenesis$getAe2StateHolder().getPushState()
-                    .getItemBackoff().getBackoffEndNanos();
-            if (retry > System.nanoTime()) frozenAeRetryNanos = retry;
-        }
         return completed;
     }
 
 	void onOutputRoutingChanged() {
-		frozenOutputBackoff.reset();
+		frozenOutputFailure.clear();
 	}
 
 	/**

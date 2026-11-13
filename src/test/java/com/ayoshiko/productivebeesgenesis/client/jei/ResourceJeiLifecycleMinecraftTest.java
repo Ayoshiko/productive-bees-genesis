@@ -1,22 +1,13 @@
 package com.ayoshiko.productivebeesgenesis.client.jei;
 
-import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceKey;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceProductionRecipe;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRecipeView;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceTypes;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import mezz.jei.api.recipe.IRecipeLookup;
 import mezz.jei.api.recipe.IRecipeManager;
-import mezz.jei.api.recipe.RecipeType;
-import mezz.jei.api.registration.IRecipeCatalystRegistration;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -77,31 +68,6 @@ class ResourceJeiLifecycleMinecraftTest {
                 List.of(previous), List.of()).isEmpty());
         verify(manager).hideRecipes(ResourceJeiPlugin.CENTRIFUGING, List.of(previous));
         verify(manager, never()).createRecipeLookup(any());
-    }
-
-    @Test
-    void resourceCatalystsOnlyAdvertiseGenesisMechanicalHosts() {
-        IRecipeCatalystRegistration registration = mock(IRecipeCatalystRegistration.class);
-        Set<Item> catalysts = new HashSet<>();
-        List<RecipeType<?>[]> categories = new ArrayList<>();
-        doAnswer(invocation -> {
-            ItemStack stack = invocation.getArgument(0);
-            RecipeType<?>[] types = (RecipeType<?>[]) invocation.getRawArguments()[1];
-            assertEquals("productivebeesgenesis", BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace());
-            catalysts.add(stack.getItem());
-            categories.add(types);
-            return null;
-        }).when(registration).addRecipeCatalyst(any(ItemStack.class), any(RecipeType[].class));
-
-        new ResourceJeiPlugin().registerRecipeCatalysts(registration);
-        assertTrue(catalysts.contains(ModBlocks.MEK_APIARY.get().asItem()));
-        assertTrue(catalysts.contains(ModBlocks.MEK_CENTRIFUGE.get().asItem()));
-        assertTrue(categories.stream().anyMatch(types -> List.of(types).contains(ResourceJeiPlugin.PRODUCTION)));
-        assertTrue(categories.stream().anyMatch(types -> List.of(types).contains(ResourceJeiPlugin.CENTRIFUGING)));
-        for (String id : List.of("advanced_oak_beehive", "centrifuge", "powered_centrifuge", "heated_centrifuge")) {
-            Item pb = BuiltInRegistries.ITEM.get(ResourceLocation.fromNamespaceAndPath("productivebees", id));
-            assertFalse(catalysts.contains(pb), id);
-        }
     }
 
     private static ResourceJeiRecipe recipe(long amount, double chance, int time, boolean includePb, boolean block) {

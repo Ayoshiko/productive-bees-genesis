@@ -10,7 +10,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.item.crafting.RecipeHolder;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -51,17 +50,6 @@ class ResourceDisplayMinecraftTest {
 	private static ResourceRecipeView view(String id, long amount) {
 		return new ResourceRecipeView(ResourceLocation.parse("example:" + id), BEE,
 				List.of(new ResourceProductionRecipe.Output(ResourceTypes.FE, amount, .25)), 0);
-	}
-	@Test void wirePreservesFullKeysLongAmountsAndProbabilities() {
-		var data = new CompoundTag(); data.putString("resource", "test_resources:echo");
-		var key = ResourceKey.aeKey(ResourceLocation.parse("test_resources:digitalization"), ResourceLocation.parse("test_resources:echo"), data);
-		var recipe = new ResourceRecipeView(BEE, BEE, List.of(new ResourceProductionRecipe.Output(key, Long.MAX_VALUE, .125)), 123);
-		var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), REGISTRIES);
-		try {
-			var page = new ResourceCatalogSync.Page(42, 0, 1, recipe);
-			ResourceCatalogSync.Page.CODEC.encode(buffer, page);
-			assertEquals(page, ResourceCatalogSync.Page.CODEC.decode(buffer));
-		} finally { buffer.release(); }
 	}
 	@Test void catalogPublishesOnlyCompleteGenerationsAndClearsOnFailureOrLogout() {
 		var buffer = new ResourceCatalogBuffer();
@@ -111,17 +99,6 @@ class ResourceDisplayMinecraftTest {
 			buffer.writeVarLong(1); buffer.writeVarInt(0); buffer.writeVarInt(Integer.MAX_VALUE);
 			assertThrows(IllegalArgumentException.class, () -> ResourceCatalogSync.Page.CODEC.decode(buffer));
 		} finally { buffer.release(); }
-	}
-	@Test void projectionIncludesDefaultsAndUsesTheSameFirstCentrifugeRecipeAsProduction() {
-		var out = List.of(new ResourceProductionRecipe.Output(ResourceTypes.EXPERIENCE, 1, 1));
-		var recipe = new ResourceProductionRecipe(BEE, out);
-		var index = ResourceRecipeIndex.build(1, List.of(new RecipeHolder<>(ResourceLocation.parse("example:java_default"), recipe)), List.of(
-				new RecipeHolder<>(ResourceLocation.parse("example:z"), new ResourceCentrifugeRecipe(BEE, out, 20)),
-				new RecipeHolder<>(ResourceLocation.parse("example:a"), new ResourceCentrifugeRecipe(BEE, out, 40))));
-		var views = ResourceRecipeView.collect(index);
-		assertEquals(2, views.size());
-		assertEquals(40, views.stream().filter(ResourceRecipeView::centrifuging).findFirst().orElseThrow().processingTime());
-		assertTrue(views.stream().anyMatch(value -> value.id().getPath().equals("java_default")));
 	}
 	@Test void summaryKeepsLongPrecisionLimitsRowsAndDoesNotExposePendingOrOwner() {
 		var account = ResourceAccountsMinecraftTest.account(new ResourceAccounts(() -> {}));

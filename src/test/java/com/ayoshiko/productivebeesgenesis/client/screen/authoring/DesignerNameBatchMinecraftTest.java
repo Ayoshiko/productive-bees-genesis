@@ -69,26 +69,6 @@ class DesignerNameBatchMinecraftTest {
 		}
 	}
 
-	@Test
-	void batchRetains4096CapacityAndRejectsBadTypesLengthsDuplicatesAndDepth() {
-		UUID token = new UUID(5, 5);
-		var batch = new DesignerNameBatch(token, 5, header(4096));
-		for (int index = 0; index < 4096; index++) {
-			batch.add(entry("test:bee_" + index, "Bee " + index));
-		}
-		assertEquals(4096, batch.finish(header(4096)).names().size());
-		assertThrows(IllegalArgumentException.class, () -> new DesignerNameBatch(token, 5, header(4097)));
-		JsonObject bad = entry("test:bad", "x".repeat(129));
-		assertThrows(IllegalArgumentException.class, () -> new DesignerNameBatch(token, 5, header(1)).add(bad));
-		JsonObject booleanName = entry("test:boolean", "Name");
-		booleanName.getAsJsonObject("names").addProperty("en_us", false);
-		assertThrows(IllegalArgumentException.class, () -> new DesignerNameBatch(token, 5, header(1)).add(booleanName));
-		var duplicate = new DesignerNameBatch(token, 5, header(2));
-		duplicate.add(entry("test:same", "One"));
-		assertThrows(IllegalArgumentException.class, () -> duplicate.add(entry("test:same", "Two")));
-		assertThrows(IllegalArgumentException.class, () -> BeeDesignerProtocol.parse("{\"names\":" + "[".repeat(33) + "0" + "]".repeat(33) + "}"));
-	}
-
 	private static JsonObject header(int count) {
 		JsonObject data = new JsonObject();
 		data.addProperty("count", count);

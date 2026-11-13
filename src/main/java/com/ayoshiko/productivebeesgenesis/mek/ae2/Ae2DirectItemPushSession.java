@@ -125,27 +125,27 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 
 	long insertBatch(AEItemKey key, long amount) {
 		return measuredStorage.prepare(meStorage, gameTick, costTracker)
-				.insert(key, amount, Actionable.MODULATE, batchSource());
+				.insertShared(key, amount, batchSource());
 	}
 
 	long batchCostNanos() {
 		return measuredStorage.lastCostNanos();
 	}
 
-	/** 网络成本只记一次，其他贡献宿主仅同步各自预算；换网后的新会话不继承旧回执。 */
-	void recordBatch(MEStorage target, long tick, AEItemKey key, long accepted, long cost, boolean measured) {
+	/** 各宿主只承担本次共享调用的成本份额；未分到部分回执不等于网络拒收。 */
+	void recordBatch(MEStorage target, long tick, AEItemKey key, long accepted, boolean batchAccepted, long cost) {
 		if (meStorage != target || gameTick != tick) return;
 		attemptedCount++;
 		recordInsertCost(cost);
-		if (!measured && costTracker != null) costTracker.recordSharedForNetwork(target, tick, cost);
-		if (accepted <= 0) {
+		if (costTracker != null) costTracker.recordSharedForNetwork(target, tick, cost);
+		if (!batchAccepted) {
 			zeroAcceptStreak++;
 			if (keyBackoff != null) keyBackoff.recordFailure(key, System.nanoTime());
 		} else {
 			zeroAcceptStreak = 0;
 			if (keyBackoff != null) {
 				keyBackoff.recordSuccess(key, System.nanoTime(),
-						costTracker == null ? 0 : costTracker.successDelayNanos());
+						accepted <= 0 || costTracker == null ? 0 : costTracker.successDelayNanos());
 			}
 		}
 	}

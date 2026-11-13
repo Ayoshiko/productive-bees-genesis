@@ -76,33 +76,24 @@ public final class AeOutputButton extends MekanismButton {
 	}
 
 	private boolean globalOutputEnabled(TransmissionType type) {
-		if (ModConfig.SERVER == null) {
-			return false;
-		}
 		if (tile instanceof TileEntityMekApiary) {
 			return switch (type) {
-				case ITEM -> ModConfig.SERVER.apiaryAeOutputEnabled != null
-						&& ModConfig.SERVER.apiaryAeOutputEnabled.get();
-				case FLUID -> ModConfig.SERVER.apiaryAeFluidOutputEnabled != null
-						&& ModConfig.SERVER.apiaryAeFluidOutputEnabled.get();
+				case ITEM -> ModConfig.SERVER.apiaryAeOutputEnabled.get();
+				case FLUID -> ModConfig.SERVER.apiaryAeFluidOutputEnabled.get();
 				default -> false;
 			};
 		}
 		return switch (type) {
-			case ITEM -> ModConfig.SERVER.mekCentrifugeAeOutputEnabled != null
-					&& ModConfig.SERVER.mekCentrifugeAeOutputEnabled.get();
-			case FLUID -> ModConfig.SERVER.mekCentrifugeAeFluidOutputEnabled != null
-					&& ModConfig.SERVER.mekCentrifugeAeFluidOutputEnabled.get();
+			case ITEM -> ModConfig.SERVER.mekCentrifugeAeOutputEnabled.get();
+			case FLUID -> ModConfig.SERVER.mekCentrifugeAeFluidOutputEnabled.get();
 			default -> false;
 		};
 	}
 
 	private boolean hasCurrentMenu() {
 		Minecraft client = Minecraft.getInstance();
-		return gui() instanceof GuiMekanism<?> screen && client.screen == screen && client.player != null && client.level != null
-				&& client.player.containerMenu == menu && screen.getMenu() == menu
-				&& menu.getTileEntity() == tile && !tile.isRemoved() && tile.getLevel() == client.level
-				&& client.level.getBlockEntity(tile.getBlockPos()) == tile;
+		return client.screen == gui() && client.player != null
+				&& client.player.containerMenu == menu && !tile.isRemoved();
 	}
 
 	private static boolean requestToggle(GuiElement element, double mouseX, double mouseY) {

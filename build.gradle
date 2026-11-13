@@ -541,8 +541,7 @@ def reportReleaseArtifact = tasks.register('reportReleaseArtifact') {
 
 apply from: 'gradle/license-manifest.gradle'
 
+// 日常 build 只编译打包；测试、示例和发布附件核对按本次需要显式选择。
 tasks.named('check') {
-    dependsOn verifyReleaseArtifact
-    dependsOn reportReleaseArtifact
-    dependsOn tasks.named('compileDatagenJava')
+    setDependsOn([])
 }

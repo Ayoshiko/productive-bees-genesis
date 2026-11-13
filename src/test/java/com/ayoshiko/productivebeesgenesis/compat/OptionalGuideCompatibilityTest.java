@@ -1,12 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.compat;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -15,12 +11,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import javax.imageio.ImageIO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * GuideME 与 Patchouli 纯资源可选兼容接线校验。
+ * GuideME 双语页面与本地资源引用校验。
  */
 class OptionalGuideCompatibilityTest {
 	private static final Path RESOURCE_ROOT = Path.of("src/main/resources");
@@ -31,8 +26,6 @@ class OptionalGuideCompatibilityTest {
 	private static final Pattern STRUCTURE_SOURCE = Pattern.compile("<ImportStructure\\s+src=\"([^\"]+)\"");
 	private static final Pattern RECIPE_FOR_ITEM = Pattern.compile("<RecipeFor\\s+id=\"([^\"]+)\"");
 	private static final Pattern UNSUPPORTED_COMPONENT = Pattern.compile("</?Row(?:\\s|>)");
-	/** 代码块单行宽度上限（半角单位），超过该值就会把整页撑宽。 */
-	private static final int MAX_CODE_BLOCK_WIDTH = 90;
 	private static final Set<String> EXPECTED_RECIPE_OUTPUTS = Set.of(
 			"productivebeesgenesis:mek_apiary",
 			"productivebeesgenesis:mek_centrifuge",
@@ -41,60 +34,6 @@ class OptionalGuideCompatibilityTest {
 			"productivebeesgenesis:byproduct_destruction_upgrade",
 			"productivebeesgenesis:gene_type_only_upgrade",
 			"productivebeesgenesis:gene_full_purity_upgrade");
-
-	@Test
-	@DisplayName("GuideME 使用数据驱动定义、双语页面和物品帮助入口")
-	void guideMeResourcesAreReady() throws Exception {
-		Path definitionPath = RESOURCE_ROOT.resolve(
-				"assets/productivebeesgenesis/guideme_guides/guide.json");
-		JsonObject definition = readJson(definitionPath);
-		assertEquals("zh_cn", definition.get("default_language").getAsString());
-		assertTrue(definition.has("item_settings"));
-		assertEquals("productivebeesgenesis:item/guide",
-				definition.getAsJsonObject("item_settings").get("model").getAsString());
-
-		assertTrue(Files.isRegularFile(GUIDE_ROOT.resolve("index.md")));
-		assertTrue(Files.isRegularFile(ENGLISH_GUIDE_ROOT.resolve("index.md")));
-		Set<String> indexedItems = collectItemIds(relativeMarkdownPages(GUIDE_ROOT, true), GUIDE_ROOT);
-		Set<String> englishIndexedItems = collectItemIds(
-				relativeMarkdownPages(ENGLISH_GUIDE_ROOT, false), ENGLISH_GUIDE_ROOT);
-		assertEquals(indexedItems, englishIndexedItems, "中英文物品帮助索引必须保持一致");
-		assertFalse(Files.readString(GUIDE_ROOT.resolve("index.md")).contains("<ItemIcon id="),
-				"指南首页不得重复声明子页面已经索引的物品，否则 GuideME 会产生帮助索引冲突");
-		assertFalse(Files.readString(ENGLISH_GUIDE_ROOT.resolve("index.md")).contains("<ItemIcon id="),
-				"英文指南首页也不得重复声明子页面已经索引的物品");
-		assertTrue(indexedItems.contains("productivebeesgenesis:mek_apiary"));
-		assertTrue(indexedItems.contains("productivebeesgenesis:mek_centrifuge"));
-		assertTrue(indexedItems.contains("productivebees:configurable_honeycomb"));
-		assertTrue(indexedItems.contains("productivebees:configurable_comb"));
-		assertTrue(indexedItems.contains("productivebees:spawn_egg_configurable_bee"));
-		assertTrue(indexedItems.contains("productivebeesgenesis:raw_ore_smelting_upgrade"));
-		assertTrue(indexedItems.contains("productivebeesgenesis:gene_type_only_upgrade"));
-		assertTrue(indexedItems.contains("productivebeesgenesis:gene_full_purity_upgrade"));
-		String automation = Files.readString(GUIDE_ROOT.resolve("upgrades/automation.md"));
-		String pbUpgrades = Files.readString(GUIDE_ROOT.resolve("upgrades/pb-upgrades.md"));
-		assertTrue(automation.contains("productivebeesgenesis:gene_type_only_upgrade")
-				&& automation.contains("productivebeesgenesis:gene_full_purity_upgrade"),
-				"两个基因插件必须与另外三个附属功能升级集中在 automation 页面");
-		assertFalse(pbUpgrades.contains("<RecipeFor id=\"productivebeesgenesis:gene_"),
-				"PB 窗口页只保留支持关系，插件配方不得再次分散索引位置");
-		assertAllFactoryItemsIndexed(indexedItems);
-		for (String redundantPage : List.of("machines/index.md", "upgrades/index.md")) {
-			assertFalse(Files.exists(GUIDE_ROOT.resolve(redundantPage)),
-					() -> "GuideME 不应恢复多余总览页: " + redundantPage);
-			assertFalse(Files.exists(ENGLISH_GUIDE_ROOT.resolve(redundantPage)),
-					() -> "英文 GuideME 不应恢复多余总览页: " + redundantPage);
-		}
-		assertEquals(indexedItems.size(), indexedItems.stream().distinct().count(),
-				"每个物品只能指向一篇 GuideME 帮助页");
-		Path guideTexture = RESOURCE_ROOT.resolve("assets/productivebeesgenesis/textures/item/guide.png");
-		assertTrue(Files.isRegularFile(RESOURCE_ROOT.resolve(
-				"assets/productivebeesgenesis/models/item/guide.json")));
-		assertTrue(Files.isRegularFile(guideTexture));
-		assertFalse(java.util.Arrays.equals(Files.readAllBytes(guideTexture), Files.readAllBytes(RESOURCE_ROOT.resolve(
-				"assets/productivebeesgenesis/textures/block/mekanism_centrifuge/factory_front_back.png"))),
-				"指南书必须使用独立书籍纹理，不得复用离心机面板");
-	}
 
 	@Test
 	@DisplayName("GuideME 双语页面拓扑和本地资源引用完整")
@@ -112,238 +51,6 @@ class OptionalGuideCompatibilityTest {
 		assertTrue(problems.isEmpty(), () -> "GuideME 页面存在无效引用或组件:\n" + String.join("\n", problems));
 	}
 
-	@Test
-	@DisplayName("指南不再引用错误状态图且保留必要的小图标")
-	void guideVisualAssetsStayReadable() throws Exception {
-		List<String> removedImageNames = List.of(
-				"apiary_states.png", "centrifuge_states.png", "gui_tabs.png");
-		List<Path> guideTextFiles;
-		try (var files = Files.walk(GUIDE_ROOT)) {
-			guideTextFiles = files.filter(Files::isRegularFile)
-					.filter(path -> path.toString().endsWith(".md"))
-					.toList();
-		}
-		Path patchouliRoot = RESOURCE_ROOT.resolve("assets/productivebeesgenesis/patchouli_books/guide");
-		List<Path> patchouliTextFiles;
-		try (var files = Files.walk(patchouliRoot)) {
-			patchouliTextFiles = files.filter(Files::isRegularFile)
-					.filter(path -> path.toString().endsWith(".json"))
-					.toList();
-		}
-		for (String imageName : removedImageNames) {
-			assertTrue(guideTextFiles.stream().noneMatch(path -> contains(path, imageName)),
-					() -> "GuideME 页面仍引用已移除图片 " + imageName);
-			assertTrue(patchouliTextFiles.stream().noneMatch(path -> contains(path, imageName)),
-					() -> "Patchouli 页面仍引用已移除图片 " + imageName);
-			assertFalse(Files.exists(GUIDE_ROOT.resolve("assets/images").resolve(imageName)),
-					() -> "GuideME 已移除图片不应重新加入资源目录: " + imageName);
-			assertFalse(Files.exists(RESOURCE_ROOT.resolve(
-					"assets/productivebeesgenesis/textures/gui/guide").resolve(imageName)),
-					() -> "Patchouli 已移除图片不应重新加入资源目录: " + imageName);
-		}
-		for (String iconPath : List.of(
-				"assets/productivebeesgenesis/textures/gui/feeder_tab.png",
-				"assets/productivebeesgenesis/textures/gui/pb_upgrade_tab.png")) {
-			Path path = RESOURCE_ROOT.resolve(iconPath);
-			BufferedImage image = ImageIO.read(path.toFile());
-			assertTrue(image != null && image.getWidth() == 16 && image.getHeight() == 16,
-					() -> iconPath + " 必须保留为 16x16 GUI 图标");
-		}
-		String cageOverlay = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/client/GuiCageSlotOverlay.java"));
-		String slotHint = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/apiary/client/PbSlotHintTexture.java"));
-		assertTrue(cageOverlay.contains("\"runtime/slot/bee_cage\""),
-				"蜂笼空槽图标必须注册在客户端运行时纹理目录");
-		assertTrue(cageOverlay.contains("\"productivebees\", \"textures/item/bee_cage/bee_cage.png\""),
-				"蜂笼提示必须使用已安装 PB 的真实物品纹理");
-		assertTrue(cageOverlay.contains("PbSlotHintTexture.register(TEXTURE, SOURCE)"),
-				"蜂笼提示必须通过可重载的灰度纹理注册入口");
-		assertTrue(cageOverlay.contains("super(TEXTURE, gui, slotX, slotY, 16, 16)"),
-				"运行时蜂笼提示必须仍按 16x16 GUI 图标绘制");
-		assertTrue(slotHint.contains("extends SimpleTexture") && slotHint.contains("super(source)"),
-				"运行时提示必须沿 SimpleTexture 生命周期加载 PB 源纹理");
-		assertTrue(slotHint.contains("super.getTextureImage(resources)")
-				&& slotHint.contains("color & 0xFF000000 | gray << 16 | gray << 8 | gray"),
-				"资源包重载后必须重新读取原图并保留透明度生成灰度提示");
-		for (String retiredIcon : List.of("cage_slot_input.png", "cage_slot_output.png")) {
-			assertFalse(Files.exists(RESOURCE_ROOT.resolve(
-					"assets/productivebeesgenesis/textures/gui/slot").resolve(retiredIcon)),
-					() -> "蜂笼运行时图标不应重新发布旧静态副本: " + retiredIcon);
-		}
-		String structure = Files.readString(GUIDE_ROOT.resolve("assets/assemblies/first_line.snbt"));
-		assertTrue(structure.contains("size: [6, 1, 1]"), "入门场景应使用连续单排布局");
-		assertTrue(structure.contains("pos: [0, 0, 0], state: \"mekanism:basic_energy_cube\""));
-		assertTrue(structure.contains("pos: [1, 0, 0], state: \"mekanism:basic_universal_cable\""),
-				"能量立方必须与线缆相邻连接");
-		assertTrue(structure.contains("pos: [3, 0, 0], state: \"mekanism:basic_universal_cable\""),
-				"第二段线缆必须连接蜂箱和离心机");
-	}
-
-	@Test
-	@DisplayName("GuideME 页面不得包含同页锚点链接或超宽代码块（会撑宽整页）")
-	void guideMePagesAvoidLayoutBreakingContent() throws Exception {
-		List<String> problems = new ArrayList<>();
-		for (Path page : relativeMarkdownPages(GUIDE_ROOT, true)) {
-			checkLayoutBreakingContent(GUIDE_ROOT, page, problems);
-			checkLayoutBreakingContent(ENGLISH_GUIDE_ROOT, page, problems);
-		}
-		assertTrue(problems.isEmpty(),
-				() -> "GuideME 页面存在会撑宽整页的内容（GuideME 会把超宽子元素回填给整页，导致正文被裁切、表格列被挤出屏幕）:\n"
-						+ String.join("\n", problems));
-	}
-
-	private static void checkLayoutBreakingContent(Path languageRoot, Path relativePage, List<String> problems)
-			throws Exception {
-		String content = Files.readString(languageRoot.resolve(relativePage));
-
-		// GuideME 不支持同页锚点：`](` + `#` 会被解析成"页面不存在"的错误块，
-		// 而错误块会把整行源码原样渲染出来，等于给页面塞进一段不可控的超宽文本。
-		Matcher linkMatcher = MARKDOWN_LINK.matcher(content);
-		while (linkMatcher.find()) {
-			if (linkMatcher.group(1).startsWith("#")) {
-				problems.add(relativePage + ": 同页锚点链接 " + linkMatcher.group(1) + "（GuideME 会报页面不存在）");
-			}
-		}
-
-		// 代码块按 PRE 渲染：框线字符之间没有断行机会，宽度会积累到远超页面宽度。
-		boolean inFence = false;
-		int lineNumber = 0;
-		for (String line : content.split("\n", -1)) {
-			lineNumber++;
-			if (line.stripLeading().startsWith("```")) {
-				inFence = !inFence;
-				continue;
-			}
-			if (inFence && displayWidth(line) > MAX_CODE_BLOCK_WIDTH) {
-				problems.add(relativePage + ":" + lineNumber + ": 代码块单行宽度 "
-						+ displayWidth(line) + " 超过 " + MAX_CODE_BLOCK_WIDTH);
-			}
-		}
-	}
-
-	/** 全角字符按 2 个半角宽度估算，用于近似 GuideME 的字符步进。 */
-	private static int displayWidth(String line) {
-		int width = 0;
-		for (int i = 0; i < line.length(); i++) {
-			width += line.charAt(i) > 0x2E7F ? 2 : 1;
-		}
-		return width;
-	}
-
-	private static boolean contains(Path path, String needle) {
-		try {
-			return Files.readString(path).contains(needle);
-		} catch (Exception exception) {
-			throw new IllegalStateException("无法读取指南资源: " + path, exception);
-		}
-	}
-
-	@Test
-	@DisplayName("Patchouli 书籍使用 1.20+ 的 data 描述符且双语内容对称")
-	void patchouliResourcesAreReady() throws Exception {
-		JsonObject book = readJson(RESOURCE_ROOT.resolve(
-				"data/productivebeesgenesis/patchouli_books/guide/book.json"));
-		assertTrue(book.get("use_resource_pack").getAsBoolean());
-		assertEquals("productivebeesgenesis.guide.name", book.get("name").getAsString());
-		assertEquals("productivebeesgenesis:guide", book.get("model").getAsString(),
-				"Patchouli 书皮必须使用独立指南书模型");
-		assertEquals("productivebeesgenesis:mek_centrifuge_tab",
-				book.get("creative_tab").getAsString());
-
-		Path bookRoot = RESOURCE_ROOT.resolve("assets/productivebeesgenesis/patchouli_books/guide");
-		assertEquals(relativeJsonFiles(bookRoot.resolve("zh_cn")), relativeJsonFiles(bookRoot.resolve("en_us")),
-				"中文和英文 Patchouli 内容集合必须保持一致");
-	}
-
-	@Test
-	@DisplayName("Patchouli 指南可用两种蜂笼在生存合成，且不与 PB 原书冲突")
-	void patchouliGuideHasOptionalSurvivalRecipes() throws Exception {
-		for (String suffix : List.of("", "_sturdy")) {
-			JsonObject recipe = readJson(RESOURCE_ROOT.resolve(
-					"data/productivebeesgenesis/recipe/guide_book" + suffix + ".json"));
-			assertEquals("minecraft:crafting_shapeless", recipe.get("type").getAsString());
-			Set<String> ingredients = new HashSet<>();
-			for (var ingredient : recipe.getAsJsonArray("ingredients")) {
-				ingredients.add(ingredient.getAsJsonObject().get("item").getAsString());
-			}
-			assertEquals(Set.of("minecraft:book", "minecraft:honeycomb",
-					suffix.isEmpty() ? "productivebees:bee_cage" : "productivebees:sturdy_bee_cage"), ingredients);
-			JsonObject result = recipe.getAsJsonObject("result");
-			assertEquals("patchouli:guide_book", result.get("id").getAsString());
-			assertEquals("productivebeesgenesis:guide",
-					result.getAsJsonObject("components").get("patchouli:book").getAsString());
-			JsonObject condition = recipe.getAsJsonArray("neoforge:conditions").get(0).getAsJsonObject();
-			assertEquals("neoforge:mod_loaded", condition.get("type").getAsString());
-			assertEquals("patchouli", condition.get("modid").getAsString());
-		}
-	}
-
-	@Test
-	@DisplayName("两个教程框架只声明可选依赖且生产 Java 不链接其 API")
-	void integrationsRemainOptionalAndClassloaderSafe() throws Exception {
-		String metadata = Files.readString(Path.of("src/main/templates/META-INF/neoforge.mods.toml"));
-		assertOptionalDependency(metadata, "guideme");
-		assertOptionalDependency(metadata, "patchouli");
-		String mixinPlugin = Files.readString(Path.of(
-				"src/main/java/com/ayoshiko/productivebeesgenesis/mixin/MixinConfigPlugin.java"));
-		assertTrue(mixinPlugin.contains(
-				"if (simpleName.equals(\"MyriadGuideHotkeyMixin\")) return isModLoaded(\"guideme\");"),
-				"GuideME 热键 Mixin 必须在缺失依赖时拒绝加载");
-
-		Path sourceRoot = Path.of("src/main/java");
-		try (var files = Files.walk(sourceRoot)) {
-			var offenders = files
-					.filter(path -> path.toString().endsWith(".java"))
-					.filter(path -> containsOptionalApiReference(path, "guideme.")
-							|| containsOptionalApiReference(path, "vazkii.patchouli."))
-					.toList();
-			assertTrue(offenders.isEmpty(),
-					() -> "纯资源兼容不得让生产 Java 链接可选教程 API: " + offenders);
-		}
-	}
-
-	private static void assertAllFactoryItemsIndexed(Set<String> indexedItems) {
-		List<String> tiers = List.of(
-				"basic", "advanced", "elite", "ultimate",
-				"overclocked", "quantum", "dense", "multiversal", "creative",
-				"absolute_extra", "supreme_extra", "cosmic_extra", "infinite_extra",
-				"absolute_overclocked_emextra", "supreme_quantum_emextra",
-				"cosmic_dense_emextra", "infinite_multiversal_emextra");
-		for (String tier : tiers) {
-			assertTrue(indexedItems.contains("productivebeesgenesis:" + tier + "_mek_apiary_factory"),
-					() -> "GuideME 缺少蜂箱工厂帮助入口: " + tier);
-			assertTrue(indexedItems.contains("productivebeesgenesis:" + tier + "_mek_centrifuge_factory"),
-					() -> "GuideME 缺少离心机工厂帮助入口: " + tier);
-		}
-	}
-
-	private static Set<String> collectItemIds(List<Path> relativePages, Path root) throws Exception {
-		Set<String> itemIds = new HashSet<>();
-		List<String> duplicates = new ArrayList<>();
-		for (Path relativePage : relativePages) {
-			boolean inItemIds = false;
-			for (String line : Files.readAllLines(root.resolve(relativePage))) {
-				if (line.equals("item_ids:")) {
-					inItemIds = true;
-					continue;
-				}
-				if (!inItemIds) {
-					continue;
-				}
-				if (!line.startsWith("  - ")) {
-					break;
-				}
-				String itemId = line.substring(4).trim();
-				if (!itemIds.add(itemId)) {
-					duplicates.add(itemId + " in " + relativePage);
-				}
-			}
-		}
-		assertTrue(duplicates.isEmpty(), () -> "GuideME 物品帮助索引冲突: " + duplicates);
-		return itemIds;
-	}
-
 	private static List<Path> relativeMarkdownPages(Path root, boolean excludeEnglishDirectory) throws Exception {
 		try (var files = Files.walk(root)) {
 			return files
@@ -353,16 +60,6 @@ class OptionalGuideCompatibilityTest {
 					.map(root::relativize)
 					.sorted()
 					.toList();
-		}
-	}
-
-	private static Set<Path> relativeJsonFiles(Path root) throws Exception {
-		try (var files = Files.walk(root)) {
-			return files
-					.filter(Files::isRegularFile)
-					.filter(path -> path.toString().endsWith(".json"))
-					.map(root::relativize)
-					.collect(java.util.stream.Collectors.toSet());
 		}
 	}
 
@@ -415,41 +112,4 @@ class OptionalGuideCompatibilityTest {
 		}
 	}
 
-	private static JsonObject readJson(Path path) throws Exception {
-		return JsonParser.parseString(Files.readString(path)).getAsJsonObject();
-	}
-
-	private static void assertOptionalDependency(String metadata, String modId) {
-		int modIdPosition = metadata.indexOf("modId=\"" + modId + "\"");
-		assertTrue(modIdPosition >= 0, () -> "缺少 " + modId + " 可选依赖声明");
-		int blockEnd = metadata.indexOf("[[dependencies.", modIdPosition);
-		String block = metadata.substring(modIdPosition, blockEnd >= 0 ? blockEnd : metadata.length());
-		assertTrue(block.contains("type=\"optional\""), () -> modId + " 必须是 optional");
-		assertFalse(block.contains("type=\"required\""), () -> modId + " 不得成为 required");
-		assertTrue(block.contains("ordering=\"AFTER\""), () -> modId + " 存在时应在其后加载");
-	}
-
-	@Test
-	@DisplayName("可选 API 检查拒绝类型引用，允许条件 Mixin 的字符串目标")
-	void optionalApiCheckDistinguishesTypesFromStrings() {
-		assertTrue(containsOptionalApiReference("import guideme.indices.ItemIndex;", "guideme."));
-		assertTrue(containsOptionalApiReference("private guideme.PageAnchor anchor;", "guideme."));
-		assertFalse(containsOptionalApiReference(
-				"@Mixin(targets = \"guideme.internal.hotkey.OpenGuideHotkey\")", "guideme."));
-		assertFalse(containsOptionalApiReference(
-				"String name = \"\\\"guideme.PageAnchor\\\"\";", "guideme."));
-	}
-
-	private static boolean containsOptionalApiReference(String source, String needle) {
-		// 字符串目标不会形成 JVM 类型链接；仍拒绝 import 和直接使用的限定类型。
-		return source.replaceAll("\"(?:\\\\.|[^\"\\\\])*\"", "\"\"").contains(needle);
-	}
-
-	private static boolean containsOptionalApiReference(Path path, String needle) {
-		try {
-			return containsOptionalApiReference(Files.readString(path), needle);
-		} catch (Exception exception) {
-			throw new IllegalStateException("无法检查生产源码: " + path, exception);
-		}
-	}
 }

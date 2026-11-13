@@ -22,11 +22,13 @@ final class Ae2EnergyMath {
             long divisor = (long) doubled;
             long quotient = shortfallJoules / divisor;
             long remainder = shortfallJoules % divisor;
-            return quotient * 2L + remainder * 2L / divisor;
+            long remainderRequest = (remainder * 2L + divisor - 1L) / divisor;
+            return quotient * 2L + remainderRequest;
         }
         BigDecimal available = BigDecimal.valueOf(shortfallJoules).subtract(retainedJoules);
         if (available.signum() <= 0) return 0;
-        return available.divide(BigDecimal.valueOf(conversion), 0, RoundingMode.DOWN)
+        // FE 以整数提取；向下取整会使不足一个 FE 的 J 缺口永远无法补齐。
+        return available.divide(BigDecimal.valueOf(conversion), 0, RoundingMode.UP)
                 .min(MAX_LONG).longValueExact();
     }
 

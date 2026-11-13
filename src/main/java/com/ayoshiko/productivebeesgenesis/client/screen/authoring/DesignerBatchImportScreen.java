@@ -6,7 +6,9 @@ import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerProtocol;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerEggs;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.storage.LevelResource;
 
 import java.util.Map;
 import java.util.ArrayDeque;
@@ -18,6 +20,7 @@ import java.util.Locale;
 /** 整批冲突先预览；写入本机草稿后仍沿服务器原有检查与应用合同。 */
 final class DesignerBatchImportScreen extends DesignerFormScreen {
 	private static final Map<UUID, PendingPublication> PUBLICATIONS = new LinkedHashMap<>();
+	private static PublicationOwner publicationOwner;
 	private final BeeDesignerScreen editor;
 	private final DesignerFormScreen parent;
 	private final Map<String, String> sources;
@@ -59,11 +62,22 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 		saved = drafts;
 	}
 
-	private record PendingPublication(UUID token, Map<String, String> sources, BeeDesignerMigration.Plan plan,
+	private record PublicationOwner(String server, UUID player) {}
+
+	private record PendingPublication(UUID token, PublicationOwner owner, Map<String, String> sources, BeeDesignerMigration.Plan plan,
 			boolean drafts, boolean single, String requestDigest) {}
 
+	static void connected() {
+		Minecraft minecraft = Minecraft.getInstance();
+		var server = minecraft.getSingleplayerServer();
+		String identity = server == null ? "remote:" + minecraft.getCurrentServer().ip
+				: "local:" + server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
+		publicationOwner = new PublicationOwner(identity, minecraft.player.getUUID());
+	}
+
 	static void requirePublicationCapacity(Set<String> ids) {
-		if (PUBLICATIONS.size() >= 16 || PUBLICATIONS.values().stream()
+		var publications = PUBLICATIONS.values().stream().filter(pending -> pending.owner().equals(publicationOwner)).toList();
+		if (publications.size() >= 16 || publications.stream()
 				.anyMatch(pending -> pending.plan().documents().keySet().stream().anyMatch(ids::contains))) {
 			throw new IllegalStateException("designer.batch_import_pending");
 		}
@@ -73,7 +87,7 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 		String id = document.get("id").getAsString();
 		Map<String, String> documents = Map.of(id, document.toString());
 		var plan = new BeeDesignerMigration.Plan(documents, Map.of(id, id), java.util.List.of());
-		PUBLICATIONS.put(token, new PendingPublication(token, documents, plan, true, true, ""));
+		PUBLICATIONS.put(token, new PendingPublication(token, publicationOwner, documents, plan, true, true, ""));
 	}
 
 	static void completePublication(UUID token) {
@@ -82,7 +96,8 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 
 	static void recordPublicationState(JsonObject data) {
 		String value = BeeDesignerDocument.text(data, "token", "");
-		PendingPublication pending = PUBLICATIONS.values().stream().filter(entry -> entry.token().toString().equals(value)).findFirst().orElse(null);
+		PendingPublication pending = PUBLICATIONS.values().stream()
+				.filter(entry -> entry.owner().equals(publicationOwner) && entry.token().toString().equals(value)).findFirst().orElse(null);
 		if (pending == null) {
 			return;
 		}
@@ -94,12 +109,15 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 		if (!pending.requestDigest().isEmpty() && !pending.requestDigest().equals(digest)) {
 			return;
 		}
-		PUBLICATIONS.put(pending.token(), new PendingPublication(pending.token(), pending.sources(), pending.plan(),
+		PUBLICATIONS.put(pending.token(), new PendingPublication(pending.token(), pending.owner(), pending.sources(), pending.plan(),
 				pending.drafts(), pending.single(), digest));
 	}
 
 	static void addPending(BeeDesignerScreen editor) {
 		for (PendingPublication pending : java.util.List.copyOf(PUBLICATIONS.values())) {
+			if (!pending.owner().equals(publicationOwner)) {
+				continue;
+			}
 			editor.rows.add(new Row("", (x, y, w) -> editor.button(x, y, w,
 					tr("batch_import_query").copy().append(" · " + pending.token().toString().substring(0, 8)), () -> {
 				DesignerBatchImportScreen screen = new DesignerBatchImportScreen(editor, editor, pending.sources(), pending.drafts());
@@ -117,7 +135,7 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 	}
 
 	private void remember() {
-		PUBLICATIONS.put(token, new PendingPublication(token, sources, plan, drafts, singlePublication, requestDigest));
+		PUBLICATIONS.put(token, new PendingPublication(token, publicationOwner, sources, plan, drafts, singlePublication, requestDigest));
 	}
 
 	private void prepare() {

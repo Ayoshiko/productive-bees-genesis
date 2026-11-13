@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.logistics;
 
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.inventory.IInventorySlot;
@@ -35,6 +36,8 @@ public final class LocalOutputTransfer {
                     if (slot instanceof TieredOutputInventorySlot && slot.getLimit(stack) <= current.getCount()) continue;
                 } catch (RuntimeException error) {
                     // 候选查询尚未触碰资产；此前已交付的前缀仍按原规则结算。
+                    LogThrottle.error("local_output_slot_query", "本地输出槽查询失败，已交付前缀保留，待发送数量={}",
+                            remaining, error);
                     return stack.getCount() - remaining;
                 }
                 if (pass == 0 && !ItemStack.isSameItemSameComponents(current, stack)) continue;

@@ -177,6 +177,11 @@ final class Ae2InsertCostTracker {
 		if (networkIdentity == identity && costNanos >= 0L) recordTile(gameTick, costNanos);
 	}
 
+	void recordSharedTotal(long gameTick, long costNanos) {
+		refreshGlobal(gameTick);
+		globalSpentNanos += costNanos;
+	}
+
 	/** 当前是否判定所在 ME 网络为昂贵网络（诊断日志用） */
 	boolean isExpensiveNetwork() {
 		return averageNanos > HEALTHY_INSERT_NANOS;

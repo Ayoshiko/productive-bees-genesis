@@ -181,7 +181,7 @@ final class Ae2InputCandidatePolicy {
 			}
 		}
 		boolean singleDirectCandidate = directOnly && directEntries.size() == 1;
-		if (!directOnly || stockPolicyActive && !singleDirectCandidate) {
+		if (!directOnly || !singleDirectCandidate) {
 			availableStacks = Ae2NetworkCandidateDirectory.readInventory(
 					meStorage, storageService, currentTick, stockPolicyActive);
 		}
@@ -194,7 +194,7 @@ final class Ae2InputCandidatePolicy {
 				Ae2InputFilter.DirectEntry direct = directEntries.get(
 						(directStart + directOffset) % directEntries.size());
 				AEItemKey key = direct.key();
-				if (key == null) continue;
+				if (key == null || keyBackoff.shouldSkip(key, nanoNow)) continue;
 				Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
 						level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
 				if (!kind.isAllowed() || !pullKeys.add(key)) continue;
@@ -209,7 +209,7 @@ final class Ae2InputCandidatePolicy {
 					continue;
 				}
 				boolean liveStockEntry = direct.networkStock() || filterSnapshot.globalNetworkStock;
-				long available = inputCapacity;
+				long available = singleDirectCandidate ? inputCapacity : Math.max(0L, availableStacks.get(key));
 				if (liveStockEntry) {
 					// 单个精确键无需候选探针；多类型只需确认保留量加本次需求。
 					available = Long.MAX_VALUE;
@@ -255,7 +255,7 @@ final class Ae2InputCandidatePolicy {
 					Ae2InputFilter.DirectEntry direct = directEntries.get(
 							(directStart + directOffset) % directEntries.size());
 					AEItemKey key = direct.key();
-					if (key == null) continue;
+					if (key == null || keyBackoff.shouldSkip(key, nanoNow)) continue;
 					Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
 							level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
 					boolean whitelistEntry = filterSnapshot.mode == Ae2InputFilter.FilterMode.WHITELIST;

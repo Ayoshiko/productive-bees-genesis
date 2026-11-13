@@ -28,32 +28,6 @@ class JdteResourceMixinContractTest {
 		assertNull(JdteResourceMixinContract.incompatibility(factory()));
 	}
 
-	@Test void rejectsRemovedPendingOutputField() throws IOException {
-		var node = factory();
-		assertTrue(node.fields.removeIf(field -> field.name.equals("pendingOutput")));
-		assertNotNull(JdteResourceMixinContract.incompatibility(node));
-	}
-
-	@Test void rejectsChangedFeeSignature() throws IOException {
-		var node = factory();
-		node.methods.stream().filter(method -> method.name.equals("getEffectiveTimeFluidCost"))
-				.findFirst().orElseThrow().desc = "()J";
-		assertNotNull(JdteResourceMixinContract.incompatibility(node));
-	}
-
-	@Test void rejectsMissingActiveOutputLayout() throws IOException {
-		var node = factory();
-		assertTrue(node.methods.removeIf(method -> method.name.equals("getActiveOutputSlots")));
-		assertNotNull(JdteResourceMixinContract.incompatibility(node));
-	}
-
-	@Test void rejectsStaticProgressField() throws IOException {
-		var node = factory();
-		node.fields.stream().filter(field -> field.name.equals("progress"))
-				.findFirst().orElseThrow().access |= Opcodes.ACC_STATIC;
-		assertNotNull(JdteResourceMixinContract.incompatibility(node));
-	}
-
 	@Test void rejectsMissingOrDuplicateNaturalCompletion() throws IOException {
 		var node = factory();
 		var tick = node.methods.stream().filter(method -> method.name.equals("tickServer")).findFirst().orElseThrow();

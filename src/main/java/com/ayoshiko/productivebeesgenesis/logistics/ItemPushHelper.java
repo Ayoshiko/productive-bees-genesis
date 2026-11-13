@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.logistics;
 
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import java.util.function.BooleanSupplier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.items.IItemHandler;
@@ -103,12 +104,23 @@ public final class ItemPushHelper {
 		ItemStack remaining = stack.copy();
 		if (!targetValid.getAsBoolean()) return remaining;
 		int slots;
-		try { slots = target.getSlots(); } catch (RuntimeException e) { return remaining; }
+		try {
+			slots = target.getSlots();
+		} catch (RuntimeException error) {
+			LogThrottle.error("item_output_slot_count", "物品输出目标槽数查询失败，target={}", destination, error);
+			return remaining;
+		}
 		for (int pass = 0; pass < 2 && !remaining.isEmpty() && !custody.blocked(); pass++) {
 			for (int i = 0; i < slots && !remaining.isEmpty() && !custody.blocked(); i++) {
 				if (!targetValid.getAsBoolean()) return remaining;
 				ItemStack current;
-				try { current = target.getStackInSlot(i); } catch (RuntimeException e) { return remaining; }
+				try {
+					current = target.getStackInSlot(i);
+				} catch (RuntimeException error) {
+					LogThrottle.error("item_output_slot_query", "物品输出目标槽查询失败，已交付前缀保留，target={} slot={} remaining={}",
+							destination, i, remaining.getCount(), error);
+					return remaining;
+				}
 				if (pass == 0 ? current.isEmpty() || !ItemStack.isSameItemSameComponents(current, remaining) : !current.isEmpty()) continue;
 				int slot = i;
 				int requested = remaining.getCount();

@@ -189,6 +189,7 @@ public final class BeeDesignerClient {
 			sequence = 0;
 			REQUESTS.clear();
 			CANCELLED.clear();
+			DesignerBatchImportScreen.connected();
 			screen = new BeeDesignerScreen(data.get("can_publish").getAsBoolean());
 			Minecraft.getInstance().setScreen(screen);
 			DesignerDraftIndex.ensureLoaded();

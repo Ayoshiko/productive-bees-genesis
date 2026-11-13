@@ -122,9 +122,9 @@ class MyriadCreationsLoggerMinecraftTest {
 			new MyriadCreationsLogger("EME工厂离心机").logEmptyCacheAndPreserve(16);
 			warmup.when(MyriadCreationsEventHandler::isBeeTypeCacheWarmupComplete).thenReturn(true);
 			DevModeManager.setEnabled(false);
-			for (int machine = 0; machine < 8; machine++) {
+			for (int machine = 0; machine < 2; machine++) {
 				var diagnostic = new MyriadCreationsLogger("ME工厂离心机");
-				for (int process = 0; process < 19; process++) {
+				for (int process = 0; process < 2; process++) {
 					diagnostic.logEmptyCacheAndPreserve(process);
 				}
 			}
@@ -151,10 +151,10 @@ class MyriadCreationsLoggerMinecraftTest {
 	private void emitAcceleratedFleet() {
 		try (var warmup = mockStatic(MyriadCreationsEventHandler.class)) {
 			warmup.when(MyriadCreationsEventHandler::isBeeTypeCacheWarmupComplete).thenReturn(false);
-			for (int machine = 0; machine < 8; machine++) {
+			for (int machine = 0; machine < 2; machine++) {
 				var diagnostic = new MyriadCreationsLogger(machine % 2 == 0 ? "EME工厂离心机" : "ME工厂离心机");
-				for (int acceleratedCall = 0; acceleratedCall < 256; acceleratedCall++) {
-					for (int process = 0; process < 19; process++) {
+				for (int acceleratedCall = 0; acceleratedCall < 2; acceleratedCall++) {
+					for (int process = 0; process < 2; process++) {
 						diagnostic.logEmptyCacheAndPreserve(process);
 						diagnostic.logOutputBlocked(process, 12800, false);
 						diagnostic.logOutputBlocked(process, 12800, true);

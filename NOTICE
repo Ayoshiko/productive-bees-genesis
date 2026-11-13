@@ -30,5 +30,5 @@ Final entry byte hashes: META-INF/license-entry-hashes.json
 Complete texts: LICENSES/; font notices: assets/productivebeesgenesis/font/*_ofl.txt
 
 Remaining current reference-code-history conditions concern the listed external GPL/LGPL versions, API exceptions and applicable combination, replacement or relinking obligations; the two reference MIT texts and seven method-level scope records are present. Retired historical gaps remain separate.
-This record is not a new license grant or permission clearance. Known unresolved distribution conditions must be resolved before a new public release.
-本记录不是新授权或许可已齐备的结论；已知分发条件未决项必须在新公开发布前处理。
+This record is not a new license grant or permission clearance. The project no longer uses unresolved provenance records as an automatic development or release gate; the recorded facts and applicable third-party terms remain unchanged.
+本记录不是新授权或许可已齐备的结论。项目不再以来源未决记录设置自动开发或发布门禁；已记录事实与适用的第三方条款保持不变。

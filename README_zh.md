@@ -1,7 +1,7 @@
 # 资源蜜蜂：创世
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-下载-orange?style=flat-square&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis)
-![Version](https://img.shields.io/badge/version-1.2.4--dev-blue?style=flat-square)
+[![Version](https://img.shields.io/badge/version-1.2.4-blue?style=flat-square)](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.4)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 ![Code license](https://img.shields.io/badge/project_code-MIT-blue?style=flat-square)
@@ -11,7 +11,7 @@
 
 **语言**: [English](README.md) · [中文](README_zh.md)
 
-**1.2.4 开发中。** 本次维护更新修复机器访问、资产恢复、编辑器行为和构建可靠性问题，当前尚未发布。变更见 [Unreleased](CHANGELOG.md#unreleased)；最近正式版本仍为 [1.2.3](CHANGELOG.md#123---2026-11-04)。
+**1.2.4：生产、升级与编辑器维护更新。** 本版修复蜂箱与离心机的供料／输出等待、已付工作恢复、带内容机器的 AE2 样板、访问权限和编辑器交互。客户端与服务端须一起更新，完整记录见 [1.2.4 变更](CHANGELOG.md#124---2026-11-13)。公开发布进行中，当前附件与平台可用状态以 [1.2.4 Release](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.4) 为准。
 
 **下载**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis) · [GitHub Releases](https://github.com/Ayoshiko/productive-bees-genesis/releases)
 
@@ -19,7 +19,7 @@
 
 **翻译与贡献：** 所有人都可以通过 [Fork](https://github.com/Ayoshiko/productive-bees-genesis/fork) 提交 PR。从对应平台的分支开始修改：**NeoForge 1.21.1／Java 21 使用 `main-neo/1.21.1`**，**Forge 1.20.1／Java 17 使用 `forge/1.20.1`**，网络开发使用 `bees-processing-network/1.21.1`。创建 PR 时保持目标分支一致。`Alpha` 是历史分支；不要把不同加载器或实验分支整树合入维护分支。共用修复须为各加载器分别适配。
 
-PR 需要通过目标平台校验和对应构建，获得当前版本的审查批准，并解决审查对话。CI、发布、构建输入和平台元数据的改动需要所有者审查。外部贡献的 Actions 可能需要维护者先批准运行。Fork PR 不要求仓库写权限；Forge 维护者更新分支也通过经审查的 PR。翻译文件位于 `src/main/resources/assets/productivebeesgenesis/lang/`（例如 `fr_fr.json`）。若流程被 GitHub 阻止，请在 issue 中提供完整报错与比较页面网址。
+所有人仍可通过 Fork 提交 PR，有仓库写权限的协作者可直接更新对应平台分支。强制分支策略检查、所有者审查和 CODEOWNERS 限制已移除，构建与审查按实际改动选择。翻译文件位于 `src/main/resources/assets/productivebeesgenesis/lang/`（例如 `fr_fr.json`）。若流程被 GitHub 阻止，请在 issue 中提供完整报错与比较页面网址。
 
 也可以[创建空白 issue](https://github.com/Ayoshiko/productive-bees-genesis/issues/new)，附上翻译 JSON；若 GitHub 不接受 JSON 附件，请先打包成 ZIP。
 
@@ -171,7 +171,7 @@ PR 需要通过目标平台校验和对应构建，获得当前版本的审查�
 2. 当蜂箱相邻方块为离心机时，蜂箱**不走通用机械原版的缓慢弹出**，通过自实现快速通道，将蜜脾快速转移到离心机的输入槽；开启离心机优先后，新产出的蜜脾更是不经蜂箱输出槽直接写入离心机输入槽。
 3. 离心机处理蜜脾，产出蜜蜂产物。
 
-这种短路设计消除了通用机械弹出器每 tick 限速和繁忙/阻塞冷却引入的吞吐瓶颈，使机器背靠背放置时能够实现满速率工业生产。离心机输入阻塞时按墙钟时间退避重试（250ms→2s），新产出保持零延迟，tick 加速模组下同样正确生效。
+直连交付把蜜脾直接送入相邻离心机输入槽，省去普通弹出器等待。输入满载时只在同一真实游戏刻内复用失败结果，下一刻重新检查容量，tick 加速下也遵循这一规则；未被接收的产物继续保留在蜂箱中。
 
 ### PB 升级系统
 
@@ -798,7 +798,7 @@ Mekanism Extras 有意使用 1.4.1 编译、1.4.0 运行；JEI 使用 19.36.0.36
 
 `./gradlew runClient --no-daemon` 通过仅开发使用的 `devExamples` sourceSet 加载资源蜜蜂示例，可选资源仍需对应模组。原生 `-PminecraftTests` 场景还需 [build.gradle](build.gradle) 中明确列出的 `run/mods` 输入及其传递依赖，标准准备清单不是完整测试整合包。示例不进入发布 JAR；生成参考与合集按当前清单同步，删除或改名的示例不会残留在后续 ZIP 中。
 
-正式分发还须通过 `verifyDistributionPermissions` 及 [PLATFORM_RELEASE.md](PLATFORM_RELEASE.md) 的来源和附件检查。已记录的权限问题未闭合时，普通开发构建仍可使用。
+普通 `build` 只编译打包，不再隐式运行测试、示例检查或产物检查；需要时显式选择相应任务。发布工作流复用 GitHub Release 的同名 JAR，检查版本与完整性，现行流程见 [PLATFORM_RELEASE.md](PLATFORM_RELEASE.md)。第三方通知继续保留已记录的来源与许可事实。
 
 ## 架构
 

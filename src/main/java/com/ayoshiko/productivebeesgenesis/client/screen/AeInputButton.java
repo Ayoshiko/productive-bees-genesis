@@ -50,18 +50,15 @@ public final class AeInputButton extends MekanismButton {
 
 	public void refreshState() {
 		visible = !closed && selectedType.get() == TransmissionType.ITEM;
-		boolean globallyEnabled = ModConfig.SERVER != null && ModConfig.SERVER.mekCentrifugeAeInputEnabled != null
-				&& ModConfig.SERVER.mekCentrifugeAeInputEnabled.get();
+		boolean globallyEnabled = ModConfig.SERVER.mekCentrifugeAeInputEnabled.get();
 		active = visible && globallyEnabled && hasCurrentMenu();
 		setTooltip(globallyEnabled ? openTooltip : disabledTooltip);
 	}
 
 	private boolean hasCurrentMenu() {
 		Minecraft client = Minecraft.getInstance();
-		return gui() instanceof GuiMekanism<?> screen && client.screen == screen && client.player != null && client.level != null
-				&& client.player.containerMenu == menu && screen.getMenu() == menu
-				&& menu.getTileEntity() == tile && !tile.isRemoved() && tile.getLevel() == client.level
-				&& client.level.getBlockEntity(tile.getBlockPos()) == tile;
+		return client.screen == gui() && client.player != null
+				&& client.player.containerMenu == menu && !tile.isRemoved();
 	}
 
 	private static boolean requestOpen(GuiElement element, double mouseX, double mouseY) {
@@ -81,9 +78,7 @@ public final class AeInputButton extends MekanismButton {
 			return false;
 		}
 		GuiAeInputConfig window = new GuiAeInputConfig(screen, 20, 20, host, null);
-		if (ModConfig.SERVER != null && ModConfig.SERVER.mekCentrifugeAeInputMinPages != null) {
-			window.setMinPages(ModConfig.SERVER.mekCentrifugeAeInputMinPages.get());
-		}
+		window.setMinPages(ModConfig.SERVER.mekCentrifugeAeInputMinPages.get());
 		screen.addWindow(window);
 		PacketDistributor.sendToServer(new OpenAeInputConfigPayload(tile.getBlockPos()));
 		return true;

@@ -40,9 +40,9 @@ final class Ae2InputExecution {
 
 	/** 预算等待是中性结果，不能扩大本机退避。 */
 	record BatchResult(int insertedCount, long extractCostNanos,
-			boolean slowExtract, boolean degraded, boolean healthy) {
+			boolean slowExtract, boolean degraded, boolean healthy, boolean inventoryWaiting) {
 		static BatchResult skipped() {
-			return new BatchResult(0, 0L, false, false, false);
+			return new BatchResult(0, 0L, false, false, false, false);
 		}
 	}
 
@@ -85,6 +85,7 @@ final class Ae2InputExecution {
 		boolean fairPassTruncated = false;
 		// 预算跨公平轮与补齐轮累计，未提取的类型留待后续拉取。
 		boolean extractBudgetExhausted = false;
+		boolean networkPermitExhausted = false;
 		try {
 			for (int pass = 0; pass < passes && totalPulled < inputCapacity && !holder.getPendingItemBuffer().isBlocked(); pass++) {
 				boolean fairPass = pass == 0 && typeCount > 1;
@@ -168,7 +169,11 @@ final class Ae2InputExecution {
 					}
 					if (typeAvailable <= 0L) {
 						// 车道被压制导致本类型这轮完全拿不到槽：补齐轮必须再给它一次机会
-						if (lanesSuppressed) fairPassTruncated = true;
+						if (lanesSuppressed) {
+							fairPassTruncated = true;
+						} else {
+							entry.remaining = 0;
+						}
 						// 槽校验可能依赖配对输出状态，只表示本轮无容量，不能对整个 key 退避。
 						continue;
 					}
@@ -179,6 +184,7 @@ final class Ae2InputExecution {
 					}
 					if (!holder.tryAcquireNetworkExtract(meStorage, currentTick)) {
 						networkWorkDeferred = true;
+						networkPermitExhausted = true;
 						break;
 					}
 					if (entry.unlimited) unlimitedAttempted = true;
@@ -188,7 +194,9 @@ final class Ae2InputExecution {
 							inputSlots, inputSlotCapacities, laneSnapshot, slotProbe, typeSlotStart, pos, keyBackoff,
 							buffers.fingerprintCache, buffers.extractBudget, deliveryLanes);
 						int pulled = batchResult.insertedCount();
-						entry.remaining -= pulled;
+						networkWorkDeferred |= batchResult.inventoryWaiting();
+						// 零交付说明本轮没有可用供料，不能继续占住补齐轮的车道份额。
+						entry.remaining = pulled == 0 ? 0 : entry.remaining - pulled;
 						totalPulled += pulled;
 						if (!entry.unlimited) normalPulled += pulled;
 						if (entry.unlimited && pulled > 0) unlimitedSucceeded = true;
@@ -215,7 +223,7 @@ final class Ae2InputExecution {
 					}
 				}
 				// 调用预算耗尽时，补齐轮也不再尝试。
-				if (extractBudgetExhausted || networkWorkDeferred) break;
+				if (extractBudgetExhausted || networkPermitExhausted) break;
 			}
 		} finally {
 			for (PullEntry entry : pullList) {
@@ -241,11 +249,12 @@ final class Ae2InputExecution {
 		return new Result(totalPulled, unlimitedAttempted, unlimitedSucceeded, networkWorkDeferred);
 	}
 
-	/** 暂缓的类型仍保留空槽份额，补齐轮不能把短暂退避变成永久挤占。 */
+	/** 仅可继续交付的类型保留补齐份额，出口等待不让健康供料空转。 */
 	static boolean hasUnassignedDemand(List<PullEntry> entries, Ae2InputLaneSnapshot lanes, int laneCount) {
 		if (!lanes.hasEmptyLane()) return false;
 		for (PullEntry entry : entries) {
-			if (entry.remaining > 0 && lanes.occupiedLaneCount(entry.key) == 0) return true;
+			if (entry.remaining > 0 && !entry.resourceDeferred
+					&& lanes.occupiedLaneCount(entry.key) == 0) return true;
 		}
 		return false;
 	}
@@ -292,30 +301,6 @@ final class Ae2InputExecution {
 		try {
 			// 物品不同必然无法插入，先做廉价身份判断，避免进入昂贵的组件比较。
 			if (!stack.isEmpty() && stack.getItem() != key.getItem()) return 0;
-			if (slot instanceof BasicInventorySlot basicSlot) {
-				// BasicInventorySlot.insertItem 的 INTERNAL 语义由三步组成：组件匹配、
-				// 上限判断、validator/canInsert 判断。这里直接复现，避免为每个候选类型
-				// 创建模拟返回栈，并复用同一次 getLimit 结果。
-				if (stack.isEmpty()) {
-					if (!entry.acceptsProbe(slotIndex, basicSlot, probe)) {
-						return 0;
-					}
-					return Math.max(0, slot.getLimit(probe));
-				}
-				// 非 Mekanism 标准槽的兜底路径：这里的栈不是快照的一部分，就地推导签名。
-				// 该分支只服务自定义 IInventorySlot 实现，不在「每格一种蜜蜂」的热路径上。
-				int lanePatchSize = stack.getComponentsPatch().size();
-				if (!entry.matchesComponents(slotIndex, stack, probe, lanePatchSize,
-						Ae2InputLaneSnapshot.singleBeeType(stack, stack.getItem(), lanePatchSize))) return 0;
-				int limit = slot.getLimit(probe);
-				// 先做「槽已满」的廉价判断（原顺序，避免多付一次 validator 调用）；
-				// 槽校验也可能随配对输出变化，不跨拉取轮缓存其拒收结论。
-				if (limit <= stack.getCount()) return 0;
-				if (!entry.acceptsProbe(slotIndex, basicSlot, probe)) {
-					return 0;
-				}
-				return (long) limit - stack.getCount();
-			}
 			// 保留非 BasicInventorySlot 实现的完整回退路径，兼容自定义 IInventorySlot。
 			if (!slot.insertItem(probe, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()) {
 				// 自定义空槽也可能暂时拒收，本轮保留在 ME 中。
@@ -372,7 +357,7 @@ final class Ae2InputExecution {
 				LogThrottle.warn("ae2_reserve_query",
 						"AE2 库存保留实时查询失败，本轮跳过抽取 key={}: {}", key, e.toString());
 				return new BatchResult(0, reserveQueryCost,
-						Ae2StorageHealth.isPathological(reserveQueryCost), true, false);
+						Ae2StorageHealth.isPathological(reserveQueryCost), true, false, false);
 			}
 			reserveQueryCost = System.nanoTime() - queryStart;
 			extractBudget.recordProbe(gameTick, reserveQueryCost);
@@ -393,7 +378,7 @@ final class Ae2InputExecution {
 					}
 				}
 				return new BatchResult(0, reserveQueryCost, slowReserveQuery,
-						slowReserveQuery, !slowReserveQuery);
+						slowReserveQuery, !slowReserveQuery, !slowReserveQuery);
 			}
 		}
 		Ae2InputTransfer transfer = pending.transfer();
@@ -427,7 +412,7 @@ final class Ae2InputExecution {
 				keyBackoff.recordFailure(key, System.nanoTime());
 			}
 			return new BatchResult(0, maxNetworkCost, slowNetworkOperation,
-					slowNetworkOperation, !slowNetworkOperation);
+					slowNetworkOperation, !slowNetworkOperation, false);
 		}
 		Ae2NetworkInventoryView.recordExtract(holder, gameTick, meStorage, key, extracted);
 		int insertedCount = 0;
@@ -467,7 +452,7 @@ final class Ae2InputExecution {
 		transfer.finish(pending, gameTick, false, 0, returnFailed);
 		if (stranded && level.getBlockEntity(pos) != null) level.getBlockEntity(pos).setChanged();
 		return new BatchResult(insertedCount, maxNetworkCost, slowNetworkOperation, returnFailed,
-				!slowNetworkOperation && !returnFailed);
+				!slowNetworkOperation && !returnFailed, false);
 	}
 
 	private static void handlePullException(Throwable e, AEItemKey key) {
@@ -503,7 +488,7 @@ final class Ae2InputExecution {
 		/** Whether this entry is an ordinary Mekanism SMELTING input. */
 		boolean smelting;
 		boolean combBlock;
-		/** 等待资源出口探测时只保留公平份额，不提取原料。 */
+		/** 等待资源出口探测时不提取原料，也不占用补齐轮空槽。 */
 		boolean resourceDeferred;
 		/** Effective AE2 stock floor, or -1 when no reserve policy applies. */
 		long reserveFloor;

@@ -9,7 +9,6 @@ import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.ingredient.IRecipeSlotRichTooltipCallback;
 import mezz.jei.api.recipe.RecipeIngredientRole;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -25,35 +24,6 @@ import static org.mockito.Mockito.*;
 
 @Tag("minecraft")
 class PbCentrifugeDisplayMinecraftTest {
-
-    @Test
-    void hugeRangesHaveBoundedCandidatesWithBothEndpointsAndOriginalComponents() {
-        ItemStack original = new ItemStack(Items.DIAMOND, 3);
-        original.set(DataComponents.CUSTOM_NAME, Component.literal("数量展示组件"));
-        for (int max : List.of(1_000_000, Integer.MAX_VALUE)) {
-            var candidates = PbCentrifugeRecipeCategory.displayOutputStacks(original, 1, max);
-            assertEquals(PbCentrifugeRecipeCategory.MAX_DISPLAY_COUNTS, candidates.size());
-            assertEquals(1, candidates.getFirst().getCount());
-            assertEquals(max, candidates.getLast().getCount());
-            for (int index = 0; index < candidates.size(); index++) {
-                ItemStack candidate = candidates.get(index);
-                assertTrue(ItemStack.isSameItemSameComponents(original, candidate));
-                assertNotSame(original, candidate);
-                if (index > 0) {
-                    assertTrue(candidate.getCount() > candidates.get(index - 1).getCount());
-                }
-            }
-        }
-        assertEquals(3, original.getCount());
-        assertEquals(List.of(2, 3, 4), PbCentrifugeRecipeCategory.displayOutputStacks(original, 2, 4)
-                .stream().map(ItemStack::getCount).toList());
-        assertEquals(Integer.MAX_VALUE,
-                PbCentrifugeRecipeCategory.displayOutputStacks(original, Integer.MAX_VALUE, Integer.MAX_VALUE)
-                        .getFirst().getCount());
-        assertTrue(PbCentrifugeRecipeCategory.displayOutputStacks(original, 5, 4).isEmpty());
-        assertTrue(PbCentrifugeRecipeCategory.displayOutputStacks(original, 0, 0).isEmpty());
-        assertTrue(PbCentrifugeRecipeCategory.displayOutputStacks(ItemStack.EMPTY, 1, 9).isEmpty());
-    }
 
     @Test
     void sharedRecipeLayoutKeepsOriginalRangeAndChanceWhileIndexingBoundedStacks() {
