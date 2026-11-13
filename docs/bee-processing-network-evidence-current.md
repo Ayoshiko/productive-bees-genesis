@@ -1479,4 +1479,8 @@ JAR **4,416,037 字节**，SHA-256 `df5c577d4d1d8ca1dd5d68f8729f9a8c1d9d5737ee85
 
 `network-dev` 默认只编译生产源码；core 只运行选定测试，探针编译独立为 probe-compile。取消 build 强制提供 Tests、全源码／依赖重复散列、历史运行扫描和 JUnit 时间戳匹配式阻断，继续记录真实命令、退出码、JUnit 汇总和实际探针报告。保留本任务进程树 300 秒以内上限、唯一运行目录及 reader 读取已正常停服 writer 世界的边界。实际行为失败不记成功，取消流程门不生成许可授权或补造运行证据。
 
-本次只改上述工具和现行设计／队列；生产 Java、资产守恒、外部输入权限、未知结果保管和已付恢复未修改。用户原有 `bee-processing-network-visual-design.md` 改动保留。修改前的五份文件副本及回收脚本均核对 SHA-256 并确认回收站可恢复。验证仅做受影响 UTF-8、JSON、PowerShell 语法和 diff 检查；未运行构建、测试或游戏，未提交、推送或合并维护分支。
+工具清理集中提交 `07493e24`；随后通过 `6b14435f` 合入维护正式 1.2.4／`863aa5be` 的生产、交付、恢复和测试精简，再以 `d9f0f8a9` 同步发布状态。合并保留网络共享采样与维护工厂批次交付，语言键两侧均保留，清单按实际合并字节更新。用户原有 `bee-processing-network-visual-design.md` 改动已保管后恢复，未混入提交；本地 29 个既有提交完整保留并随网络分支推送。
+
+首轮 `build compileTestJava` 在 58.519 秒退出 1：生产源码已通过，失败为新增保留测试缺少共享 `PbVirtualTickPlan` import，以及 LICENSE 的 CRLF 字节与历史 LF 摘要不等。补齐 import，生成清单改为记录本次许可文件摘要，历史原件摘要继续留在维护源；未改许可证文本。修复后相同必要任务在 30.635 秒退出 0，未执行 JUnit、游戏或性能矩阵。原始失败与成功结果保存在 `build/network-dev/release124-merge-20261113`、`release124-merge-fixed-20261113`。
+
+网络已推送 `d9f0f8a96d3ca48aa79f476f9e78e83d4748745a`，[GitHub Build 43390541371](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43390541371) 成功。规则备份、退役脚本及四个冲突旧测试均核对摘要且确认回收站可恢复；共享自动提交钩子与远端 8 条 rulesets 已取消，两份 AGENTS 同步为按需验证。构建通过不代表网络全部宿主、性能或游戏行为已验收，A1 实际开发队列保持原范围。
