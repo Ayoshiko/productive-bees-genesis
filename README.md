@@ -66,11 +66,17 @@ this repository and open a pull request against that branch. Include the Java,
 Forge and dependency versions, the packaging result, and which runtime scenarios
 were actually tested. Report issues with **Forge 1.20.1** in the title.
 
-Branch updates use reviewed PRs, including contributions from the Forge maintainer.
-The Forge platform policy and Java 17 build must pass; approvals are dismissed after
-new changes and review conversations must be resolved. CI, publishing, build inputs,
-and platform metadata need Ayoshiko's review. Other branches and release tags remain
-owner-managed. External PR Actions may require maintainer approval before execution.
+Forge maintainer `mybong9` has repository write access and can push directly to
+`forge/1.20.1`, maintain its build and publishing files, and create or update Forge
+version tags and GitHub Releases. The additional PR, review, status-check, code-owner,
+branch and tag restrictions were removed on 2026-11-13. CI remains available as
+build feedback and is not a prerequisite for maintenance.
+
+Use `v<version>-forge-1.20.1` or `v<version>-forge-1.20.1-<prerelease-suffix>`
+for Forge release tags so downloads clearly identify their loader and game version.
+Contributors without write access can continue to use pull requests. GitHub Release
+write permissions apply to the entire repository; use the appropriate platform branch
+and artifact when publishing.
 
 Changes shared with NeoForge should be adapted and validated for each loader's API.
 Do not merge the full Forge source tree into `main-neo/1.21.1` or copy a NeoForge
