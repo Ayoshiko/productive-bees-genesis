@@ -1019,6 +1019,7 @@
   "command.productivebeesgenesis.output.source_debit": "源端待结算数量：%s，扣除结果未知：%s。核验并完成源端扣除后，再使用 confirm-source-settled。",
   "command.productivebeesgenesis.output.invalid_ledger": "输出账本无法读取，已保留原始数据并暂停输出。",
   "command.productivebeesgenesis.output.energy": "能量待结算：请求 %s，阶段 %s，来源 %s，请求 %s FE，保管 %s J，待本地入账 %s J。resolve-energy 在提取阶段填写核实的 FE，在本地入账阶段填写核实的 J。",
+  "command.productivebeesgenesis.output.energy_legacy": "旧版 AE2 能源请求已保管：%s，原请求 %s FE。供能已自动恢复，此历史记录不阻塞机器；核实旧回执后仍可使用 resolve-energy 结算。",
   "command.productivebeesgenesis.output.centrifuge_payment": "离心车道 %s 的费用待核验：请求 %s，需结清 %s J；确认实际扣费完整后使用 confirm-centrifuge-payment。",
   "command.productivebeesgenesis.output.status": "输出保管：请求 %s，未决量 %s，目标 %s，原因 %s",
   "command.productivebeesgenesis.output.upgrade": "蜂箱升级待核验：请求 %s，阶段 %s，原因 %s。使用 upgrade-data <请求> <页码> 查看原快照；人工核实来源、目标和资源账户全部结清后，confirm-upgrade-settled 仅解除暂停，不重放或补发资产。",

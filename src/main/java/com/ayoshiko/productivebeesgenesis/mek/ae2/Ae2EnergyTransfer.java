@@ -25,6 +25,7 @@ public final class Ae2EnergyTransfer {
     private long beforeCredit;
     private long offeredCredit;
     private Tag unreadable;
+    private CompoundTag legacyExtraction;
 
     public boolean isPresent() {
         return phase != null || unreadable != null;
@@ -68,6 +69,14 @@ public final class Ae2EnergyTransfer {
         return offeredCredit;
     }
 
+    public UUID legacyRequest() {
+        return legacyExtraction == null ? null : legacyExtraction.getUUID("request");
+    }
+
+    public long legacyRequestedFe() {
+        return legacyExtraction == null ? 0L : legacyExtraction.getLong("requested_fe");
+    }
+
     public void beginExtract(String source, long requestedFe, double conversion) {
         if (requiresReconciliation() || knownJoules() != 0 || !SOURCES.contains(source)
                 || requestedFe <= 0 || !Double.isFinite(conversion) || conversion <= 0) {
@@ -97,11 +106,7 @@ public final class Ae2EnergyTransfer {
                 || amountFe.compareTo(BigDecimal.valueOf(requestedFe)) > 0) {
             throw new IllegalStateException("Invalid extracted energy: " + amountFe + "/" + requestedFe);
         }
-        BigDecimal conversion = BigDecimal.valueOf(joulesPerFe);
-        if (amountFe.scale() > MAX_SAVED_SCALE - conversion.scale()) {
-            throw new IllegalArgumentException("Energy receipt precision exceeds the saved format");
-        }
-        knownJoules = knownJoules.add(amountFe.multiply(conversion));
+        knownJoules = knownJoules.add(convertedEnergy(amountFe, joulesPerFe));
         requestedFe = 0;
         phase = "known";
         finishIfEmpty();
@@ -131,8 +136,14 @@ public final class Ae2EnergyTransfer {
 
     /** 核实提取时填实际 FE；核实本地入账时填实际新增的整数 J。 */
     public void resolve(UUID expected, BigDecimal transferred) {
-        if (unreadable != null || expected == null || !expected.equals(request())
-                || transferred == null || transferred.signum() < 0) {
+        if (unreadable != null || expected == null || transferred == null || transferred.signum() < 0) {
+            throw new IllegalArgumentException("Energy request identity or amount does not match");
+        }
+        if (expected.equals(legacyRequest())) {
+            resolveLegacyExtraction(transferred);
+            return;
+        }
+        if (!expected.equals(request())) {
             throw new IllegalArgumentException("Energy request identity or amount does not match");
         }
         if ("extract".equals(phase)) {
@@ -149,20 +160,58 @@ public final class Ae2EnergyTransfer {
         }
     }
 
+    private void resolveLegacyExtraction(BigDecimal transferred) {
+        if (requiresReconciliation()) {
+            throw new IllegalStateException("Resolve the current energy request before the legacy receipt");
+        }
+        BigDecimal maximum = new BigDecimal(legacyNativeRequest(legacyRequestedFe()) * 2.0);
+        if (transferred.compareTo(maximum) > 0) {
+            throw new IllegalArgumentException("Legacy energy receipt exceeds the original AE request");
+        }
+        double conversion = legacyExtraction.getDouble("joules_per_fe");
+        BigDecimal confirmed = knownJoules.add(convertedEnergy(transferred, conversion));
+        if (confirmed.compareTo(MAX_JOULES.add(BigDecimal.valueOf(conversion))) > 0) {
+            throw new IllegalStateException("Credit the retained energy before adding this legacy receipt");
+        }
+        if (transferred.signum() > 0) {
+            request = legacyRequest();
+            source = "ae_native";
+            joulesPerFe = conversion;
+            knownJoules = confirmed;
+            requestedFe = 0;
+            phase = "known";
+        }
+        legacyExtraction = null;
+        finishIfEmpty();
+    }
+
+    private static BigDecimal convertedEnergy(BigDecimal amountFe, double conversionRate) {
+        BigDecimal conversion = BigDecimal.valueOf(conversionRate);
+        if (amountFe.scale() > MAX_SAVED_SCALE - conversion.scale()) {
+            throw new IllegalArgumentException("Energy receipt precision exceeds the saved format");
+        }
+        return amountFe.multiply(conversion);
+    }
+
     public void save(CompoundTag parent) {
         if (unreadable != null) {
             parent.put(NBT_KEY, unreadable.copy());
-        } else if (phase != null) {
+        } else if (phase != null || legacyExtraction != null) {
             var tag = new CompoundTag();
-            tag.putInt("version", 1);
-            tag.putUUID("request", request());
-            tag.putString("phase", phase);
-            tag.putString("source", source);
-            tag.putLong("requested_fe", requestedFe);
-            tag.putDouble("joules_per_fe", joulesPerFe);
-            tag.putString("known_joules", knownJoules.toPlainString());
-            tag.putLong("before_credit", beforeCredit);
-            tag.putLong("offered_credit", offeredCredit);
+            tag.putInt("version", 2);
+            if (phase != null) {
+                tag.putUUID("request", request());
+                tag.putString("phase", phase);
+                tag.putString("source", source);
+                tag.putLong("requested_fe", requestedFe);
+                tag.putDouble("joules_per_fe", joulesPerFe);
+                tag.putString("known_joules", knownJoules.toPlainString());
+                tag.putLong("before_credit", beforeCredit);
+                tag.putLong("offered_credit", offeredCredit);
+            }
+            if (legacyExtraction != null) {
+                tag.put("legacy_extract", legacyExtraction.copy());
+            }
             parent.put(NBT_KEY, tag);
         } else {
             parent.remove(NBT_KEY);
@@ -174,57 +223,110 @@ public final class Ae2EnergyTransfer {
         Tag raw = parent.get(NBT_KEY);
         if (raw == null) return;
         try {
-            if (!(raw instanceof CompoundTag tag)
-                    || !tag.contains("version", Tag.TAG_INT) || tag.getInt("version") != 1
-                    || !tag.hasUUID("request") || !tag.contains("phase", Tag.TAG_STRING)
-                    || !tag.contains("source", Tag.TAG_STRING) || !SOURCES.contains(tag.getString("source"))
-                    || !tag.contains("requested_fe", Tag.TAG_LONG)
-                    || !tag.contains("joules_per_fe", Tag.TAG_DOUBLE)
-                    || !tag.contains("known_joules", Tag.TAG_STRING)
-                    || tag.getString("known_joules").length() > MAX_SAVED_ENERGY_LENGTH
-                    || !tag.contains("before_credit", Tag.TAG_LONG)
-                    || !tag.contains("offered_credit", Tag.TAG_LONG)) {
-                throw new IllegalArgumentException("Invalid energy transfer header");
+            if (!(raw instanceof CompoundTag tag) || !tag.contains("version", Tag.TAG_INT)
+                    || tag.getInt("version") != 1 && tag.getInt("version") != 2) {
+                throw new IllegalArgumentException("Invalid energy transfer version");
             }
-            long savedRequest = tag.getLong("requested_fe");
-            double savedConversion = tag.getDouble("joules_per_fe");
-            BigDecimal savedKnown = new BigDecimal(tag.getString("known_joules"));
-            long savedBefore = tag.getLong("before_credit");
-            long savedCredit = tag.getLong("offered_credit");
-            boolean validPhase = switch (tag.getString("phase")) {
-                case "extract" -> savedRequest > 0 && savedKnown.compareTo(BigDecimal.ONE) < 0
-                        && savedBefore == 0 && savedCredit == 0;
-                case "known" -> savedRequest == 0 && savedKnown.signum() > 0
-                        && savedBefore == 0 && savedCredit == 0;
-                case "credit" -> savedRequest == 0 && savedCredit > 0 && savedBefore >= 0
-                        && savedCredit <= Long.MAX_VALUE - savedBefore
-                        && savedKnown.compareTo(BigDecimal.valueOf(savedCredit)) >= 0;
-                default -> false;
-            };
-            if (!validPhase || !Double.isFinite(savedConversion) || savedConversion <= 0
-                    || savedKnown.signum() < 0 || savedKnown.scale() < 0 || savedKnown.scale() > MAX_SAVED_SCALE
-                    || savedKnown.compareTo(MAX_JOULES.add(BigDecimal.valueOf(savedConversion))) > 0) {
-                throw new IllegalArgumentException("Invalid energy transfer state");
+            if (tag.contains("legacy_extract")) {
+                if (tag.getInt("version") != 2 || !(tag.get("legacy_extract") instanceof CompoundTag legacy)
+                        || !legacy.contains("version", Tag.TAG_INT) || legacy.getInt("version") != 1
+                        || legacy.contains("legacy_extract")) {
+                    throw new IllegalArgumentException("Invalid legacy energy transfer");
+                }
+                var previous = new Ae2EnergyTransfer();
+                previous.loadState(legacy);
+                if (!previous.hasLegacyRoundingRisk()) {
+                    throw new IllegalArgumentException("Legacy energy transfer does not match the rounding migration");
+                }
+                legacyExtraction = legacy.copy();
             }
-            request = tag.getUUID("request");
-            phase = tag.getString("phase");
-            source = tag.getString("source");
-            requestedFe = savedRequest;
-            joulesPerFe = savedConversion;
-            knownJoules = savedKnown;
-            beforeCredit = savedBefore;
-            offeredCredit = savedCredit;
+            if (tag.contains("phase")) {
+                loadState(tag);
+            } else if (legacyExtraction == null
+                    || !Set.of("version", "legacy_extract").containsAll(tag.getAllKeys())) {
+                throw new IllegalArgumentException("Missing active energy transfer");
+            }
+            if (tag.getInt("version") == 1 && hasLegacyRoundingRisk()) {
+                // 旧格式没有实际回执。保管原请求，尾数继续归本机；新供能另行真实扣取。
+                legacyExtraction = tag.copy();
+                request = null;
+                requestedFe = 0;
+                phase = "known";
+                finishIfEmpty();
+            }
         } catch (RuntimeException error) {
             clear();
             unreadable = raw.copy();
         }
     }
 
+    private void loadState(CompoundTag tag) {
+        if (!tag.hasUUID("request") || !tag.contains("phase", Tag.TAG_STRING)
+                || !tag.contains("source", Tag.TAG_STRING) || !SOURCES.contains(tag.getString("source"))
+                || !tag.contains("requested_fe", Tag.TAG_LONG)
+                || !tag.contains("joules_per_fe", Tag.TAG_DOUBLE)
+                || !tag.contains("known_joules", Tag.TAG_STRING)
+                || tag.getString("known_joules").length() > MAX_SAVED_ENERGY_LENGTH
+                || !tag.contains("before_credit", Tag.TAG_LONG)
+                || !tag.contains("offered_credit", Tag.TAG_LONG)) {
+            throw new IllegalArgumentException("Invalid energy transfer header");
+        }
+        long savedRequest = tag.getLong("requested_fe");
+        double savedConversion = tag.getDouble("joules_per_fe");
+        BigDecimal savedKnown = new BigDecimal(tag.getString("known_joules"));
+        long savedBefore = tag.getLong("before_credit");
+        long savedCredit = tag.getLong("offered_credit");
+        boolean validPhase = switch (tag.getString("phase")) {
+            case "extract" -> savedRequest > 0 && savedKnown.compareTo(BigDecimal.ONE) < 0
+                    && savedBefore == 0 && savedCredit == 0;
+            case "known" -> savedRequest == 0 && savedKnown.signum() > 0
+                    && savedBefore == 0 && savedCredit == 0;
+            case "credit" -> savedRequest == 0 && savedCredit > 0 && savedBefore >= 0
+                    && savedCredit <= Long.MAX_VALUE - savedBefore
+                    && savedKnown.compareTo(BigDecimal.valueOf(savedCredit)) >= 0;
+            default -> false;
+        };
+        if (!validPhase || !Double.isFinite(savedConversion) || savedConversion <= 0
+                || savedKnown.signum() < 0 || savedKnown.scale() < 0 || savedKnown.scale() > MAX_SAVED_SCALE
+                || savedKnown.compareTo(MAX_JOULES.add(BigDecimal.valueOf(savedConversion))) > 0) {
+            throw new IllegalArgumentException("Invalid energy transfer state");
+        }
+        request = tag.getUUID("request");
+        phase = tag.getString("phase");
+        source = tag.getString("source");
+        requestedFe = savedRequest;
+        joulesPerFe = savedConversion;
+        knownJoules = savedKnown;
+        beforeCredit = savedBefore;
+        offeredCredit = savedCredit;
+    }
+
+    private boolean hasLegacyRoundingRisk() {
+        return "extract".equals(phase) && "ae_native".equals(source)
+                && BigDecimal.valueOf(legacyNativeRequest(requestedFe) * 2.0)
+                        .compareTo(BigDecimal.valueOf(requestedFe)) > 0;
+    }
+
+    /** 重现旧版请求收紧与回执字符串转换，只用于识别一次性迁移范围。 */
+    private static double legacyNativeRequest(long requestedFe) {
+        double requestedAe = requestedFe / 2.0;
+        if (BigDecimal.valueOf(requestedAe).multiply(BigDecimal.valueOf(2))
+                .compareTo(BigDecimal.valueOf(requestedFe)) > 0) {
+            requestedAe = Math.nextDown(requestedAe);
+        }
+        return requestedAe;
+    }
+
     private void finishIfEmpty() {
-        if (knownJoules.signum() == 0) clear();
+        if (knownJoules.signum() == 0) clearActive();
     }
 
     public void clear() {
+        clearActive();
+        legacyExtraction = null;
+    }
+
+    private void clearActive() {
         request = null;
         phase = null;
         source = "";

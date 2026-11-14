@@ -36,6 +36,8 @@ Check network power, channels, storage capacity, machine AE2 switches, input mod
 
 If a transfer, input return or charge fails after starting and its actual result cannot be confirmed, the request is saved and the affected operation pauses. Keep the machine and logs, and ask an operator to reconcile both endpoints' inventory and energy before resolving it.
 
+**Large-capacity machines stopped drawing AE energy on an older version:** update to 1.2.5 and reload the world or restart the server. Native AE requests matching the old rounding failure are migrated automatically. The machine keeps its settings, confirmed energy and remainders and resumes drawing the actual shortfall from the network without dismantling or a recovery command. The original request remains as a historical record and no longer blocks production; a receipt missing from the old format is never guessed as a full delivery. An operator can still inspect it with `/pbgoutput x y z status` and use `resolve-energy` with verified FE if the earlier debit needs reconciliation. Other unknown transfers retain their existing recovery rules.
+
 ## Failed upgrades or recovery pending
 
 Normal machine upgrades preserve complete fluid data and paid progress. If restoration fails partway through, the apiary retains the source data and failure stage, then pauses production, active output and further upgrades. Pipes may still remove inventory that was already restored to real slots; include those later transfers in reconciliation.

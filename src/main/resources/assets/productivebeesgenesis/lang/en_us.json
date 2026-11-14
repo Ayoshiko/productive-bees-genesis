@@ -1019,6 +1019,7 @@
   "command.productivebeesgenesis.output.source_debit": "Source quantity awaiting settlement: %s, debit result unknown: %s. Verify and settle the source before using confirm-source-settled.",
   "command.productivebeesgenesis.output.invalid_ledger": "The output ledger is unreadable. Its original data was kept and output is paused.",
   "command.productivebeesgenesis.output.energy": "Energy awaiting settlement: request %s, phase %s, source %s, requested %s FE, retained %s J, pending local credit %s J. resolve-energy uses verified FE for extraction, or verified J for local credit.",
+  "command.productivebeesgenesis.output.energy_legacy": "Legacy AE2 energy request retained: %s, original request %s FE. Energy input has resumed automatically. This record does not block the machine; resolve-energy can reconcile a verified old receipt.",
   "command.productivebeesgenesis.output.centrifuge_payment": "Centrifuge lane %s payment awaiting review: request %s, %s J must be settled. Use confirm-centrifuge-payment only after verifying the full debit.",
   "command.productivebeesgenesis.output.status": "Output custody: request %s, unresolved amount %s, target %s, reason %s",
   "command.productivebeesgenesis.output.upgrade": "Apiary upgrade awaiting review: request %s, phase %s, reason %s. Read upgrade-data <request> <page>; after manually verifying all source, target and resource assets, confirm-upgrade-settled only removes the pause and never replays or grants assets.",

@@ -10,7 +10,7 @@
 | 模组 ID | `productivebeesgenesis` |
 | 内部/构建版本 | 以 `gradle.properties` 的 `mod_version` 为准；当前版本为 `1.2.5` |
 | CurseForge 版本 | 以 `curseforge_release_version` 为准；当前版本为 `1.2.5` |
-| 发布状态 | `1.2.5` 于 2026-11-14 执行正式发布，包含 AE2 超大储能供能、FE／J 余量和生产数量边界修复，以及中英文 README 更新；公开附件与平台结果在发布后核验。上一正式版本为 `1.2.4` |
+| 发布状态 | `1.2.5` 已补齐旧版大数供能暂停的自动迁移，准备于 2026-11-14 重新发布。此前附件已撤回，GitHub Release／标签已删除，CurseForge 文件由维护者归档；旧文件摘要 `d25d8959ea8c8e38b3ce13eb58113f158ac47934f1434f01964eddd31142178d` 不再作为本次产物。新 JAR 5,692,806 字节，SHA-256 `8d3147150b7ccd1670665a1f21e02adc42f949519a2b213c227226a5e444f468`；能源专项、构建和附件检查通过，公开与同步结果在重发后记录 |
 | CurseForge 渠道 | Release |
 | Minecraft | `1.21.1` |
 | 模组加载器 | NeoForge |

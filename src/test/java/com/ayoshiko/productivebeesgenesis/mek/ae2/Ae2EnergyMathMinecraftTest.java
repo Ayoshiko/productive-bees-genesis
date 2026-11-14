@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -346,6 +347,155 @@ class Ae2EnergyMathMinecraftTest {
         assertEquals("extract", restored.phase());
         restored.resolve(request, BigDecimal.ONE);
         assertEquals(0, new BigDecimal("2.5").compareTo(restored.retainedEnergy()));
+    }
+
+    @Test
+    void legacyRoundingRequestResumesNativeEnergyAndKeepsItsOriginalRecordAcrossReloads() {
+        try (var fixture = new Fixture(2.5, false)) {
+            fixture.maximum = Long.MAX_VALUE;
+            fixture.energy = 4_560L;
+            CompoundTag legacy = legacyExtraction(3_689_348_814_741_908_499L, "0.75");
+            var oldRequest = legacy.getUUID("request");
+            var saved = new CompoundTag();
+            saved.put("productivebeesgenesis_ae_energy_transfer", legacy.copy());
+            fixture.holder.loadPendingItems(saved);
+            var transfer = fixture.holder.getEnergyTransfer();
+            assertFalse(transfer.requiresReconciliation());
+            assertEquals(oldRequest, transfer.legacyRequest());
+            assertEquals(0, new BigDecimal("0.75").compareTo(transfer.retainedEnergy()));
+
+            BigDecimal[] delivered = {BigDecimal.ZERO};
+            when(fixture.nativeEnergy.extractAEPower(anyDouble(), eq(Actionable.MODULATE), eq(PowerMultiplier.ONE)))
+                    .thenAnswer(call -> {
+                        double requestedAe = call.getArgument(0);
+                        delivered[0] = delivered[0].add(new BigDecimal(requestedAe).multiply(BigDecimal.valueOf(5)));
+                        return requestedAe;
+                    });
+            for (int attempt = 0; attempt < 3 && fixture.energy < fixture.maximum; attempt++) {
+                Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0);
+            }
+            assertEquals(Long.MAX_VALUE, fixture.energy);
+            assertEquals(0, BigDecimal.valueOf(fixture.energy - 4_560L).add(transfer.retainedEnergy())
+                    .compareTo(delivered[0].add(new BigDecimal("0.75"))));
+
+            fixture.holder.savePendingItems(saved);
+            assertEquals(legacy, saved.getCompound("productivebeesgenesis_ae_energy_transfer")
+                    .getCompound("legacy_extract"));
+            fixture.holder.loadPendingItems(saved);
+            assertFalse(transfer.requiresReconciliation());
+            assertEquals(oldRequest, transfer.legacyRequest());
+            assertEquals(0, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
+
+            fixture.energy--;
+            assertEquals(1L, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
+            transfer.beginExtract("ae_native", 3_689_348_814_741_908_499L, 2.5);
+            fixture.holder.savePendingItems(saved);
+            fixture.holder.loadPendingItems(saved);
+            assertTrue(transfer.requiresReconciliation());
+            assertEquals(oldRequest, transfer.legacyRequest());
+            assertEquals(legacy, saved.getCompound("productivebeesgenesis_ae_energy_transfer")
+                    .getCompound("legacy_extract"));
+        }
+    }
+
+    @Test
+    void migratedRequestUsesOnlyFreshFiniteEnergyAndOptionalLegacyReceiptIsCreditedOnce() {
+        try (var fixture = new Fixture(2.5, false)) {
+            CompoundTag legacy = legacyExtraction(184_467_440_730_955_162L, "0.75");
+            var request = legacy.getUUID("request");
+            var saved = new CompoundTag();
+            saved.put("productivebeesgenesis_ae_energy_transfer", legacy);
+            fixture.holder.loadPendingItems(saved);
+            var transfer = fixture.holder.getEnergyTransfer();
+            double[] availableAe = {200D};
+            when(fixture.nativeEnergy.extractAEPower(anyDouble(), eq(Actionable.MODULATE), eq(PowerMultiplier.ONE)))
+                    .thenAnswer(call -> {
+                        double amount = Math.min((double) call.getArgument(0), availableAe[0]);
+                        availableAe[0] -= amount;
+                        return amount;
+                    });
+            assertEquals(1_000L, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
+            assertEquals(0D, availableAe[0]);
+            assertEquals(0, new BigDecimal("0.75").compareTo(transfer.retainedEnergy()));
+
+            fixture.holder.savePendingItems(saved);
+            fixture.holder.loadPendingItems(saved);
+            fixture.energy = 900L;
+            assertEquals(0L, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
+            assertEquals(900L, fixture.energy);
+            assertEquals(request, transfer.legacyRequest());
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> transfer.resolve(request, new BigDecimal("1E-100000000")));
+            assertEquals(request, transfer.legacyRequest());
+            transfer.resolve(request, BigDecimal.valueOf(2));
+            assertNull(transfer.legacyRequest());
+            assertThrows(IllegalStateException.class, () -> transfer.resolve(request, BigDecimal.valueOf(2)));
+            fixture.holder.savePendingItems(saved);
+            fixture.holder.loadPendingItems(saved);
+            fixture.gridLookup.when(() -> Ae2GridNodeManager.getCachedGrid(fixture.host)).thenReturn(null);
+            assertEquals(5L, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
+            assertEquals(905L, fixture.energy);
+            assertEquals(0, new BigDecimal("0.75").compareTo(transfer.retainedEnergy()));
+            assertNull(transfer.legacyRequest());
+        }
+    }
+
+    @Test
+    void migrationPreservesUnrelatedUnknownRequestsAndInvalidLegacyData() {
+        for (String source : new String[]{"ae_native", "applied_flux_fe"}) {
+            var saved = new CompoundTag();
+            var raw = legacyExtraction(source.equals("ae_native") ? 400L : 3_689_348_814_741_908_499L, "0");
+            raw.putString("source", source);
+            saved.put("productivebeesgenesis_ae_energy_transfer", raw);
+            var transfer = new Ae2EnergyTransfer();
+            transfer.load(saved);
+            assertTrue(transfer.requiresReconciliation());
+            assertEquals(raw.getUUID("request"), transfer.request());
+            assertNull(transfer.legacyRequest());
+        }
+
+        var credit = legacyExtraction(1L, "5");
+        credit.putString("phase", "credit");
+        credit.putLong("requested_fe", 0L);
+        credit.putLong("before_credit", 3L);
+        credit.putLong("offered_credit", 5L);
+        var saved = new CompoundTag();
+        saved.put("productivebeesgenesis_ae_energy_transfer", credit);
+        var transfer = new Ae2EnergyTransfer();
+        transfer.load(saved);
+        assertTrue(transfer.requiresReconciliation());
+        assertEquals("credit", transfer.phase());
+
+        var legacy = legacyExtraction(3_689_348_814_741_908_499L, "0");
+        saved.put("productivebeesgenesis_ae_energy_transfer", legacy);
+        transfer.load(saved);
+        transfer.save(saved);
+        assertFalse(transfer.requiresReconciliation());
+        assertFalse(transfer.isPresent());
+        transfer.load(saved);
+        assertEquals(legacy.getUUID("request"), transfer.legacyRequest());
+        saved.getCompound("productivebeesgenesis_ae_energy_transfer")
+                .getCompound("legacy_extract").putString("known_joules", "-1");
+        var original = saved.copy();
+        transfer.load(saved);
+        assertTrue(transfer.requiresReconciliation());
+        transfer.save(saved);
+        assertEquals(original, saved);
+    }
+
+    private static CompoundTag legacyExtraction(long requestedFe, String retainedJoules) {
+        var tag = new CompoundTag();
+        tag.putInt("version", 1);
+        tag.putUUID("request", UUID.randomUUID());
+        tag.putString("phase", "extract");
+        tag.putString("source", "ae_native");
+        tag.putLong("requested_fe", requestedFe);
+        tag.putDouble("joules_per_fe", 2.5);
+        tag.putString("known_joules", retainedJoules);
+        tag.putLong("before_credit", 0L);
+        tag.putLong("offered_credit", 0L);
+        return tag;
     }
 
     private static final class Fixture implements AutoCloseable {

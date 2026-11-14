@@ -146,6 +146,10 @@ public final class OutputRecoveryCommands {
                             String.valueOf(energy.request()), energy.phase(), energy.source(),
                             energy.requestedFe(), energy.retainedJoules(), energy.offeredCredit()), false);
                 }
+                if (energy.legacyRequest() != null) {
+                    source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.energy_legacy",
+                            energy.legacyRequest().toString(), energy.legacyRequestedFe()), false);
+                }
                 var pending = holder.getPendingItemBuffer();
                 if (host.productivebeesgenesis$getAe2StateHolder().hasDeferredInputFilter()) {
                     source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.input_filter"), false);

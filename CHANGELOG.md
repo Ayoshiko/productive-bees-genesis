@@ -43,7 +43,7 @@
 ### 修复
 
 - **AE2 大数供能**：修复机器在超大储能、包括安装大量能量升级后，把合法原生 AE 回执误判为超额并持续暂停供能的问题。请求上界和实际回执使用一致的精确数值，正常补能保留全部已确认的 J 与尾数。
-- **能量尾数与恢复**：极小原生 AE 回执可完整保存和重载；管理员确认能量时拒绝无法保存的超长精度，保留原未决请求。旧版本已经暂停的请求仍需核实实际结果后恢复，不会自动清空或补发能源。
+- **能量尾数与恢复**：极小原生 AE 回执可完整保存和重载；管理员确认能量时拒绝无法保存的超长精度，保留原未决请求。旧版符合大数舍入故障特征的原生 AE 请求在加载机器时自动迁移，机器立即允许重新按实际缺口取电，无需拆机或先执行管理员命令；原请求仍保管供核对，不按未知回执补电，新版真实交接异常继续保留。
 - **资源 FE 输出**：Mekanism 线缆提取资源能源时按整数 J 交付，精确扣除所兑换的 FE；已兑换余量保存在原资源账户，模拟、重启、拆装和重新认领不会丢失。小额请求与自定义换算率仍可持续输出，账户状态命令显示待输出 J，含余量的账户不能被当作空账户删除。
 - **能源容器花源**：按实际整数 J 精确核对所需 FE，避免接近 long 上限时向上舍入，让不足额容器误判为符合条件。
 - **开发清理**：移除已无生产消费者、仍使用旧单位假设的反向能源适配器及缓存入口。
@@ -62,7 +62,7 @@
 #### Fixed
 
 - **Large AE2 energy transfers**: fixed valid native AE receipts being rejected as excessive and leaving machine energy input suspended at very large capacities, including machines with many energy upgrades. Request limits and receipts now use consistent exact values, preserving confirmed joules and remainders.
-- **Energy remainders and recovery**: very small native AE receipts survive saving and reloading. Operator reconciliation rejects precision that cannot be saved while preserving the pending request. Requests already suspended by an older version still require confirmation of the actual outcome; energy is never automatically discarded or reissued.
+- **Energy remainders and recovery**: very small native AE receipts survive saving and reloading. Operator reconciliation rejects precision that cannot be saved while preserving the pending request. Legacy native AE requests matching the large-number rounding failure are migrated when the machine loads, allowing it to draw its actual shortfall again without dismantling or an operator command. The original request remains available for reconciliation without guessing its missing receipt; new unknown transfers retain their recovery rules.
 - **Resource FE output**: Mekanism cables receive integer joules while the source account debits exactly the FE converted for that delivery. Converted remainders stay in the original resource account across simulation, restarts, dismantling and reclaiming. Small requests and custom conversion ratios remain supported; account status shows pending joules, and accounts containing remainders cannot be retired as empty.
 - **Energy container flowers**: compare stored integer joules with the exact FE requirement, preventing upward rounding near the long limit from accepting insufficient containers.
 - **Development cleanup**: removed an unused reverse energy adapter and its cache, which still used obsolete unit assumptions.

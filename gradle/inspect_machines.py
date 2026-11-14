@@ -187,8 +187,12 @@ def machine_row(tag, dimension, saved, report, energy, inputs, neighbors, accele
     custody = tag.get("component_ejector", {}).get("output_custody", {})
     energy_transfer = tag.get(PREFIX + "ae_energy_transfer")
     retained_energy = isinstance(energy_transfer, dict) and energy_transfer.get("phase") == "known"
+    migrated_energy = (isinstance(energy_transfer, dict) and energy_transfer.get("version") == 2
+                       and isinstance(energy_transfer.get("legacy_extract"), dict)
+                       and "phase" not in energy_transfer)
     if (invalid_frozen_items or custody or production.get("request")
-            or PREFIX + "ae_input_transfer" in tag or energy_transfer is not None and not retained_energy
+            or PREFIX + "ae_input_transfer" in tag
+            or energy_transfer is not None and not (retained_energy or migrated_energy)
             or any(value and (key.startswith("invalid") or "unknown" in key)
                    for section in (output_buffer, production) for key, value in section.items())):
         state = "有待核对状态"
@@ -206,6 +210,7 @@ def machine_row(tag, dimension, saved, report, energy, inputs, neighbors, accele
         "state": state, "saved_utc": saved, "acceleration": acceleration,
         "energy": sum(entry.get("stored", 0) for entry in tag.get("energy_containers", [])),
         "retained_energy_joules": energy_transfer.get("known_joules") if retained_energy else None,
+        "legacy_energy_request": energy_transfer.get("legacy_extract") if isinstance(energy_transfer, dict) else None,
         "inventory_count": inventory_count, "occupied_slots": len(items),
         "slots": items, "bee_slots": tag.get(PREFIX + "apiary_bee_slots", []),
         "feeder_slots": tag.get(PREFIX + "feeder_slots", []),
