@@ -10,7 +10,7 @@
 | 模组 ID | `productivebeesgenesis` |
 | 内部/构建版本 | 以 `gradle.properties` 的 `mod_version` 为准；当前版本为 `1.2.5` |
 | CurseForge 版本 | 以 `curseforge_release_version` 为准；当前版本为 `1.2.5` |
-| 发布状态 | `1.2.5` 已补齐旧版大数供能暂停的自动迁移，准备于 2026-11-14 重新发布。此前附件已撤回，GitHub Release／标签已删除，CurseForge 文件由维护者归档；旧文件摘要 `d25d8959ea8c8e38b3ce13eb58113f158ac47934f1434f01964eddd31142178d` 不再作为本次产物。新 JAR 5,692,806 字节，SHA-256 `8d3147150b7ccd1670665a1f21e02adc42f949519a2b213c227226a5e444f468`；能源专项、构建和附件检查通过，公开与同步结果在重发后记录 |
+| 发布状态 | `1.2.5` 于 2026-11-14 补齐旧机自动恢复后[重新正式发布并设为 Latest](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.5)，标签提交 `e292753b98908f0cd5a3cc732dd3d1e22ec2fd32`。[维护 Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43594894813)、[标签 Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43594894882) 和 [CurseForge 上传](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43595158229) 均成功。新 JAR 5,692,806 字节，SHA-256 `8d3147150b7ccd1670665a1f21e02adc42f949519a2b213c227226a5e444f468`，与 GitHub 附件摘要和镜像日志核对一致；本机两次重新下载分别在 120 秒与 60 秒超时，未计为下载核验通过。CurseForge 新文件已上传，网页公开审核状态尚未确认。此前同名旧附件已撤回／归档，旧摘要 `d25d8959ea8c8e38b3ce13eb58113f158ac47934f1434f01964eddd31142178d` 已失效 |
 | CurseForge 渠道 | Release |
 | Minecraft | `1.21.1` |
 | 模组加载器 | NeoForge |
