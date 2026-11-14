@@ -21,6 +21,10 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.fml.config.ConfigTracker;
+import net.neoforged.fml.config.ModConfig;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import java.util.HashMap;
@@ -30,6 +34,16 @@ import static org.mockito.Mockito.*;
 
 @Tag("minecraft")
 class ContainerFlowerMinecraftTest {
+    @BeforeAll
+    static void loadConfigs() {
+        ConfigTracker.INSTANCE.loadDefaultServerConfigs();
+    }
+
+    @AfterAll
+    static void unloadConfigs() {
+        ConfigTracker.INSTANCE.unloadConfigs(ModConfig.Type.SERVER);
+    }
+
     private static final ResourceLocation BEE = ResourceLocation.parse("test:container_flower");
     private static final RegistryAccess REGISTRIES = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
     private static final String HYDROGEN = "{\"kind\":\"chemical\",\"id\":\"mekanism:hydrogen\",\"amount\":\"100\"}";
@@ -186,6 +200,29 @@ class ContainerFlowerMinecraftTest {
         clearInvocations(handler);
         assertFalse(ContainerFlower.parse(HYDROGEN).matches(original, REGISTRIES));
         verify(handler, never()).getChemicalInTank(anyInt());
+    }
+
+    @Test void largeEnergyFlowerCannotRoundAnInsufficientContainerUpToTheThreshold() {
+        var original = mock(ItemStack.class);
+        var snapshot = mock(ItemStack.class);
+        when(original.copyWithCount(1)).thenReturn(snapshot);
+        var strict = mock(mekanism.api.energy.IStrictEnergyHandler.class);
+        when(snapshot.getCapability(mekanism.common.capabilities.Capabilities.STRICT_ENERGY.item())).thenReturn(strict);
+        when(strict.getEnergyContainerCount()).thenReturn(1);
+        when(strict.getEnergy(0)).thenReturn(Long.MAX_VALUE);
+        double previous = mekanism.common.config.MekanismConfig.general.forgeConversionRate.getOrDefault();
+        try {
+            mekanism.common.config.MekanismConfig.general.forgeConversionRate.set(2.5);
+            var insufficient = ContainerFlower.parse(
+                    "{\"kind\":\"energy\",\"energy_type\":\"FE\",\"amount\":\"3689348814741910324\"}");
+            var affordable = ContainerFlower.parse(
+                    "{\"kind\":\"energy\",\"energy_type\":\"FE\",\"amount\":\"3689348814741910322\"}");
+            assertFalse(insufficient.matches(original, REGISTRIES));
+            assertTrue(affordable.matches(original, REGISTRIES));
+            verify(strict, never()).extractEnergy(anyInt(), anyLong(), any());
+        } finally {
+            mekanism.common.config.MekanismConfig.general.forgeConversionRate.set(previous);
+        }
     }
 
     @Test void insufficientContainersAreNotPooledAndQueryFailureDoesNotMatch() {

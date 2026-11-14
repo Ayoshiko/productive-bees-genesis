@@ -117,6 +117,55 @@ class PbFactoryOutputBatchMinecraftTest {
     }
 
     @Test
+    void myriadLargeBatchKeepsFluidCountsWithinLongBeforePayment() {
+        var fixture = new Fixture(mock(PbRecipeContext.class), 1);
+        var level = mock(ServerLevel.class);
+        when(level.registryAccess()).thenReturn(REGISTRIES);
+        when(fixture.context.level()).thenReturn(level);
+        when(fixture.context.getTicksForBase(anyInt())).thenReturn(1);
+        when(fixture.context.productivityModifier()).thenReturn(Integer.MAX_VALUE);
+        var energy = mock(MachineEnergyContainer.class);
+        when(fixture.context.energyContainer()).thenReturn(energy);
+        when(energy.getEnergy()).thenReturn(Long.MAX_VALUE);
+        when(energy.extract(anyLong(), any(), any())).thenAnswer(call -> call.getArgument(0));
+        var input = new BasicInventorySlot(Integer.MAX_VALUE, (stack, automation) -> true,
+                (stack, automation) -> true, stack -> true, null, 0, 0) {
+            { obeyStackLimit = false; }
+        };
+        input.setStack(new ItemStack(Items.HONEYCOMB, Integer.MAX_VALUE));
+        when(fixture.context.inputSlot(0)).thenReturn(input);
+        int[] progress = new int[1];
+        var handler = new MyriadCreationsHandler(fixture.context, "myriad-large-batch-test",
+                progress, new boolean[1], new int[1], new RecipeHolder[1],
+                mock(PbRecipeFinder.class), fixture.owners);
+        var type = ResourceLocation.parse("productivebees:iron");
+        var selected = List.of(type);
+        var snapshot = mock(MyriadBeeTypeCache.BeeTypeCacheSnapshot.class);
+        when(snapshot.selectTemplates(eq(selected), eq(true), any()))
+                .thenReturn(Map.of(type, new ItemStack(Items.IRON_INGOT)));
+        var selector = mock(WeightedTypeSelector.class);
+        when(selector.getWeightsFor(selected)).thenReturn(new double[]{1});
+        when(selector.selectForProcess(eq(0), eq(1), eq(level), eq(selected), eq(fixture.context))).thenReturn(selected);
+        try (var events = mockStatic(MyriadCreationsEventHandler.class);
+             var types = mockStatic(MyriadBeeTypeCache.class);
+             var selectors = mockStatic(WeightedTypeSelector.class)) {
+            events.when(MyriadCreationsEventHandler::isMyriadCreationsEnabled).thenReturn(true);
+            events.when(() -> MyriadCreationsEventHandler.isMyriadCreationsCombBlock(any())).thenReturn(true);
+            types.when(() -> MyriadBeeTypeCache.cachedBeeTypes(true)).thenReturn(selected);
+            types.when(MyriadBeeTypeCache::snapshot).thenReturn(snapshot);
+            selectors.when(WeightedTypeSelector::getInstance).thenReturn(selector);
+            assertTrue(handler.tryProcessMyriadCreations(0, input.getStack(), 10, Integer.MAX_VALUE, 1));
+        }
+        long completed = Long.MAX_VALUE / (400L * Integer.MAX_VALUE);
+        assertEquals(Integer.MAX_VALUE - completed, input.getCount());
+        // 此并行量位于 16 × 2^19 与 16 × 2^20 之间，对应 36 份计费量。
+        verify(energy).extract(eq(360L), any(), any());
+        assertEquals(completed * 4L * Integer.MAX_VALUE, pending(fixture.owners[0]));
+        assertEquals(completed * 400L * Integer.MAX_VALUE, fixture.owners[0].getPendingFluidAmount());
+        assertEquals(0, progress[0]);
+    }
+
+    @Test
     void combinesIdenticalItemsAndFluidsWithinTheSameTick() {
         var fixture = new Fixture(mock(PbRecipeContext.class));
         when(fixture.context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))

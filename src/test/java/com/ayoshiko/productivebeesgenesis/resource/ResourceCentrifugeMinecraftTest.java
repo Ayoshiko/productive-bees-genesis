@@ -236,8 +236,36 @@ class ResourceCentrifugeMinecraftTest {
 		}
 	}
 
+	@Test void emcNearPersistenceLimitCompletesOnlyTheFittingBatch() throws ReflectiveOperationException {
+		var recipe = new ResourceCentrifugeRecipe(BEE,
+				List.of(new ResourceProductionRecipe.Output(ResourceTypes.EMC, 100, 1)), 20, true);
+		try (var fixture = new ProcessorFixture(false, recipe)) {
+			var initial = ResourceExactAmounts.MAX_VALUE.subtract(BigInteger.valueOf(150));
+			var ticket = fixture.account.reserve(fixture.account.reference(), 1, new CompoundTag(), Map.of(ResourceTypes.EMC, initial));
+			fixture.account.start(ticket);
+			fixture.account.freeze(ticket, Map.of(ResourceTypes.EMC, initial));
+			fixture.account.commit(ticket);
+			var lane = fixture.lanes[0];
+			assertEquals(ResourceCentrifugeProcessor.Result.WORKING, ResourceCentrifugeProcessor.tick(lane, 80));
+			assertEquals(3, lane.input.getCount());
+			assertEquals(800, lane.energy);
+			var expected = initial.add(BigInteger.valueOf(100));
+			assertEquals(expected, fixture.account.availableExact().get(ResourceTypes.EMC));
+			assertEquals(ResourceCentrifugeProcessor.Result.BLOCKED, ResourceCentrifugeProcessor.tick(lane, 80));
+			assertEquals(3, lane.input.getCount());
+			assertEquals(800, lane.energy);
+			var restored = ResourceAccounts.load(fixture.store.save(), () -> {});
+			try {
+				assertFalse(restored.hasInvalidData());
+				assertEquals(expected, restored.find(fixture.account.reference().sourceId()).availableExact().get(ResourceTypes.EMC));
+			} finally {
+				restored.close();
+			}
+		}
+	}
+
 	private static final class ProcessorFixture implements AutoCloseable {
-		private final ResourceCentrifugeRecipe recipe = new ResourceCentrifugeRecipe(BEE, recipe(100).outputs(), 20, true);
+		private final ResourceCentrifugeRecipe recipe;
 		private final ResourceAccounts store = new ResourceAccounts(() -> {});
 		private final ResourceAccount account = ResourceAccountsMinecraftTest.account(store);
 		private final ResourceProductionMonitor monitor = new ResourceProductionMonitor(() -> 1000L);
@@ -251,6 +279,11 @@ class ResourceCentrifugeMinecraftTest {
 		private final MockedStatic<ResourceHiveHost> hosts;
 
 		private ProcessorFixture(boolean deferred) throws ReflectiveOperationException {
+			this(deferred, new ResourceCentrifugeRecipe(BEE, recipe(100).outputs(), 20, true));
+		}
+
+		private ProcessorFixture(boolean deferred, ResourceCentrifugeRecipe recipe) throws ReflectiveOperationException {
+			this.recipe = recipe;
 			var random = RandomSource.create(81237L);
 			var randomField = Level.class.getField("random");
 			randomField.setAccessible(true);
@@ -271,6 +304,7 @@ class ResourceCentrifugeMinecraftTest {
 				Map<ResourceKey, BigInteger> maximum = call.getArgument(1);
 				var occupied = account.reservedCapacity();
 				for (var entry : maximum.entrySet()) {
+					if (ResourceTypes.EMC.equals(entry.getKey())) continue;
 					if (occupied.getOrDefault(entry.getKey(), BigInteger.ZERO).add(entry.getValue())
 							.compareTo(BigInteger.valueOf(10_000L)) > 0) return false;
 				}

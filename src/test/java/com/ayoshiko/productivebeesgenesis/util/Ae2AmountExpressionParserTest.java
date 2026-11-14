@@ -25,6 +25,23 @@ class Ae2AmountExpressionParserTest {
 	}
 
 	@Test
+	void preservesFullLongIntegerPrecision() {
+		assertEquals(OptionalLong.of(Long.MAX_VALUE),
+				Ae2AmountExpressionParser.parseLong("9223372036854775807", 0, Long.MAX_VALUE));
+		assertEquals(OptionalLong.of(Long.MAX_VALUE - 1),
+				Ae2AmountExpressionParser.parseLong("9223372036854775807-1", 0, Long.MAX_VALUE));
+		assertTrue(Ae2AmountExpressionParser.parseLong("9223372036854775807+1", 0, Long.MAX_VALUE).isEmpty());
+	}
+
+	@Test
+	void rejectsPowerExpansionBeforeAllocatingLargeIntermediateValues() {
+		assertTrue(Ae2AmountExpressionParser.parse("0.999^30^30^30^30^30^30").isEmpty());
+		assertTrue(Ae2AmountExpressionParser.parse("0.1^30^30^30^30^30^30").isEmpty());
+		assertEquals(OptionalLong.of(1),
+				Ae2AmountExpressionParser.parseLong("(0.1^30)/(0.1^30)", 0, Long.MAX_VALUE));
+	}
+
+	@Test
 	void acceptsAe2EqualsPrefix() {
 		assertEquals(OptionalLong.of(64L), Ae2AmountExpressionParser.parseLong("= 2^6", 0, 8_192));
 	}

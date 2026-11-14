@@ -4,6 +4,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -15,6 +16,10 @@ final class ResourceAccountData {
 
 	private static final int LONG_BYTES = net.minecraft.nbt.LongTag.valueOf(0).sizeInBytes();
 	private static final int REASON_BYTES = net.minecraft.nbt.StringTag.valueOf("x".repeat(512)).sizeInBytes();
+	// Mekanism 的 FE 换算范围为 0.0001–10000 J/FE；余量小于一次 FE 兑换。
+    private static final int MAX_ENERGY_TEXT = 64;
+    private static final int MAX_ENERGY_SCALE = 32;
+    private static final BigDecimal MAX_ENERGY_REMAINDER = BigDecimal.valueOf(10000);
 	private static final long STORAGE_BASE = storageBase();
 
 	/** 按同版 NBT 内存计量预约恢复上界，不编码或复制整份账户。 */
@@ -115,6 +120,7 @@ final class ResourceAccountData {
 		tag.put("binding", binding);
 		tag.put("available", new net.minecraft.nbt.ListTag());
 		tag.putString("suspension", "x".repeat(512));
+        tag.putString("fe_output_joules", "0".repeat(MAX_ENERGY_TEXT));
 		tag.put("centrifuge_work", new CompoundTag());
 		tag.put("suspended_lanes", new CompoundTag());
 		tag.put("suspended_transfers", new net.minecraft.nbt.ListTag());
@@ -140,6 +146,9 @@ final class ResourceAccountData {
 			tag.put("centrifuge_work", work);
 		}
 		tag.put("available", ResourceExactAmounts.save(account.available));
+        if (account.retainedEnergyJoules.signum() > 0) {
+            tag.putString("fe_output_joules", account.retainedEnergyJoules.stripTrailingZeros().toPlainString());
+        }
 		tag.putString("suspension", account.suspension);
 		if (account.production != null) {
 			tag.put("production", saveProduction(account.production));
@@ -171,7 +180,8 @@ final class ResourceAccountData {
 
 	static ResourceAccount load(ResourceAccounts accounts, CompoundTag tag) {
 		keys(tag, Set.of("id", "owner", "generation", "next_sequence", "binding",
-				"available", "suspension", "production", "transfer", "centrifuge_work", "suspended_lanes", "suspended_transfers"));
+				"available", "suspension", "production", "transfer", "centrifuge_work", "suspended_lanes", "suspended_transfers",
+                "fe_output_joules"));
 		if (!tag.hasUUID("id") || !tag.hasUUID("owner")) throw invalid();
 		var account = new ResourceAccount(accounts, tag.getUUID("id"), tag.getUUID("owner"), null);
 		account.generation = positiveLong(tag, "generation");
@@ -194,6 +204,14 @@ final class ResourceAccountData {
 			}
 		}
 		account.available = ResourceExactAmounts.load(tag.get("available"));
+        if (tag.contains("fe_output_joules")) {
+            String raw = string(tag, "fe_output_joules");
+            if (raw.length() > MAX_ENERGY_TEXT) throw invalid();
+            BigDecimal retained = new BigDecimal(raw);
+            if (retained.signum() < 0 || retained.scale() < 0 || retained.scale() > MAX_ENERGY_SCALE
+                    || retained.compareTo(MAX_ENERGY_REMAINDER) >= 0) throw invalid();
+            account.retainedEnergyJoules = retained;
+        }
 		account.suspension = string(tag, "suspension");
 		if (account.suspension.length() > 512 || (tag.contains("production") && tag.contains("transfer"))) {
 			throw invalid();

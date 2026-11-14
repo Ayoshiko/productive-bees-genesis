@@ -31,6 +31,46 @@
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-11-14
+
+**AE2 供能与大数结算修复。** 客户端与服务端须一起更新。 / **AE2 energy and large-quantity fixes.** Update clients and servers together.
+
+### 变更
+
+- **项目介绍**：重写中英文 README，集中说明安装、首条生产线、蜜蜂编辑器、扩展资源与指南入口，并更新版本链接。
+- **发布构建**：随包许可清单记录本次实际许可文本摘要，保留维护源中的历史原件摘要，避免不同换行导致打包失败。
+
+### 修复
+
+- **AE2 大数供能**：修复机器在超大储能、包括安装大量能量升级后，把合法原生 AE 回执误判为超额并持续暂停供能的问题。请求上界和实际回执使用一致的精确数值，正常补能保留全部已确认的 J 与尾数。
+- **能量尾数与恢复**：极小原生 AE 回执可完整保存和重载；管理员确认能量时拒绝无法保存的超长精度，保留原未决请求。旧版本已经暂停的请求仍需核实实际结果后恢复，不会自动清空或补发能源。
+- **资源 FE 输出**：Mekanism 线缆提取资源能源时按整数 J 交付，精确扣除所兑换的 FE；已兑换余量保存在原资源账户，模拟、重启、拆装和重新认领不会丢失。小额请求与自定义换算率仍可持续输出，账户状态命令显示待输出 J，含余量的账户不能被当作空账户删除。
+- **能源容器花源**：按实际整数 J 精确核对所需 FE，避免接近 long 上限时向上舍入，让不足额容器误判为符合条件。
+- **开发清理**：移除已无生产消费者、仍使用旧单位假设的反向能源适配器及缓存入口。
+- **非能量大数结算**：普通／组合离心机与万象在扣料扣费前按物品、流体和转换后的可表示数量缩批，剩余输入留在原槽；EMC 接近 4096 位保存上限时仍可加工能够容纳的批次，已冻结预留量继续占用容量。
+- **蜂箱大产量与随机区间**：基因加成后的数量以 long 聚合，超过单个 ItemStack 上限仍保留完整产量与组件；混合生产支持包含 Integer.MAX_VALUE 的合法随机区间。Wanna Bee 数量溢出不再被吞掉后继续结清已付周期。
+- **超大拆栈与配方倍率**：蜂箱、Wanna Bee、精华转换和粗矿熔炼在展开超过 4096 个聚合栈前拒绝该次生成，保留原已付工作／库存，避免巨量对象卡死；蜜脾块派生数量超过上游 int 配方范围时拒绝生成该派生配方，不再截小产物后消费输入，无流体配方可正常派生。
+- **数量表达式与万象分配**：限制连续乘方的中间数展开，保留完整 long 整数输入；万象长数量按实际权重精确分配，避免浮点舍入丢失低位或偏配余数。
+
+### English
+
+#### Changed
+
+- **Project overview**: rewrote both READMEs around installation, a first production line, the bee editor, extended resources and guide links, and updated the release links.
+- **Release builds**: bundled license inventories record hashes of the actual packaged license text while retaining historical original hashes in the maintained source, avoiding packaging failures caused by line-ending differences.
+
+#### Fixed
+
+- **Large AE2 energy transfers**: fixed valid native AE receipts being rejected as excessive and leaving machine energy input suspended at very large capacities, including machines with many energy upgrades. Request limits and receipts now use consistent exact values, preserving confirmed joules and remainders.
+- **Energy remainders and recovery**: very small native AE receipts survive saving and reloading. Operator reconciliation rejects precision that cannot be saved while preserving the pending request. Requests already suspended by an older version still require confirmation of the actual outcome; energy is never automatically discarded or reissued.
+- **Resource FE output**: Mekanism cables receive integer joules while the source account debits exactly the FE converted for that delivery. Converted remainders stay in the original resource account across simulation, restarts, dismantling and reclaiming. Small requests and custom conversion ratios remain supported; account status shows pending joules, and accounts containing remainders cannot be retired as empty.
+- **Energy container flowers**: compare stored integer joules with the exact FE requirement, preventing upward rounding near the long limit from accepting insufficient containers.
+- **Development cleanup**: removed an unused reverse energy adapter and its cache, which still used obsolete unit assumptions.
+- **Large non-energy quantities**: ordinary, combined and Myriad centrifuges reduce batches to representable item, fluid and converted output counts before charging energy or consuming input. Remaining input stays in its slot. EMC production near the 4096-digit persistence limit can still process fitting batches, with frozen reservations included in occupied capacity.
+- **Large apiary outputs and random ranges**: gene-adjusted counts aggregate as longs, preserving quantities and components across ItemStack splits. Mixed production accepts valid random ranges including Integer.MAX_VALUE. Wanna Bee arithmetic overflow no longer gets swallowed while settling paid cycles.
+- **Oversized stack expansion and recipe scaling**: apiaries, Wanna Bees, essence conversion and raw ore smelting reject generation before expanding beyond 4096 aggregate stacks, retaining paid work or source inventory instead of allocating an enormous list. Derived comb-block recipes that exceed the upstream int quantity format are rejected instead of consuming input for truncated output; recipes without fluid output can now be derived normally.
+- **Amount expressions and Myriad allocation**: bounded intermediate values prevent repeated powers from exhausting the client while preserving full long integer input. Large Myriad totals are allocated using exact weight ratios, avoiding lost low bits and biased remainder distribution.
+
 ## [1.2.4] - 2026-11-13
 
 **生产、升级与编辑器维护更新。** 客户端与服务端须一起更新。 / **Production, upgrade and editor maintenance update.** Update clients and servers together.

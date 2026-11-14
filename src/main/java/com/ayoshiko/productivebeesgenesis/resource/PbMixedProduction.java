@@ -55,8 +55,10 @@ public final class PbMixedProduction {
 			for (long roll = 0; roll < rolls; roll++) {
 				if (random.nextFloat() > output.chance()) continue;
 				long range = (long) output.max() - output.min() + 1;
-				int raw = range == 1 ? output.min()
-						: Math.toIntExact(output.min() + random.nextInt(Math.toIntExact(range)));
+				int raw;
+				if (range == 1) raw = output.min();
+				else if (range > Integer.MAX_VALUE) raw = random.nextInt() >>> 1;
+				else raw = output.min() + random.nextInt((int) range);
 				amount = Math.addExact(amount, adjusted(raw));
 			}
 			if (amount > 0) result.add(output.template().copyWithCount(Math.toIntExact(amount)));
@@ -65,8 +67,6 @@ public final class PbMixedProduction {
 	}
 
 	private int adjusted(int raw) {
-		int adjusted = BeeProductivityGene.adjustStackCount(raw, gene);
-		if (adjusted == Integer.MAX_VALUE) throw new ArithmeticException("PB mixed item count overflow");
-		return adjusted;
+		return Math.toIntExact(BeeProductivityGene.adjustCount(raw, gene));
 	}
 }

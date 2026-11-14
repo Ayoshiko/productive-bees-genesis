@@ -50,6 +50,9 @@ public final class BeeProduceBatchSampler {
 
 			int min = Math.max(0, chanced.min());
 			int max = Math.max(chanced.max(), min);
+			if (max == 0) continue;
+			ItemStackMergeHelper.checkBulkCount(output.size(),
+					Math.multiplyExact(BeeProductivityGene.adjustCount(max, productivityLevel), rollCount));
 			long successes = ExactBinomialSampler.sample(random, rollCount, adjustedChance);
 			long count = sampleGeneAdjustedSum(random, min, max, successes, productivityLevel);
 			ItemStackMergeHelper.appendBulkCount(output, entry.getKey(), count);
@@ -67,15 +70,16 @@ public final class BeeProduceBatchSampler {
 		if (output == null || template == null || template.isEmpty() || batchCount <= 0
 				|| !Float.isFinite(multiplier) || multiplier <= 0.0f) return;
 		ThreadLocalRandom random = ThreadLocalRandom.current();
-		int lowerRolls = multiplier >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.floor(multiplier);
-		double fraction = lowerRolls == Integer.MAX_VALUE ? 0 : multiplier - lowerRolls;
+		if (multiplier >= Integer.MAX_VALUE) throw new ArithmeticException("Per-event bee multiplier exceeds int");
+		int lowerRolls = (int) Math.floor(multiplier);
+		double fraction = multiplier - lowerRolls;
 		long upperEvents = ExactBinomialSampler.sample(random, batchCount, fraction);
 		long lowerEvents = batchCount - upperEvents;
 		long count = Math.multiplyExact(
-				BeeProductivityGene.adjustStackCount(lowerRolls, productivityLevel), lowerEvents);
+				BeeProductivityGene.adjustCount(lowerRolls, productivityLevel), lowerEvents);
 		if (upperEvents > 0) {
 			count = Math.addExact(count, Math.multiplyExact(
-					BeeProductivityGene.adjustStackCount(lowerRolls + 1, productivityLevel), upperEvents));
+					BeeProductivityGene.adjustCount(lowerRolls + 1, productivityLevel), upperEvents));
 		}
 		ItemStackMergeHelper.appendBulkCount(output, template, count);
 	}
@@ -97,20 +101,20 @@ public final class BeeProduceBatchSampler {
 		int level = Math.max(BeeProductivityGene.NORMAL,
 				Math.min(BeeProductivityGene.VERY_HIGH, productivityLevel));
 		if (min == max) {
-			return Math.multiplyExact(BeeProductivityGene.adjustStackCount(min, level), sampleCount);
+			return Math.multiplyExact(BeeProductivityGene.adjustCount(min, level), sampleCount);
 		}
 		if (level == BeeProductivityGene.NORMAL) {
 			Math.multiplyExact((long) max, sampleCount);
 			return SampleUniformSum.sample(random, min, max, sampleCount, 1);
 		}
-		int lower = BeeProductivityGene.adjustStackCount(min, level);
-		int upper = BeeProductivityGene.adjustStackCount(max, level);
-		if (lower == upper) return Math.multiplyExact((long) lower, sampleCount);
+		long lower = BeeProductivityGene.adjustCount(min, level);
+		long upper = BeeProductivityGene.adjustCount(max, level);
+		if (lower == upper) return Math.multiplyExact(lower, sampleCount);
 		if (sampleCount <= 32) {
 			long sum = 0;
 			for (long i = 0; i < sampleCount; i++) {
 				int sampled = SampleUniformSum.sampleSingle(random, min, max);
-				sum = Math.addExact(sum, BeeProductivityGene.adjustStackCount(sampled, level));
+				sum = Math.addExact(sum, BeeProductivityGene.adjustCount(sampled, level));
 			}
 			return sum;
 		}

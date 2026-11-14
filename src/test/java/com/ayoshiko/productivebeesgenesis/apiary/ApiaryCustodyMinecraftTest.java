@@ -94,6 +94,52 @@ class ApiaryCustodyMinecraftTest {
         assertArrayEquals(new int[]{0, 0, 4, 0, 0}, copy.counts);
     }
 
+    @Test void largeGeneOutputsKeepTheirQuantityAndComponentsAcrossStackSplits() {
+        var template = named(7).copyWithCount(1);
+        var output = new java.util.ArrayList<ItemStack>();
+        var chanced = new cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput(
+                net.minecraft.world.item.crafting.Ingredient.of(template), 1_000_000_000, 1_000_000_000, 1);
+        BeeProduceBatchSampler.sampleInto(output, java.util.Map.of(template, chanced),
+                2, 1, 0, BeeProductivityGene.VERY_HIGH);
+        assertEquals(3, output.size());
+        assertEquals(6_400_000_000L, output.stream().mapToLong(ItemStack::getCount).sum());
+        assertTrue(output.stream().allMatch(stack -> ItemStack.isSameItemSameComponents(template, stack)));
+        output.clear();
+        BeeProduceBatchSampler.sampleGuaranteedInto(output, template,
+                2, 1_000_000_000F, BeeProductivityGene.VERY_HIGH);
+        assertEquals(6_400_000_000L, output.stream().mapToLong(ItemStack::getCount).sum());
+    }
+
+    @Test void oversizedGenerationKeepsPaidCyclesWithoutExpandingTheItemList() {
+        var state = new ApiaryProductionState(1, () -> {});
+        state.counts[0] = Integer.MAX_VALUE;
+        var data = new CompoundTag();
+        data.putString("entity", "productivebees:lumber_bee");
+        state.bees[0].setBeeData(data);
+        var indices = new OrderedSlotIndex();
+        indices.reset(1);
+        indices.add(0);
+        state.begin(indices);
+        state.converted();
+        var output = new java.util.ArrayList<ItemStack>();
+        var template = named(1);
+        var chanced = new cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput(
+                net.minecraft.world.item.crafting.Ingredient.of(template), 1_000_000_000, 1_000_000_000, 1);
+        var failure = assertThrows(ArithmeticException.class, () -> BeeProduceBatchSampler.sampleInto(
+                output, java.util.Map.of(template, chanced), Integer.MAX_VALUE, 1, 0, BeeProductivityGene.NORMAL));
+        state.fail(failure);
+        assertTrue(output.isEmpty());
+        assertThrows(ArithmeticException.class, () -> ItemStackMergeHelper.appendBulkCount(output, template, Long.MAX_VALUE));
+        assertTrue(output.isEmpty());
+        var restored = new ApiaryProductionState(1, () -> {});
+        restored.load(registries(), state.save(registries()));
+        assertTrue(restored.suspended());
+        assertEquals(Integer.MAX_VALUE, restored.counts[0]);
+        assertEquals(data, restored.bees[0].getBeeData());
+        assertEquals(state.request(), restored.request());
+        assertFalse(restored.hasFrozen());
+    }
+
     @Test void paidBeeSnapshotRejectsReplacementAndSurvivesReload() {
         var state = new ApiaryProductionState(1, () -> {});
         var bee = new BeeSlot();

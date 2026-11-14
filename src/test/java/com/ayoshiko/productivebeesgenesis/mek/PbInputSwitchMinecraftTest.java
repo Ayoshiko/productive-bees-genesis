@@ -377,6 +377,29 @@ class PbInputSwitchMinecraftTest {
 		assertEquals(3, buffer.save().getCompound(0).getInt("progress"));
 	}
 
+	@Test
+	void oversizedProductionShrinksBeforeChargingAndRetainsTheRemainingInput() {
+		var fixture = new Fixture(1);
+		when(fixture.context.operationsPerTick()).thenReturn(4);
+		when(fixture.context.productivityModifier()).thenReturn(Integer.MAX_VALUE);
+		when(fixture.context.productivebeesgenesis$isDirectAeOutputEnabled()).thenReturn(true);
+		fixture.inputs[0].setStack(new ItemStack(Items.HONEYCOMB, 4));
+		var result = new ChancedOutput(Ingredient.of(Items.DIAMOND), Integer.MAX_VALUE, Integer.MAX_VALUE, 1);
+		var recipe = new CentrifugeRecipe(Ingredient.of(Items.HONEYCOMB), List.of(result), null, 1) {
+			@Override public FluidStack getFluidOutputs() { return FluidStack.EMPTY; }
+		};
+		assertTrue(fixture.run(0, new RecipeHolder<>(ResourceLocation.parse("test:large_batch"), recipe), 1));
+		assertEquals(2, fixture.inputs[0].getCount());
+		assertEquals(20, fixture.spent);
+		var pending = fixture.save().getList("productivebeesgenesis_pb_committed_pending", 10).getCompound(0);
+		var amounts = pending.getList("items", 10);
+		long retained = amounts.getCompound(0).getLong("productivebeesgenesis_count");
+		long delivered = fixture.context.primaryOutputSlot(0).getCount()
+				+ fixture.context.secondaryOutputSlot(0).getCount() + fixture.context.tertiaryOutputSlot(0).getCount();
+		assertEquals(Math.multiplyExact(2L * Integer.MAX_VALUE, Integer.MAX_VALUE), retained + delivered);
+		assertFalse(pending.contains("input_count"));
+	}
+
 	private static ItemStack named(Item item, String name) {
 		ItemStack stack = new ItemStack(item);
 		stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));

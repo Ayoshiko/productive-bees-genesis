@@ -38,6 +38,7 @@ import java.util.Map;
 	 * </ul>
 	 */
 public final class ItemStackMergeHelper {
+	private static final int MAX_GENERATED_STACKS = 4096;
 
 	/** 工具类禁止实例化 */
 	private ItemStackMergeHelper() {
@@ -155,8 +156,17 @@ public final class ItemStackMergeHelper {
 		appendBulkCount(result, first, totalCount);
 	}
 
+	/** 在采样或拆栈前限制单次对象展开；失败由原已付周期保管，不截断数量。 */
+	public static void checkBulkCount(int existingStacks, long totalCount) {
+		long required = totalCount <= 0 ? 0 : (totalCount - 1) / Integer.MAX_VALUE + 1;
+		if (required > MAX_GENERATED_STACKS - (long) existingStacks) {
+			throw new ArithmeticException("Generated item batch exceeds stack expansion budget");
+		}
+	}
+
 	/** 仅在 ItemStack 的 int 数量边界拆栈，保留完整聚合数量及组件。 */
 	public static void appendBulkCount(List<ItemStack> result, ItemStack template, long totalCount) {
+		checkBulkCount(result.size(), totalCount);
 		while (totalCount > 0L) {
 			int count = (int) Math.min(totalCount, Integer.MAX_VALUE);
 			result.add(template.copyWithCount(count));

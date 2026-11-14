@@ -1,10 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import appeng.api.networking.energy.IEnergySource;
 import appeng.api.stacks.AEItemKey;
 import it.unimi.dsi.fastutil.objects.Object2LongLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
-import mekanism.common.capabilities.energy.MachineEnergyContainer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,8 +18,7 @@ import java.util.Set;
  * 职责单一：只做「对象池 + 缓存 + 版本标记」的容器，不含任何推送/拉取决策逻辑。
  * <p>
  * <b>生命周期</b>：与宿主方块实体一致，方块销毁时由 {@code Ae2OutputStateHolder.clear()} 释放。
- * <b>线程安全</b>：绝大多数字段仅服务端 tick 线程访问；能量适配器用 volatile +
- * double-checked locking，候选缓存版本标记用 volatile（网格回调可能在非 tick 线程置位）。
+ * <b>线程归属</b>：缓冲区由服务端 tick 线程使用；候选缓存版本标记由网格回调置位。
  */
 final class Ae2PushBuffers {
 
@@ -38,14 +35,6 @@ final class Ae2PushBuffers {
 
 	/** 输入尝试的成本预算，与机器及输出成本统计同生命周期。 */
 	final Ae2ExtractBudget extractBudget = new Ae2ExtractBudget();
-
-	/**
-	 * 懒初始化的能量适配器 — container 引用在宿主生命周期内固定不变
-	 * <p>
-	 * volatile 保证多线程可见性，配合 {@link #getEnergyAdapter} 的 double-checked locking
-	 * 确保仅创建一个实例。
-	 */
-	private volatile MekEnergyToAeSource energyAdapter;
 
 	/** 复用的槽位条目列表 — 容量自动增长到峰值后零扩容 */
 	final List<Ae2SlotEntry> entries = new ArrayList<>();
@@ -138,29 +127,6 @@ final class Ae2PushBuffers {
 	/** 借用车道快照（每轮拉取开始时 capture，执行阶段按插入刷新）。 */
 	Ae2InputLaneSnapshot inputLaneSnapshot() {
 		return inputLaneSnapshot;
-	}
-
-	/**
-	 * 获取能量适配器（懒初始化，volatile + double-checked locking 保证线程安全）
-	 * <br/>
-	 * MekEnergyToAeSource 无状态，container 引用在宿主生命周期内固定不变，可安全复用。
-	 * 物品推送和流体推送共享同一适配器实例。
-	 *
-	 * @param container 宿主的 Mekanism 能量容器
-	 * @return 复用的能量适配器（包装为 AE2 {@link IEnergySource}）
-	 */
-	IEnergySource getEnergyAdapter(MachineEnergyContainer<?> container) {
-		MekEnergyToAeSource local = energyAdapter;
-		if (local == null) {
-			synchronized (this) {
-				local = energyAdapter;
-				if (local == null) {
-					local = new MekEnergyToAeSource(container);
-					energyAdapter = local;
-				}
-			}
-		}
-		return local;
 	}
 
 	/** 借用拉取列表（调用方使用后应 clear，跨 tick 复用避免每 tick 分配） */

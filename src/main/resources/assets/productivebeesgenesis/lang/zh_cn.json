@@ -1037,6 +1037,7 @@
   "command.productivebeesgenesis.resource.account": "账户 %s · 代际 %s · %s",
   "command.productivebeesgenesis.resource.detached": "已托管，可重新认领",
   "command.productivebeesgenesis.resource.available": "可用：%s × %s",
+  "command.productivebeesgenesis.resource.energy_remainder": "已兑换、待输出的能量：%s J；保留至后续 Mekanism 供能。",
   "command.productivebeesgenesis.resource.frozen": "已冻结，尚未入账：%s × %s",
   "command.productivebeesgenesis.resource.uncertain": "输出结果未知：%s × %s",
   "command.productivebeesgenesis.resource.production": "待核验生产：请求 %s，%s",

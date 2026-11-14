@@ -135,6 +135,27 @@ class PbCombinedOutputMinecraftTest {
         verify(context, never()).productivebeesgenesis$markForSave();
     }
 
+    @Test void overflowedMaximumShrinksToAnExactUnpaidBatch() {
+        var context = context();
+        when(context.productivebeesgenesis$isDirectAeOutputEnabled()).thenReturn(true);
+        var outputs = List.of(Items.DIAMOND, Items.EMERALD, Items.IRON_INGOT, Items.GOLD_INGOT).stream()
+                .map(item -> new ChancedOutput(Ingredient.of(item), Integer.MAX_VALUE, Integer.MAX_VALUE, 1))
+                .toList();
+        var recipe = new CentrifugeRecipe(Ingredient.of(Items.HONEYCOMB), outputs, null, 20) {
+            @Override public FluidStack getFluidOutputs() { return FluidStack.EMPTY; }
+        };
+        var owner = new PbRecipeCompleter(context);
+        assertFalse(owner.fitsMaximum(recipe, 0, Integer.MAX_VALUE));
+        assertEquals(1, new PbCentrifugeOutputPlan(owner, recipe, 0).maximumInputs(Integer.MAX_VALUE));
+        var prepared = owner.prepare(recipe, 1, 19, false);
+        assertEquals(4, prepared.getPendingOutputs().size());
+        assertTrue(prepared.getPendingOutputs().values().stream().allMatch(amount -> amount == 2L * Integer.MAX_VALUE));
+        assertEquals(8L * Integer.MAX_VALUE, prepared.pendingItemCount());
+        assertFalse(owner.hasPendingOutputs());
+        assertTrue(context.primaryOutputSlot(0).isEmpty());
+        verify(context, never()).productivebeesgenesis$markForSave();
+    }
+
     @Test void resourceInputDebitHandlesOversizedStacksWithoutChangingComponentsOrSimulation() {
         for (int requested : List.of(64, 65, 256, 512)) {
             var context = context();

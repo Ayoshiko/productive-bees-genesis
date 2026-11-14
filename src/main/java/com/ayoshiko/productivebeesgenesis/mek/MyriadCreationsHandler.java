@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
+import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
@@ -93,9 +94,24 @@ public class MyriadCreationsHandler {
 			pbProcessing[processIndex] = false;
 			return false;
 		}
+		if (plan.completedOperations() > 0) {
+			int modifier = Math.max(1, context.productivityModifier());
+			FluidStack fluid = fluidOutputHandler.resolveFluidOutput(input, processIndex);
+			if (context.suppressesUselessByproducts() && UselessByproductUpgradeHelper.isHoney(fluid)) {
+				fluid = FluidStack.EMPTY;
+			}
+			long perInput = Math.max(MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input) ? 4L : 1L,
+					fluid.getAmount()) * modifier;
+			int limit = (int) Math.min(inputCount, Long.MAX_VALUE / perInput);
+			if (plan.completedOperations() > limit) {
+				plan = PbVirtualTickPlan.create(pbOperatingTicks[processIndex], Math.max(1, virtualTicks),
+						processingTime, Math.min(effectiveOps, limit), limit, energyPerTick, energy);
+			}
+			if (!freezeOutputs(input, processIndex, plan.completedOperations(), modifier, fluid)) return false;
+		}
 		int completed = plan.completedOperations();
-		if (completed > 0 && !freezeOutputs(input, processIndex, completed)) return false;
-		if (!completer.payForPlan(plan, () -> pbOperatingTicks[processIndex] = plan.remainingProgress())) {
+		int remainingProgress = plan.remainingProgress();
+		if (!completer.payForPlan(plan, () -> pbOperatingTicks[processIndex] = remainingProgress)) {
 			pbProcessing[processIndex] = false;
 			return false;
 		}
@@ -106,10 +122,9 @@ public class MyriadCreationsHandler {
 		return true;
 	}
 
-	private boolean freezeOutputs(ItemStack input, int processIndex, int inputs) {
+	private boolean freezeOutputs(ItemStack input, int processIndex, int inputs, int modifier, FluidStack fluid) {
 		Level level = context.level();
 		boolean block = MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
-		int modifier = Math.max(1, context.productivityModifier());
 		long total = Math.multiplyExact(Math.multiplyExact((long) inputs, block ? 4 : 1), modifier);
 		List<ResourceLocation> selected;
 		if (inputs >= WEIGHTED_SELECTOR_THRESHOLD) {
@@ -137,7 +152,6 @@ public class MyriadCreationsHandler {
 			if (template == null || template.isEmpty()) return false;
 			outputs.put(template.copyWithCount(1), entry.getValue());
 		}
-		FluidStack fluid = fluidOutputHandler.resolveFluidOutput(input, processIndex);
 		long fluidAmount = Math.multiplyExact(Math.multiplyExact((long) fluid.getAmount(), inputs), modifier);
 		completers[processIndex].freezeMyriadBatch(outputs, fluid, fluidAmount, input, inputs);
 		WeightedTypeSelector.getInstance().recordOutputs(allocation);

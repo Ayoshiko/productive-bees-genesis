@@ -123,6 +123,17 @@ class EssenceConversionPlanMinecraftTest {
 		assertEquals(3, count(result, Items.IRON_NUGGET));
 	}
 
+	@Test void expansionLimitRejectsBeforeChangingSourceStacks() {
+		var source = new ItemStack(Items.IRON_NUGGET, Integer.MAX_VALUE);
+		var result = new ItemStack(Items.IRON_INGOT, Integer.MAX_VALUE);
+		var conversion = new EssenceConversionRecipeIndex.Conversion(1, result, key(result), false);
+		var plan = new EssenceConversionUpgradeHelper.BatchPlan(new EssenceConversionRecipeIndex.ConversionSnapshot(
+				Map.of(key(source), conversion), Map.of(Items.IRON_NUGGET, conversion)));
+		assertThrows(ArithmeticException.class, () -> plan.convert(List.of(source)));
+		assertEquals(Integer.MAX_VALUE, source.getCount());
+		assertTrue(source.is(Items.IRON_NUGGET));
+	}
+
 	@Test void checkedConversionRejectsLongOverflow() {
 		assertThrows(ArithmeticException.class, () -> EssenceConversionUpgradeHelper.calculateAmounts(Long.MAX_VALUE, 1, 12));
 	}

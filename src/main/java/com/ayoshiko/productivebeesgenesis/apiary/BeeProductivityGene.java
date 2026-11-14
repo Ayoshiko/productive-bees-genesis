@@ -61,6 +61,11 @@ public final class BeeProductivityGene {
 	 * @return 应用基因后的数量，溢出时截断到 {@link Integer#MAX_VALUE}
 	 */
 	public static int adjustStackCount(int baseCount, int productivityLevel) {
+		return (int) Math.min(Integer.MAX_VALUE, adjustCount(baseCount, productivityLevel));
+	}
+
+	/** 批量产出保留超过单栈 int 上限的基因加成，随后由聚合器精确拆栈。 */
+	public static long adjustCount(int baseCount, int productivityLevel) {
 		if (baseCount <= 0) return 0;
 		int level = Math.max(NORMAL, Math.min(VERY_HIGH, productivityLevel));
 		if (level == NORMAL) return baseCount;
@@ -70,8 +75,8 @@ public final class BeeProductivityGene {
 			adjusted = 1L + level;
 		} else {
 			float modifier = (1.0F / (level + 2.0F) + (level + 1.0F) / 2.0F) * baseCount;
-			adjusted = (long) baseCount + Math.round(modifier);
+			adjusted = (long) baseCount + Math.round((double) modifier);
 		}
-		return adjusted >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) adjusted;
+		return adjusted;
 	}
 }

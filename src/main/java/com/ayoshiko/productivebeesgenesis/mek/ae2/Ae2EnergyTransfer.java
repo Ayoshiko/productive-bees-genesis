@@ -12,6 +12,10 @@ public final class Ae2EnergyTransfer {
     private static final String NBT_KEY = "productivebeesgenesis_ae_energy_transfer";
     private static final BigDecimal MAX_JOULES = BigDecimal.valueOf(Long.MAX_VALUE);
     private static final Set<String> SOURCES = Set.of("applied_flux_fe", "ae_native");
+    // 最小正 AE 回执的精确尾数，加上转换率的十进制精度，必须可以随机器往返保存。
+    private static final int MAX_SAVED_SCALE = new BigDecimal(Double.MIN_VALUE).scale()
+            + BigDecimal.valueOf(Double.MIN_VALUE).scale();
+    private static final int MAX_SAVED_ENERGY_LENGTH = 2048;
     private UUID request;
     private String phase;
     private String source = "";
@@ -81,8 +85,11 @@ public final class Ae2EnergyTransfer {
     }
 
     public void extracted(double amountFe) {
-        if (!Double.isFinite(amountFe)) throw new IllegalStateException("Invalid energy receipt");
-        extracted(BigDecimal.valueOf(amountFe));
+        if (!Double.isFinite(amountFe)) {
+            throw new IllegalStateException("Invalid energy receipt");
+        }
+        // 原生 AE 回执是实际 double 数值；valueOf 的最短字符串会改写大数低位。
+        extracted(new BigDecimal(amountFe));
     }
 
     private void extracted(BigDecimal amountFe) {
@@ -90,7 +97,11 @@ public final class Ae2EnergyTransfer {
                 || amountFe.compareTo(BigDecimal.valueOf(requestedFe)) > 0) {
             throw new IllegalStateException("Invalid extracted energy: " + amountFe + "/" + requestedFe);
         }
-        knownJoules = knownJoules.add(amountFe.multiply(BigDecimal.valueOf(joulesPerFe)));
+        BigDecimal conversion = BigDecimal.valueOf(joulesPerFe);
+        if (amountFe.scale() > MAX_SAVED_SCALE - conversion.scale()) {
+            throw new IllegalArgumentException("Energy receipt precision exceeds the saved format");
+        }
+        knownJoules = knownJoules.add(amountFe.multiply(conversion));
         requestedFe = 0;
         phase = "known";
         finishIfEmpty();
@@ -125,7 +136,9 @@ public final class Ae2EnergyTransfer {
             throw new IllegalArgumentException("Energy request identity or amount does not match");
         }
         if ("extract".equals(phase)) {
-            if ("applied_flux_fe".equals(source)) transferred.toBigIntegerExact();
+            if ("applied_flux_fe".equals(source) && transferred.stripTrailingZeros().scale() > 0) {
+                throw new IllegalArgumentException("AppliedFlux receipt must contain whole FE");
+            }
             extracted(transferred);
         } else if ("credit".equals(phase)) {
             long credited = transferred.longValueExact();
@@ -168,7 +181,7 @@ public final class Ae2EnergyTransfer {
                     || !tag.contains("requested_fe", Tag.TAG_LONG)
                     || !tag.contains("joules_per_fe", Tag.TAG_DOUBLE)
                     || !tag.contains("known_joules", Tag.TAG_STRING)
-                    || tag.getString("known_joules").length() > 512
+                    || tag.getString("known_joules").length() > MAX_SAVED_ENERGY_LENGTH
                     || !tag.contains("before_credit", Tag.TAG_LONG)
                     || !tag.contains("offered_credit", Tag.TAG_LONG)) {
                 throw new IllegalArgumentException("Invalid energy transfer header");
@@ -189,7 +202,7 @@ public final class Ae2EnergyTransfer {
                 default -> false;
             };
             if (!validPhase || !Double.isFinite(savedConversion) || savedConversion <= 0
-                    || savedKnown.signum() < 0 || savedKnown.scale() < 0 || savedKnown.scale() > 340
+                    || savedKnown.signum() < 0 || savedKnown.scale() < 0 || savedKnown.scale() > MAX_SAVED_SCALE
                     || savedKnown.compareTo(MAX_JOULES.add(BigDecimal.valueOf(savedConversion))) > 0) {
                 throw new IllegalArgumentException("Invalid energy transfer state");
             }

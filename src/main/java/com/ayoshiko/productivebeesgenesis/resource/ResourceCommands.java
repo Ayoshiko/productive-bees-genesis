@@ -106,6 +106,9 @@ public final class ResourceCommands {
 		var source = ctx.getSource();
 		summary(source, account);
 		amounts(source, "available", account.availableExact());
+        if (account.retainedEnergyJoules.signum() > 0) {
+            reply(source, "energy_remainder", account.retainedEnergyJoules.stripTrailingZeros().toPlainString());
+        }
 		amounts(source, "frozen", account.frozenProductionExact());
 		amounts(source, "uncertain", account.uncertainTransferExact());
 		if (account.productionTicket() != null) {

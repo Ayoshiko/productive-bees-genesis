@@ -95,7 +95,8 @@ public final class ResourceAccounts {
         checkThread();
         var account = accounts.get(reference.sourceId());
         if (account == null || !account.reference().equals(reference)) throw new IllegalStateException("Stale account retirement");
-        if (account.binding != null || !account.available.isEmpty() || account.production != null || account.transfer != null
+        if (account.binding != null || !account.available.isEmpty() || account.retainedEnergyJoules.signum() > 0
+                || account.production != null || account.transfer != null
                 || !account.centrifugeWork.isEmpty() || !account.suspendedLanes.isEmpty()
                 || !account.suspendedTransfers.isEmpty() || !account.suspension.isEmpty()) return false;
         beforeChange(account);

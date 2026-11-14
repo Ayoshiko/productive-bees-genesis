@@ -22,6 +22,18 @@ class PbMixedProductionMinecraftTest {
 			if (slot == failSlot) throw new IllegalStateException("listener after write");
 		}
 	}
+	@Test void fullIntRangeSamplesWithoutOverflowAndExactMaximumIsAccepted() {
+		var template = new ItemStack(Items.DIAMOND);
+		var variable = new PbMixedProduction(List.of(new PbResourceCatalog.ItemOutput(
+				template, 0, Integer.MAX_VALUE, 1)), 1, 0, false, false);
+		assertEquals(Integer.MAX_VALUE, variable.maximum().getFirst().getCount());
+		var sampled = assertDoesNotThrow(() -> variable.sample(1, 42));
+		assertTrue(sampled.isEmpty() || sampled.getFirst().getCount() > 0);
+		var fixed = new PbMixedProduction(List.of(new PbResourceCatalog.ItemOutput(
+				template, Integer.MAX_VALUE, Integer.MAX_VALUE, 1)), 1, 0, false, false);
+		assertEquals(Integer.MAX_VALUE, fixed.sample(1, 42).getFirst().getCount());
+	}
+
 	@Test void wholeBatchUsesOnlyOutputSlotsAndMergesExactComponents() {
 		var inv = new Inventory();
 		var named = new ItemStack(Items.IRON_INGOT);

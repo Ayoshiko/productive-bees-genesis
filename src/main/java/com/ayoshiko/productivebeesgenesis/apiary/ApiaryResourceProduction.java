@@ -3,6 +3,8 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.resource.PbResourceCatalog;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceAccount;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceExactAmounts;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceTypes;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRollPlan;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceProductionRecipe;
@@ -107,8 +109,9 @@ final class ApiaryResourceProduction {
 			long capacityCycles = Long.MAX_VALUE;
 			var capacityUsed = account.reservedCapacity();
 			for (var entry : perCycle.entrySet()) {
-				if (com.ayoshiko.productivebeesgenesis.resource.ResourceTypes.EMC.equals(entry.getKey())) continue;
-                BigInteger room = BigInteger.valueOf(host.capacity()).subtract(capacityUsed.getOrDefault(entry.getKey(), BigInteger.ZERO));
+				BigInteger limit = ResourceTypes.EMC.equals(entry.getKey())
+						? ResourceExactAmounts.MAX_VALUE : BigInteger.valueOf(host.capacity());
+                BigInteger room = limit.subtract(capacityUsed.getOrDefault(entry.getKey(), BigInteger.ZERO));
                 long cycles = room.max(BigInteger.ZERO).divide(entry.getValue()).min(BigInteger.valueOf(Long.MAX_VALUE)).longValueExact();
                 capacityCycles = Math.min(capacityCycles, cycles);
 			}

@@ -6,7 +6,9 @@ import net.minecraft.resources.ResourceLocation;
 import java.util.LinkedHashMap;
 import java.util.Comparator;
 import java.util.List;
+import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -116,6 +118,7 @@ public final class ResourceAccount {
 	long nextSequence = 1;
 	Binding binding;
 	Map<ResourceKey, BigInteger> available = Map.of();
+    BigDecimal retainedEnergyJoules = BigDecimal.ZERO;
 	final Map<Integer, CompoundTag> centrifugeWork = new LinkedHashMap<>();
 	Production production;
 	static final class SuspendedProduction {
@@ -491,6 +494,41 @@ public final class ResourceAccount {
 		available = frozen;
 		accounts.releaseStorage(this);
 	}
+
+    /** 已兑换的 J 与 FE 余额由同一账户提交；模拟不兑换，不足一 J 时也不扣 FE。 */
+    long extractEnergyJoules(Reference source, long maximum, BigDecimal conversion, boolean simulate) {
+        checkReady(source);
+        if (suspendedTransfers.containsKey(ResourceTypes.FE)) {
+            throw new IllegalStateException("Resource energy output requires reconciliation");
+        }
+        BigInteger availableFe = available.getOrDefault(ResourceTypes.FE, BigInteger.ZERO);
+        BigDecimal total = new BigDecimal(availableFe).multiply(conversion).add(retainedEnergyJoules);
+        long delivered = total.min(BigDecimal.valueOf(maximum)).longValue();
+        if (simulate || delivered == 0) {
+            return delivered;
+        }
+        BigDecimal required = BigDecimal.valueOf(delivered).subtract(retainedEnergyJoules);
+        BigInteger spentFe = required.signum() <= 0 ? BigInteger.ZERO
+                : required.divide(conversion, 0, RoundingMode.UP).toBigIntegerExact();
+        BigDecimal remaining = retainedEnergyJoules.add(new BigDecimal(spentFe).multiply(conversion))
+                .subtract(BigDecimal.valueOf(delivered));
+        Map<ResourceKey, BigInteger> next = available;
+        if (spentFe.signum() > 0) {
+            var changed = new LinkedHashMap<>(available);
+            BigInteger left = availableFe.subtract(spentFe);
+            if (left.signum() == 0) {
+                changed.remove(ResourceTypes.FE);
+            } else {
+                changed.put(ResourceTypes.FE, left);
+            }
+            next = Map.copyOf(changed);
+        }
+        accounts.beforeChange(this);
+        available = next;
+        retainedEnergyJoules = remaining;
+        accounts.releaseStorage(this);
+        return delivered;
+    }
 
 	/** 只读检查整份容量；暂停、在途请求或容量不足不改变计时、余额或随机结果。 */
 	public boolean canReserve(Reference source, Map<ResourceKey, ? extends Number> maximum) {

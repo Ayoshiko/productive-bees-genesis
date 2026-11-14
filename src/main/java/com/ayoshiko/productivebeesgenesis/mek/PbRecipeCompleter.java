@@ -111,7 +111,6 @@ public class PbRecipeCompleter {
 	private boolean outputUpgradesPrepared;
 	private int outputUpgradeMask;
 	private long outputUpgradeRevision;
-	private boolean preparationOverflow;
 	private CompoundTag invalidPending;
 	/** 只缓存准备结果；每次准入仍复核当前槽位和外部路由状态。 */
 	private PbOutputCapacityCache capacityCache;
@@ -176,13 +175,12 @@ public class PbRecipeCompleter {
 		FluidStack fluidOutput = pendingFluidTemplate;
 		if (fluidOutput != null && !fluidOutput.isEmpty()
 				&& !(discardWax && UselessByproductUpgradeHelper.isHoney(fluidOutput))) {
-			pendingFluidAmount = SaturatingMath.saturatingAdd(pendingFluidAmount,
-				SaturatingMath.saturatingMultiply(fluidOutput.getAmount(), modifier));
+			pendingFluidAmount = Math.addExact(pendingFluidAmount,
+				Math.multiplyExact((long) fluidOutput.getAmount(), modifier));
 		}
 
 		// 修复:每次操作只消耗1个输入,productivityModifier 只影响输出数量不影响输入消耗
-		pendingInputShrink = SaturatingMath.saturatingToInt(
-			SaturatingMath.saturatingAdd(pendingInputShrink, 1));
+		pendingInputShrink = Math.addExact(pendingInputShrink, 1);
 	}
 
 	/**
@@ -262,11 +260,10 @@ public class PbRecipeCompleter {
 		FluidStack fluidOutput = pendingFluidTemplate;
 		if (fluidOutput != null && !fluidOutput.isEmpty()
 				&& !(discardWax && UselessByproductUpgradeHelper.isHoney(fluidOutput))) {
-			pendingFluidAmount = SaturatingMath.saturatingAdd(pendingFluidAmount,
-				SaturatingMath.saturatingMultiply(fluidOutput.getAmount(), modifier, batchCount));
+			pendingFluidAmount = Math.addExact(pendingFluidAmount,
+				Math.multiplyExact((long) fluidOutput.getAmount() * modifier, batchCount));
 		}
-		pendingInputShrink = SaturatingMath.saturatingToInt(
-			SaturatingMath.saturatingAdd(pendingInputShrink, batchCount));
+		pendingInputShrink = Math.addExact(pendingInputShrink, batchCount);
 	}
 
 	/** 在原聚合器中准备独占结果；不修改本实例、库存、进度或费用。 */
@@ -276,6 +273,11 @@ public class PbRecipeCompleter {
 		return batch;
 	}
 
+	int maximumRepresentableInputs(CentrifugeRecipe recipe) {
+		if (capacityCache == null) capacityCache = new PbOutputCapacityCache(this, context);
+		return capacityCache.maximumRepresentableInputs(recipe);
+	}
+
 	boolean fitsMaximum(CentrifugeRecipe recipe, int lane, int inputs) {
 		if (capacityCache == null) capacityCache = new PbOutputCapacityCache(this, context);
 		return capacityCache.fits(recipe, lane, inputs);
@@ -283,7 +285,6 @@ public class PbRecipeCompleter {
 
 	private void prepareInto(PbRecipeCompleter batch, CentrifugeRecipe recipe, int inputs, long seed, boolean maximum) {
 		batch.clearPendingOutputs();
-		batch.preparationOverflow = false;
 		if (maximum) {
 			batch.selectRecipe(recipe);
 			int modifier = Math.max(1, context.productivityModifier());
@@ -291,14 +292,15 @@ public class PbRecipeCompleter {
 				var out = entry.getValue();
 				if (PbOutputChance.adjustedChance(out.chance(), context.stabilityBonus()) <= 0) continue;
 				int max = Math.max(Math.max(0, out.min()), out.max());
-				if ((long) max * modifier > Long.MAX_VALUE / (long) Math.max(1, inputs)) batch.preparationOverflow = true;
-				long amount = SaturatingMath.saturatingMultiply(max, modifier, inputs);
+				if (context.suppressesUselessByproducts() && UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
+				long amount = Math.multiplyExact((long) max * modifier, inputs);
 				batch.addPendingOutput(entry.getKey(), amount);
+				batch.pendingItemCount = Math.addExact(batch.pendingItemCount, amount);
 			}
-			if (batch.pendingFluidTemplate != null) {
+			if (batch.pendingFluidTemplate != null && !(context.suppressesUselessByproducts()
+					&& UselessByproductUpgradeHelper.isHoney(batch.pendingFluidTemplate))) {
 				long perInput = (long) batch.pendingFluidTemplate.getAmount() * modifier;
-				if (perInput > Long.MAX_VALUE / Math.max(1, inputs)) batch.preparationOverflow = true;
-				batch.pendingFluidAmount = SaturatingMath.saturatingMultiply(perInput, inputs);
+				batch.pendingFluidAmount = Math.multiplyExact(perInput, inputs);
 			}
 		} else batch.accumulateBatch(recipe, context.productivityModifier(), inputs, new java.util.Random(seed));
 		batch.prepareOutputUpgrades(maximum);
@@ -336,7 +338,7 @@ public class PbRecipeCompleter {
 		outputUpgradeRevision = revision;
 	}
 
-	boolean fitsPrepared(int lane, int inputs) { return !preparationOverflow && flusher.fitsPrepared(this, lane, inputs); }
+	boolean fitsPrepared(int lane, int inputs) { return flusher.fitsPrepared(this, lane, inputs); }
 	boolean isPreparedOutput() { return preparedOutput; }
 	boolean invalidPending() { return invalidPending != null; }
 

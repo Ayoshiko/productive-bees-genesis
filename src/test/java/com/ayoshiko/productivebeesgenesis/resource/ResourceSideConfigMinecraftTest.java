@@ -202,10 +202,13 @@ class ResourceSideConfigMinecraftTest {
             assertTrue(simulated >= 0 && simulated <= amount);
             assertEquals(before, store.save());
             long old = account.available().get(ResourceTypes.FE);
+            var beforeJoules = account.retainedEnergyJoules;
             long actual = output.extractEnergy(0, amount, mekanism.api.Action.EXECUTE);
             assertEquals(simulated, actual);
             long spent = old - account.available().getOrDefault(ResourceTypes.FE, 0L);
-            assertEquals(conversion.convertFrom(spent), actual);
+            assertEquals(0, java.math.BigDecimal.valueOf(spent)
+                    .multiply(java.math.BigDecimal.valueOf(conversion.getConversion())).add(beforeJoules)
+                    .compareTo(java.math.BigDecimal.valueOf(actual).add(account.retainedEnergyJoules)));
         }
         output.invalidate();
         assertEquals(0, output.extractEnergy(0, 100, mekanism.api.Action.EXECUTE));

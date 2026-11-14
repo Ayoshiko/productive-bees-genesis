@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext;
 import com.ayoshiko.productivebeesgenesis.mek.PbRecipeFinder;
 import net.minecraft.world.level.Level;
@@ -24,6 +25,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeManager;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
 import net.neoforged.fml.config.ConfigTracker;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -165,6 +168,50 @@ class RecipeGenerationMinecraftTest {
         assertTrue(CentrifugeRecipeIndex.isCurrent(a));
         assertSame(accepted, CentrifugeRecipeIndex.get(BEE));
         assertEquals(version, ProductiveBeesGenesis.RECIPE_VERSION.get());
+    }
+
+    @Test
+    void derivedCombBlockRejectsOverflowWithoutTruncatingOutputs() {
+        int multiplier = ModConfig.SERVER.mekCentrifugeCombBlockMultiplier.get();
+        ModConfig.SERVER.mekCentrifugeCombBlockMultiplier.set(4);
+        try {
+            var input = new ItemStack(PbCombItemRefs.honeycomb());
+            input.set(PbDataComponents.beeType(), BEE);
+            var block = new ItemStack(cy.jdkdigital.productivebees.init.ModItems.CONFIGURABLE_COMB_BLOCK.get());
+            block.set(PbDataComponents.beeType(), BEE);
+            int accepted = Integer.MAX_VALUE / 4;
+            for (boolean fluid : new boolean[]{false, true}) {
+                var valid = new CentrifugeRecipe(Ingredient.of(input),
+                        List.of(new ChancedOutput(Ingredient.of(Items.DIAMOND), accepted, accepted, 1)),
+                        fluid ? SizedFluidIngredient.of(Fluids.WATER, accepted) : null, 20);
+                var manager = new RecipeManager(REGISTRIES);
+                var holder = new RecipeHolder<>(ResourceLocation.parse("test:large_comb"), valid);
+                manager.replaceRecipes(List.of(holder));
+                assertTrue(CentrifugeRecipeIndex.rebuild(manager));
+                var derived = CentrifugeRecipeIndex.getCombBlock(BEE);
+                assertNotNull(derived);
+                assertEquals(accepted * 4, derived.value().itemOutput.getFirst().max());
+                if (fluid) assertEquals(accepted * 4, derived.value().fluidOutput.amount());
+
+                var invalid = new CentrifugeRecipe(Ingredient.of(input),
+                        List.of(new ChancedOutput(Ingredient.of(Items.DIAMOND),
+                                fluid ? 1 : accepted + 1, fluid ? 1 : accepted + 1, 1)),
+                        SizedFluidIngredient.of(Fluids.WATER, fluid ? accepted + 1 : 1), 20);
+                holder = new RecipeHolder<>(ResourceLocation.parse("test:overflow_comb"), invalid);
+                manager.replaceRecipes(List.of(holder));
+                assertTrue(CentrifugeRecipeIndex.rebuild(manager));
+                assertSame(holder, CentrifugeRecipeIndex.get(BEE));
+                assertNull(CentrifugeRecipeIndex.getCombBlock(BEE));
+                var level = mock(Level.class);
+                when(level.getRecipeManager()).thenReturn(manager);
+                var context = mock(PbRecipeContext.class);
+                when(context.level()).thenReturn(level);
+                SharedPbRecipeCache.invalidate();
+                assertNull(new PbRecipeFinder(context).findPbRecipe(block));
+            }
+        } finally {
+            ModConfig.SERVER.mekCentrifugeCombBlockMultiplier.set(multiplier);
+        }
     }
 
     private static RecipeManager manager(Item output) {

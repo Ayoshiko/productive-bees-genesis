@@ -1385,6 +1385,7 @@
   "command.productivebeesgenesis.resource.account": "Compte %s · génération %s · %s",
   "command.productivebeesgenesis.resource.account_access": "Compte introuvable ou accès refusé.",
   "command.productivebeesgenesis.resource.available": "Disponible : %s × %s",
+  "command.productivebeesgenesis.resource.energy_remainder": "Énergie convertie en attente de sortie : %s J ; conservée pour une livraison ultérieure à Mekanism.",
   "command.productivebeesgenesis.resource.bound": "Compte lié : %s, génération %s.",
   "command.productivebeesgenesis.resource.capacity": "Comptes du monde : %s/%s ; les comptes sans actifs peuvent être retirés sans risque.",
   "command.productivebeesgenesis.resource.detached": "Dissocié ; disponible pour réattribution",

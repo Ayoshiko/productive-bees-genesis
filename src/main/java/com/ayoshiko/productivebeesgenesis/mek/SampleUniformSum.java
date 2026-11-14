@@ -1,9 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
-
-import java.util.concurrent.ThreadLocalRandom;
-
 /**
 	 * 均匀分布求和采样工具 — 中心极限定理 (CLT) 实现
 	 * <br/>
@@ -42,24 +38,25 @@ public final class SampleUniformSum {
 		if (n == 1) {
 			// 单次走原版精确路径
 			int count = sampleSingle(random, min, max);
-			return SaturatingMath.saturatingMultiply(count, modifier);
+			return Math.multiplyExact((long) count, modifier);
 		}
 		if (min == max) {
 			// 固定数量,无随机
-			return SaturatingMath.saturatingMultiply(min, modifier, n);
+			return Math.multiplyExact((long) min * modifier, n);
 		}
+		long lower = Math.multiplyExact((long) min, n);
+		long upper = Math.multiplyExact((long) max, n);
+		Math.multiplyExact(upper, modifier);
 		// Normal 近似 N 次均匀分布之和
 		double mean = ((double) min + max) / 2.0D * n;
 		double range = (double) max - min + 1.0D;
 		double variance = n * (range * range - 1) / 12.0;
 		double stdDev = Math.sqrt(Math.max(0, variance));
 		double gaussian = random.nextGaussian();
-		long sum = SaturatingMath.saturatingRoundToLong(mean + gaussian * stdDev);
+		long sum = Math.round(mean + gaussian * stdDev);
 		// 限制在 [min*n, max*n] 范围内(防止 Normal 近似的极端值)
-		long lower = SaturatingMath.saturatingMultiply(min, n);
-		long upper = SaturatingMath.saturatingMultiply(max, n);
 		sum = Math.max(lower, Math.min(upper, sum));
-		return SaturatingMath.saturatingMultiply(sum, modifier);
+		return Math.multiplyExact(sum, modifier);
 	}
 
 	/** Samples an inclusive int range without overflowing {@code max - min + 1}. */

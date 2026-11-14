@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
+import com.ayoshiko.productivebeesgenesis.apiary.ItemStackMergeHelper;
 import com.ayoshiko.productivebeesgenesis.apiary.IPbUpgradeProvider;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.util.EssenceConversionRecipeIndex.Conversion;
@@ -371,11 +372,7 @@ public final class EssenceConversionUpgradeHelper {
 			amount -= accepted;
 			if (amount <= 0) return;
 		}
-		while (amount > 0) {
-			int count = (int) Math.min(amount, Integer.MAX_VALUE);
-			stacks.add(template.copyWithCount(count));
-			amount -= count;
-		}
+		ItemStackMergeHelper.appendBulkCount(stacks, template, amount);
 	}
 
 	record AmountConversion(long remainder, long resultAmount) {

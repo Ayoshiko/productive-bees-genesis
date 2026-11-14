@@ -95,14 +95,16 @@ public final class WannaBeeAmberAdapter {
 				long representedEvents = WannaBeeBatchPlan.weightAt(eventCount, samplesForLevel, sampleIndex);
 				long rollCount = BeeProduceBatchSampler.sampleRollCount(random, representedEvents, multiplier);
 				if (rollCount <= 0) continue;
+				LootPool pool;
 				try {
-					LootPool pool = createLootPool(level, origin, candidates, random);
-					sampleRolls(level, aggregated, pool, rollCount, productivityLevel);
+					pool = createLootPool(level, origin, candidates, random);
 				} catch (Exception e) {
 					if (strict) throw new IllegalStateException("Wanna Bee resource batch generation failed", e);
 					LogThrottle.warn("wanna_bee_amber_loot",
 							"Wanna Bee 无法读取封存生物战利品，跳过本次代表事件: origin={}", origin, e);
+					continue;
 				}
+				sampleRolls(level, aggregated, pool, rollCount, productivityLevel);
 			}
 		}
 
@@ -139,10 +141,15 @@ public final class WannaBeeAmberAdapter {
 	private static void sampleRolls(ServerLevel level, List<AggregatedDrop> aggregated, LootPool pool,
 			long rollCount, int productivityLevel) {
 		if (pool.eligibleDrops.isEmpty()) return;
+		long maximum = 0;
+		for (ItemStack drop : pool.eligibleDrops) {
+			maximum = Math.max(maximum, BeeProductivityGene.adjustCount(drop.getCount(), productivityLevel));
+		}
+		ItemStackMergeHelper.checkBulkCount(0, Math.multiplyExact(maximum, rollCount));
 		if (pool.eligibleDrops.size() == 1) {
 			ItemStack sampled = pool.eligibleDrops.getFirst();
-			long amount = SaturatingMath.saturatingMultiply(
-					BeeProductivityGene.adjustStackCount(sampled.getCount(), productivityLevel), rollCount);
+			long amount = Math.multiplyExact(
+					BeeProductivityGene.adjustCount(sampled.getCount(), productivityLevel), rollCount);
 			merge(aggregated, sampled, amount);
 			return;
 		}
@@ -151,8 +158,8 @@ public final class WannaBeeAmberAdapter {
 		for (int i = 0; i < selectedCounts.length; i++) {
 			if (selectedCounts[i] <= 0) continue;
 			ItemStack sampled = pool.eligibleDrops.get(i);
-			long amount = SaturatingMath.saturatingMultiply(
-					BeeProductivityGene.adjustStackCount(sampled.getCount(), productivityLevel), selectedCounts[i]);
+			long amount = Math.multiplyExact(
+					BeeProductivityGene.adjustCount(sampled.getCount(), productivityLevel), selectedCounts[i]);
 			merge(aggregated, sampled, amount);
 		}
 	}
@@ -161,7 +168,7 @@ public final class WannaBeeAmberAdapter {
 		if (amount <= 0) return;
 		for (AggregatedDrop existing : aggregated) {
 			if (ItemStack.isSameItemSameComponents(existing.template, sampled)) {
-				existing.count = SaturatingMath.saturatingAdd(existing.count, amount);
+				existing.count = Math.addExact(existing.count, amount);
 				return;
 			}
 		}

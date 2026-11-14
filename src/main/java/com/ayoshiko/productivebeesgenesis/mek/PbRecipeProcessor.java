@@ -620,7 +620,7 @@ public class PbRecipeProcessor {
 		}
 		int effectiveOps = CentrifugeFactoryCommonLogic.parallelOperations(cachedOperationsPerTick,
 				Math.max(1, context.productivityParallelModifier()), cachedMaxOpsPerTick);
-		int remainingInput = input.getCount();
+		int remainingInput = Math.min(input.getCount(), completer.maximumRepresentableInputs(recipeValue));
 		effectiveOps = Math.min(effectiveOps, remainingInput);
 		if (effectiveOps <= 0) {
 			pbProcessing[processIndex] = false;

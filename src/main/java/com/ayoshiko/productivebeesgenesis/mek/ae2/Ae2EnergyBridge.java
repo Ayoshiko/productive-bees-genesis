@@ -55,7 +55,8 @@ public final class Ae2EnergyBridge {
         if (!Ae2IntegrationLoader.isAe2Loaded() || grid == null || amount <= 0) return 0;
         IEnergyService energyService = grid.getEnergyService();
         double aeAmount = amount / AE_TO_FE_RATIO;
-        if (BigDecimal.valueOf(aeAmount).multiply(BigDecimal.valueOf(AE_TO_FE_RATIO))
+        // 按 double 实际表示的值收紧请求；最短十进制字符串可能掩盖已经向上舍入的整数。
+        if (new BigDecimal(aeAmount).multiply(BigDecimal.valueOf(AE_TO_FE_RATIO))
                 .compareTo(BigDecimal.valueOf(amount)) > 0) {
             aeAmount = Math.nextDown(aeAmount);
         }

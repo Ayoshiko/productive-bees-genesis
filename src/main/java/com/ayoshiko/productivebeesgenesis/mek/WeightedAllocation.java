@@ -9,6 +9,8 @@ import net.minecraft.resources.ResourceLocation;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -106,22 +108,27 @@ public final class WeightedAllocation {
 			return result;
 		}
 		boolean valid = weights != null && weights.length == size;
-		double sum = 0;
+		BigDecimal sum = BigDecimal.ZERO;
+		BigDecimal[] exactWeights = new BigDecimal[size];
 		if (valid) {
-			for (double weight : weights) {
+			for (int i = 0; i < size; i++) {
+				double weight = weights[i];
 				if (!Double.isFinite(weight)) {
 					valid = false;
 					break;
 				}
-				sum += Math.max(0, weight);
+				exactWeights[i] = new BigDecimal(Math.max(0, weight));
+				sum = sum.add(exactWeights[i]);
 			}
-			valid &= Double.isFinite(sum) && sum > 0;
+			valid &= sum.signum() > 0;
 		}
 		long[] allocated = new long[size];
 		long remaining = total;
+		BigDecimal exactTotal = BigDecimal.valueOf(total);
 		for (int i = 0; i < size; i++) {
-			long count = valid ? (long) Math.floor((double) total * Math.max(0, weights[i]) / sum) : total / size;
-			allocated[i] = Math.min(remaining, Math.max(0, count));
+			long count = valid ? exactTotal.multiply(exactWeights[i]).divide(sum, 0, RoundingMode.FLOOR).longValueExact()
+					: total / size;
+			allocated[i] = count;
 			remaining -= allocated[i];
 		}
 		Integer[] order = new Integer[size];

@@ -57,8 +57,7 @@ final class ApiaryMixedProduction {
 		for (var entry : spec.items()) {
 			if (entry.chance() == 0 || entry.max() == 0) continue;
 			var template = entry.template();
-			int adjusted = BeeProductivityGene.adjustStackCount(entry.max(), gene);
-			if (adjusted == Integer.MAX_VALUE) throw new ArithmeticException("Mixed item count overflow");
+			long adjusted = BeeProductivityGene.adjustCount(entry.max(), gene);
 			long perCycle = Math.multiplyExact(rolls, adjusted);
 			if (perCycle > Integer.MAX_VALUE) throw new ArithmeticException("Mixed item cycle overflow");
 			maximum.add(template.copyWithCount((int) perCycle));

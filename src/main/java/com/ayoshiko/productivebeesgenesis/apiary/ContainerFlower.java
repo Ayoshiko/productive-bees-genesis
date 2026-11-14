@@ -20,6 +20,7 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.capabilities.Capabilities;
 
+import java.math.BigDecimal;
 import java.util.Set;
 
 /** 不消费花源：每次查询只访问单件容器副本；数量不能跨物品或槽位拼接。 */
@@ -225,9 +226,13 @@ public final class ContainerFlower {
             if (!conversion.isEnabled()) return false;
             int containers = strict.getEnergyContainerCount();
             if (containers < 0 || containers > MAX_TANKS) return false;
+            BigDecimal requiredJoules = BigDecimal.valueOf(amount)
+                    .multiply(BigDecimal.valueOf(conversion.getConversion()));
             for (int i = 0; i < containers; i++) {
-                // 使用 Mekanism 的当前 FE 换算，不能把内部焦耳数直接当成 FE。
-                if (conversion.convertTo(strict.getEnergy(i)) >= amount) return true;
+                // 比较原始整数 J，避免大数先转 double 后把不足额容器舍入为达标。
+                if (BigDecimal.valueOf(strict.getEnergy(i)).compareTo(requiredJoules) >= 0) {
+                    return true;
+                }
             }
             return false;
         }

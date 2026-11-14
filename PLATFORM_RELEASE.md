@@ -8,9 +8,9 @@
 | --- | --- |
 | 项目名称 | Productive Bees Genesis / 资源蜜蜂：创世 |
 | 模组 ID | `productivebeesgenesis` |
-| 内部/构建版本 | 以 `gradle.properties` 的 `mod_version` 为准；当前版本为 `1.2.4` |
-| CurseForge 版本 | 以 `curseforge_release_version` 为准；当前版本为 `1.2.4` |
-| 发布状态 | `1.2.4` 于 2026-11-13 在 [GitHub 正式发布并设为 Latest](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.4)，标签提交为 `863aa5be74ecc56f9ee6fa0cf2e43e8c8cd56dc7`。[维护 Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43378990852)、[标签 Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43381786352) 及 [CurseForge 上传](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43381809241) 均成功。公开 JAR 5,689,027 字节，重新下载 SHA-256 为 `0f181b726bf868080f723cd089245cd7e91393ea94ab958df2926763c857ffe9`，与上传附件一致。CurseForge 公共文件信息已列出 [文件 9587266](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis/files/9587266)，正式类型、1.21.1／NeoForge 与文件大小均匹配；上传工作流使用同一已核对的 GitHub 附件 |
+| 内部/构建版本 | 以 `gradle.properties` 的 `mod_version` 为准；当前版本为 `1.2.5` |
+| CurseForge 版本 | 以 `curseforge_release_version` 为准；当前版本为 `1.2.5` |
+| 发布状态 | `1.2.5` 于 2026-11-14 执行正式发布，包含 AE2 超大储能供能、FE／J 余量和生产数量边界修复，以及中英文 README 更新；公开附件与平台结果在发布后核验。上一正式版本为 `1.2.4` |
 | CurseForge 渠道 | Release |
 | Minecraft | `1.21.1` |
 | 模组加载器 | NeoForge |
@@ -23,7 +23,7 @@
 
 ## 版本映射
 
-版本由目标标签提交的 `gradle.properties` 决定，标签 `v<mod_version>`、文件名 `productivebeesgenesis-<mod_version>.jar`、NeoForge 的本模组版本与 Manifest `Implementation-Version` 必须一致。`CurseForge-Release-Version` 必须等于同一提交的 `curseforge_release_version`。当前两个属性为 `1.2.4`；后续发布不能按本文旧示例倒改版本。
+版本由目标标签提交的 `gradle.properties` 决定，标签 `v<mod_version>`、文件名 `productivebeesgenesis-<mod_version>.jar`、NeoForge 的本模组版本与 Manifest `Implementation-Version` 必须一致。`CurseForge-Release-Version` 必须等于同一提交的 `curseforge_release_version`。当前两个属性为 `1.2.5`；后续发布不能按本文旧示例倒改版本。
 
 Build 工作流使用 [固定开发依赖清单](gradle/development-dependencies.json)，运行普通 `build` 编译打包，随后记录并上传 JAR、版本、大小与 SHA-256 等附件信息。测试、示例检查和产物检查按实际需要显式选择，不再由普通构建隐式执行。
 
@@ -42,6 +42,10 @@ CurseForge 工作流在公开的非预发布 GitHub Release 发布后自动触�
 首个正式版前的所有 GitHub Release（原 `v1.0.0` 至 `v2.0.9-hotfix`）均为开发快照，不是正式发行版。
 其 Git 标签统一使用 `dev-v...` 前缀，Release 标题使用 `dev-...` 前缀并标记为 Pre-release；新的
 `v1.0.0` 和 `v1.0.1` 是不带该前缀的正式标签。历史 Release 的 JAR 资产维持原文件名和校验和，不重新打包或改名。
+
+## 历史快照：1.2.4 正式发布产物（2026-11-13）
+
+`1.2.4` 于 2026-11-13 在 [GitHub 正式发布并设为 Latest](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.4)，标签提交为 `863aa5be74ecc56f9ee6fa0cf2e43e8c8cd56dc7`。[维护 Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43378990852)、[标签 Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43381786352) 及 [CurseForge 上传](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43381809241) 均成功。公开 JAR 5,689,027 字节，重新下载 SHA-256 为 `0f181b726bf868080f723cd089245cd7e91393ea94ab958df2926763c857ffe9`，与上传附件一致。CurseForge 公共文件信息已列出 [文件 9587266](https://www.curseforge.com/minecraft/mc-mods/productive-bees-genesis/files/9587266)，正式类型、1.21.1／NeoForge 与文件大小均匹配；上传工作流使用同一已核对的 GitHub 附件
 
 ## 历史快照：1.0.9 正式发布产物（2026-09-26）
 

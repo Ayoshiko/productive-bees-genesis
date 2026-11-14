@@ -44,7 +44,7 @@ class Ae2EnergyMathMinecraftTest {
                 for (BigDecimal fraction : retained) {
                     BigDecimal available = BigDecimal.valueOf(shortfall).subtract(fraction);
                     long expected = available.signum() <= 0 ? 0L
-                            : available.divide(BigDecimal.valueOf(conversion), 0, java.math.RoundingMode.DOWN)
+                            : available.divide(BigDecimal.valueOf(conversion), 0, java.math.RoundingMode.UP)
                                     .min(BigDecimal.valueOf(Long.MAX_VALUE)).longValueExact();
                     assertEquals(expected, Ae2EnergyMath.requestedFe(shortfall, fraction, conversion),
                             () -> shortfall + " J, retained=" + fraction + ", ratio=" + conversion);
@@ -146,7 +146,8 @@ class Ae2EnergyMathMinecraftTest {
                     .thenReturn(0.1);
             assertEquals(0, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
             var transfer = fixture.holder.getEnergyTransfer();
-            assertEquals(0, new BigDecimal("0.50").compareTo(new BigDecimal(transfer.retainedJoules())));
+            BigDecimal fractionalReceipt = new BigDecimal(0.2D).multiply(BigDecimal.valueOf(2.5));
+            assertEquals(0, fractionalReceipt.compareTo(new BigDecimal(transfer.retainedJoules())));
             var saved = new CompoundTag();
             fixture.holder.savePendingItems(saved);
             var restored = new Ae2OutputStateHolder();
@@ -169,17 +170,23 @@ class Ae2EnergyMathMinecraftTest {
             fixture.holder.savePendingItems(interrupted);
             restored.loadPendingItems(interrupted);
             restored.getEnergyTransfer().resolve(transfer.request(), BigDecimal.valueOf(3));
-            assertFalse(restored.getEnergyTransfer().isPresent());
+            assertEquals(0, fractionalReceipt.subtract(new BigDecimal("0.5"))
+                    .compareTo(restored.getEnergyTransfer().retainedEnergy()));
             verify(fixture.nativeEnergy, times(1)).extractAEPower(anyDouble(), any(), any());
         }
     }
 
     @Test
-    void invalidReceiptsRemainUnknownAndSmallCapacityDoesNotConsumeSource() {
+    void invalidReceiptsRemainUnknownAndSubFeCapacityRetainsThePaidRemainder() {
         try (var fixture = new Fixture(2.5, false)) {
             fixture.maximum = 1;
+            when(fixture.nativeEnergy.extractAEPower(anyDouble(), eq(Actionable.MODULATE), eq(PowerMultiplier.ONE)))
+                    .thenAnswer(call -> call.getArgument(0));
+            assertEquals(1, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
+            assertEquals(1, fixture.energy);
+            assertEquals(0, new BigDecimal("1.5").compareTo(fixture.holder.getEnergyTransfer().retainedEnergy()));
             assertEquals(0, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
-            verifyNoInteractions(fixture.nativeEnergy);
+            verify(fixture.nativeEnergy, times(1)).extractAEPower(eq(0.5D), any(), any());
         }
         try (var fixture = new Fixture(2.5, false)) {
             when(fixture.nativeEnergy.extractAEPower(anyDouble(), eq(Actionable.MODULATE), eq(PowerMultiplier.ONE)))
@@ -219,17 +226,20 @@ class Ae2EnergyMathMinecraftTest {
     }
 
     @Test
-    void satisfiedBatchAndSubFeCapacityDoNotScheduleFailureBackoff() {
+    void satisfiedBatchDoesNotPullAndSubFeCapacityFillsWithoutFailureBackoff() {
         try (var fixture = new Fixture(2.5, false)) {
             fixture.energy = 500;
             when(fixture.host.productivebeesgenesis$usesSmeltingEnergyBudget()).thenReturn(true);
             assertEquals(0, Ae2EnergyInjector.injectEnergy(fixture.host, 1024, 500));
             assertEquals(0, fixture.holder.getPushState().getEnergyBackoff().getBackoffExponent());
-            fixture.energy = 999;
-            assertEquals(0, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
-            assertEquals(0, fixture.holder.getPushState().getEnergyBackoff().getBackoffExponent());
             fixture.gridLookup.verifyNoInteractions();
-            verifyNoInteractions(fixture.nativeEnergy);
+            fixture.energy = 999;
+            when(fixture.nativeEnergy.extractAEPower(anyDouble(), eq(Actionable.MODULATE), eq(PowerMultiplier.ONE)))
+                    .thenAnswer(call -> call.getArgument(0));
+            assertEquals(1, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
+            assertEquals(0, fixture.holder.getPushState().getEnergyBackoff().getBackoffExponent());
+            assertEquals(0, new BigDecimal("1.5").compareTo(fixture.holder.getEnergyTransfer().retainedEnergy()));
+            verify(fixture.nativeEnergy).extractAEPower(eq(0.5D), any(), any());
         }
     }
 
@@ -242,7 +252,9 @@ class Ae2EnergyMathMinecraftTest {
             assertEquals(0, fixture.holder.getPushState().getEnergyBackoff().getBackoffExponent());
             assertEquals(1, Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0));
             assertEquals(1, fixture.energy);
-            assertFalse(fixture.holder.getEnergyTransfer().isPresent());
+            BigDecimal received = new BigDecimal(0.2D).multiply(BigDecimal.valueOf(5));
+            assertEquals(0, received.subtract(BigDecimal.ONE)
+                    .compareTo(fixture.holder.getEnergyTransfer().retainedEnergy()));
             verify(fixture.nativeEnergy, times(2)).extractAEPower(anyDouble(), any(), any());
         }
     }
@@ -258,6 +270,82 @@ class Ae2EnergyMathMinecraftTest {
             verify(fixture.nativeEnergy).extractAEPower(eq(200D),
                     eq(Actionable.MODULATE), eq(PowerMultiplier.ONE));
         }
+    }
+
+    @Test
+    void nativeLargeReceiptsStayWithinTheRequestAndEveryJouleIsAccountedFor() {
+        long[][] scenarios = {
+                {461_168_601_827_387_904L, 0L},
+                {45_035_996_273_705_020L, 0L},
+                {Long.MAX_VALUE, 0L},
+                {Long.MAX_VALUE, 4_560L}
+        };
+        for (long[] scenario : scenarios) {
+            try (var fixture = new Fixture(2.5, false)) {
+                fixture.maximum = scenario[0];
+                fixture.energy = scenario[1];
+                long before = fixture.energy;
+                BigDecimal[] deliveredJoules = {BigDecimal.ZERO};
+                when(fixture.nativeEnergy.extractAEPower(anyDouble(), eq(Actionable.MODULATE), eq(PowerMultiplier.ONE)))
+                        .thenAnswer(call -> {
+                            double requestedAe = call.getArgument(0);
+                            var transfer = fixture.holder.getEnergyTransfer();
+                            BigDecimal actualFe = new BigDecimal(requestedAe).multiply(BigDecimal.valueOf(2));
+                            assertTrue(actualFe.compareTo(BigDecimal.valueOf(transfer.requestedFe())) <= 0);
+                            deliveredJoules[0] = deliveredJoules[0].add(actualFe.multiply(BigDecimal.valueOf(2.5)));
+                            return requestedAe;
+                        });
+                for (int attempt = 0; attempt < 3 && fixture.energy < fixture.maximum; attempt++) {
+                    Ae2EnergyInjector.injectEnergy(fixture.host, 0, 0);
+                    assertFalse(fixture.holder.getEnergyTransfer().requiresReconciliation());
+                }
+                assertEquals(fixture.maximum, fixture.energy);
+                BigDecimal accounted = BigDecimal.valueOf(fixture.energy - before)
+                        .add(fixture.holder.getEnergyTransfer().retainedEnergy());
+                assertEquals(0, deliveredJoules[0].compareTo(accounted));
+            }
+        }
+    }
+
+    @Test
+    void exactNativeLowBitsAndSmallestReceiptSurviveSaving() {
+        var transfer = new Ae2EnergyTransfer();
+        transfer.beginExtract("ae_native", 18_014_398_509_482_008L, 2.5);
+        transfer.extracted(18_014_398_509_482_008D);
+        assertEquals("45035996273705020.0", transfer.retainedJoules());
+        for (double conversion : new double[]{2.5, 0.0001}) {
+            transfer = new Ae2EnergyTransfer();
+            transfer.beginExtract("ae_native", 1, conversion);
+            double receiptFe = Double.MIN_VALUE * 2.0;
+            transfer.extracted(receiptFe);
+            BigDecimal expected = new BigDecimal(receiptFe).multiply(BigDecimal.valueOf(conversion));
+            var saved = new CompoundTag();
+            transfer.save(saved);
+            var restored = new Ae2EnergyTransfer();
+            restored.load(saved);
+            assertFalse(restored.requiresReconciliation());
+            assertEquals(0, expected.compareTo(restored.retainedEnergy()));
+            assertEquals(transfer.retainedJoules(), restored.retainedJoules());
+        }
+    }
+
+    @Test
+    void recoveryRejectsUnsaveablePrecisionWithoutChangingThePendingRequest() {
+        var transfer = new Ae2EnergyTransfer();
+        transfer.beginExtract("ae_native", 1, 2.5);
+        var request = transfer.request();
+        assertThrows(IllegalArgumentException.class,
+                () -> transfer.resolve(request, new BigDecimal("1E-100000000")));
+        assertTrue(transfer.requiresReconciliation());
+        assertEquals(request, transfer.request());
+        assertEquals(BigDecimal.ZERO, transfer.retainedEnergy());
+        var saved = new CompoundTag();
+        transfer.save(saved);
+        var restored = new Ae2EnergyTransfer();
+        restored.load(saved);
+        assertEquals("extract", restored.phase());
+        restored.resolve(request, BigDecimal.ONE);
+        assertEquals(0, new BigDecimal("2.5").compareTo(restored.retainedEnergy()));
     }
 
     private static final class Fixture implements AutoCloseable {

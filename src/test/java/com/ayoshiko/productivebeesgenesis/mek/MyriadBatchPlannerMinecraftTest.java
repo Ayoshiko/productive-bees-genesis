@@ -46,6 +46,20 @@ class MyriadBatchPlannerMinecraftTest {
 	}
 
 	@Test
+	void longWeightedAllocationKeepsLowBitsAndTotal() {
+		var third = ResourceLocation.parse("test:third");
+		var types = List.of(FIRST, SECOND, third);
+		var equal = WeightedAllocation.allocateByWeight(Long.MAX_VALUE, types, new double[]{1, 1, 1});
+		assertEquals(Long.MAX_VALUE / 3 + 1, equal.get(FIRST));
+		assertEquals(Long.MAX_VALUE / 3, equal.get(SECOND));
+		assertEquals(Long.MAX_VALUE / 3, equal.get(third));
+		assertEquals(Long.MAX_VALUE, equal.values().stream().mapToLong(Long::longValue).reduce(0, Math::addExact));
+		var weighted = WeightedAllocation.allocateByWeight(Long.MAX_VALUE, List.of(FIRST, SECOND), new double[]{2, 1});
+		assertEquals(6_148_914_691_236_517_205L, weighted.get(FIRST));
+		assertEquals(3_074_457_345_618_258_602L, weighted.get(SECOND));
+	}
+
+	@Test
 	void differentBeeTypesSharingOneCombKeepNewSlotOwnership() {
 		var slot = BasicInventorySlot.at(null, 0, 0);
 		List<IInventorySlot> slots = List.of(slot);

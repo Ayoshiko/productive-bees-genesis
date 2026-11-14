@@ -317,15 +317,12 @@ public final class CentrifugeRecipeIndex {
 				// 模块 3：过滤 Wax 产出，复刻 PB 热力离心机 stripWax=true 行为
 				if (isWaxOutput(chanced)) continue;
 				blockOutputs.add(new ChancedOutput(chanced.ingredient(),
-						SaturatingMath.saturatingToInt(
-								SaturatingMath.saturatingMultiply(chanced.min(), multiplier)),
-						SaturatingMath.saturatingToInt(
-								SaturatingMath.saturatingMultiply(chanced.max(), multiplier)),
-						chanced.chance()));
+						Math.multiplyExact(chanced.min(), multiplier),
+						Math.multiplyExact(chanced.max(), multiplier), chanced.chance()));
 			}
-			SizedFluidIngredient blockFluid = new SizedFluidIngredient(
-					original.fluidOutput.ingredient(), SaturatingMath.saturatingToInt(
-							SaturatingMath.saturatingMultiply(original.fluidOutput.amount(), multiplier)));
+			// 上游配方以 int 保存数量；超界必须拒绝派生，不能截小后消费蜜脾块。
+			SizedFluidIngredient blockFluid = original.fluidOutput == null ? null : new SizedFluidIngredient(
+					original.fluidOutput.ingredient(), Math.multiplyExact(original.fluidOutput.amount(), multiplier));
 			CentrifugeRecipe blockRecipe = new CentrifugeRecipe(
 					blockIngredient, blockOutputs, blockFluid, original.getProcessingTime());
 			return new RecipeHolder<>(honeycombRecipe.id().withSuffix("_block"), blockRecipe);

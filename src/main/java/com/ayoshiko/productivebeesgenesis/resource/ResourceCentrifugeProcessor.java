@@ -276,16 +276,17 @@ public final class ResourceCentrifugeProcessor {
 			long allowedInputs = input.getCount();
 			var capacityUsed = account.reservedCapacity();
 			for (var entry : perInput.entrySet()) {
-				if (ResourceTypes.EMC.equals(entry.getKey())) continue;
+				boolean emc = ResourceTypes.EMC.equals(entry.getKey());
 				long capacity = host.capacity();
 				BigInteger used = capacityUsed.getOrDefault(entry.getKey(), BigInteger.ZERO);
 				BigInteger perUnit = entry.getValue();
 				long inputs;
-				if (used.signum() >= 0 && used.bitLength() < 64 && perUnit.signum() > 0 && perUnit.bitLength() < 64) {
+				if (!emc && used.bitLength() < 64 && perUnit.bitLength() < 64) {
 					long room = Math.max(0, capacity - used.longValueExact());
 					inputs = room / perUnit.longValueExact();
 				} else {
-					BigInteger room = BigInteger.valueOf(capacity).subtract(used).max(BigInteger.ZERO);
+					BigInteger limit = emc ? ResourceExactAmounts.MAX_VALUE : BigInteger.valueOf(capacity);
+					BigInteger room = limit.subtract(used).max(BigInteger.ZERO);
 					inputs = room.divide(perUnit).min(BigInteger.valueOf(Long.MAX_VALUE)).longValueExact();
 				}
                 allowedInputs = Math.min(allowedInputs, inputs);

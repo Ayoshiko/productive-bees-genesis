@@ -1037,6 +1037,7 @@
   "command.productivebeesgenesis.resource.account": "Account %s · generation %s · %s",
   "command.productivebeesgenesis.resource.detached": "Detached; available to reclaim",
   "command.productivebeesgenesis.resource.available": "Available: %s × %s",
+  "command.productivebeesgenesis.resource.energy_remainder": "Converted energy awaiting output: %s J; retained for later Mekanism energy delivery.",
   "command.productivebeesgenesis.resource.frozen": "Frozen, not yet available: %s × %s",
   "command.productivebeesgenesis.resource.uncertain": "Unresolved transfer: %s × %s",
   "command.productivebeesgenesis.resource.production": "Production awaiting resolution: request %s, %s",

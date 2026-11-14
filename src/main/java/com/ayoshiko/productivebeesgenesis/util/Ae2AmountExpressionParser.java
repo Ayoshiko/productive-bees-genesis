@@ -22,6 +22,7 @@ public final class Ae2AmountExpressionParser {
 
 	private static final BigDecimal MAX_POWER_BASE = BigDecimal.valueOf(1_000_000_000L);
 	private static final BigDecimal MAX_POWER_EXPONENT = BigDecimal.valueOf(30L);
+	private static final int MAX_INTERMEDIATE_DIGITS = 4096;
 
 	private Ae2AmountExpressionParser() {
 	}
@@ -52,7 +53,7 @@ public final class Ae2AmountExpressionParser {
 					Number number = decimalFormat.parse(source, position);
 					if (position.getErrorIndex() == -1 && position.getIndex() > index
 							&& number instanceof BigDecimal decimal) {
-						output.add(decimal);
+						output.add(bounded(decimal));
 						index = position.getIndex();
 						wasValue = true;
 						continue;
@@ -103,10 +104,10 @@ public final class Ae2AmountExpressionParser {
 				if (values.size() < 2) return Optional.empty();
 				BigDecimal right = values.pop();
 				BigDecimal left = values.pop();
-				values.push(apply(operator, left, right));
+				values.push(bounded(apply(operator, left, right)));
 			}
 			return values.size() == 1 ? Optional.of(values.pop().stripTrailingZeros()) : Optional.empty();
-		} catch (ArithmeticException | NumberFormatException | StackOverflowError ignored) {
+		} catch (ArithmeticException | NumberFormatException invalid) {
 			return Optional.empty();
 		}
 	}
@@ -142,10 +143,24 @@ public final class Ae2AmountExpressionParser {
 						|| left.abs().compareTo(MAX_POWER_BASE) > 0) {
 					throw new ArithmeticException("invalid power");
 				}
-				yield left.pow(exponent.intValueExact());
+				int power = exponent.intValueExact();
+				// 小于一的底数也能由连续乘方展开为巨数，必须在分配结果前检查。
+				if ((long) left.precision() * power > MAX_INTERMEDIATE_DIGITS
+						|| Math.abs((long) left.scale() * power) > MAX_INTERMEDIATE_DIGITS) {
+					throw new ArithmeticException("power exceeds expression digit budget");
+				}
+				yield left.pow(power);
 			}
 			default -> throw new ArithmeticException("invalid operator");
 		};
+	}
+
+	private static BigDecimal bounded(BigDecimal value) {
+		if (value.precision() > MAX_INTERMEDIATE_DIGITS
+				|| Math.abs((long) value.scale()) > MAX_INTERMEDIATE_DIGITS) {
+			throw new ArithmeticException("expression exceeds digit budget");
+		}
+		return value;
 	}
 
 	private static boolean precedenceCheck(char first, char second) {
