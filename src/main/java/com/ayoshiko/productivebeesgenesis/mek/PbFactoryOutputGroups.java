@@ -62,7 +62,8 @@ final class PbFactoryOutputGroups<T> {
     void add(int lane, T template, long amount) {
         if (amount <= 0) return;
         // collect 在服务器线程封闭执行，外部交付尚未开始；引用索引不跨批保留。
-        Group<T> key = references.get(template);
+        // 流体模板由各车道独立复制，直接沿类型索引比较，省去不会共享的引用查询。
+        Group<T> key = hash == null ? null : references.get(template);
         if (key == null) {
             Object baseType = type.apply(template);
             Group<T> firstVariant = types.get(baseType);
@@ -91,7 +92,7 @@ final class PbFactoryOutputGroups<T> {
                     }
                 }
             }
-            references.put(template, key);
+            if (hash != null) references.put(template, key);
         }
         Group<T> part = key.lastPart;
         if (amount > Long.MAX_VALUE - part.amount) {

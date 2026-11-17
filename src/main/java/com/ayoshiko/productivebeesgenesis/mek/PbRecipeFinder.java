@@ -46,13 +46,10 @@ public class PbRecipeFinder {
 	private final PbRecipeContext context;
 
 	/**
-	 * PB配方查找的短期缓存（TTL 100 tick + 最近 20 个指纹条目）
-	 * <br/>
-	 * 作为 {@link SharedPbRecipeCache} 的上层缓存：tryProcessPbRecipe 每 tick 调用 findPbRecipe 时，
-	 * 通过指纹（Item + bee_type/组件哈希）快速命中缓存，跳过下层缓存的 key 计算。
-	 * 配方重载时由 {@link #clearCaches()} 清空。
+	 * PB 配方查找保留 128 个完整输入身份，覆盖高并行工厂轮换的蜜脾类型。
+	 * TTL 沿用共享输入缓存的 100 tick；配方重载由 {@link #clearCaches()} 清空。
 	 */
-	private final InputValidationCache inputRecipeCache = new InputValidationCache();
+	private final InputValidationCache inputRecipeCache = new InputValidationCache(InputValidationCache.DEFAULT_TTL, 128);
 	// 实例拥有，最多保留 64 份当前配方；旧已付工作由账户独立拥有。
 	private final Map<RecipeHolder<CentrifugeRecipe>, CompoundTag> frozenRecipes = new LinkedHashMap<>();
 	private final Map<Integer, FrozenLane> frozenLanes = new HashMap<>();

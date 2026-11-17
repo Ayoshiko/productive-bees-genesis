@@ -27,6 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.function.BiPredicate;
 import java.util.function.IntSupplier;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 
 /**
 	 * BasicInventorySlot 输入槽分等级堆叠倍率 Mixin
@@ -90,6 +91,9 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 
     @Unique
     private BooleanSupplier productivebeesgenesis$outputInsertionAllowed;
+
+    @Unique
+    private Predicate<ItemStack> productivebeesgenesis$inputInsertionAdmission;
 
     @Unique
     private boolean productivebeesgenesis$extractionNotificationFailed;
@@ -222,6 +226,11 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
         productivebeesgenesis$outputInsertionAllowed = allowed;
     }
 
+    @Override
+    public void productivebeesgenesis$setInputInsertionAdmission(Predicate<ItemStack> admission) {
+        productivebeesgenesis$inputInsertionAdmission = admission;
+    }
+
     @Inject(method = "insertItem(Lnet/minecraft/world/item/ItemStack;Lmekanism/api/Action;"
             + "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
             at = @At("HEAD"), cancellable = true, order = 800)
@@ -240,6 +249,10 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
         if (productivebeesgenesis$outputInsertionAllowed != null
                 && !productivebeesgenesis$outputInsertionAllowed.getAsBoolean()) {
             cir.setReturnValue(false);
+            return;
+        }
+        if (productivebeesgenesis$inputInsertionAdmission != null) {
+            cir.setReturnValue(productivebeesgenesis$inputInsertionAdmission.test(stack));
         }
     }
 

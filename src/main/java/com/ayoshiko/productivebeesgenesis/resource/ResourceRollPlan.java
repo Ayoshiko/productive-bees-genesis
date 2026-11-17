@@ -66,6 +66,15 @@ public final class ResourceRollPlan {
 
 	public Sample sampleWithRolls(long cycles) { return sampleWithRolls(cycles, seed); }
 
+	/** 包内已为同批份数生成并验证上界；确定性结果复用它，未完成周期仍没有产物。 */
+	Sample samplePrepared(long cycles, long seed, Map<ResourceKey, BigInteger> preparedMaximum) {
+		if (cycles == 0) return new Sample(Map.of(), 0);
+		if (deterministic) {
+			return new Sample(preparedMaximum, Math.multiplyExact((long) Math.floor(rolls), cycles));
+		}
+		return sampleWithRolls(cycles, seed);
+	}
+
 	public Sample sampleWithRolls(long cycles, long seed) {
 		if (cycles < 0) throw new IllegalArgumentException("Negative resource cycle count");
 		if (cycles == 0) return new Sample(Map.of(), 0);

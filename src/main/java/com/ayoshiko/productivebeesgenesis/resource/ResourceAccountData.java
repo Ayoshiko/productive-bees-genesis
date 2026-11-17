@@ -37,10 +37,21 @@ final class ResourceAccountData {
 				&& account.suspendedTransfers.isEmpty()) {
 			return bytes + amountsBytes(available) - new net.minecraft.nbt.ListTag().sizeInBytes();
 		}
-		var recoverable = new LinkedHashMap<>(available);
+		var reserved = account.reservedCapacitySnapshot;
+		boolean reuseReserved = available == account.available && reserved != null;
+		Map<ResourceKey, BigInteger> recoverable;
+		if (reuseReserved) {
+			// 只借用已生成的容量快照；没有新请求时无需复制，不为预算额外构建快照。
+			recoverable = production == null && transfer == null ? reserved : new LinkedHashMap<>(reserved);
+		} else {
+			// 冷快照和外部交接的扣后拟余额沿原路径聚合，不能复用扣前数量。
+			recoverable = new LinkedHashMap<>(available);
+		}
 		for (var pending : account.suspendedLanes.values()) {
-			pending.production().capacityReservation().forEach(
-					(key, amount) -> recoverable.merge(key, amount, BigInteger::add));
+			if (!reuseReserved) {
+				pending.production().capacityReservation().forEach(
+						(key, amount) -> recoverable.merge(key, amount, BigInteger::add));
+			}
 			bytes += productionBudget(pending.production());
 		}
 		if (production != null) {
@@ -50,7 +61,7 @@ final class ResourceAccountData {
 		}
 		for (var pending : account.suspendedTransfers.values()) {
 			var request = pending.transfer();
-			recoverable.merge(request.key(), request.amount(), BigInteger::add);
+			if (!reuseReserved) recoverable.merge(request.key(), request.amount(), BigInteger::add);
 			bytes += transferBudget(request);
 		}
 		if (transfer != null) {
@@ -66,11 +77,11 @@ final class ResourceAccountData {
 	}
 
 	private static long productionBudget(ResourceAccount.Production pending) {
-		long amounts = amountsBytes(pending.maximum);
+		long amounts = pending.maximumBytes;
 		long nextWork = 0;
 		if ("resource_centrifuging".equals(pending.context.getString("host"))) {
 			if (pending.phase == ResourceAccount.Phase.WAITING_OUTPUT) {
-				if (pending.nextWork != null) nextWork = fieldBytes("next_work", pending.nextWork.sizeInBytes());
+				if (pending.nextWork != null) nextWork = fieldBytes("next_work", pending.nextWorkBytes);
 			} else {
 				// 扣费之前就预约等待态的下一段原文；确认后写回 lane 所需空间更小。
 				nextWork = fieldBytes("next_work", ResourceAccount.MAX_LANE_BYTES);
@@ -78,7 +89,7 @@ final class ResourceAccountData {
 		}
 		long production = 48L + fieldBytes("sequence", LONG_BYTES) + fieldBytes("recipe_revision", LONG_BYTES)
 				+ fieldBytes("phase", net.minecraft.nbt.StringTag.valueOf("WAITING_OUTPUT").sizeInBytes())
-				+ fieldBytes("context", pending.context.sizeInBytes())
+				+ fieldBytes("context", pending.contextBytes)
 				+ fieldBytes("maximum", amounts) + fieldBytes("result", amounts) + nextWork
 				+ fieldBytes("next_work_captured", net.minecraft.nbt.ByteTag.valueOf(true).sizeInBytes());
 		long isolated = 48L + fieldBytes("production", production) + fieldBytes("reason", REASON_BYTES);
@@ -90,7 +101,7 @@ final class ResourceAccountData {
 				+ fieldBytes("amount", amountBytes(transfer.amount())) + fieldBytes("reason", REASON_BYTES);
 	}
 
-	private static long amountsBytes(Map<ResourceKey, java.math.BigInteger> amounts) {
+	static long amountsBytes(Map<ResourceKey, java.math.BigInteger> amounts) {
 		long bytes = 37L + 4L * amounts.size();
 		for (var entry : amounts.entrySet()) {
 			bytes += 48L + fieldBytes("key", entry.getKey().savedSize())
@@ -295,7 +306,7 @@ final class ResourceAccountData {
 			if (pending.phase == ResourceAccount.Phase.WAITING_OUTPUT
 					&& account.centrifugeWork.containsKey(entry.getKey())) throw invalid();
 			if (pending.nextWork != null && (pending.phase == ResourceAccount.Phase.WAITING_OUTPUT
-					|| pending.nextWorkCaptured)) workBytes += pending.nextWork.sizeInBytes();
+					|| pending.nextWorkCaptured)) workBytes += pending.nextWorkBytes;
 		}
 		if (workBytes > ResourceAccount.MAX_WORK_BYTES) throw invalid();
 		for (var pending : account.suspendedTransfers.values()) maximum = ResourceExactAmounts.plus(maximum, Map.of(pending.transfer().key(), pending.transfer().amount()));
@@ -344,26 +355,29 @@ final class ResourceAccountData {
 		long revision = number(production, "recipe_revision");
 		var phase = ResourceAccount.Phase.valueOf(string(production, "phase"));
 		var context = compound(production, "context");
+		int contextBytes = context.sizeInBytes();
 		var maximum = ResourceExactAmounts.load(production.get("maximum"));
 		var result = ResourceExactAmounts.load(production.get("result"));
 		boolean waiting = phase == ResourceAccount.Phase.WAITING_OUTPUT;
 		if (sequence >= nextSequence || revision < 0
 				|| maximum.isEmpty() && !ResourceAccount.mechanicalLocalProduction(context)
-				|| context.sizeInBytes() > ResourceAccount.MAX_CONTEXT_BYTES
+				|| contextBytes > ResourceAccount.MAX_CONTEXT_BYTES
 				|| phase != ResourceAccount.Phase.FROZEN && !waiting && !result.isEmpty()) throw invalid();
 		boolean captured = production.contains("next_work_captured");
 		if (captured && (!production.contains("next_work_captured", Tag.TAG_BYTE)
 				|| production.getByte("next_work_captured") != 1)) throw invalid();
 		CompoundTag nextWork = production.contains("next_work") ? compound(production, "next_work") : null;
+		int nextWorkBytes = nextWork == null ? 0 : nextWork.sizeInBytes();
 		if ((waiting || captured) && (!"resource_centrifuging".equals(context.getString("host"))
 				|| ResourceAccount.productionLane(context) < 0)
 				|| captured && phase != ResourceAccount.Phase.FROZEN && !waiting
 				|| !captured && !waiting && nextWork != null
-				|| nextWork != null && nextWork.sizeInBytes() > ResourceAccount.MAX_LANE_BYTES) throw invalid();
+				|| nextWorkBytes > ResourceAccount.MAX_LANE_BYTES) throw invalid();
 		if (waiting && !captured || (waiting || captured) && !context.contains("next_ticks", Tag.TAG_INT)) throw invalid();
 		if (waiting || captured) ResourceAccount.validateDeferredProgress(context, nextWork);
 		ResourceExactAmounts.within(result, maximum);
-		return new ResourceAccount.Production(sequence, revision, context, maximum, result, phase, nextWork, captured);
+		return new ResourceAccount.Production(sequence, revision, context.copy(), contextBytes, maximum, result,
+				phase, nextWork, nextWorkBytes, captured);
 	}
 
 	static long number(CompoundTag tag, String key) {

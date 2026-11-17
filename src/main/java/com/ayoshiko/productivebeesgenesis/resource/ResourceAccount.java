@@ -56,39 +56,42 @@ public final class ResourceAccount {
 		final long sequence;
 		final long recipeRevision;
 		final CompoundTag context;
+		final int contextBytes;
 		final Map<ResourceKey, BigInteger> maximum;
+		final long maximumBytes;
 		final Map<ResourceKey, BigInteger> result;
 		final Phase phase;
 		final CompoundTag nextWork;
+		final int nextWorkBytes;
 		final boolean nextWorkCaptured;
 
-		Production(long sequence, long revision, CompoundTag context, Map<ResourceKey, BigInteger> maximum,
-				Map<ResourceKey, BigInteger> result, Phase phase) {
-			this(sequence, revision, context, maximum, result, phase, null, false);
-		}
-
-		Production(long sequence, long revision, CompoundTag context, Map<ResourceKey, BigInteger> maximum,
-				Map<ResourceKey, BigInteger> result, Phase phase, CompoundTag nextWork, boolean nextWorkCaptured) {
+		Production(long sequence, long revision, CompoundTag context, int contextBytes,
+				Map<ResourceKey, BigInteger> maximum, Map<ResourceKey, BigInteger> result, Phase phase,
+				CompoundTag nextWork, int nextWorkBytes, boolean nextWorkCaptured) {
 			this.sequence = sequence;
 			this.recipeRevision = revision;
-			this.context = context.copy();
-			this.maximum = ResourceExactAmounts.copy(maximum);
-			this.result = ResourceExactAmounts.copy(result);
+			this.context = context;
+			this.contextBytes = contextBytes;
+			// 预约和载入入口已封闭证据及数量表；下一段可变 NBT 在此复制接管。
+			this.maximum = maximum;
+			this.maximumBytes = ResourceAccountData.amountsBytes(maximum);
+			this.result = result;
 			this.phase = phase;
 			this.nextWork = nextWork == null ? null : nextWork.copy();
+			this.nextWorkBytes = nextWorkBytes;
 			this.nextWorkCaptured = nextWorkCaptured;
 		}
 
 		Production with(Phase next, Map<ResourceKey, BigInteger> output) {
-			return new Production(this, next, output, nextWork, nextWorkCaptured);
+			return new Production(this, next, output, nextWork, nextWorkBytes, nextWorkCaptured);
 		}
 
-		Production freezeCentrifuge(Map<ResourceKey, BigInteger> output, CompoundTag work) {
-			return new Production(this, Phase.FROZEN, output, work == null ? null : work.copy(), true);
+		Production freezeCentrifuge(Map<ResourceKey, BigInteger> output, CompoundTag work, int workBytes) {
+			return new Production(this, Phase.FROZEN, output, work == null ? null : work.copy(), workBytes, true);
 		}
 
 		Production awaitingOutput() {
-			return new Production(this, Phase.WAITING_OUTPUT, result, nextWork, nextWorkCaptured);
+			return new Production(this, Phase.WAITING_OUTPUT, result, nextWork, nextWorkBytes, nextWorkCaptured);
 		}
 
 		Map<ResourceKey, BigInteger> capacityReservation() {
@@ -97,15 +100,18 @@ public final class ResourceAccount {
 		}
 
 		private Production(Production previous, Phase next, Map<ResourceKey, BigInteger> output,
-				CompoundTag work, boolean nextWorkCaptured) {
+				CompoundTag work, int workBytes, boolean nextWorkCaptured) {
 			sequence = previous.sequence;
 			recipeRevision = previous.recipeRevision;
-			// 首次接管已深拷贝，之后只有本账户读；阶段转换共享封闭证据。
+			// 入口已封闭证据，之后只读；阶段转换共享证据及其保存计量。
 			context = previous.context;
+			contextBytes = previous.contextBytes;
 			maximum = previous.maximum;
+			maximumBytes = previous.maximumBytes;
 			result = output;
 			phase = next;
 			nextWork = work;
+			nextWorkBytes = workBytes;
 			this.nextWorkCaptured = nextWorkCaptured;
 		}
 	}
@@ -141,7 +147,7 @@ public final class ResourceAccount {
 	final Map<ResourceKey, SuspendedTransfer> suspendedTransfers = new LinkedHashMap<>();
 	String suspension = "";
 	long storageBudget;
-	private Map<ResourceKey, BigInteger> reservedCapacitySnapshot;
+	Map<ResourceKey, BigInteger> reservedCapacitySnapshot;
 	private Map<ResourceKey, BigInteger> sortedAvailable;
 	private List<ResourceKey> sortedKeys = List.of();
 
@@ -284,10 +290,11 @@ public final class ResourceAccount {
 	}
 
 	private static long workBytes(int lane, CompoundTag value, Map<Integer, CompoundTag> work) {
-		if (lane < 0 || lane >= 256 || (value != null && value.sizeInBytes() > MAX_LANE_BYTES)) {
+		int valueBytes = value == null ? 0 : value.sizeInBytes();
+		if (lane < 0 || lane >= 256 || valueBytes > MAX_LANE_BYTES) {
 			throw new IllegalArgumentException("Invalid resource work snapshot");
 		}
-		long bytes = value == null ? 0 : value.sizeInBytes();
+		long bytes = valueBytes;
 		for (var entry : work.entrySet()) {
 			if (entry.getKey() != lane) bytes += entry.getValue().sizeInBytes();
 		}
@@ -302,12 +309,12 @@ public final class ResourceAccount {
 			var pending = entry.getValue().production;
 			if (entry.getKey() != lane && pending.nextWork != null
 					&& (pending.phase == Phase.WAITING_OUTPUT || pending.nextWorkCaptured)) {
-				bytes += pending.nextWork.sizeInBytes();
+				bytes += pending.nextWorkBytes;
 			}
 		}
 		if (production != null && productionLane(production.context) != lane
 				&& production.nextWorkCaptured && production.nextWork != null) {
-			bytes += production.nextWork.sizeInBytes();
+			bytes += production.nextWorkBytes;
 		}
 		if (bytes > MAX_WORK_BYTES) throw new IllegalArgumentException("Resource work snapshot budget exceeded");
 	}
@@ -367,7 +374,7 @@ public final class ResourceAccount {
 			if (production != null || transfer != null) {
 				throw new IllegalStateException("Resource request is still executing");
 			}
-			var next = ResourceExactAmounts.plus(available, pending.production.result);
+			var next = ResourceExactAmounts.plusValidated(available, pending.production.result);
 			var work = pending.production.nextWork;
 			settling = true;
 			try {
@@ -418,7 +425,7 @@ public final class ResourceAccount {
 			validateCentrifugeWork(lane, nextWork);
 			if (nextWork != null) copied = nextWork.copy();
 		}
-		var next = ResourceExactAmounts.plus(available, production.result);
+		var next = ResourceExactAmounts.plusValidated(available, production.result);
 		accounts.beforeChange(this);
 		if (copied == null) {
 			centrifugeWork.remove(lane);
@@ -561,13 +568,58 @@ public final class ResourceAccount {
 		}
 	}
 
+	/** 离心计划的每输入上界已封闭；一次遍历同时计算资源身份、未决交接和保存容量限额。 */
+	long maximumCentrifugeInputs(Reference source, Map<ResourceKey, BigInteger> perInput, int limit, long capacity) {
+		checkReference(source);
+		if (binding == null || production != null || transfer != null || !suspension.isEmpty()
+				|| !accounts.persistenceFailure().isEmpty() || accounts.hasInvalidData()
+				|| nextSequence == Long.MAX_VALUE || perInput.isEmpty()) return 0;
+		var capacityUsed = reservedCapacity();
+		int keys = capacityUsed.size();
+		long allowed = limit;
+		for (var entry : perInput.entrySet()) {
+			var key = entry.getKey();
+			if (suspendedTransfers.containsKey(key)) return 0;
+			var used = capacityUsed.get(key);
+			if (used == null) {
+				if (++keys > ResourceAmounts.MAX_KEYS) return 0;
+				used = BigInteger.ZERO;
+			}
+			var perUnit = entry.getValue();
+			long inputs;
+			if (ResourceTypes.EMC.equals(key)) {
+				BigInteger room = ResourceExactAmounts.MAX_VALUE.subtract(used).max(BigInteger.ZERO);
+				inputs = room.divide(perUnit).min(BigInteger.valueOf(Long.MAX_VALUE)).longValueExact();
+			} else {
+				long room = Math.max(0, capacity - used.longValueExact());
+				inputs = room / perUnit.longValueExact();
+			}
+			allowed = Math.min(allowed, inputs);
+			if (allowed == 0) return 0;
+		}
+		return allowed;
+	}
+
 	/** 在任何宿主副作用前预留整份上界；空结果、溢出或超身份容量不会修改账户。 */
 	public Ticket reserve(Reference source, long recipeRevision, CompoundTag context,
 			Map<ResourceKey, ? extends Number> maximum) {
+		return reserveCaptured(source, recipeRevision, context, null, maximum);
+	}
+
+	/** 仅接管本包构造的私有工作证据；普通计划和本批字段先复制，封闭模板只读共享。 */
+	Ticket reserveCentrifuge(Reference source, long recipeRevision, CompoundTag context,
+			ResourceCentrifugeWork.Evidence evidence, Map<ResourceKey, BigInteger> maximum) {
+		return reserveCaptured(source, recipeRevision, context, evidence, maximum);
+	}
+
+	private Ticket reserveCaptured(Reference source, long recipeRevision, CompoundTag context,
+			ResourceCentrifugeWork.Evidence evidence, Map<ResourceKey, ? extends Number> maximum) {
 		checkReady(source);
 		int lane = productionLane(context);
 		if (lane >= 0 && laneSuspended(lane)) throw new IllegalStateException("Resource lane has an unresolved production");
-		if (recipeRevision < 0 || context.sizeInBytes() > MAX_CONTEXT_BYTES) {
+		int contextBytes = context.sizeInBytes();
+		if (evidence != null) contextBytes = Math.addExact(contextBytes, evidence.fieldBytes());
+		if (recipeRevision < 0 || contextBytes > MAX_CONTEXT_BYTES) {
 			throw new IllegalArgumentException("Invalid production snapshot");
 		}
 		var checked = ResourceExactAmounts.copy(maximum);
@@ -578,7 +630,10 @@ public final class ResourceAccount {
 		ResourceExactAmounts.checkAddition(reservedCapacity(), checked);
 		long sequence = nextSequence;
 		long next = Math.incrementExact(sequence);
-		var planned = new Production(sequence, recipeRevision, context, checked, Map.of(), Phase.RESERVED);
+		var captured = context.copy();
+		if (evidence != null) evidence.attach(captured);
+		var planned = new Production(sequence, recipeRevision, captured, contextBytes, checked, Map.of(),
+				Phase.RESERVED, null, 0, false);
 		accounts.admitStorage(this, ResourceAccountData.storageBudget(this, available, planned, null) + 4L);
 		nextSequence = next;
 		production = planned;
@@ -612,19 +667,21 @@ public final class ResourceAccount {
 			throw new IllegalArgumentException("Missing centrifuge progress plan");
 		}
 		validateDeferredProgress(production.context, nextWork);
-		validateCentrifugeWork(lane, nextWork);
-		long workBytes = nextWork == null ? 0 : nextWork.sizeInBytes();
+		int nextWorkBytes = nextWork == null ? 0 : nextWork.sizeInBytes();
+		if (nextWorkBytes > MAX_LANE_BYTES) throw new IllegalArgumentException("Invalid resource work snapshot");
+		// 冻结前原工作与下一段同时归账户保管；这个总量也覆盖提交时的替换预算。
+		long workBytes = nextWorkBytes;
 		for (var work : centrifugeWork.values()) workBytes += work.sizeInBytes();
 		for (var pending : suspendedLanes.values()) {
 			if (pending.production.nextWork != null
 					&& (pending.production.phase == Phase.WAITING_OUTPUT || pending.production.nextWorkCaptured)) {
-				workBytes += pending.production.nextWork.sizeInBytes();
+				workBytes += pending.production.nextWorkBytes;
 			}
 		}
 		if (workBytes > MAX_WORK_BYTES) throw new IllegalArgumentException("Resource work snapshot budget exceeded");
 		var checked = ResourceExactAmounts.copy(result);
 		ResourceExactAmounts.within(checked, production.maximum);
-		var next = production.freezeCentrifuge(checked, nextWork);
+		var next = production.freezeCentrifuge(checked, nextWork, nextWorkBytes);
 		accounts.beforeChange(this);
 		production = next;
 	}
@@ -632,7 +689,7 @@ public final class ResourceAccount {
 	/** 仅在外层宿主正常完成后入账；重复提交同一票据会被拒绝。 */
 	public void commit(Ticket ticket) {
 		checkProduction(ticket, Phase.FROZEN);
-		var next = ResourceExactAmounts.plus(available, production.result);
+		var next = ResourceExactAmounts.plusValidated(available, production.result);
 		accounts.beforeChange(this);
 		available = next;
 		production = null;

@@ -104,10 +104,17 @@ public final class MekCentrifugeFactoryHelper {
 
 	/** Cached global smelting-compat master switch (refreshed on config load/reload, volatile read per probe). */
 	private static volatile boolean cachedSmeltingCompatGlobalEnabled = true;
+	private static volatile long runtimeConfigRevision;
 
 	/** 在游戏线程发布配置快照，避免监听线程改动运行时配方状态。 */
 	public static void publishSmeltingCompatConfig(boolean enabled) {
 		cachedSmeltingCompatGlobalEnabled = enabled;
+		// ServerConfigRuntime 在重置或发布整份配置时调用，产出缓存共用此代际。
+		runtimeConfigRevision++;
+	}
+
+	static long runtimeConfigRevision() {
+		return runtimeConfigRevision;
 	}
 
 	/**

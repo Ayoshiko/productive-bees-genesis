@@ -458,6 +458,7 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 
 	/** 缓存对应的版本号（-1 表示未初始化，首次访问强制刷新） */
 	private long cachedMultiplierVersion = -1;
+	private long cachedRuntimeConfigRevision = -1;
 
 	/** 倍率缓存调用计数器 — 达到 {@link #MULTIPLIER_REFRESH_INTERVAL} 次自动重算 */
 	private int multiplierCallCounter;
@@ -485,12 +486,14 @@ public class MekCentrifugePbUpgradeHandler implements ICentrifugePbUpgradeAccess
 	 * 线程安全：服务端主线程独占访问（tick 与 Container 网络包同线程），无需 volatile。
 	 */
 	private void refreshMultiplierCacheIfNeeded() {
-		if (cachedMultiplierVersion == upgradeCountsVersion
+		long configRevision = MekCentrifugeFactoryHelper.runtimeConfigRevision();
+		if (cachedMultiplierVersion == upgradeCountsVersion && cachedRuntimeConfigRevision == configRevision
 				&& ++multiplierCallCounter < MULTIPLIER_REFRESH_INTERVAL) {
 			return;
 		}
 		multiplierCallCounter = 0;
 		cachedMultiplierVersion = upgradeCountsVersion;
+		cachedRuntimeConfigRevision = configRevision;
 		cachedProductivityMultiplier = computeProductivityMultiplier();
 		cachedParallelModifier = computeProductivityParallelModifier();
 		cachedTimeMultiplier = computeTimeMultiplier();

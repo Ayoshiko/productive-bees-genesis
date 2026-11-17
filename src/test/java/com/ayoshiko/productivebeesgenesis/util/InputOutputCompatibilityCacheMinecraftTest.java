@@ -22,6 +22,13 @@ class InputOutputCompatibilityCacheMinecraftTest {
 		var input = new ItemStack(Items.HONEYCOMB);
 		var output = new ItemStack(Items.IRON_INGOT);
 		assertTrue(cache.get(level, input, output, null, null, () -> true));
+		assertTrue(cache.get(level, input.copy(), output.copyWithCount(32), null, null,
+				() -> fail("output count must not change compatibility")));
+		assertFalse(cache.get(level, input.copyWithCount(17), output, null, null, () -> false));
+		assertTrue(cache.get(level, input, output, null, null,
+				() -> fail("the one-item probe must keep its separate result")));
+		assertTrue(cache.get(level, input, output, null, null,
+				() -> fail("the repeated one-item probe must stay cached")));
 		input.set(DataComponents.CUSTOM_NAME, Component.literal("changed in place"));
 		assertFalse(cache.get(level, input, output, null, null, () -> false));
 		input.grow(1);

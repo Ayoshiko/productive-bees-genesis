@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.PatchedDataComponentMap;
@@ -36,7 +37,7 @@ import java.util.function.Supplier;
 	 *   <li>{@link #getResult} — 缓存完整 {@link ValidationResult}（包含配方/蜜蜂类型/是否蜜脾块），
 	 *       供 {@code tryProcessPbRecipe} 等需要配方信息的路径直接复用，避免重复 {@code findPbRecipe}</li>
 	 * </ul>
-	 * 缓存有效期默认 100 tick（约 5 秒），升级/配方重载等导致的语义变化会在下次 tick 后自动反映。
+	 * 缓存有效期默认 100 tick（约 5 秒）；世界或配方/标签代际变化在下次查询立即失效。
 	 * 线程安全：方块实体在服务端单线程执行，无需同步锁。
 	 *
 	 * @author ayoshiko
@@ -177,6 +178,8 @@ public class InputValidationCache {
 	private final int ttlTicks;
 	private final Map<InputFingerprint, CacheEntry> entries;
 	private long generation;
+	private Level cachedLevel;
+	private long recipeVersion = Long.MIN_VALUE;
 	private final InputLookup reusableLookup = new InputLookup();
 
 	private static final class CacheEntry {
@@ -239,6 +242,7 @@ public class InputValidationCache {
 		if (level == null || input == null) {
 			return validator.get();
 		}
+		long version = refreshContext(level);
 		long now = level.getGameTime();
 		InputFingerprint fp;
 		InputLookup lookup = reusableLookup;
@@ -253,7 +257,9 @@ public class InputValidationCache {
 		}
 		long validationGeneration = generation;
 		ValidationResult result = validator.get();
-		if (generation == validationGeneration) entries.put(fp, new CacheEntry(result, now));
+		if (generation == validationGeneration && version == ProductiveBeesGenesis.RECIPE_VERSION.get()) {
+			entries.put(fp, new CacheEntry(result, now));
+		}
 		return result;
 	}
 
@@ -272,6 +278,7 @@ public class InputValidationCache {
 		if (level == null || input == null) {
 			return validator.get();
 		}
+		long version = refreshContext(level);
 		long now = level.getGameTime();
 		InputFingerprint fp;
 		InputLookup lookup = reusableLookup;
@@ -285,10 +292,20 @@ public class InputValidationCache {
 		}
 		long validationGeneration = generation;
 		boolean result = validator.get();
-		if (generation == validationGeneration) {
+		if (generation == validationGeneration && version == ProductiveBeesGenesis.RECIPE_VERSION.get()) {
 			entries.put(fp, new CacheEntry(new ValidationResult(result, null, null, false), now));
 		}
 		return result;
+	}
+
+	private long refreshContext(Level level) {
+		long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
+		if (cachedLevel != level || recipeVersion != version) {
+			clear();
+			cachedLevel = level;
+			recipeVersion = version;
+		}
+		return version;
 	}
 
 	private CacheEntry findFreshEntry(InputLookup fingerprint, long now) {
@@ -300,5 +317,7 @@ public class InputValidationCache {
 	public void clear() {
 		generation++;
 		entries.clear();
+		cachedLevel = null;
+		recipeVersion = Long.MIN_VALUE;
 	}
 }

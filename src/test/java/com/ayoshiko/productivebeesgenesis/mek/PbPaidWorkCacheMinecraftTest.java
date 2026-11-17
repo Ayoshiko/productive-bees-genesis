@@ -18,6 +18,10 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.fml.config.ConfigTracker;
+import net.neoforged.fml.config.ModConfig;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +38,16 @@ import static org.mockito.Mockito.mock;
 class PbPaidWorkCacheMinecraftTest {
     private static final RegistryAccess REGISTRIES =
             RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+
+    @BeforeAll
+    static void loadConfigs() {
+        ConfigTracker.INSTANCE.loadDefaultServerConfigs();
+    }
+
+    @AfterAll
+    static void unloadConfigs() {
+        ConfigTracker.INSTANCE.unloadConfigs(ModConfig.Type.SERVER);
+    }
 
     @Test
     void equivalentInputsShareOneFrozenTemplateAndEncodingAcrossLanes() {

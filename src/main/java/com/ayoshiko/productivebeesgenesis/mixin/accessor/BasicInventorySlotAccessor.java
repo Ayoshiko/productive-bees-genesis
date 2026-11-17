@@ -1,17 +1,13 @@
 package com.ayoshiko.productivebeesgenesis.mixin.accessor;
 
-import java.util.function.BiPredicate;
-import mekanism.api.AutomationType;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 /**
- * 访问 Mekanism 10.7.19.85 的真实槽容量、库存与插入策略字段。
- * 容量用于本模组堆叠倍率，current 用于失败后的实际库存核验；
- * canInsert 仅在已核对的工厂装配入口替换，不改原 validator 与公开插入锁。
+ * 访问 Mekanism 10.7.19.85 的真实槽容量与库存字段。
+ * 容量用于本模组堆叠倍率，current 用于失败后的实际库存核验。
  */
 @Mixin(value = BasicInventorySlot.class, remap = false)
 public interface BasicInventorySlotAccessor {
@@ -51,9 +47,4 @@ public interface BasicInventorySlotAccessor {
 	/** 本地执行抛错后核对真实库存，绕过可能失败的公开读取回调。 */
 	@Accessor("current")
 	ItemStack productivebeesgenesis$getCurrent();
-
-	/** 本模组工厂装配时保留逐车道输出校验；全局配方准入仍由原 validator 执行。 */
-	@Mutable
-	@Accessor("canInsert")
-	void productivebeesgenesis$setCanInsert(BiPredicate<ItemStack, AutomationType> canInsert);
 }

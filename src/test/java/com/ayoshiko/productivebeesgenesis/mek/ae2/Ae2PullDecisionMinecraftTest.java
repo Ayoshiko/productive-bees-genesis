@@ -7,6 +7,8 @@ import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import java.util.List;
+import java.util.ArrayList;
+import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import mekanism.common.inventory.slot.InputInventorySlot;
@@ -142,6 +144,31 @@ class Ae2PullDecisionMinecraftTest {
 		assertFalse(accepted.isItemValidForInsertion(probe, AutomationType.INTERNAL));
 		inputAllowed[0] = true;
 		assertTrue(accepted.isItemValidForInsertion(probe, AutomationType.INTERNAL));
+
+		var checkedCounts = new ArrayList<Integer>();
+		((TieredInputSlot) accepted).productivebeesgenesis$setInputInsertionAdmission(stack -> {
+			checkedCounts.add(stack.getCount());
+			return outputAvailable[0] && ItemStack.isSameItemSameComponents(probe, stack);
+		});
+		assertTrue(accepted.isItemValid(probe));
+		assertFalse(accepted.isItemValid(new ItemStack(Items.GOLD_INGOT)));
+		assertTrue(checkedCounts.isEmpty());
+		assertTrue(accepted.isItemValidForInsertion(probe, AutomationType.INTERNAL));
+		inputAllowed[0] = false;
+		assertFalse(accepted.isItemValidForInsertion(probe, AutomationType.INTERNAL));
+		assertEquals(List.of(1), checkedCounts);
+		inputAllowed[0] = true;
+		outputAvailable[0] = false;
+		var offered = probe.copyWithCount(8);
+		assertTrue(ItemStack.matches(offered, accepted.insertItem(offered, Action.EXECUTE, AutomationType.INTERNAL)));
+		assertTrue(accepted.isEmpty());
+		outputAvailable[0] = true;
+		var different = probe.copy();
+		different.set(DataComponents.CUSTOM_NAME, Component.literal("different components"));
+		assertFalse(accepted.isItemValidForInsertion(different, AutomationType.INTERNAL));
+		assertTrue(accepted.insertItem(offered, Action.EXECUTE, AutomationType.INTERNAL).isEmpty());
+		assertEquals(8, accepted.getCount());
+		assertEquals(List.of(1, 8, 1, 8), checkedCounts);
 	}
 
 	@Test

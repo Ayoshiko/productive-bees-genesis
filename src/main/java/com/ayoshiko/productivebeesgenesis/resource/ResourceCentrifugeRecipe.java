@@ -1,12 +1,12 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.PbCombItemRefs;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -82,13 +82,13 @@ public record ResourceCentrifugeRecipe(ResourceLocation bee, List<ResourceProduc
 
 	static int unitsForItem(ItemStack input) {
 		if (input.isEmpty()) return 0;
-		if (input.is(ModItems.CONFIGURABLE_HONEYCOMB.get())) return 1;
-		return input.is(ModItems.CONFIGURABLE_COMB_BLOCK.get()) ? 4 : 0;
+		if (input.is(PbCombItemRefs.honeycomb())) return 1;
+		return input.is(PbCombItemRefs.combBlock()) ? 4 : 0;
 	}
 
 	/** 返回独立输入样本，供 JEI、数据生成和第三方配方转换使用。 */
 	public ItemStack input(boolean block) {
-		var stack = new ItemStack(block ? ModItems.CONFIGURABLE_COMB_BLOCK.get() : ModItems.CONFIGURABLE_HONEYCOMB.get());
+		var stack = new ItemStack(block ? PbCombItemRefs.combBlock() : PbCombItemRefs.honeycomb());
 		stack.set(PbDataComponents.beeType(), bee);
 		return stack;
 	}

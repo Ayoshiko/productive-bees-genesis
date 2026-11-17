@@ -6,6 +6,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntSupplier;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 
 /**
 	 * 输入槽分等级堆叠倍率标记接口
@@ -73,6 +74,9 @@ public interface TieredInputSlot {
 
     /** 未结清输出账本禁止同槽再追加，保留原数量与扣账后数量。 */
     void productivebeesgenesis$setOutputInsertionAllowed(BooleanSupplier allowed);
+
+    /** 合并工厂输入的配方准入与本车道输出判断；每次公开插入校验都重新执行。 */
+    void productivebeesgenesis$setInputInsertionAdmission(Predicate<ItemStack> admission);
 
 	/** 该槽位是否由本模组机器创建；原版机器槽位恒为 {@code false}。 */
 	boolean productivebeesgenesis$isOwnSlot();

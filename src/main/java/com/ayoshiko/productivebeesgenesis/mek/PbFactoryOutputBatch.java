@@ -38,6 +38,8 @@ final class PbFactoryOutputBatch implements DeferredItemOutput {
     private ServerLevel deferredLevel;
     // 本批曾注册资源句柄后保留标志，嵌套卸载不会提前切换收尾路径。
     private boolean hasResourceCompletions;
+    private boolean preparationPhase;
+    private PbRecipeCompleter.OutputSettings outputSettings;
 
     PbFactoryOutputBatch(PbRecipeContext context, PbRecipeCompleter[] owners) {
         this.context = context;
@@ -48,6 +50,25 @@ final class PbFactoryOutputBatch implements DeferredItemOutput {
         uncertain = new boolean[owners.length];
         completions = new Completion[owners.length];
         order = new int[owners.length];
+    }
+
+    void beginPreparation() {
+        preparationPhase = true;
+        outputSettings = null;
+    }
+
+    void endPreparation() {
+        preparationPhase = false;
+        outputSettings = null;
+    }
+
+    PbRecipeCompleter.OutputSettings outputSettings() {
+        if (!preparationPhase) return null;
+        if (outputSettings == null || outputSettings.revision() != ProductiveBeesGenesis.RECIPE_VERSION.get()
+                || outputSettings.configRevision() != MekCentrifugeFactoryHelper.runtimeConfigRevision()) {
+            outputSettings = PbRecipeCompleter.OutputSettings.capture(context);
+        }
+        return outputSettings;
     }
 
     void begin() {
@@ -305,6 +326,7 @@ final class PbFactoryOutputBatch implements DeferredItemOutput {
     }
 
     void cancelDeferredOutput() {
+        outputSettings = null;
         if (deferred) cancel(outputEpoch);
     }
 
@@ -331,7 +353,6 @@ final class PbFactoryOutputBatch implements DeferredItemOutput {
                     processor.markLaneRecovery(lane, "输出分组准备");
                     processor.markLaneRecovery(lane, "刻末产物排队");
                     processor.markLaneRecovery(lane, "付款恢复或已付产物排空");
-                    processor.finishLaneAttempt(lane);
                 }
             } catch (RuntimeException | LinkageError failure) {
                 if (hasResourceCompletions && (owners[lane].invalidPending()
@@ -356,14 +377,23 @@ final class PbFactoryOutputBatch implements DeferredItemOutput {
                         if (context instanceof IFactoryPbDelegateAccess factory) {
                             PbRecipeProcessor processor = factory.productivebeesgenesis$getPbProcessor();
                             processor.markLaneRecovery(lane, "批次收尾");
-                            processor.finishLaneAttempt(lane);
                         }
                     }
                 } catch (RuntimeException | LinkageError failure) {
                     if (hasResourceCompletions) uncertain[lane] = true;
                     reportFailure(lane, "批次收尾", failure);
                 } finally {
-                    if (hasResourceCompletions) confirm(lane);
+                    try {
+                        if (hasResourceCompletions) confirm(lane);
+                    } finally {
+                        if (context instanceof IFactoryPbDelegateAccess factory) {
+                            try {
+                                factory.productivebeesgenesis$getPbProcessor().finishLaneAttempt(lane);
+                            } catch (RuntimeException | LinkageError failure) {
+                                reportFailure(lane, "批次收尾", failure);
+                            }
+                        }
+                    }
                 }
             }
         } finally {
@@ -374,6 +404,7 @@ final class PbFactoryOutputBatch implements DeferredItemOutput {
 
     /** 卸载可在外部回调内发生；先撤销完成句柄，正在结算的原产物仍由该调用收尾扣账。 */
     void abandon() {
+        endPreparation();
         active = false;
         cancelled = true;
         boolean alreadyFinishing = finishing;
@@ -411,7 +442,6 @@ final class PbFactoryOutputBatch implements DeferredItemOutput {
                 if (context instanceof IFactoryPbDelegateAccess factory) {
                     PbRecipeProcessor processor = factory.productivebeesgenesis$getPbProcessor();
                     processor.markLaneRecovery(lane, "资源组合交付确认");
-                    processor.finishLaneAttempt(lane);
                 }
             }
         } catch (RuntimeException | LinkageError failure) {

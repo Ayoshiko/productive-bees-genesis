@@ -18,7 +18,25 @@ final class ResourceCentrifugeWork {
 	final long seed;
 	final long revision;
 	final CompoundTag ordinaryRecipe;
+	private static final int EMPTY_COMPOUND_BYTES = new CompoundTag().sizeInBytes();
 	private CompoundTag encodedTemplate;
+	private int encodedTemplateBytes;
+
+	/** 私有工作标签只交给账户接管；对外读取和保存仍深拷贝，不开放模板写入。 */
+	static final class Evidence {
+		private static final String FIELD = "work_before";
+		private final CompoundTag value;
+		private final int fieldBytes;
+
+		private Evidence(CompoundTag value, int bytes) {
+			this.value = value;
+			fieldBytes = Math.addExact(bytes, 28 + 2 * FIELD.length());
+		}
+
+		int fieldBytes() { return fieldBytes; }
+
+		void attach(CompoundTag context) { context.put(FIELD, value); }
+	}
 
 	ResourceCentrifugeWork(ResourceLocation id, ResourceCentrifugeRecipe recipe, ItemStack input,
 			int paidTicks, long seed, long revision) {
@@ -46,27 +64,43 @@ final class ResourceCentrifugeWork {
 		return tag;
 	}
 
-	/** 请求证据只需普通配方 ID；完整产物表仍由已付工作和实际本地结果保管。 */
-	CompoundTag evidence(HolderLookup.Provider provider) {
-		var tag = saveBase(provider);
-		if (ordinaryRecipe != null) tag.putString("ordinary_recipe_id", ordinaryRecipe.getString("id"));
-		return tag;
+	/** 本批标量独立保存，子标签借用封闭模板；计量只扫描发生变化的字段。 */
+	Evidence evidence(HolderLookup.Provider provider) {
+		var template = encodedTemplate(provider);
+		var fields = new CompoundTag();
+		fields.putInt("paid_ticks", paidTicks);
+		fields.putLong("seed", seed);
+		if (ordinaryRecipe != null) fields.putString("ordinary_recipe_id", ordinaryRecipe.getString("id"));
+		int bytes = Math.addExact(encodedTemplateBytes, fields.sizeInBytes() - EMPTY_COMPOUND_BYTES);
+		for (var key : template.getAllKeys()) fields.put(key, template.get(key));
+		return new Evidence(fields, bytes);
 	}
 
 	private CompoundTag saveBase(HolderLookup.Provider provider) {
-		if (encodedTemplate == null) {
-			var template = new CompoundTag();
-			template.putInt("version", 2);
-			template.putString("recipe_id", recipeId.toString());
-			template.put("recipe", ResourceCentrifugeRecipe.CODEC.codec().encodeStart(NbtOps.INSTANCE, recipe).getOrThrow());
-			template.put("input", input.save(provider));
-			template.putLong("revision", revision);
-			encodedTemplate = template;
-		}
-		var tag = encodedTemplate.copy();
+		var tag = encodedTemplate(provider).copy();
 		tag.putInt("paid_ticks", paidTicks);
 		tag.putLong("seed", seed);
 		return tag;
+	}
+
+	private CompoundTag encodedTemplate(HolderLookup.Provider provider) {
+		if (encodedTemplate == null) {
+			encodeTemplate(ResourceCentrifugeRecipe.CODEC.codec().encodeStart(NbtOps.INSTANCE, recipe).getOrThrow(),
+					input.save(provider));
+		}
+		return encodedTemplate;
+	}
+
+	/** 处理器在完整组件匹配后借用封闭编码；模板没有写入口，落盘时仍深拷贝。 */
+	void encodeTemplate(Tag encodedRecipe, Tag encodedInput) {
+		var template = new CompoundTag();
+		template.putInt("version", 2);
+		template.putString("recipe_id", recipeId.toString());
+		template.put("recipe", encodedRecipe);
+		template.put("input", encodedInput);
+		template.putLong("revision", revision);
+		encodedTemplate = template;
+		encodedTemplateBytes = template.sizeInBytes();
 	}
 
 	ResourceCentrifugeWork advance(int ticks, long nextSeed) {
@@ -83,6 +117,7 @@ final class ResourceCentrifugeWork {
 		revision = previous.revision;
 		ordinaryRecipe = previous.ordinaryRecipe;
 		encodedTemplate = previous.encodedTemplate;
+		encodedTemplateBytes = previous.encodedTemplateBytes;
 	}
 
 	static ResourceCentrifugeWork load(CompoundTag tag, HolderLookup.Provider provider) {

@@ -11,24 +11,32 @@ public final class ResourceInputAdmission {
 	private ResourceInputAdmission() {}
 
 	public static boolean allows(MinecraftServer server, ItemStack input) {
-		var admission = ResourceRuntime.centrifugeAdmission(server, input);
-		if (admission == ResourceRuntime.CentrifugeAdmission.UNMANAGED) return true;
-		if (admission == ResourceRuntime.CentrifugeAdmission.UNAVAILABLE) return false;
-		var recipe = ResourceRuntime.recipes(server).centrifuge(input);
-		return recipe == null || outputsAvailable(server, recipe.value());
+		var resolved = ResourceRuntime.resolveCentrifugeInput(server, input);
+		if (resolved.admission() == ResourceRuntime.CentrifugeAdmission.UNMANAGED) return true;
+		if (resolved.admission() == ResourceRuntime.CentrifugeAdmission.UNAVAILABLE) return false;
+		return outputsAvailable(server, resolved.recipe());
 	}
 
 	/** 配方匹配可缓存，账户、权限和保存状态必须在实际准入时重新核验。 */
 	public static boolean allows(BlockEntity host, ItemStack input) {
 		if (!(host.getLevel() instanceof ServerLevel level)
 				|| host.isRemoved() || level.getBlockEntity(host.getBlockPos()) != host) return false;
+		return allows(host, level, ResourceRuntime.resolveCentrifugeInput(level.getServer(), input));
+	}
+
+	/** 分类结果只供当前调用使用，宿主与账户权限仍在本入口核验。 */
+	public static boolean allows(BlockEntity host, ResourceRuntime.CentrifugeInputResolution resolved) {
+		if (!(host.getLevel() instanceof ServerLevel level)
+				|| host.isRemoved() || level.getBlockEntity(host.getBlockPos()) != host) return false;
+		return allows(host, level, resolved);
+	}
+
+	private static boolean allows(BlockEntity host, ServerLevel level,
+			ResourceRuntime.CentrifugeInputResolution resolved) {
 		var server = level.getServer();
-		var admission = ResourceRuntime.centrifugeAdmission(server, input);
-		if (admission == ResourceRuntime.CentrifugeAdmission.UNMANAGED) return true;
-		if (admission == ResourceRuntime.CentrifugeAdmission.UNAVAILABLE) return false;
-		var recipe = ResourceRuntime.recipes(server).centrifuge(input);
-		if (recipe == null) return true;
-		if (!outputsAvailable(server, recipe.value())) return false;
+		if (resolved.admission() == ResourceRuntime.CentrifugeAdmission.UNMANAGED) return true;
+		if (resolved.admission() == ResourceRuntime.CentrifugeAdmission.UNAVAILABLE) return false;
+		if (!outputsAvailable(server, resolved.recipe())) return false;
 		var state = ResourceHiveHost.existing(host);
 		if (state != null && !state.nativeConfigValid()) return false;
 		var accounts = ResourceRuntime.accounts(server).accounts();

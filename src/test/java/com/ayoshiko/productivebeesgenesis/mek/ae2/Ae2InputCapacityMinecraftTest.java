@@ -2,10 +2,14 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 import appeng.api.config.Actionable;
@@ -195,48 +199,57 @@ class Ae2InputCapacityMinecraftTest {
 
 	@Test
 	void earlyStopRetainsTheSecondPassAndIndependentLanesForBothTypes() {
-		var level = mock(Level.class);
-		when(level.getGameTime()).thenReturn(402L);
-		when(level.registryAccess()).thenReturn(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
-		var host = mock(IAe2InputHost.class);
-		when(host.productivebeesgenesis$getAe2Level()).thenReturn(level);
-		when(host.productivebeesgenesis$getAe2BlockPos()).thenReturn(BlockPos.ZERO);
-		var holder = new Ae2OutputStateHolder();
-		var buffers = new Ae2PushBuffers();
-		var fairness = new Ae2InputFairnessScheduler();
-		var iron = AEItemKey.of(Items.IRON_INGOT);
-		var gold = AEItemKey.of(Items.GOLD_INGOT);
-		var storage = mock(MEStorage.class);
-		when(storage.extract(any(), anyLong(), eq(Actionable.MODULATE), any()))
-				.thenAnswer(call -> call.getArgument(1));
-		var first = BasicInventorySlot.at(null, 0, 0);
-		var second = BasicInventorySlot.at(null, 0, 0);
-		var ironEntry = new Ae2InputExecution.PullEntry(iron, 12);
-		var goldEntry = new Ae2InputExecution.PullEntry(gold, 2);
-		try {
-			fairness.roll(402);
-			List<IInventorySlot> slots = List.of(first, second);
-			var lanes = buffers.inputLaneSnapshot();
-			lanes.capture(slots, slots.size());
-			var result = Ae2InputExecution.execute(host, holder, buffers,
-					new ArrayList<>(List.of(ironEntry, goldEntry)), lanes, slots, storage,
-					new Ae2KeyBackoffRegistry<>(), fairness, 128, 10, 64, IActionSource.empty());
-			assertEquals(10, result.totalPulled());
-			assertTrue(first.getStack().is(Items.IRON_INGOT));
-			assertTrue(second.getStack().is(Items.GOLD_INGOT));
-			assertEquals(8, first.getCount());
-			assertEquals(2, second.getCount());
-			assertEquals(4, ironEntry.remaining);
-			assertEquals(0, goldEntry.remaining);
-			var calls = inOrder(storage);
-			calls.verify(storage).extract(eq(iron), eq(5L), eq(Actionable.MODULATE), any());
-			calls.verify(storage).extract(eq(gold), eq(2L), eq(Actionable.MODULATE), any());
-			calls.verify(storage).extract(eq(iron), eq(3L), eq(Actionable.MODULATE), any());
-			calls.verifyNoMoreInteractions();
-			assertFalse(holder.getPendingItemBuffer().isBlocked());
-			assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
-		} finally {
-			Ae2NetworkWorkCoordinator.clearAll();
+		// 车道分配验证固定健康网络，Mockito 首次调用和 JIT 耗时不参与限流。
+		try (var budgets = mockConstruction(Ae2ExtractBudget.class, (budget, context) ->
+				when(budget.canExtractNow(anyLong(), anyInt(), anyLong())).thenReturn(true));
+				var coordinator = mockStatic(Ae2NetworkWorkCoordinator.class, CALLS_REAL_METHODS);
+				var health = mockStatic(Ae2StorageHealth.class, CALLS_REAL_METHODS)) {
+			coordinator.when(() -> Ae2NetworkWorkCoordinator.recordResolvedExtractCost(
+					any(), anyLong(), anyLong(), anyLong())).thenAnswer(call -> null);
+			health.when(() -> Ae2StorageHealth.isPathological(anyLong())).thenReturn(false);
+			var level = mock(Level.class);
+			when(level.getGameTime()).thenReturn(402L);
+			when(level.registryAccess()).thenReturn(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+			var host = mock(IAe2InputHost.class);
+			when(host.productivebeesgenesis$getAe2Level()).thenReturn(level);
+			when(host.productivebeesgenesis$getAe2BlockPos()).thenReturn(BlockPos.ZERO);
+			var holder = new Ae2OutputStateHolder();
+			var buffers = new Ae2PushBuffers();
+			var fairness = new Ae2InputFairnessScheduler();
+			var iron = AEItemKey.of(Items.IRON_INGOT);
+			var gold = AEItemKey.of(Items.GOLD_INGOT);
+			var storage = mock(MEStorage.class);
+			when(storage.extract(any(), anyLong(), eq(Actionable.MODULATE), any()))
+					.thenAnswer(call -> call.getArgument(1));
+			var first = BasicInventorySlot.at(null, 0, 0);
+			var second = BasicInventorySlot.at(null, 0, 0);
+			var ironEntry = new Ae2InputExecution.PullEntry(iron, 12);
+			var goldEntry = new Ae2InputExecution.PullEntry(gold, 2);
+			try {
+				fairness.roll(402);
+				List<IInventorySlot> slots = List.of(first, second);
+				var lanes = buffers.inputLaneSnapshot();
+				lanes.capture(slots, slots.size());
+				var result = Ae2InputExecution.execute(host, holder, buffers,
+						new ArrayList<>(List.of(ironEntry, goldEntry)), lanes, slots, storage,
+						new Ae2KeyBackoffRegistry<>(), fairness, 128, 10, 64, IActionSource.empty());
+				assertEquals(10, result.totalPulled());
+				assertTrue(first.getStack().is(Items.IRON_INGOT));
+				assertTrue(second.getStack().is(Items.GOLD_INGOT));
+				assertEquals(8, first.getCount());
+				assertEquals(2, second.getCount());
+				assertEquals(4, ironEntry.remaining);
+				assertEquals(0, goldEntry.remaining);
+				var calls = inOrder(storage);
+				calls.verify(storage).extract(eq(iron), eq(5L), eq(Actionable.MODULATE), any());
+				calls.verify(storage).extract(eq(gold), eq(2L), eq(Actionable.MODULATE), any());
+				calls.verify(storage).extract(eq(iron), eq(3L), eq(Actionable.MODULATE), any());
+				calls.verifyNoMoreInteractions();
+				assertFalse(holder.getPendingItemBuffer().isBlocked());
+				assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
+			} finally {
+				Ae2NetworkWorkCoordinator.clearAll();
+			}
 		}
 	}
 

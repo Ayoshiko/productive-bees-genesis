@@ -3,7 +3,6 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
 import mekanism.api.IContentsListener;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import mekanism.api.recipes.inputs.IInputHandler;
@@ -98,9 +97,9 @@ public class TileEntityMekCentrifugeFactory extends AbstractMekCentrifugeFactory
 			((TieredInputSlot) inputSlot).productivebeesgenesis$markInputSlot();
 
 			int index = i;
-			// 原 validator 已执行同一全局准入，canInsert 只保留当前车道的输出兼容性。
-			((BasicInventorySlotAccessor) inputSlot).productivebeesgenesis$setCanInsert(
-					(stack, automation) -> inputProducesOutput(index, stack, outputSlot, secondaryOutputSlot, false));
+			// 槽装配发生在父构造期间；缓存和处理器只能在回调执行时从宿主读取。
+			((TieredInputSlot) inputSlot).productivebeesgenesis$setInputInsertionAdmission(
+					stack -> isInputValidForInsertion(index, stack, outputSlot, secondaryOutputSlot));
 			builder.addSlot(inputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,
 					getWarningCheck(RecipeError.NOT_ENOUGH_INPUT,
 							index)));

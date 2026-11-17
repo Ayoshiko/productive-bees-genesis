@@ -3,6 +3,11 @@ package com.ayoshiko.productivebeesgenesis.resource;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.api.resource.RegisterResourceRecipesEvent;
 import com.ayoshiko.productivebeesgenesis.api.resource.ResourceProductionApi;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.mek.CentrifugeFactoryCommonLogic;
+import com.ayoshiko.productivebeesgenesis.mek.PbRecipeProcessor;
+import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
+import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -17,6 +22,13 @@ import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import mekanism.common.lib.security.ISecurityTile;
+import mekanism.api.Action;
+import mekanism.api.AutomationType;
+import mekanism.common.inventory.slot.BasicInventorySlot;
+import mekanism.common.inventory.slot.InputInventorySlot;
+import mekanism.common.recipe.IMekanismRecipeTypeProvider;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -27,6 +39,7 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.*;
 
 @Tag("minecraft")
 class ResourceIsolationMinecraftTest {
@@ -96,6 +109,79 @@ class ResourceIsolationMinecraftTest {
             NeoForge.EVENT_BUS.unregister(failing);
             ResourceRuntime.stopped(new ServerStoppedEvent(server));
             ProductiveBeesGenesis.RECIPE_VERSION.set(originalVersion);
+        }
+    }
+
+    @Test
+    void mergedSlotAdmissionRechecksResourcePermissionsAndRetainedIdentityBeforeInsertion() {
+        var recipe = new ResourceCentrifugeRecipe(RESOURCE_BEE,
+                List.of(new ResourceProductionRecipe.Output(ResourceTypes.FE, 100, 1)), 20);
+        var input = recipe.input(false);
+        var offered = input.copyWithCount(8);
+        var server = mock(MinecraftServer.class);
+        var level = mock(ServerLevel.class);
+        var entity = mock(BlockEntity.class, withSettings().extraInterfaces(ISecurityTile.class));
+        when(level.getServer()).thenReturn(server);
+        when(entity.getLevel()).thenReturn(level);
+        when(entity.getBlockPos()).thenReturn(BlockPos.ZERO);
+        when(level.getBlockEntity(BlockPos.ZERO)).thenReturn(entity);
+        var state = mock(ResourceHiveHost.class);
+        var account = mock(ResourceAccount.class);
+        var reference = mock(ResourceAccount.Reference.class);
+        var accounts = mock(ResourceAccounts.class);
+        var data = mock(ResourceAccountsSavedData.class);
+        when(data.accounts()).thenReturn(accounts);
+        when(accounts.persistenceFailure()).thenReturn("");
+        when(state.nativeConfigValid()).thenReturn(true);
+        when(state.reference()).thenReturn(reference);
+        when(state.account(entity)).thenReturn(account);
+        boolean[] permission = {true};
+        boolean[] retained = {false};
+        when(account.canExtract(reference)).thenAnswer(call -> permission[0]);
+        var processor = mock(PbRecipeProcessor.class);
+        when(processor.hasRetainedInput(any(ItemStack.class))).thenAnswer(call ->
+                retained[0] && ItemStack.isSameItemSameComponents(input, call.getArgument(0)));
+        var validationCache = new InputValidationCache();
+        var outputCache = new InputOutputCompatibilityCache();
+        var recipeType = mock(IMekanismRecipeTypeProvider.class);
+        var output = BasicInventorySlot.at(null, 0, 0);
+        var secondary = BasicInventorySlot.at(null, 0, 0);
+        var tertiary = BasicInventorySlot.at(null, 0, 0);
+        var slot = InputInventorySlot.at(stack -> true,
+                stack -> ItemStack.isSameItemSameComponents(input, stack), null, 0, 0);
+        ((TieredInputSlot) slot).productivebeesgenesis$setInputInsertionAdmission(stack ->
+                CentrifugeFactoryCommonLogic.isItemValidForInsertion(entity, stack,
+                        output, secondary, tertiary, validationCache, outputCache, processor,
+                        recipeType, false, () -> false));
+        var resolved = new ResourceRuntime.CentrifugeInputResolution(ResourceRuntime.CentrifugeAdmission.READY, recipe);
+        try (var runtime = mockStatic(ResourceRuntime.class);
+             var hosts = mockStatic(ResourceHiveHost.class)) {
+            runtime.when(() -> ResourceRuntime.resolveCentrifugeInput(eq(server), any(ItemStack.class)))
+                    .thenReturn(resolved);
+            runtime.when(() -> ResourceRuntime.available(server, ResourceTypes.FE)).thenReturn(true);
+            runtime.when(() -> ResourceRuntime.accounts(server)).thenReturn(data);
+            hosts.when(() -> ResourceHiveHost.existing(entity)).thenReturn(state);
+            assertTrue(slot.isItemValidForInsertion(input, AutomationType.INTERNAL));
+            permission[0] = false;
+            assertTrue(ItemStack.matches(offered, slot.insertItem(offered, Action.EXECUTE, AutomationType.INTERNAL)));
+            assertTrue(slot.isEmpty());
+            permission[0] = true;
+            runtime.when(() -> ResourceRuntime.available(server, ResourceTypes.FE)).thenReturn(false);
+            assertFalse(slot.isItemValidForInsertion(input, AutomationType.INTERNAL));
+            runtime.when(() -> ResourceRuntime.resolveCentrifugeInput(eq(server), any(ItemStack.class)))
+                    .thenReturn(new ResourceRuntime.CentrifugeInputResolution(
+                            ResourceRuntime.CentrifugeAdmission.UNAVAILABLE, null));
+            assertFalse(slot.isItemValidForInsertion(input, AutomationType.INTERNAL));
+            retained[0] = true;
+            var changed = input.copy();
+            changed.set(DataComponents.CUSTOM_NAME, Component.literal("changed original input"));
+            assertFalse(slot.isItemValidForInsertion(changed, AutomationType.INTERNAL));
+            assertTrue(slot.insertItem(offered, Action.EXECUTE, AutomationType.INTERNAL).isEmpty());
+            assertEquals(8, slot.getCount());
+            ((TieredInputSlot) slot).productivebeesgenesis$setOutputInsertionAllowed(() -> false);
+            assertFalse(slot.isItemValidForInsertion(input, AutomationType.INTERNAL));
+            assertTrue(ItemStack.matches(offered, slot.insertItem(offered, Action.EXECUTE, AutomationType.INTERNAL)));
+            assertEquals(8, slot.getCount());
         }
     }
 

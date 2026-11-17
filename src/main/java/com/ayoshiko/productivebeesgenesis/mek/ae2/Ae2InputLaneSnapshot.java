@@ -166,16 +166,40 @@ final class Ae2InputLaneSnapshot {
 	/** 交付后的新偏好与实际库存一起更新，槽位替换仍撤销旧偏好。 */
 	void refresh(int index, AEItemKey acceptedKey) {
 		if (index < 0 || index >= size) return;
-		if (isIndexed()) {
-			long bit = 1L << index;
-			removeLane(occupiedLaneMasks, currentKeys[index], bit);
-			removeLane(preferredLaneMasks, preferredKeys[index], bit);
-			emptyLaneMask &= ~bit;
-			customLaneMask &= ~bit;
-			refillableLaneMask &= ~bit;
+		AEItemKey previousCurrent = currentKeys[index];
+		AEItemKey previousPreferred = preferredKeys[index];
+		try {
+			readLane(index, acceptedKey);
+		} catch (RuntimeException | LinkageError failure) {
+			if (isIndexed()) {
+				long bit = 1L << index;
+				removeLane(occupiedLaneMasks, previousCurrent, bit);
+				removeLane(preferredLaneMasks, previousPreferred, bit);
+				emptyLaneMask &= ~bit;
+				customLaneMask &= ~bit;
+				refillableLaneMask &= ~bit;
+			}
+			currentKeys[index] = null;
+			preferredKeys[index] = null;
+			throw failure;
 		}
-		readLane(index, acceptedKey);
-		indexLane(index);
+		if (!isIndexed()) return;
+		long bit = 1L << index;
+		// 续入同一完整键只改变数量与可补料位，无需移除再插入两个身份索引。
+		if (previousCurrent != currentKeys[index]) {
+			removeLane(occupiedLaneMasks, previousCurrent, bit);
+			addLane(occupiedLaneMasks, currentKeys[index], bit);
+		}
+		if (previousPreferred != preferredKeys[index]) {
+			removeLane(preferredLaneMasks, previousPreferred, bit);
+			addLane(preferredLaneMasks, preferredKeys[index], bit);
+		}
+		if (currentKeys[index] == null) emptyLaneMask |= bit;
+		else emptyLaneMask &= ~bit;
+		if (slots[index] != null && !(slots[index] instanceof BasicInventorySlot)) customLaneMask |= bit;
+		else customLaneMask &= ~bit;
+		if (currentKeys[index] != null && counts[index] < limits[index]) refillableLaneMask |= bit;
+		else refillableLaneMask &= ~bit;
 	}
 
 	/** 整轮 capture 已清空索引，只读状态，不再逐槽删除旧位。 */
@@ -255,6 +279,19 @@ final class Ae2InputLaneSnapshot {
 
 	long candidateLanes(AEItemKey key) {
 		return emptyLaneMask | customLaneMask | (occupiedLaneMasks.getLong(key) & refillableLaneMask);
+	}
+
+	/** 没有空槽和自定义槽时，只有已有完整键的可补料车道能接收候选。 */
+	boolean canProjectCandidates() {
+		return isIndexed() && emptyLaneMask == 0L && customLaneMask == 0L;
+	}
+
+	long refillableLanes() {
+		return refillableLaneMask;
+	}
+
+	AEItemKey currentKey(int lane) {
+		return currentKeys[lane];
 	}
 
 	/** 公平份额用完后直接跳过剩余空车道，完整占用计数仍用于下一轮分配。 */

@@ -30,12 +30,12 @@ final class PbRecipeProcessorStateHelper {
 	private static final int PROGRESS_SYNC_INTERVAL = 5;
 	/**
 	 * 在工厂处理各进程前为不同流体输出预留槽位。
-	 * 配方查找命中现有缓存，且只在多槽工厂启用；不会为同一种流体重复扩容。
+	 * 完整输入身份不变时复用配方与流体模板；每次仍按原槽序实际预留唯一流体类型。
 	 */
 	static void reserveActiveFluidOutputTypes(@NotNull PbRecipeContext context,
 			@NotNull List<IInventorySlot> inputSlots, @NotNull PbRecipeFinder recipeFinder,
 			@NotNull ItemStack[] cachedInputs,
-			@NotNull RecipeHolder<CentrifugeRecipe>[] cachedRecipes,
+			@NotNull RecipeHolder<CentrifugeRecipe>[] cachedRecipes, @NotNull FluidStack[] cachedFluids,
 			@NotNull FluidStack[] reservedFluidTypes, @NotNull PbRecipeProcessor processor) {
 		int reservedTypeCount = 0;
 		int reservationLimit = Math.min(context.fluidOutputTankCount(), reservedFluidTypes.length);
@@ -44,38 +44,50 @@ final class PbRecipeProcessorStateHelper {
 		for (int i = 0, size = inputSlots.size(); i < size; i++) {
 			try {
 				ItemStack input = inputSlots.get(i).getStack();
-				cachedInputs[i] = input;
-				cachedRecipes[i] = null;
-				if (input.isEmpty()
-						|| MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
-						|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input)) {
-					continue;
-				}
-				RecipeHolder<CentrifugeRecipe> recipe = recipeFinder.findPbRecipe(input);
-				cachedRecipes[i] = recipe;
-				if (recipe == null || reservedTypeCount >= reservationLimit) continue;
-				var fluid = recipe.value().getFluidOutputs();
-				if (!fluid.isEmpty()) {
-					if (!suppressionRead) {
-						suppressHoney = context.suppressesUselessByproducts();
-						suppressionRead = true;
+				if (cachedInputs[i] == null || !ItemStack.isSameItemSameComponents(cachedInputs[i], input)) {
+					RecipeHolder<CentrifugeRecipe> recipe = null;
+					if (!input.isEmpty() && !MyriadCreationsEventHandler.isMyriadCreationsItem(input)) {
+						recipe = recipeFinder.findPbRecipe(input);
 					}
-					if (suppressHoney && UselessByproductUpgradeHelper.isHoney(fluid)) continue;
-					boolean alreadyReserved = false;
-					for (int reservedIndex = 0; reservedIndex < reservedTypeCount; reservedIndex++) {
-						if (FluidStack.isSameFluidSameComponents(reservedFluidTypes[reservedIndex], fluid)) {
-							alreadyReserved = true;
-							break;
+					cachedInputs[i] = input.copyWithCount(1);
+					cachedRecipes[i] = recipe;
+					cachedFluids[i] = null;
+				}
+				RecipeHolder<CentrifugeRecipe> recipe = cachedRecipes[i];
+				if (recipe != null && reservedTypeCount >= reservationLimit) continue;
+				if (recipe != null) {
+					FluidStack fluid = cachedFluids[i];
+					if (fluid == null) {
+						fluid = recipe.value().getFluidOutputs();
+						cachedFluids[i] = fluid;
+					}
+					if (!fluid.isEmpty()) {
+						if (!suppressionRead) {
+							suppressHoney = context.suppressesUselessByproducts();
+							suppressionRead = true;
+						}
+						if (!(suppressHoney && UselessByproductUpgradeHelper.isHoney(fluid))) {
+							boolean alreadyReserved = false;
+							for (int reservedIndex = 0; reservedIndex < reservedTypeCount; reservedIndex++) {
+								if (reservedFluidTypes[reservedIndex] == fluid
+										|| FluidStack.isSameFluidSameComponents(reservedFluidTypes[reservedIndex], fluid)) {
+									alreadyReserved = true;
+									break;
+								}
+							}
+							if (!alreadyReserved) {
+								context.reserveFluidOutputType(fluid);
+								reservedFluidTypes[reservedTypeCount++] = fluid;
+							}
 						}
 					}
-					if (alreadyReserved) continue;
-					context.reserveFluidOutputType(fluid);
-					reservedFluidTypes[reservedTypeCount++] = fluid;
 				}
+				processor.markLaneRecovery(i, "流体类型预留");
 			} catch (RuntimeException | LinkageError failure) {
 				// 失败结果不登记为“无配方”；正式车道仍可在下一次调用重新查找。
 				cachedInputs[i] = null;
 				cachedRecipes[i] = null;
+				cachedFluids[i] = null;
 				processor.reportLaneFailure(i, "流体类型预留", failure);
 			}
 		}

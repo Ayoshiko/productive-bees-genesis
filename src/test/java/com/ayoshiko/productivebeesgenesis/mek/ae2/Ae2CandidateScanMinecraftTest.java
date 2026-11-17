@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -115,6 +116,86 @@ class Ae2CandidateScanMinecraftTest {
         assertEquals(17, selected.stream().mapToInt(entry -> entry.remaining).sum());
         verify(fixture.service).getCachedInventory();
         verifyNoInteractions(fixture.storage);
+
+        var occupied = new Fixture();
+        occupied.filter.setFilterMode(Ae2InputFilter.FilterMode.DISABLED);
+        occupied.filter.setPreciseMode(true);
+        occupied.holder.setAeInputNbtIgnore(false);
+        occupied.filter.setGlobalNetworkStock(true);
+        occupied.filter.setGlobalReserveAmount(10);
+        for (int index = 0; index < 96; index++) {
+            occupied.inventory.add(namedComb("occupied_" + index), 1000);
+        }
+        when(occupied.service.getCachedInventory()).thenReturn(occupied.inventory);
+        var initial = occupied.collect(100);
+        assertEquals(6, initial.size());
+        var directory = List.copyOf(occupied.buffers.borrowScanCandidateKeys());
+        var cursor = directory.get(25);
+        List<AEItemKey> refillKeys = List.of(directory.get(70), directory.get(4), directory.get(40));
+        List<IInventorySlot> occupiedSlots = new ArrayList<>();
+        for (int index = 0; index < 18; index++) {
+            var slot = BasicInventorySlot.at(null, 0, 0);
+            if (index < refillKeys.size()) slot.setStack(refillKeys.get(index).toStack(60));
+            else if (index == 3) slot.setStack(refillKeys.getFirst().toStack(60));
+            else slot.setStack(cursor.toStack(64));
+            occupiedSlots.add(slot);
+        }
+        occupied.inputSlots = occupiedSlots;
+        for (var expectedCursor : new AEItemKey[]{cursor, refillKeys.get(1), null}) {
+            occupied.holder.setInputCombCandidateCursor(expectedCursor);
+            clearInvocations(occupied.backoff);
+            List<AEItemKey> expected = new ArrayList<>();
+            Ae2CursorScan.collectPrioritizedRotating(expected, new HashSet<>(),
+                    List.of(), directory, null, expectedCursor, 36, refillKeys::contains);
+            var projected = occupied.collect(101);
+            assertEquals(expected, projected.stream().map(entry -> entry.key).toList());
+            assertTrue(projected.stream().allMatch(entry -> entry.remaining == 64
+                    && entry.reserveFloor == 10 && !entry.resourceDeferred));
+            verify(occupied.backoff, times(3)).shouldSkip(any(), anyLong());
+        }
+        occupied.holder.setInputCombCandidateCursor(cursor);
+        occupied.holder.setAeInputNbtIgnore(true);
+        assertEquals(3, occupied.collect(102).size());
+        verifyNoInteractions(occupied.storage);
+
+        occupiedSlots.getFirst().setEmpty();
+        var withEmptyLane = occupied.collect(103);
+        assertEquals(36, withEmptyLane.size());
+        assertTrue(withEmptyLane.stream().anyMatch(entry -> !refillKeys.contains(entry.key)));
+        occupiedSlots.getFirst().setStack(refillKeys.getFirst().toStack(60));
+        occupiedSlots.get(1).setStack(cursor.toStack(64));
+        List<AEItemKey> changedRefills = List.of(refillKeys.getFirst(), refillKeys.get(2));
+        List<AEItemKey> expectedChanged = new ArrayList<>();
+        var currentCursor = (AEItemKey) occupied.holder.getInputCombCandidateCursor();
+        Ae2CursorScan.collectPrioritizedRotating(expectedChanged, new HashSet<>(),
+                List.of(), directory, null, currentCursor, 36, changedRefills::contains);
+        assertEquals(expectedChanged, occupied.collect(104).stream().map(entry -> entry.key).toList());
+        occupied.holder.setInputCombCandidateCursor(currentCursor);
+        occupied.buffers.invalidateScanCandidateCache();
+        assertEquals(expectedChanged, occupied.collect(105).stream().map(entry -> entry.key).toList());
+
+        var replacement = namedComb("replacement_after_refresh");
+        occupied.inventory.add(replacement, 1000);
+        occupiedSlots.get(4).setStack(replacement.toStack(60));
+        var refreshed = occupied.collect(110);
+        assertTrue(refreshed.stream().anyMatch(entry -> entry.key.equals(replacement)));
+        assertEquals(3, refreshed.size());
+        verifyNoInteractions(occupied.storage);
+
+        var customSlot = mock(IInventorySlot.class);
+        when(customSlot.getStack()).thenReturn(cursor.toStack(60));
+        when(customSlot.getLimit(any())).thenReturn(64);
+        occupiedSlots.set(5, customSlot);
+        assertEquals(36, occupied.collect(111).size());
+        occupiedSlots.set(5, BasicInventorySlot.at(null, 0, 0));
+        occupiedSlots.get(5).setStack(cursor.toStack(64));
+        var unreadable = spy(BasicInventorySlot.at(null, 0, 0));
+        unreadable.setStack(cursor.toStack(60));
+        doThrow(new IllegalStateException("temporary lane read failure")).when(unreadable).getStack();
+        occupiedSlots.set(5, unreadable);
+        assertEquals(3, occupied.collect(112).size());
+        doCallRealMethod().when(unreadable).getStack();
+        assertEquals(4, occupied.collect(113).size());
     }
 
     @Test
@@ -533,6 +614,9 @@ class Ae2CandidateScanMinecraftTest {
             var fixture = new Fixture();
             fixture.holder.setSmeltingCompatEnabled(true);
             var iron = AEItemKey.of(Items.RAW_IRON);
+            var slot = BasicInventorySlot.at(null, 0, 0);
+            slot.setStack(iron.toStack(1));
+            fixture.inputSlots = List.of(slot);
             fixture.inventory.add(iron, 5);
             when(fixture.service.getCachedInventory()).thenReturn(fixture.inventory);
             var cache = fixture.buffers.smeltingInputCache;

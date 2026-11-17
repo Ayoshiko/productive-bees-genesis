@@ -329,6 +329,7 @@ final class Ae2InputCandidatePolicy {
 			if (buffers.needsScanSmeltingRefresh(networkDirectory.ordinaryKeys(),
 					recipeVersion, smeltingEnabled, tagGeneration)) {
 				smeltingCandidateKeys.clear();
+				buffers.scanSmeltingInputIndex.clear();
 				if (smeltingEnabled) {
 					for (AEItemKey itemKey : networkDirectory.ordinaryKeys()) {
 						Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
@@ -342,6 +343,7 @@ final class Ae2InputCandidatePolicy {
 			if (buffers.needsScanCandidateRefresh(availableStacks, networkDirectory.generation(),
 					recipeVersion, smeltingEnabled, tagGeneration)) {
 				candidateKeys.clear();
+				buffers.scanCombInputIndex.clear();
 				// 蜜脾资格可以随本机已付工作与临时探测预算变化，仍按原目录周期重验。
 				for (AEItemKey itemKey : networkDirectory.combKeys()) {
 					Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
@@ -392,9 +394,19 @@ final class Ae2InputCandidatePolicy {
 					? key : null;
 			AEItemKey combCursor = holder.getInputCombCandidateCursor() instanceof AEItemKey key
 					? key : null;
-			int smeltingSelected = Ae2CursorScan.collectPrioritizedRotating(selectedKeys, seenKeys,
-					smeltingCandidateKeys, candidateKeys, smeltingCursor, combCursor,
-					scanCap, acceptableCandidate, buffers.scanSmeltingPosition, buffers.scanCombPosition);
+			int smeltingSelected;
+			if (lanes.canProjectCandidates()) {
+				List<AEItemKey> smeltingRefills = buffers.scanSmeltingInputIndex.project(
+						smeltingCandidateKeys, lanes, smeltingCursor);
+				List<AEItemKey> combRefills = buffers.scanCombInputIndex.project(candidateKeys, lanes, combCursor);
+				// 投影已按完整目录游标后的顺序排列；正式 predicate 保留当前库存与准入。
+				smeltingSelected = Ae2CursorScan.collectPrioritizedRotating(selectedKeys, seenKeys,
+						smeltingRefills, combRefills, null, null, scanCap, acceptableCandidate);
+			} else {
+				smeltingSelected = Ae2CursorScan.collectPrioritizedRotating(selectedKeys, seenKeys,
+						smeltingCandidateKeys, candidateKeys, smeltingCursor, combCursor,
+						scanCap, acceptableCandidate, buffers.scanSmeltingPosition, buffers.scanCombPosition);
+			}
 			for (int index = 0; index < selectedKeys.size(); index++) {
 				AEItemKey key = selectedKeys.get(index);
 				int amount = candidateAmounts.get(key);

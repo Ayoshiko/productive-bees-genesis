@@ -92,11 +92,13 @@ public class PbRecipeProcessor {
 	@Nullable
 	private final RecipeHolder<CentrifugeRecipe>[] cachedPbRecipes;
 
-	/** 多流体预留阶段的同 tick 输入快照；只用于复用已完成的配方查找。 */
+	/** 预留配方缓存持有完整输入组件身份；数量变化不改变配方与流体模板。 */
 	private final ItemStack[] reservedPbInputs;
 	/** 多流体预留阶段的配方结果，null 表示该输入已确认没有 PB 配方。 */
 	@Nullable
 	private final RecipeHolder<CentrifugeRecipe>[] reservedPbRecipes;
+	private final FluidStack[] reservedPbFluids;
+	private Level reservedPbRecipeLevel;
 	/** 多流体预留阶段复用的唯一流体类型缓冲，避免同流体按进程重复查映射。 */
 	private final FluidStack[] reservedFluidTypes;
 
@@ -166,7 +168,7 @@ public class PbRecipeProcessor {
 	private long lastFluidFullCacheTick = Long.MIN_VALUE;
 	/** Prevents repeated recipe scans used only to reserve multi-fluid lanes. */
 	private long lastFluidReservationTick = Long.MIN_VALUE;
-	/** 预留查找缓存的有效 tick/配方版本，任一变化都会使缓存失效。 */
+	/** tick 标记本次扫描；配方代际决定跨 tick 输入身份与流体模板的有效期。 */
 	private long reservedPbRecipeCacheTick = Long.MIN_VALUE;
 	private long reservedPbRecipeCacheVersion = Long.MIN_VALUE;
 
@@ -196,6 +198,7 @@ public class PbRecipeProcessor {
 		this.cachedPbRecipes = new RecipeHolder[processes];
 		this.reservedPbInputs = new ItemStack[processes];
 		this.reservedPbRecipes = new RecipeHolder[processes];
+		this.reservedPbFluids = new FluidStack[processes];
 		this.reservedFluidTypes = new FluidStack[processes];
 		this.energyCache = new PbRecipeEnergyCache(context);
 		// 子组件：查找器自拥有缓存；输出聚合器自拥有 pending 缓冲；
@@ -234,6 +237,7 @@ public class PbRecipeProcessor {
 	/** 卸载只释放近期模板保留根；已付、暂停和待交付资产仍由各自状态持有。 */
 	public void clearTransientCaches() {
 		factoryOutputBatch.abandon();
+		clearReservedPbRecipeCache();
 		paidWorkCache.clear();
 		Arrays.fill(laneFailures, null);
 		for (PbRecipeCompleter completer : recipeCompleters) completer.clearTransientFailures();
@@ -252,6 +256,7 @@ public class PbRecipeProcessor {
 		try {
 			drainFactoryPreparedPending(processStart);
 			factoryOutputBatch.begin();
+			factoryOutputBatch.beginPreparation();
 		} catch (RuntimeException | Error failure) {
 			factoryPassActive = false;
 			Arrays.fill(factoryPendingAttempted, false);
@@ -289,6 +294,7 @@ public class PbRecipeProcessor {
 	}
 
 	public void finishFactoryOutputBatch() {
+		factoryOutputBatch.endPreparation();
 		try {
 			factoryOutputBatch.finish(true);
 		} finally {
@@ -307,7 +313,8 @@ public class PbRecipeProcessor {
 	// ===== 入口缓存刷新（由 processPbRecipesAndUpdate 调用）=====
 	/** 刷新流体槽满载状态缓存（入口调用一次，替代原 tryProcessPbRecipe 内的入口刷新；flush 后的刷新保留，finally 块刷新已移除以精简高频路径） */
 	public void refreshFluidTankFullCache(PbRecipeContext context) {
-		cachedFluidTankFull = context.areAllFluidTanksFull() && !context.canAllocateNewFluidTank();
+		cachedFluidTankFull = !context.productivebeesgenesis$isDirectAeOutputEnabled()
+				&& context.areAllFluidTanksFull() && !context.canAllocateNewFluidTank();
 		Level level = context.level();
 		lastFluidFullCacheTick = level == null ? Long.MIN_VALUE : level.getGameTime();
 	}
@@ -334,23 +341,26 @@ public class PbRecipeProcessor {
 	public void reserveActiveFluidOutputTypes(List<IInventorySlot> inputSlots) {
 		Level level = context.level();
 		long tick = level == null ? Long.MIN_VALUE : level.getGameTime();
-		if (tick == lastFluidReservationTick) return;
-		lastFluidReservationTick = tick;
-		reservedPbRecipeCacheTick = Long.MIN_VALUE;
-		reservedPbRecipeCacheVersion = Long.MIN_VALUE;
+		long version = ProductiveBeesGenesis.RECIPE_VERSION.get();
+		if (tick == lastFluidReservationTick && reservedPbRecipeCacheVersion == version
+				&& reservedPbRecipeLevel == level) return;
 		if (level == null || context.fluidOutputTankCount() <= 1) return;
-		// 预留阶段本身会查配方，先处理热重载，避免把旧版本结果写入同 tick 缓存。
+		// 配方或世界变化撤销旧模板；已付产物仍由正式车道缓冲持有。
 		checkRecipeVersion();
+		if (reservedPbRecipeLevel != level) clearReservedPbRecipeCache();
+		reservedPbRecipeLevel = level;
+		lastFluidReservationTick = tick;
 		reservedPbRecipeCacheTick = tick;
-		reservedPbRecipeCacheVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
+		reservedPbRecipeCacheVersion = version;
 		PbRecipeProcessorStateHelper.reserveActiveFluidOutputTypes(context, inputSlots, recipeFinder,
-				reservedPbInputs, reservedPbRecipes, reservedFluidTypes, this);
+				reservedPbInputs, reservedPbRecipes, reservedPbFluids, reservedFluidTypes, this);
 	}
 
 	/** 预留扫描已取得各槽当前输入；同次工厂公平预算复用它，失败槽仍重新读取。 */
 	public int countFactoryInputLanes(List<IInventorySlot> inputSlots) {
 		Level level = context.level();
-		boolean cached = level != null && reservedPbRecipeCacheTick == level.getGameTime()
+		boolean cached = level != null && reservedPbRecipeLevel == level
+				&& reservedPbRecipeCacheTick == level.getGameTime()
 				&& reservedPbRecipeCacheVersion == ProductiveBeesGenesis.RECIPE_VERSION.get();
 		int count = 0;
 		for (int lane = 0; lane < inputSlots.size(); lane++) {
@@ -408,14 +418,15 @@ public class PbRecipeProcessor {
 		clearReservedPbRecipeCache();
 	}
 
-	/** 判断输入是否命中本 tick 多流体预留阶段的配方快照。 */
+	/** 当前扫描中的完整输入身份仍匹配时，正式处理复用已查询的 PB 配方。 */
 	boolean hasReservedPbRecipe(int processIndex, ItemStack input) {
 		Level level = context.level();
 		long tick = level == null ? Long.MIN_VALUE : level.getGameTime();
 		return processIndex >= 0 && processIndex < reservedPbInputs.length
 				&& reservedPbRecipeCacheTick == tick
 				&& reservedPbRecipeCacheVersion == ProductiveBeesGenesis.RECIPE_VERSION.get()
-				&& reservedPbInputs[processIndex] == input;
+				&& reservedPbRecipeLevel == level && reservedPbInputs[processIndex] != null
+				&& ItemStack.isSameItemSameComponents(reservedPbInputs[processIndex], input);
 	}
 
 	/** 读取已验证命中的本 tick PB 配方结果；调用方应先检查 {@link #hasReservedPbRecipe}。 */
@@ -425,10 +436,14 @@ public class PbRecipeProcessor {
 				? null : reservedPbRecipes[processIndex];
 	}
 
-	/** 清除预留阶段的输入/配方快照，避免跨 tick 或跨配方版本复用。 */
+	/** 配方重载、世界切换或卸载时释放车道输入身份与流体模板。 */
 	private void clearReservedPbRecipeCache() {
 		Arrays.fill(reservedPbInputs, null);
 		Arrays.fill(reservedPbRecipes, null);
+		Arrays.fill(reservedPbFluids, null);
+		Arrays.fill(reservedFluidTypes, null);
+		reservedPbRecipeLevel = null;
+		lastFluidReservationTick = Long.MIN_VALUE;
 		reservedPbRecipeCacheTick = Long.MIN_VALUE;
 		reservedPbRecipeCacheVersion = Long.MIN_VALUE;
 	}
@@ -729,7 +744,9 @@ public class PbRecipeProcessor {
 		if (pbOperatingTicks[processIndex] == 0) releasePaidWork(processIndex);
 		context.productivebeesgenesis$markForSave();
 		if (completed > 0) completer.flushCompletedBatch(processIndex);
-		cachedFluidTankFull = context.areAllFluidTanksFull() && !context.canAllocateNewFluidTank();
+		if (!context.productivebeesgenesis$isDirectAeOutputEnabled()) {
+			cachedFluidTankFull = context.areAllFluidTanksFull() && !context.canAllocateNewFluidTank();
+		}
 		if (batch != null) completeLaneRecovery(processIndex);
 		return true;
 	}
@@ -841,7 +858,7 @@ public class PbRecipeProcessor {
 	/** 只在原工作已实际结算或排空后结束故障期；真实未决资产仍由所有者状态显示。 */
 	public void completeLaneRecovery(int lane) {
 		markLaneRecovery(lane, "processing");
-		finishLaneAttempt(lane);
+		if (!factoryPassActive) finishLaneAttempt(lane);
 	}
 
 	/** 单个准备／通知阶段成功只确认其原首因，收尾前的新失败会撤销本次确认。 */

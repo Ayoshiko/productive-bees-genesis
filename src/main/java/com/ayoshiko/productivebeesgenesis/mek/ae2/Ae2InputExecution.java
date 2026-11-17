@@ -136,7 +136,7 @@ final class Ae2InputExecution {
 						entry.remaining = 0;
 						continue;
 					}
-					if (!entry.componentMatchCacheActive) entry.beginComponentMatchCache(processCount);
+					if (!indexed && !entry.componentMatchCacheActive) entry.beginComponentMatchCache(processCount);
 
 					// 每个候选只构造一个探针，并复用当前规划轮的完整组件匹配缓存。
 					ItemStack slotProbe = entry.key.toStack(1);
@@ -311,7 +311,8 @@ final class Ae2InputExecution {
 		long limit = lanes.limit(slotIdx);
 		int count = lanes.count(slotIdx);
 		if (limit <= count) return 0;
-		if (!entry.matchesComponents(slotIdx, lanes.stack(slotIdx), probe,
+		// 完整键索引已限定非空标准车道的身份；未索引车道仍逐槽比较全部组件。
+		if (!lanes.isIndexed() && !entry.matchesComponents(slotIdx, lanes.stack(slotIdx), probe,
 				lanes.patchSize(slotIdx), lanes.beeType(slotIdx))) return 0;
 		if (!basicSlot.isItemValidForInsertion(probe, AutomationType.INTERNAL)) {
 			return 0;

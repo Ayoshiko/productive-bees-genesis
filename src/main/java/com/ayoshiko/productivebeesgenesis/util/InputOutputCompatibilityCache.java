@@ -52,13 +52,13 @@ public final class InputOutputCompatibilityCache {
 		if (cached != null && now >= cached.tick && now - cached.tick < ttlTicks) return cached.result;
 
 		// 仅未命中时复制组件快照；先准备独立键，validator 异常或重入不能污染已缓存状态。
-		StateKey key = lookup.snapshot();
+		StateKey key = cached == null ? lookup.snapshot() : cached.key;
 		long validationGeneration = generation;
 		boolean result = validator.get();
 		// 清空后即使重入恢复了相同世界/配方版本，旧校验也不能覆盖新代际的结果。
 		if (generation == validationGeneration && cachedLevel == level
 				&& recipeVersion == version && version == ProductiveBeesGenesis.RECIPE_VERSION.get()) {
-			entries.put(key, new Entry(now, result));
+			entries.put(key, new Entry(key, now, result));
 		}
 		return result;
 	}
@@ -75,7 +75,7 @@ public final class InputOutputCompatibilityCache {
 		return stack == null || stack.isEmpty() ? ItemStack.EMPTY : stack;
 	}
 
-	private record Entry(long tick, boolean result) {}
+	private record Entry(StateKey key, long tick, boolean result) {}
 
 	/** 查询键可复用；存入映射的键持有写时复制的组件快照，绝不引用调用方可变栈。 */
 	private static final class StateKey {

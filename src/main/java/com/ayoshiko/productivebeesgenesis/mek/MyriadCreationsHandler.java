@@ -102,9 +102,10 @@ public class MyriadCreationsHandler {
 		}
 		PreparedOutputs prepared = null;
 		if (plan.completedOperations() > 0) {
-			int modifier = Math.max(1, context.productivityModifier());
+			PbRecipeCompleter.OutputSettings settings = completer.outputSettings();
+			int modifier = settings.productivity();
 			FluidStack fluid = fluidOutputHandler.resolveFluidOutput(input, processIndex);
-			if (context.suppressesUselessByproducts() && UselessByproductUpgradeHelper.isHoney(fluid)) {
+			if ((settings.upgrades() & 1) != 0 && UselessByproductUpgradeHelper.isHoney(fluid)) {
 				fluid = FluidStack.EMPTY;
 			}
 			long perInput = Math.max(MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input) ? 4L : 1L,
@@ -114,7 +115,7 @@ public class MyriadCreationsHandler {
 				plan = PbVirtualTickPlan.create(pbOperatingTicks[processIndex], Math.max(1, virtualTicks),
 						processingTime, Math.min(effectiveOps, limit), limit, energyPerTick, energy);
 			}
-			prepared = prepareOutputs(input, processIndex, plan.completedOperations(), modifier, fluid);
+			prepared = prepareOutputs(input, processIndex, plan.completedOperations(), settings, fluid);
 			if (prepared == null) return false;
 		}
 		int completed = plan.completedOperations();
@@ -133,8 +134,10 @@ public class MyriadCreationsHandler {
 
 	private record PreparedOutputs(PbRecipeCompleter batch, Map<ResourceLocation, Long> allocation) {}
 
-	private PreparedOutputs prepareOutputs(ItemStack input, int processIndex, int inputs, int modifier, FluidStack fluid) {
-		Level level = context.level();
+	private PreparedOutputs prepareOutputs(ItemStack input, int processIndex, int inputs,
+			PbRecipeCompleter.OutputSettings settings, FluidStack fluid) {
+		Level level = settings.level();
+		int modifier = settings.productivity();
 		boolean block = MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
 		long total = Math.multiplyExact(Math.multiplyExact((long) inputs, block ? 4 : 1), modifier);
 		List<ResourceLocation> selected;
@@ -159,7 +162,7 @@ public class MyriadCreationsHandler {
 		var variants = block ? snapshot.combBlockVariants() : snapshot.honeycombVariants();
 		long fluidAmount = Math.multiplyExact(Math.multiplyExact((long) fluid.getAmount(), inputs), modifier);
 		PbRecipeCompleter batch = completers[processIndex].prepareMyriadCompleted(
-				selected, allocation, variants, level.getRandom(), fluid, fluidAmount, input, inputs);
+				selected, allocation, variants, level.getRandom(), fluid, fluidAmount, settings);
 		return batch == null ? null : new PreparedOutputs(batch, allocation);
 	}
 

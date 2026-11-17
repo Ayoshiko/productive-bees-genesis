@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import it.unimi.dsi.fastutil.ints.Int2ObjectLinkedOpenHashMap;
 import net.minecraft.core.HolderLookup;
@@ -11,7 +10,6 @@ final class PbOutputCapacityCache {
     private static final int MAX_PREPARED_COUNTS = 32;
 
     private final PbRecipeCompleter owner;
-    private final PbRecipeContext context;
     private final Int2ObjectLinkedOpenHashMap<PbRecipeCompleter> prepared = new Int2ObjectLinkedOpenHashMap<>();
     private CentrifugeRecipe recipe;
     private Level level;
@@ -22,9 +20,8 @@ final class PbOutputCapacityCache {
     private long revision;
     private int representableInputs = -1;
 
-    PbOutputCapacityCache(PbRecipeCompleter owner, PbRecipeContext context) {
+    PbOutputCapacityCache(PbRecipeCompleter owner) {
         this.owner = owner;
-        this.context = context;
     }
 
     boolean fits(CentrifugeRecipe currentRecipe, int lane, int inputs) {
@@ -52,14 +49,13 @@ final class PbOutputCapacityCache {
     }
 
     private void refresh(CentrifugeRecipe currentRecipe) {
-        Level currentLevel = context.level();
-        HolderLookup.Provider currentProvider = currentLevel == null ? null : currentLevel.registryAccess();
-        int currentProductivity = Math.max(1, context.productivityModifier());
-        int currentStability = Float.floatToIntBits(context.stabilityBonus());
-        int currentUpgrades = (context.suppressesUselessByproducts() ? 1 : 0)
-                | (context.productivebeesgenesis$hasEssenceConversionUpgrade() ? 2 : 0)
-                | (context.productivebeesgenesis$hasRawOreSmeltingUpgrade() ? 4 : 0);
-        long currentRevision = ProductiveBeesGenesis.RECIPE_VERSION.get();
+        PbRecipeCompleter.OutputSettings settings = owner.outputSettings();
+        Level currentLevel = settings.level();
+        HolderLookup.Provider currentProvider = settings.provider();
+        int currentProductivity = settings.productivity();
+        int currentStability = Float.floatToIntBits(settings.stability());
+        int currentUpgrades = settings.upgrades();
+        long currentRevision = settings.revision();
         if (recipe != currentRecipe || level != currentLevel || provider != currentProvider
                 || productivity != currentProductivity || stability != currentStability
                 || upgrades != currentUpgrades || revision != currentRevision) {

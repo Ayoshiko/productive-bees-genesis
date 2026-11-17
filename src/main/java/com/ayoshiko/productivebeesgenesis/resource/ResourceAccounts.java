@@ -130,7 +130,7 @@ public final class ResourceAccounts {
 	public ResourceAccount bound(ResourceAccount.Reference reference, ResourceAccount.Binding binding) {
 		checkThread();
 		var account = accounts.get(reference.sourceId());
-		if (account == null || !account.reference().equals(reference) || !Objects.equals(account.binding, binding)
+		if (account == null || account.generation != reference.generation() || !Objects.equals(account.binding, binding)
 				|| binding == null) {
 			throw new IllegalStateException("Unknown or stale resource binding");
 		}

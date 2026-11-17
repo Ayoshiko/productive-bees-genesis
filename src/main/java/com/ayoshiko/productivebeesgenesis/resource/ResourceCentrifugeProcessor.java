@@ -1,16 +1,20 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
+import com.ayoshiko.productivebeesgenesis.api.resource.ResourceProductionApi;
 import com.ayoshiko.productivebeesgenesis.mek.PbVirtualTickPlan;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
 import java.math.BigInteger;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -62,10 +66,55 @@ public final class ResourceCentrifugeProcessor {
 			ResourceCentrifugeWork work) {}
 	private final Map<Integer, Cached> decoded = new HashMap<>();
 	private final Map<Integer, ResourceCentrifugeWork> templates = new HashMap<>();
-	private record Rolls(ResourceCentrifugeRecipe recipe, int productivity, double stability, int units,
-			ResourceRollPlan plan, Map<ResourceKey, BigInteger> perInput) {}
-	/** 最多每 lane 一份；配方快照、升级或输入份数改变时替换，随机种子始终来自当前工作。 */
-	private final Map<Integer, Rolls> rollPlans = new HashMap<>();
+	private static final int MAX_RECIPE_TEMPLATES = 128;
+	/** 每配方只保留最近一个完整输入编码和当前升级计划；普通计划、进度与随机种子另行封闭。 */
+	private final Map<ResourceCentrifugeRecipe, RecipeTemplate> encodedRecipes = new IdentityHashMap<>();
+	private long templateRevision = Long.MIN_VALUE;
+	private HolderLookup.Provider templateProvider;
+
+	private static final class RecipeTemplate {
+		final Tag encodedRecipe;
+		ItemStack input;
+		Tag encodedInput;
+		Rolls rolls;
+
+		RecipeTemplate(ResourceCentrifugeRecipe recipe) {
+			encodedRecipe = ResourceCentrifugeRecipe.CODEC.codec().encodeStart(NbtOps.INSTANCE, recipe).getOrThrow();
+		}
+	}
+
+	private static final class Rolls {
+		final int productivity;
+		final double stability;
+		final ResourceRollPlan plan;
+		final Map<ResourceKey, BigInteger> combMaximum;
+		Map<ResourceKey, BigInteger> blockMaximum;
+		long batchUnits;
+		Map<ResourceKey, BigInteger> batchMaximum;
+
+		Rolls(ResourceCentrifugeRecipe recipe, int productivity, double stability) {
+			this.productivity = productivity;
+			this.stability = stability;
+			plan = ResourceProductionApi.planCentrifuging(recipe, productivity, stability, 0);
+			combMaximum = plan.maximumExact();
+		}
+
+		Map<ResourceKey, BigInteger> maximum(int units) {
+			if (units == 1) return combMaximum;
+			if (blockMaximum == null) blockMaximum = plan.maximumExact(units);
+			return blockMaximum;
+		}
+
+		/** 同配方和升级配置只保留最近完成份数的上界；不保留任何容量或准入结果。 */
+		Map<ResourceKey, BigInteger> maximumBatch(long completedUnits) {
+			if (batchMaximum == null || batchUnits != completedUnits) {
+				var maximum = plan.maximumExact(completedUnits);
+				batchUnits = completedUnits;
+				batchMaximum = maximum;
+			}
+			return batchMaximum;
+		}
+	}
 	private final Map<Integer, LaneFailure> laneFailures = new HashMap<>();
 	private static final class LaneFailure {
 		final Throwable cause;
@@ -217,6 +266,27 @@ public final class ResourceCentrifugeProcessor {
 		return cached.work();
 	}
 
+	private RecipeTemplate recipeTemplate(ResourceCentrifugeRecipe recipe) {
+		var template = encodedRecipes.get(recipe);
+		if (template == null) {
+			template = new RecipeTemplate(recipe);
+			if (encodedRecipes.size() >= MAX_RECIPE_TEMPLATES) {
+				encodedRecipes.remove(encodedRecipes.keySet().iterator().next());
+			}
+			encodedRecipes.put(recipe, template);
+		}
+		return template;
+	}
+
+	private void encodeTemplate(ResourceCentrifugeWork work, HolderLookup.Provider provider) {
+		var template = recipeTemplate(work.recipe);
+		if (template.input == null || !ItemStack.isSameItemSameComponents(template.input, work.input)) {
+			template.encodedInput = work.input.save(provider);
+			template.input = work.input;
+		}
+		work.encodeTemplate(template.encodedRecipe, template.encodedInput);
+	}
+
 	/** 活动确认仍阻止重复执行；展示状态只把真实未知请求报为未决。 */
 	public static ResourceAccount.CentrifugeLaneState laneState(BlockEntity entity, int lane) {
 		var host = ResourceHiveHost.existing(entity);
@@ -250,10 +320,17 @@ public final class ResourceCentrifugeProcessor {
 			var input = access.input().copy();
 			if (input.isEmpty()) return Result.BLOCKED;
 			var raw = account.centrifugeWork(access.lane());
+			long revision = ResourceRuntime.recipes(level.getServer()).revision();
+			var provider = level.registryAccess();
+			if (templateRevision != revision || templateProvider != provider) {
+				templates.clear();
+				encodedRecipes.clear();
+				templateRevision = revision;
+				templateProvider = provider;
+			}
 			ResourceCentrifugeWork work;
 			if (raw == null) {
 				if (current == null) return Result.UNMANAGED;
-				long revision = ResourceRuntime.recipes(level.getServer()).revision();
 				var template = templates.get(access.lane());
 				if (template == null || template.revision != revision || template.recipe != current.value()
 						|| !template.recipeId.equals(current.id()) || !ItemStack.isSameItemSameComponents(template.input, input)) {
@@ -263,7 +340,7 @@ public final class ResourceCentrifugeProcessor {
 						return Result.BLOCKED;
 					}
 					template = new ResourceCentrifugeWork(current.id(), current.value(), input, 0, 0, revision, ordinary);
-					template.save(level.registryAccess());
+					encodeTemplate(template, provider);
 					templates.put(access.lane(), template);
 				}
 				work = template.advance(0, level.random.nextLong());
@@ -292,37 +369,18 @@ public final class ResourceCentrifugeProcessor {
 			int units = work.recipe.units(input);
 			int productivity = access.productivity();
 			double stability = access.stability();
-			var cachedRolls = rollPlans.get(access.lane());
-			if (cachedRolls == null || cachedRolls.recipe != work.recipe || cachedRolls.productivity != productivity
-					|| cachedRolls.stability != stability || cachedRolls.units != units) {
-				var plan = com.ayoshiko.productivebeesgenesis.api.resource.ResourceProductionApi.planCentrifuging(
-						work.recipe, productivity, stability, 0);
-				cachedRolls = new Rolls(work.recipe, productivity, stability, units, plan, plan.maximumExact(units));
-				rollPlans.put(access.lane(), cachedRolls);
+			var preparedRecipe = recipeTemplate(work.recipe);
+			var cachedRolls = preparedRecipe.rolls;
+			if (cachedRolls == null || cachedRolls.productivity != productivity || cachedRolls.stability != stability) {
+				cachedRolls = new Rolls(work.recipe, productivity, stability);
+				preparedRecipe.rolls = cachedRolls;
 			}
 			var rolls = cachedRolls.plan;
-			var perInput = cachedRolls.perInput;
-			if (perInput.isEmpty() || !host.fitsExact(account, perInput)) {
+			var perInput = cachedRolls.maximum(units);
+			long allowedInputs = account.maximumCentrifugeInputs(host.reference(), perInput, input.getCount(), host.capacity());
+			if (allowedInputs == 0) {
 				access.returnInput();
 				return Result.BLOCKED;
-			}
-			long allowedInputs = input.getCount();
-			var capacityUsed = account.reservedCapacity();
-			for (var entry : perInput.entrySet()) {
-				boolean emc = ResourceTypes.EMC.equals(entry.getKey());
-				long capacity = host.capacity();
-				BigInteger used = capacityUsed.getOrDefault(entry.getKey(), BigInteger.ZERO);
-				BigInteger perUnit = entry.getValue();
-				long inputs;
-				if (!emc && used.bitLength() < 64 && perUnit.bitLength() < 64) {
-					long room = Math.max(0, capacity - used.longValueExact());
-					inputs = room / perUnit.longValueExact();
-				} else {
-					BigInteger limit = emc ? ResourceExactAmounts.MAX_VALUE : BigInteger.valueOf(capacity);
-					BigInteger room = limit.subtract(used).max(BigInteger.ZERO);
-					inputs = room.divide(perUnit).min(BigInteger.valueOf(Long.MAX_VALUE)).longValueExact();
-				}
-                allowedInputs = Math.min(allowedInputs, inputs);
 			}
 			LocalPlan local = work.ordinaryRecipe == null ? null : access.localPlan(work.ordinaryRecipe);
 			if (work.ordinaryRecipe != null) {
@@ -350,7 +408,8 @@ public final class ResourceCentrifugeProcessor {
 			long energyCost = tickPlan.energyUsed();
 			if (access.consumeEnergy(energyCost, true) != energyCost) return Result.BLOCKED;
 			if (consumed > 0 && !exact(access.consume(consumed, true), input, consumed)) return Result.BLOCKED;
-			var maximum = rolls.maximumExact(consumed == 0 ? units : Math.multiplyExact((long) consumed, units));
+			long completedUnits = Math.multiplyExact((long) consumed, units);
+			var maximum = consumed <= 1 ? perInput : cachedRolls.maximumBatch(completedUnits);
 			if (!host.fitsExact(account, maximum)) return Result.BLOCKED;
 			var workBefore = work.evidence(level.registryAccess());
 			var next = remaining == 0 ? null : work.advance(remaining,
@@ -360,16 +419,15 @@ public final class ResourceCentrifugeProcessor {
 			var context = new CompoundTag();
 			context.putString("host", "resource_centrifuging");
 			context.putInt("lane", access.lane());
-			context.put("work_before", workBefore);
 			context.putInt("input_before", input.getCount());
 			context.putInt("input_consumed", consumed);
 			context.putInt("next_ticks", remaining);
 			context.putLong("energy_before", access.energy());
 			context.putLong("energy_cost", energyCost);
 			if (localBatch != null) context.put("local_plan", localBatch.snapshot());
-			ticket = account.reserve(host.reference(), work.revision, context, maximum);
+			ticket = account.reserveCentrifuge(host.reference(), work.revision, context, workBefore, maximum);
 			account.start(ticket);
-			var produced = rolls.sampleWithRolls(Math.multiplyExact((long) consumed, units), work.seed).exactAmounts();
+			var produced = rolls.samplePrepared(completedUnits, work.seed, maximum).exactAmounts();
 			account.freezeCentrifuge(ticket, produced, nextWork);
 			if (access.consumeEnergy(energyCost, false) != energyCost) throw new IllegalStateException("Incomplete energy debit");
 			if (host.account(access.entity()) != account || !exact(access.input(), input, input.getCount())) {

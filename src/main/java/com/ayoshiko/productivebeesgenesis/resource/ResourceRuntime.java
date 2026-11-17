@@ -301,6 +301,14 @@ public final class ResourceRuntime {
 
 	public enum CentrifugeAdmission { UNMANAGED, READY, UNAVAILABLE }
 
+	/** 仅供一次输入准入共用的分类与配方；不缓存账户、权限或接收资格。 */
+	public record CentrifugeInputResolution(CentrifugeAdmission admission, ResourceCentrifugeRecipe recipe) {
+		private static final CentrifugeInputResolution UNMANAGED =
+				new CentrifugeInputResolution(CentrifugeAdmission.UNMANAGED, null);
+		private static final CentrifugeInputResolution UNAVAILABLE =
+				new CentrifugeInputResolution(CentrifugeAdmission.UNAVAILABLE, null);
+	}
+
 	/** 故障时只保管已声明资源蜜脾；普通蜜脾不触发逐刻异常或资源账户创建。 */
 	public static CentrifugeAdmission centrifugeAdmission(MinecraftServer server, ItemStack input) {
 		if (ResourceCentrifugeRecipe.unitsForItem(input) == 0) return CentrifugeAdmission.UNMANAGED;
@@ -312,6 +320,21 @@ public final class ResourceRuntime {
 		var bee = input.get(com.ayoshiko.productivebeesgenesis.util.PbDataComponents.beeType());
 		return bee != null && state.failedCentrifugeBeeTypes.contains(bee)
 				? CentrifugeAdmission.UNAVAILABLE : CentrifugeAdmission.UNMANAGED;
+	}
+
+	/** 合并插入准入需要配方时才携带本次解析结果，普通识别热路径仍直接返回枚举。 */
+	public static CentrifugeInputResolution resolveCentrifugeInput(MinecraftServer server, ItemStack input) {
+		if (ResourceCentrifugeRecipe.unitsForItem(input) == 0) return CentrifugeInputResolution.UNMANAGED;
+		var state = state(server);
+		if (recipesReady(server, state)) {
+			var recipe = state.recipes.centrifuge(input);
+			if (recipe == null) return CentrifugeInputResolution.UNMANAGED;
+			if (reloadBlocked(server)) return CentrifugeInputResolution.UNAVAILABLE;
+			return new CentrifugeInputResolution(CentrifugeAdmission.READY, recipe.value());
+		}
+		var bee = input.get(com.ayoshiko.productivebeesgenesis.util.PbDataComponents.beeType());
+		return bee != null && state.failedCentrifugeBeeTypes.contains(bee)
+				? CentrifugeInputResolution.UNAVAILABLE : CentrifugeInputResolution.UNMANAGED;
 	}
 
 	static boolean recipesUnavailable(MinecraftServer server) {

@@ -79,6 +79,8 @@ final class Ae2PushBuffers {
 	final List<AEItemKey> scanSmeltingCandidateKeys = new ArrayList<>();
 	/** Cached Productive Bees comb keys used as the lower-priority candidate group. */
 	final List<AEItemKey> scanCandidateKeys = new ArrayList<>();
+	final Ae2InputCandidateIndex scanSmeltingInputIndex = new Ae2InputCandidateIndex();
+	final Ae2InputCandidateIndex scanCombInputIndex = new Ae2InputCandidateIndex();
 	final Ae2CursorScan.CursorPosition scanSmeltingPosition = new Ae2CursorScan.CursorPosition();
 	final Ae2CursorScan.CursorPosition scanCombPosition = new Ae2CursorScan.CursorPosition();
 	volatile Object scanCandidateSource;

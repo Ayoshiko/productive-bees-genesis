@@ -33,7 +33,7 @@
 
 ## [1.2.6] - 未发布候选
 
-**蜜脾块升级与机器自动恢复维护更新。** 客户端与服务端须一起更新。 / **Comb block upgrade and automatic machine recovery maintenance update.** Update clients and servers together.
+**蜜脾块升级、自动恢复与生产性能维护更新。** 客户端与服务端须一起更新。 / **Comb block upgrades, automatic recovery and production performance maintenance update.** Update clients and servers together.
 
 ### 修复
 
@@ -46,6 +46,8 @@
 - **故障提示**：离心车道区分已知费用待结清与真实费用未决；正常资源批次的输出确认不再误报“资源结果未决”或反复记录“已恢复”。Jade 分别显示准备失败、资源等待与交付保管，不再把这些状态汇总成容量等待。
 - **异常日志**：蜂槽、离心车道、输出请求与升级／路由阶段保留首个原因和原位置；持续异常按固定类别全局一分钟限频，避免加速或大量机器同时失败时刷屏。跳过重试或仅命中配方不会清除未恢复的故障，真实恢复后合并记录；输出通知失败与恢复保留原请求、目标和数量。
 - **生产与供料性能**：机械蜂箱复用已付蜜蜂的完整身份快照，万象奖励按完整数量聚合，减少满槽生产中的 NBT 深比较和重复拆栈。精妙存储直出使用其当前整库存入口并保留原过滤、锁定与拒收缓存；万象离心直接固定批次模板，减少中间复制，并按真实流体变化失效满罐缓存，跳过直接 AE 输出的无用本地扫描；原随机选型与付款顺序保持。多种蜜脾和熔炼供料跳过已满或不匹配的车道，减少空离心批次和健康熔炼车道的重复准备，保留真实准入、费用、产量和公平份额。
+
+- **高并行离心工厂**：满槽供料按已有完整物品身份投影候选，补料后增量更新车道索引；一次公开准入只解析一次输入，实际提取后仍按完整组件、数量、权限与当前输出重新校验。混合供料缓存覆盖已测的轮换工作集，世界或配方／标签重载后立即撤销旧结果。普通和万象批次共享同次准备配置，复用静态流体类型；扩展资源复用有界配方计划和完整输入编码，减少保存证据的重复深拷贝与预算计算。原产量、费用、公平份额、已付工作和未知交付保管保持。
 
 ### English
 
@@ -60,6 +62,8 @@
 - **Failure messages**: centrifuge lanes distinguish known payment remainders awaiting settlement from uncertain debits. Normal resource batches awaiting output confirmation no longer report an unresolved resource result or repeatedly log recovery. Jade reports preparation failures, resource waits and retained transfers separately instead of counting them as capacity waits.
 - **Exception logs**: bee slots, centrifuge lanes, output requests and upgrade or routing stages retain the first cause and original location. Repeated exceptions are combined by fixed global categories and limited to one report per minute, avoiding spam with acceleration or many failing machines. Skipped retries or recipe matches do not clear an unresolved failure; verified recoveries are combined. Output notification failures and recoveries retain the original request, destination and quantity.
 - **Production and input performance**: mechanical apiaries reuse complete paid-bee identity snapshots, and Myriad bonuses aggregate full quantities, reducing deep NBT comparisons and repeated stack splitting with full bee slots. Direct output to Sophisticated Storage uses its current whole-inventory insertion path while preserving filters, locks and failed-insert caches. Myriad centrifuges freeze batch templates directly with fewer intermediate copies and invalidate full-tank caches after real fluid changes, avoiding unused local scans during direct AE output while retaining the original random selection and payment order. Mixed-comb and smelting input skips full or mismatched lanes, and centrifuges avoid empty batches and repeated preparation of healthy smelting lanes while preserving real admission checks, energy costs, output totals and fair input shares.
+
+- **High parallelism centrifuge factories**: full input lanes project candidates by their existing complete item identities and update lane indexes incrementally after refill. Each public admission check resolves the input once, while insertion after extraction still rechecks complete components, actual quantities, permissions and current outputs. Mixed-input caches cover the measured rotating working set and invalidate immediately after world or recipe/tag changes. Normal and Myriad batches share preparation settings and static fluid types; extended resources reuse bounded recipe plans and complete input encodings, reducing repeated evidence copies and storage-budget calculations. Output totals, energy costs, fair input shares, paid work and retained uncertain transfers are preserved.
 
 ## [1.2.5] - 2026-11-14
 

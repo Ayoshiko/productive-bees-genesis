@@ -20,9 +20,11 @@ import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
+import java.math.BigInteger;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 
 /** 新取料的资源出口检查；不创建账户、不扣原料，不改变已付产物的恢复。 */
 final class Ae2ResourceInputGate {
@@ -48,7 +50,9 @@ final class Ae2ResourceInputGate {
         Decision decision = Decision.DEFERRED;
         int productivity;
         double stability;
-        java.util.Map<ResourceKey, java.math.BigInteger> maximum;
+        Map<ResourceKey, BigInteger> maximum;
+        long scaledUnits;
+        Map<ResourceKey, BigInteger> scaledMaximum;
     }
 
     private final LinkedHashMap<ResourceKey, Route> routes = new LinkedHashMap<>();
@@ -209,7 +213,7 @@ final class Ae2ResourceInputGate {
             if (result == Decision.ACCEPTED && account != null) {
                 var check = checks.get(recipe.value());
                 long units = recipe.value().units(key.getReadOnlyStack());
-                if (!ResourceHiveHost.existing(host).fitsExact(account, scaledMaximum(check.maximum, units))) {
+                if (!ResourceHiveHost.existing(host).fitsExact(account, scaledMaximum(check, units))) {
                     waiting.add(recipe.value());
                     return Decision.REJECTED;
                 }
@@ -254,6 +258,7 @@ final class Ae2ResourceInputGate {
                 if (check.maximum == null || check.productivity != productivity || check.stability != stability) {
                     check.maximum = com.ayoshiko.productivebeesgenesis.api.resource.ResourceProductionApi
                             .planCentrifuging(recipe, productivity, stability, 0).maximumExact();
+                    check.scaledMaximum = null;
                     check.productivity = productivity;
                     check.stability = stability;
                 }
@@ -338,12 +343,19 @@ final class Ae2ResourceInputGate {
         return accepted ? Decision.ACCEPTED : Decision.REJECTED;
     }
 
-    private static java.util.Map<ResourceKey, java.math.BigInteger> scaledMaximum(
-            java.util.Map<ResourceKey, java.math.BigInteger> maximum, long units) {
-        if (units == 1) return maximum;
-        var result = new LinkedHashMap<ResourceKey, java.math.BigInteger>();
-        maximum.forEach((key, value) -> result.put(key, value.multiply(java.math.BigInteger.valueOf(units))));
-        return result;
+    private static Map<ResourceKey, BigInteger> scaledMaximum(RecipeCheck check, long units) {
+        if (units == 1) return check.maximum;
+        // 只复用当前产出计划的静态缩放；账户容量与权限仍由调用方当次核验。
+        if (check.scaledMaximum == null || check.scaledUnits != units) {
+            var factor = BigInteger.valueOf(units);
+            var result = new LinkedHashMap<ResourceKey, BigInteger>();
+            for (var entry : check.maximum.entrySet()) {
+                result.put(entry.getKey(), entry.getValue().multiply(factor));
+            }
+            check.scaledUnits = units;
+            check.scaledMaximum = result;
+        }
+        return check.scaledMaximum;
     }
 
     private static void report(Object key, Throwable failure) {

@@ -55,6 +55,23 @@ public final class ResourceExactAmounts {
         return copy(result);
     }
 
+    /** 包内两份数量表均已校验并封闭；只核对本次增量的累计量和新身份，不重扫未变余额。 */
+    static Map<ResourceKey, BigInteger> plusValidated(Map<ResourceKey, BigInteger> first,
+            Map<ResourceKey, BigInteger> second) {
+        if (second.isEmpty()) return first;
+        var result = new LinkedHashMap<>(first);
+        for (var entry : second.entrySet()) {
+            var key = entry.getKey();
+            var previous = result.get(key);
+            if (previous == null && result.size() >= ResourceAmounts.MAX_KEYS) {
+                throw new IllegalArgumentException("Too many resource identities");
+            }
+            BigInteger amount = previous == null ? entry.getValue() : previous.add(entry.getValue());
+            result.put(key, validate(key, amount));
+        }
+        return Map.copyOf(result);
+    }
+
     public static void checkAddition(Map<ResourceKey, BigInteger> first, Map<ResourceKey, ? extends Number> second) {
         if (second.size() > ResourceAmounts.MAX_KEYS) throw new IllegalArgumentException("Too many resource identities");
         int keys = first.size();

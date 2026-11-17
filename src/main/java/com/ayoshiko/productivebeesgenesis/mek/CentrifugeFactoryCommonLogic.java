@@ -13,6 +13,9 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2InputHost;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
 import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceInputAdmission;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import com.ayoshiko.productivebeesgenesis.util.InputOutputCompatibilityCache;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
@@ -40,6 +43,7 @@ import mekanism.common.util.MekanismUtils;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
@@ -87,6 +91,35 @@ public final class CentrifugeFactoryCommonLogic {
 		if (pbProcessor.acceptsResourceInput(stack)) {
 			return pbProcessor.allowsNewResourceInput(stack) || pbProcessor.hasRetainedInput(stack);
 		}
+		return isOrdinaryInputValid(level, stack, cache, pbProcessor, recipeType, allowSmelting);
+	}
+
+	/** 一次槽准入只分类一次；规划探测与实际插入各自调用，不能沿用上次权限或输出判断。 */
+	public static boolean isItemValidForInsertion(@NotNull BlockEntity host, @NotNull ItemStack stack,
+			@NotNull IInventorySlot outputSlot, @Nullable IInventorySlot secondaryOutputSlot,
+			@Nullable IInventorySlot tertiaryOutputSlot, @NotNull InputValidationCache validationCache,
+			@NotNull InputOutputCompatibilityCache outputCache, @NotNull PbRecipeProcessor pbProcessor,
+			@NotNull IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
+					SingleItem<ItemStackToItemStackRecipe>> recipeType, boolean allowSmelting,
+			@NotNull BooleanSupplier superChecker) {
+		Level level = host.getLevel();
+		if (level == null) return false;
+		if (level instanceof ServerLevel serverLevel) {
+			var resolved = ResourceRuntime.resolveCentrifugeInput(serverLevel.getServer(), stack);
+			if (resolved.admission() != ResourceRuntime.CentrifugeAdmission.UNMANAGED
+					|| ResourceCentrifugeProcessor.hasPendingInput(host, stack)) {
+				return ResourceInputAdmission.allows(host, resolved) || pbProcessor.hasRetainedInput(stack);
+			}
+		}
+		return isOrdinaryInputValid(level, stack, validationCache, pbProcessor, recipeType, allowSmelting)
+				&& ordinaryInputProducesOutput(level, stack, outputSlot, secondaryOutputSlot, tertiaryOutputSlot,
+						outputCache, pbProcessor, superChecker);
+	}
+
+	private static boolean isOrdinaryInputValid(@NotNull Level level, @NotNull ItemStack stack,
+			@NotNull InputValidationCache cache, @NotNull PbRecipeProcessor pbProcessor,
+			@NotNull IMekanismRecipeTypeProvider<SingleRecipeInput, ItemStackToItemStackRecipe,
+					SingleItem<ItemStackToItemStackRecipe>> recipeType, boolean allowSmelting) {
 		// Clear cached validation when the smelting-compat switch changes (O(1) flag compare per probe)
 		cache.setSmeltingAllowed(allowSmelting);
 		return cache.getResult(level, stack,
@@ -110,6 +143,14 @@ public final class CentrifugeFactoryCommonLogic {
 			@NotNull InputOutputCompatibilityCache cache, @NotNull PbRecipeProcessor pbProcessor,
 			@NotNull BooleanSupplier superChecker) {
 		if (pbProcessor.acceptsResourceInput(fallbackInput)) return true;
+		return ordinaryInputProducesOutput(level, fallbackInput, outputSlot, secondaryOutputSlot, tertiaryOutputSlot,
+				cache, pbProcessor, superChecker);
+	}
+
+	private static boolean ordinaryInputProducesOutput(@Nullable Level level, @NotNull ItemStack fallbackInput,
+			@NotNull IInventorySlot outputSlot, @Nullable IInventorySlot secondaryOutputSlot,
+			@Nullable IInventorySlot tertiaryOutputSlot, @NotNull InputOutputCompatibilityCache cache,
+			@NotNull PbRecipeProcessor pbProcessor, @NotNull BooleanSupplier superChecker) {
 		return cache.get(level, fallbackInput, outputSlot.getStack(),
 				secondaryOutputSlot == null ? ItemStack.EMPTY : secondaryOutputSlot.getStack(),
 				tertiaryOutputSlot == null ? ItemStack.EMPTY : tertiaryOutputSlot.getStack(),

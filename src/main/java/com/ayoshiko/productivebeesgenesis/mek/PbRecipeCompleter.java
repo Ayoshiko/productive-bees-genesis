@@ -77,6 +77,22 @@ public class PbRecipeCompleter {
 	private static final ConcurrentHashMap<CentrifugeRecipe, Map<ItemStack,
 		ChancedOutput>> recipeOutputsCache = new ConcurrentHashMap<>();
 
+	/** 工厂准备阶段共享产出配置；库存容量和外部接收仍由正式入口实时核验。 */
+	record OutputSettings(Level level, HolderLookup.Provider provider, int productivity, float stability,
+			int upgrades, long revision, long configRevision) {
+		static OutputSettings capture(PbRecipeContext context) {
+			Level level = context.level();
+			HolderLookup.Provider provider = level == null ? null : level.registryAccess();
+			int productivity = Math.max(1, context.productivityModifier());
+			float stability = context.stabilityBonus();
+			int upgrades = (context.suppressesUselessByproducts() ? 1 : 0)
+					| (context.productivebeesgenesis$hasEssenceConversionUpgrade() ? 2 : 0)
+					| (context.productivebeesgenesis$hasRawOreSmeltingUpgrade() ? 4 : 0);
+			return new OutputSettings(level, provider, productivity, stability, upgrades,
+					ProductiveBeesGenesis.RECIPE_VERSION.get(), MekCentrifugeFactoryHelper.runtimeConfigRevision());
+		}
+	}
+
 	/** PB配方处理上下文 */
 	private final PbRecipeContext context;
 	private final int lane;
@@ -189,19 +205,20 @@ public class PbRecipeCompleter {
 	 */
 	public void accumulatePbRecipeOutputs(CentrifugeRecipe recipe, int processIndex, int productivityModifier) {
 		beforePendingMutation();
-		accumulateSingle(recipe, productivityModifier, ThreadLocalRandom.current());
+		accumulateSingle(recipe, productivityModifier, ThreadLocalRandom.current(), null);
 	}
 
-	private void accumulateSingle(CentrifugeRecipe recipe, int productivityModifier, java.util.random.RandomGenerator random) {
+	private void accumulateSingle(CentrifugeRecipe recipe, int productivityModifier,
+			java.util.random.RandomGenerator random, OutputSettings settings) {
 		int modifier = Math.max(1, productivityModifier);
 		// stability bonus 循环外获取一次（EnumMap O(1) 查询，不在循环内重复）
-		float stabilityBonus = context.stabilityBonus();
+		float stabilityBonus = settings == null ? context.stabilityBonus() : settings.stability();
 
 		// v2.0.9 修复产物锁定 bug：配方变更时同步重置 pendingRecipe 和 pendingRecipeOutputs
 		// 原代码每次都赋值 pendingRecipe（无脑赋值），仅当 pendingRecipeOutputs == null 时加载
 		// 新代码仅当配方变更时更新，避免残留旧配方的 outputs
 		selectRecipe(recipe);
-		boolean discardWax = context.suppressesUselessByproducts();
+		boolean discardWax = settings == null ? context.suppressesUselessByproducts() : (settings.upgrades() & 1) != 0;
 
 		for (Map.Entry<ItemStack, ChancedOutput> entry : pendingRecipeOutputs.entrySet()) {
 			if (discardWax && UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
@@ -257,24 +274,24 @@ public class PbRecipeCompleter {
 	public void accumulatePbRecipeOutputsBatch(CentrifugeRecipe recipe, int processIndex,
 			int productivityModifier, int batchCount) {
 		beforePendingMutation();
-		accumulateBatch(recipe, productivityModifier, batchCount, ThreadLocalRandom.current());
+		accumulateBatch(recipe, productivityModifier, batchCount, ThreadLocalRandom.current(), null);
 	}
 
 	private void accumulateBatch(CentrifugeRecipe recipe, int productivityModifier, int batchCount,
-			java.util.random.RandomGenerator random) {
+			java.util.random.RandomGenerator random, OutputSettings settings) {
 		if (batchCount <= 0) return;
 		if (batchCount == 1) {
 			// N=1 走原版路径,保持完全等价
-			accumulateSingle(recipe, productivityModifier, random);
+			accumulateSingle(recipe, productivityModifier, random, settings);
 			return;
 		}
 		int modifier = Math.max(1, productivityModifier);
 		// stability bonus 循环外获取一次（EnumMap O(1) 查询，不在循环内重复）
-		float stabilityBonus = context.stabilityBonus();
+		float stabilityBonus = settings == null ? context.stabilityBonus() : settings.stability();
 
 		// v2.0.9 修复产物锁定 bug：配方变更时同步重置（与 accumulatePbRecipeOutputs 保持一致）
 		selectRecipe(recipe);
-		boolean discardWax = context.suppressesUselessByproducts();
+		boolean discardWax = settings == null ? context.suppressesUselessByproducts() : (settings.upgrades() & 1) != 0;
 
 		for (Map.Entry<ItemStack, ChancedOutput> entry : pendingRecipeOutputs.entrySet()) {
 			if (discardWax && UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
@@ -335,7 +352,7 @@ public class PbRecipeCompleter {
 	/** 模板按原选型顺序抽取，输出按分配顺序直接进入独占批次，只复制一次共享模板。 */
 	PbRecipeCompleter prepareMyriadCompleted(List<ResourceLocation> selected, Map<ResourceLocation, Long> allocation,
 			Map<ResourceLocation, List<ItemStack>> variants, RandomSource random, FluidStack fluid, long amount,
-			ItemStack input, int inputs) {
+			OutputSettings settings) {
 		PbRecipeCompleter batch = completedBatch();
 		batch.clearPendingOutputs();
 		batch.resetPendingRecipe();
@@ -353,13 +370,18 @@ public class PbRecipeCompleter {
 		}
 		batch.pendingFluidTemplate = fluid.isEmpty() ? null : fluid.copyWithAmount(1);
 		batch.pendingFluidAmount = amount;
-		batch.pendingInputShrink = inputs;
-		batch.freezeCompletedBatch(input);
+		batch.prepareOutputUpgrades(false, settings.upgrades(), settings.revision(), settings.level());
+		batch.preparedOutput = true;
 		return batch;
 	}
 
 	void bindMyriadFluidOutput(MyriadFluidOutputHandler handler) {
 		myriadFluidOutput = handler;
+	}
+
+	OutputSettings outputSettings() {
+		OutputSettings settings = factoryOutputBatch == null ? null : factoryOutputBatch.outputSettings();
+		return settings == null ? OutputSettings.capture(context) : settings;
 	}
 
 	private PbRecipeCompleter completedBatch() {
@@ -370,37 +392,40 @@ public class PbRecipeCompleter {
 	}
 
 	int maximumRepresentableInputs(CentrifugeRecipe recipe) {
-		if (capacityCache == null) capacityCache = new PbOutputCapacityCache(this, context);
+		if (capacityCache == null) capacityCache = new PbOutputCapacityCache(this);
 		return capacityCache.maximumRepresentableInputs(recipe);
 	}
 
 	boolean fitsMaximum(CentrifugeRecipe recipe, int lane, int inputs) {
-		if (capacityCache == null) capacityCache = new PbOutputCapacityCache(this, context);
+		if (capacityCache == null) capacityCache = new PbOutputCapacityCache(this);
 		return capacityCache.fits(recipe, lane, inputs);
 	}
 
 	private void prepareInto(PbRecipeCompleter batch, CentrifugeRecipe recipe, int inputs, long seed, boolean maximum) {
 		batch.clearPendingOutputs();
+		OutputSettings settings = outputSettings();
 		if (maximum) {
 			batch.selectRecipe(recipe);
-			int modifier = Math.max(1, context.productivityModifier());
+			int modifier = settings.productivity();
+			float stability = settings.stability();
+			boolean suppressByproducts = (settings.upgrades() & 1) != 0;
 			for (var entry : batch.pendingRecipeOutputs.entrySet()) {
 				var out = entry.getValue();
-				if (PbOutputChance.adjustedChance(out.chance(), context.stabilityBonus()) <= 0) continue;
+				if (PbOutputChance.adjustedChance(out.chance(), stability) <= 0) continue;
 				int max = Math.max(Math.max(0, out.min()), out.max());
-				if (context.suppressesUselessByproducts() && UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
+				if (suppressByproducts && UselessByproductUpgradeHelper.isWax(entry.getKey())) continue;
 				long amount = Math.multiplyExact((long) max * modifier, inputs);
 				batch.addPendingOutput(entry.getKey(), amount);
 				batch.pendingItemCount = Math.addExact(batch.pendingItemCount, amount);
 			}
-			if (batch.pendingFluidTemplate != null && !(context.suppressesUselessByproducts()
+			if (batch.pendingFluidTemplate != null && !(suppressByproducts
 					&& UselessByproductUpgradeHelper.isHoney(batch.pendingFluidTemplate))) {
 				long perInput = (long) batch.pendingFluidTemplate.getAmount() * modifier;
 				batch.pendingFluidAmount = Math.multiplyExact(perInput, inputs);
 			}
-		} else batch.accumulateBatch(recipe, context.productivityModifier(), inputs, new java.util.Random(seed));
-		batch.prepareOutputUpgrades(maximum);
-		if (context.suppressesUselessByproducts() && batch.pendingFluidTemplate != null
+		} else batch.accumulateBatch(recipe, settings.productivity(), inputs, new java.util.Random(seed), settings);
+		batch.prepareOutputUpgrades(maximum, settings.upgrades(), settings.revision(), settings.level());
+		if ((batch.outputUpgradeMask & 1) != 0 && batch.pendingFluidTemplate != null
 				&& UselessByproductUpgradeHelper.isHoney(batch.pendingFluidTemplate)) batch.pendingFluidAmount = 0;
 		batch.pendingInputShrink = 0;
 		batch.preparedOutput = true;
@@ -409,21 +434,31 @@ public class PbRecipeCompleter {
 	/** 普通与组合共用副产物、精华、粗矿顺序；上界保留可能出现的转换余料。 */
 	void prepareOutputUpgrades(boolean maximum) {
 		if (preparedOutput) return;
-		int mask = (context.suppressesUselessByproducts() ? 1 : 0)
+		OutputSettings settings = factoryOutputBatch == null ? null : factoryOutputBatch.outputSettings();
+		if (settings != null) {
+			prepareOutputUpgrades(maximum, settings.upgrades(), settings.revision(), settings.level());
+			return;
+		}
+		int upgrades = (context.suppressesUselessByproducts() ? 1 : 0)
 				| (context.productivebeesgenesis$hasEssenceConversionUpgrade() ? 2 : 0)
-				| (context.productivebeesgenesis$hasRawOreSmeltingUpgrade() ? 4 : 0)
-				| (maximum ? 8 : 0);
-		long revision = ProductiveBeesGenesis.RECIPE_VERSION.get();
+				| (context.productivebeesgenesis$hasRawOreSmeltingUpgrade() ? 4 : 0);
+		prepareOutputUpgrades(maximum, upgrades, ProductiveBeesGenesis.RECIPE_VERSION.get(), context.level());
+	}
+
+	private void prepareOutputUpgrades(boolean maximum, int upgrades, long revision, Level level) {
+		int mask = upgrades | (maximum ? 8 : 0);
 		if (outputUpgradesPrepared && outputUpgradeMask == mask && outputUpgradeRevision == revision) return;
-		discardSuppressedWaxOutputs();
+		if ((mask & 1) != 0) discardSuppressedWaxOutputs();
 		if (maximum) {
-			if (context.productivebeesgenesis$hasEssenceConversionUpgrade())
-				EssenceConversionUpgradeHelper.maximumPendingLongOutputs(context.level(), pendingOutputs);
-			if (context.productivebeesgenesis$hasRawOreSmeltingUpgrade())
-				RawOreSmeltingUpgradeHelper.maximumPendingLongOutputs(context.level(), pendingOutputs);
+			if ((mask & 2) != 0) {
+				EssenceConversionUpgradeHelper.maximumPendingLongOutputs(level, pendingOutputs);
+			}
+			if ((mask & 4) != 0) {
+				RawOreSmeltingUpgradeHelper.maximumPendingLongOutputs(level, pendingOutputs);
+			}
 		} else {
-			convertPendingEssenceOutputs();
-			convertPendingRawOreOutputs();
+			if ((mask & 2) != 0) convertPendingEssenceOutputs(level);
+			if ((mask & 4) != 0) convertPendingRawOreOutputs(level);
 		}
 		if (maximum) {
 			pendingItemCount = 0;
@@ -892,8 +927,8 @@ public class PbRecipeCompleter {
 	}
 
 	/** Drops wax that was buffered before the upgrade was installed. */
-	void discardSuppressedWaxOutputs() {
-		if (!context.suppressesUselessByproducts() || pendingOutputs.isEmpty()) return;
+	private void discardSuppressedWaxOutputs() {
+		if (pendingOutputs.isEmpty()) return;
 		Iterator<Map.Entry<ItemStack, Long>> iterator = pendingOutputs.entrySet().iterator();
 		while (iterator.hasNext()) {
 			Map.Entry<ItemStack, Long> entry = iterator.next();
@@ -904,10 +939,9 @@ public class PbRecipeCompleter {
 	}
 
 	/** 将当前 pending 物品输出按精华转化升级规则重建，并同步数量统计。 */
-	void convertPendingEssenceOutputs() {
-		if (!context.productivebeesgenesis$hasEssenceConversionUpgrade()
-				|| pendingOutputs.isEmpty() || context.level() == null) return;
-		if (!EssenceConversionUpgradeHelper.convertPendingLongOutputs(context.level(), pendingOutputs)) return;
+	private void convertPendingEssenceOutputs(Level level) {
+		if (pendingOutputs.isEmpty() || level == null) return;
+		if (!EssenceConversionUpgradeHelper.convertPendingLongOutputs(level, pendingOutputs)) return;
 		long total = 0L;
 		for (long count : pendingOutputs.values()) {
 			total = SaturatingMath.saturatingAdd(total, Math.max(0, count));
@@ -916,10 +950,9 @@ public class PbRecipeCompleter {
 	}
 
 	/** 将当前 pending 物品输出按粗矿熔炼升级重建，并同步数量统计。 */
-	void convertPendingRawOreOutputs() {
-		if (!context.productivebeesgenesis$hasRawOreSmeltingUpgrade()
-				|| pendingOutputs.isEmpty() || context.level() == null) return;
-		if (!RawOreSmeltingUpgradeHelper.convertPendingLongOutputs(context.level(), pendingOutputs)) return;
+	private void convertPendingRawOreOutputs(Level level) {
+		if (pendingOutputs.isEmpty() || level == null) return;
+		if (!RawOreSmeltingUpgradeHelper.convertPendingLongOutputs(level, pendingOutputs)) return;
 		long total = 0L;
 		for (long count : pendingOutputs.values()) {
 			total = SaturatingMath.saturatingAdd(total, Math.max(0, count));

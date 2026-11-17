@@ -96,7 +96,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	/** Task 9: GUI 访问委托 — 封装 GUI/Container 查询方法，减少本类行数 */
 	private final FactoryGuiAccessor guiAccessor;
 	/** 输入槽有效性校验缓存（isItemValidForSlot / isValidInputItem） */
-	protected final InputValidationCache validInputCache = new InputValidationCache();
+	protected final InputValidationCache validInputCache = new InputValidationCache(InputValidationCache.DEFAULT_TTL, 128);
 	/** 输入-输出兼容性校验缓存（inputProducesOutput） */
 	protected final InputOutputCompatibilityCache inputProducesOutputCache = new InputOutputCompatibilityCache();
 	/** Per-tile 批量收获状态 — 工厂变体共用，用于 skipPb 判断 */
@@ -221,6 +221,15 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 		return CentrifugeFactoryCommonLogic.inputProducesOutput(level,
 			fallbackInput, outputSlot, secondaryOutputSlot, tertiaryOutputSlot(process), inputProducesOutputCache, pbProcessor,
 			() -> super.inputProducesOutput(process, fallbackInput, outputSlot, secondaryOutputSlot, updateCache));
+	}
+
+	protected boolean isInputValidForInsertion(int process, @NotNull ItemStack stack,
+			@NotNull IInventorySlot outputSlot, @Nullable IInventorySlot secondaryOutputSlot) {
+		return CentrifugeFactoryCommonLogic.isItemValidForInsertion(this, stack,
+				outputSlot, secondaryOutputSlot, tertiaryOutputSlot(process), validInputCache,
+				inputProducesOutputCache, pbProcessor, getRecipeType(),
+				MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this),
+				() -> super.inputProducesOutput(process, stack, outputSlot, secondaryOutputSlot, false));
 	}
 
 	/** 配置卡兼容性检查 — 支持ME/EME工厂跨等级粘贴配置 */

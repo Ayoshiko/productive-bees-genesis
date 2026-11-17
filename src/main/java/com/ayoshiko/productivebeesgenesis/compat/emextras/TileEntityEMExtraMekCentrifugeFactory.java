@@ -8,7 +8,6 @@ import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeFluidTankMultiplie
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
-import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
 import com.ayoshiko.productivebeesgenesis.mek.CentrifugeFactoryCommonLogic;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryPbContextDelegate;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryPbUpgradeDelegate;
@@ -119,7 +118,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	/** PB 升级委托 — 封装 PB 升级安装/卸载/同步/持久化/倍率计算 */
 	private final FactoryPbUpgradeDelegate pbUpgradeDelegate;
 	/** 输入槽有效性校验缓存 */
-	private final InputValidationCache validInputCache = new InputValidationCache();
+	private final InputValidationCache validInputCache = new InputValidationCache(InputValidationCache.DEFAULT_TTL, 128);
 	/** 输入-输出兼容性校验缓存 */
 	private final InputOutputCompatibilityCache inputProducesOutputCache = new InputOutputCompatibilityCache();
 	/** Per-tile 批量收获状态 — skipPb "虚拟 tick 银行"策略,256x JDTE 加速下避免每 gameTick 256 次完整 PB 处理 */
@@ -234,9 +233,9 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 			((TieredInputSlot) inputSlot).productivebeesgenesis$markInputSlot();
 
 			int index = i;
-			// 原 validator 已执行同一全局准入，canInsert 只保留当前车道的输出兼容性。
-			((BasicInventorySlotAccessor) inputSlot).productivebeesgenesis$setCanInsert(
-					(stack, automation) -> inputProducesOutput(index, stack, outputSlot, secondaryOutputSlot, false));
+			// 槽装配发生在父构造期间；缓存和处理器只能在回调执行时从宿主读取。
+			((TieredInputSlot) inputSlot).productivebeesgenesis$setInputInsertionAdmission(
+					stack -> isInputValidForInsertion(index, stack, outputSlot, secondaryOutputSlot));
 			builder.addSlot(inputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,
 				getWarningCheck(RecipeError.NOT_ENOUGH_INPUT,
 				index)));
@@ -310,6 +309,15 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 		return CentrifugeFactoryCommonLogic.inputProducesOutput(level,
 			fallbackInput, outputSlot, secondaryOutputSlot, tertiaryOutputSlot(process), inputProducesOutputCache, pbProcessor,
 			() -> super.inputProducesOutput(process, fallbackInput, outputSlot, secondaryOutputSlot, updateCache));
+	}
+
+	private boolean isInputValidForInsertion(int process, @NotNull ItemStack stack,
+			@NotNull IInventorySlot outputSlot, @Nullable IInventorySlot secondaryOutputSlot) {
+		return CentrifugeFactoryCommonLogic.isItemValidForInsertion(this, stack,
+				outputSlot, secondaryOutputSlot, tertiaryOutputSlot(process), validInputCache,
+				inputProducesOutputCache, pbProcessor, getRecipeType(),
+				MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(this),
+				() -> super.inputProducesOutput(process, stack, outputSlot, secondaryOutputSlot, false));
 	}
 	/** 配置卡兼容性检查 — 支持EME/ME工厂跨等级粘贴配置 */
 	@Override public boolean isConfigurationDataCompatible(@NotNull Block blockType) {
