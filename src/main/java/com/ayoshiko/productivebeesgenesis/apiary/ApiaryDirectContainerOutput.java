@@ -42,13 +42,13 @@ final class ApiaryDirectContainerOutput {
 	 * 待离心蜜脾（{@code shouldHoldForCentrifuge}）被 hold 过滤保留，
 	 * 避免相邻箱子抢走本该进离心机的蜜脾；全部组被 hold 或真实尝试被拒时进入退避。
 	 */
-	void drainBuffer() {
-		if (!tile.isDirectContainerOutputEnabled()) return;
+	boolean drainBuffer() {
+		if (!tile.isDirectContainerOutputEnabled()) return false;
 		ApiaryOutputBuffer buffer = tile.getOutputBuffer();
 		// O(1) 短路：缓冲区为空时不进入 synchronized 遍历
-		if (buffer.getBufferedGroupCount() <= 0) return;
+		if (buffer.getBufferedGroupCount() <= 0) return false;
 		long now = System.nanoTime();
-		if (backoff.shouldSkip(now)) return;
+		if (backoff.shouldSkip(now)) return false;
 		ApiaryOutputBuffer.AeBufferPushResult result =
 				buffer.pushToSink(this::pushOne, tile::shouldHoldForCentrifuge);
 		if (result.pushed() > 0) {
@@ -58,6 +58,7 @@ final class ApiaryDirectContainerOutput {
 		} else {
 			backoff.recordFailure(now);
 		}
+		return true;
 	}
 
 	/** 单组推送回调 — 返回相邻容器实际接收数量（0 表示完全拒收）。 */

@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.util;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import org.slf4j.Logger;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -35,11 +34,8 @@ public class LogThrottle {
 
 	// ===== 静态全局节流 API（多 tile 共享） =====
 
-	/** 静态节流冷却间隔（毫秒） — 5000ms = 5 秒 */
-	private static final long COOLDOWN_MS = 5000L;
-
-	/** 静态节流冷却间隔（纳秒） — COOLDOWN_MS * 1_000_000 */
-	private static final long COOLDOWN_NS = COOLDOWN_MS * 1_000_000L;
+	/** 持续异常按类别每分钟最多输出一次，首个异常立即记录。 */
+	private static final long COOLDOWN_MS = 60_000L;
 
 	/** 全局静态节流缓存 — key = 业务标识，value = 上次输出时间戳（nanoTime） */
 	private static final ConcurrentHashMap<String, Long> lastLogTimeNanos = new ConcurrentHashMap<>();
@@ -74,7 +70,7 @@ public class LogThrottle {
 	}
 
 	/**
-	 * 静态 WARN 级别日志 — 5 秒内同 key 仅输出首次 WARN（多 tile 全局节流）
+	 * 静态 WARN 级别日志 — 60 秒内同 key 仅输出首次 WARN（多 tile 全局节流）
 	 * <p>
 	 * 用于多 tile 同类异常的统一节流，避免 256x 工厂场景下同一错误刷屏。
 	 * key 应为常量字符串（如 "ae2_fluid_backoff"），message 应为常量模板字符串。
@@ -84,7 +80,6 @@ public class LogThrottle {
 	 * @param args    占位符参数
 	 */
 	public static void warn(String key, String message, Object... args) {
-		lazyCleanup();
 		warnWithCooldown(key, COOLDOWN_MS, message, args);
 	}
 
@@ -140,7 +135,7 @@ public class LogThrottle {
 	}
 
 	/**
-	 * 静态 ERROR 级别日志 — 5 秒内同 key 仅输出首次 ERROR（多 tile 全局节流）
+	 * 静态 ERROR 级别日志 — 60 秒内同 key 仅输出首次 ERROR（多 tile 全局节流）
 	 * <p>
 	 * 用于多 tile 同类错误的统一节流，避免 256x 工厂场景下同一错误刷屏。
 	 * key 应为常量字符串（如 "ae2_push_permanent_failure"），message 应为常量模板字符串。
@@ -153,27 +148,21 @@ public class LogThrottle {
 	 * @param args    占位符参数
 	 */
 	public static void error(String key, String message, Object... args) {
-		lazyCleanup();
-		long now = System.nanoTime();
-		AtomicBoolean shouldOutput = new AtomicBoolean(false);
-		lastLogTimeNanos.compute(key, (k, last) -> {
-			if (last == null || (now - last) >= COOLDOWN_NS) {
-				shouldOutput.set(true);
-				return now;
-			}
-			return last; // 节流：保留旧时间戳
-		});
-		if (shouldOutput.get()) {
-			Logger logger = ProductiveBeesGenesis.LOGGER;
-			logger.error(message, args);
+		errorWithCooldown(key, COOLDOWN_MS, message, args);
+	}
+
+	/** 按固定异常类别汇总；调用方仍保管各槽位的首个根因与请求。 */
+	public static void errorWithCooldown(String key, long cooldownMs, String message, Object... args) {
+		if (shouldLog(key, cooldownMs)) {
+			ProductiveBeesGenesis.LOGGER.error(message, args);
 		}
 	}
 
-	/** 默认冷却间隔（tick） — 100 tick = 5 秒 */
-	public static final long DEFAULT_COOLDOWN_TICKS = 100L;
+	/** 默认日志间隔，按正常 20 TPS 对应一分钟。 */
+	public static final long DEFAULT_COOLDOWN_TICKS = 1_200L;
 
-	/** 默认冷却间隔（毫秒） — 5000ms = 5 秒 */
-	public static final long DEFAULT_COOLDOWN_MS = 5000L;
+	/** 默认日志间隔（毫秒）。 */
+	public static final long DEFAULT_COOLDOWN_MS = 60_000L;
 
 	/** 冷却间隔（tick） */
 	private final long cooldownTicks;
@@ -190,7 +179,7 @@ public class LogThrottle {
 	/** 冷却期内被抑制的日志计数（tick/ms 模式共享，单实例单模式使用） */
 	private final AtomicLong suppressedCount = new AtomicLong(0L);
 
-	/** 使用默认冷却间隔（tick 100 / ms 5000）构造冷却器 */
+	/** 使用默认一分钟日志间隔构造冷却器。 */
 	public LogThrottle() {
 		this(DEFAULT_COOLDOWN_TICKS);
 	}

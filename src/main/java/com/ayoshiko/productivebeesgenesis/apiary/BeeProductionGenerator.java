@@ -329,25 +329,20 @@ final class BeeProductionGenerator {
 		// Bug 10: 万象创世蜜蜂追加随机蜜脾/蜜脾块
 		// 机械蜂箱绕过 BeeHelperMixin 注入（调用 BeeInfoHelper.getBeeProduce 而非 BeeHelper.getBeeProduce），
 		// 需在此动态追加。随机产物不进入静态缓存 BeeProduceCache，避免所有蜂箱共享同一份随机结果。
-		// Task 7: 改用 MyriadAggregatedStacksBuilder 预聚合，将原 576 ItemStack 降为 ≤9 个聚合 stack，
-		// 后续 distributeToOutput 迭代次数从 576 降为 9。
+		// 每个选定模板保留完整数量的大堆叠，避免生成拆栈与冻结输出再聚合。
 		if (myriadCount > 0 && level != null) {
 			try {
-				// cappedMyriadCount 作为 totalCount 上限保护输出槽总容量（9 槽 × 64 = 576，实际 ItemStack ≤9）
-				int cappedMyriadCount = myriadCount;
 				List<ItemStack> randomItems;
 				if (upgrades.hasCombBlockUpgrade()) {
 					// 有 Block/Omega 升级：buildAggregatedCombBlocks 内部已 4× 缩放（与 Mixin 单次 4 个比例一致）
 					randomItems = myriadAggregatedBuilder.buildAggregatedCombBlocks(
-							cappedMyriadCount, level, cacheOwner);
+							myriadCount, level, cacheOwner);
 				} else {
 					// 无 Block/Omega 升级
 					randomItems = myriadAggregatedBuilder.buildAggregatedHoneycombs(
-							cappedMyriadCount, level, cacheOwner);
+							myriadCount, level, cacheOwner);
 				}
-				if (randomItems != null && !randomItems.isEmpty()) {
-					allItems.addAll(randomItems);
-				}
+				allItems.addAll(randomItems);
 			} catch (Exception e) {
 				throw new IllegalStateException("Myriad batch generation failed", e);
 			}

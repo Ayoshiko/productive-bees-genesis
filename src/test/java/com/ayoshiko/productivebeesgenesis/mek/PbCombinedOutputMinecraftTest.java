@@ -3,6 +3,8 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceAccount;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceAccounts;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceKey;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
 import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicEnergyContainerAccessor;
@@ -413,30 +415,57 @@ class PbCombinedOutputMinecraftTest {
         var tile = mock(TileEntityMekCentrifuge.class);
         when(tile.processes()).thenReturn(3);
         var host = mock(ResourceHiveHost.class);
-        var account = mock(ResourceAccount.class);
-        var reference = new ResourceAccount.Reference(java.util.UUID.randomUUID(), 1);
+        var accounts = new ResourceAccounts(() -> {});
+        var account = accounts.create(java.util.UUID.randomUUID(), new ResourceAccount.Binding(
+            ResourceLocation.parse("minecraft:overworld"), 0L, ResourceLocation.parse("productivebeesgenesis:mek_centrifuge")));
+        var reference = account.reference();
+        var key = ResourceKey.chemical(ResourceLocation.parse("mekanism:hydrogen"));
         when(host.reference()).thenReturn(reference);
         when(host.account(tile)).thenReturn(account);
-        when(account.canExtract(reference)).thenReturn(false);
         try (var hosts = mockStatic(ResourceHiveHost.class)) {
             hosts.when(() -> ResourceHiveHost.existing(tile)).thenReturn(host);
             assertFalse(MekResourceCentrifuge.suspended(tile, 0));
-            assertFalse(MekResourceCentrifuge.suspended(tile, 0));
-            var ticket = new ResourceAccount.Ticket(reference, 1);
+            assertFalse(MekResourceCentrifuge.blocked(tile, 0));
             var production = new CompoundTag();
             production.putString("host", "resource_centrifuging");
             production.putInt("lane", 1);
-            when(account.productionTicket()).thenReturn(ticket);
-            when(account.productionContext(ticket)).thenReturn(production);
+            production.putLong("energy_cost", 10L);
+            var ticket = account.reserve(reference, 1L, production, Map.of(key, 100L));
+            account.start(ticket);
+            account.freeze(ticket, Map.of(key, 100L));
+            assertFalse(account.canExtract(reference));
             assertFalse(MekResourceCentrifuge.suspended(tile, 0));
             assertTrue(MekResourceCentrifuge.suspended(tile, 1));
             assertFalse(MekResourceCentrifuge.suspended(tile, 2));
+            account.suspendProduction(ticket, "External chemical receipt unknown");
+            assertEquals(ticket, account.productionTicket());
+            assertEquals(100L, account.frozenProduction().get(key));
             production.putInt("lane", 3);
             assertFalse(MekResourceCentrifuge.suspended(tile, 0));
             production.putString("lane", "1");
             assertFalse(MekResourceCentrifuge.suspended(tile, 0));
             production.putString("host", "unknown");
             assertFalse(MekResourceCentrifuge.suspended(tile, 0));
+            assertTrue(MekResourceCentrifuge.blocked(tile, 1));
+            assertFalse(MekResourceCentrifuge.blocked(tile, 0));
+            assertFalse(MekResourceCentrifuge.blocked(tile, 2));
+            var healthy = new CompoundTag();
+            healthy.putString("host", "resource_centrifuging");
+            healthy.putInt("lane", 0);
+            var healthyTicket = account.reserve(reference, 1L, healthy, Map.of(key, 50L));
+            account.start(healthyTicket);
+            account.freeze(healthyTicket, Map.of(key, 50L));
+            account.commit(healthyTicket);
+            assertEquals(50L, account.available().get(key));
+            assertEquals(100L, account.frozenProduction().get(key));
+            assertEquals(ticket, account.productionTicket());
+            assertEquals(10L, account.productionContext(ticket).getLong("energy_cost"));
+            assertEquals(1, account.productionContext(ticket).getInt("lane"));
+            assertTrue(MekResourceCentrifuge.suspended(tile, 1));
+            assertFalse(MekResourceCentrifuge.blocked(tile, 0));
+            assertFalse(MekResourceCentrifuge.blocked(tile, 2));
+        } finally {
+            accounts.close();
         }
     }
 

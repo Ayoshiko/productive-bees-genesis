@@ -3,9 +3,9 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.storage.MEStorage;
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import com.ayoshiko.productivebeesgenesis.mek.DeferredItemOutput;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -359,7 +359,8 @@ final class Ae2DeferredItemOutputs {
 
     private static void log(Ticket ticket, String phase, Throwable failure) {
         BlockEntity owner = ticket.output.owner();
-        ProductiveBeesGenesis.LOGGER.error("普通物品合并交付失败，phase={} pos={} epoch={}；原资产继续保管",
+        LogThrottle.error("ae2_deferred_item_output_failure",
+                "普通物品合并交付失败，phase={} pos={} epoch={}；原资产继续保管",
                 phase, owner == null ? null : owner.getBlockPos(), ticket.epoch, failure);
     }
 

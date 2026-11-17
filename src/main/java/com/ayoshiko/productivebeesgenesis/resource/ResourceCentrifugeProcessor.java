@@ -1,7 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.PbVirtualTickPlan;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import java.math.BigInteger;
@@ -11,6 +12,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 /** PB 与 Genesis 离心机共用的实际消费边界；世界账户保存已付费进度和唯一冻结结果。 */
@@ -64,6 +66,23 @@ public final class ResourceCentrifugeProcessor {
 			ResourceRollPlan plan, Map<ResourceKey, BigInteger> perInput) {}
 	/** 最多每 lane 一份；配方快照、升级或输入份数改变时替换，随机种子始终来自当前工作。 */
 	private final Map<Integer, Rolls> rollPlans = new HashMap<>();
+	private final Map<Integer, LaneFailure> laneFailures = new HashMap<>();
+	private static final class LaneFailure {
+		final Throwable cause;
+		final BlockPos position;
+		final UUID accountId;
+		final String phase;
+		long request;
+		long repeats;
+		long lastSummaryNanos = System.nanoTime();
+
+		LaneFailure(Throwable cause, BlockPos position, UUID accountId, String phase) {
+			this.cause = cause;
+			this.position = position;
+			this.accountId = accountId;
+			this.phase = phase;
+		}
+	}
 
 	/** 无配方的旧机器不创建账户，也不接管旧物品／流体链。 */
 	public static Result tick(Access access, int virtualTicks) {
@@ -82,7 +101,7 @@ public final class ResourceCentrifugeProcessor {
 			var existing = ResourceHiveHost.existing(access.entity());
 			if (existing != null && existing.reference() != null) {
 				try {
-					if (unresolvedLane(existing.account(access.entity()), access.lane())) return Result.BLOCKED;
+					if (laneBlocked(existing.account(access.entity()), access.lane())) return Result.BLOCKED;
 				} catch (IllegalStateException invalid) {
 					return Result.BLOCKED;
 				}
@@ -116,7 +135,7 @@ public final class ResourceCentrifugeProcessor {
 				access.entity() instanceof mekanism.common.lib.security.ISecurityTile security ? security.getOwnerUUID() : null)) return false;
 		// 失效引用不能证明输入未消费；必须核对原账户的车道、全局请求和冻结记录。
 		return account.binding() == null && account.centrifugeWork(access.lane()) == null
-				&& !unresolvedLane(account, access.lane()) && account.productionTicket() == null
+				&& !laneBlocked(account, access.lane()) && account.productionTicket() == null
 				&& account.transferTicket() == null && !account.hasIsolatedRequests();
 	}
 
@@ -144,7 +163,7 @@ public final class ResourceCentrifugeProcessor {
 		if (host == null || host.reference() == null) return false;
 		try {
 			var account = retainedAccount(entity, host);
-			return account != null && (unresolvedLane(account, lane) || account.centrifugeWork(lane) != null);
+			return account != null && (laneBlocked(account, lane) || account.centrifugeWork(lane) != null);
 		}
 		catch (IllegalStateException invalid) { return false; }
 	}
@@ -154,12 +173,17 @@ public final class ResourceCentrifugeProcessor {
 		try {
 			return host.account(entity);
 		} catch (IllegalStateException stale) {
-			if (!(entity.getLevel() instanceof ServerLevel level)
-					|| !(entity instanceof mekanism.common.lib.security.ISecurityTile security)
-					|| security.getOwnerUUID() == null) return null;
-			var original = ResourceRuntime.accounts(level.getServer()).accounts().find(host.reference().sourceId());
-			return original != null && original.owner().equals(security.getOwnerUUID()) ? original : null;
+			return originalAccount(entity, host);
 		}
+	}
+
+	/** 原绑定失效后，只允许读取已核对所有者的原账户，不授予新绑定的资产权限。 */
+	private static ResourceAccount originalAccount(BlockEntity entity, ResourceHiveHost host) {
+		if (!(entity.getLevel() instanceof ServerLevel level)
+				|| !(entity instanceof mekanism.common.lib.security.ISecurityTile security)
+				|| security.getOwnerUUID() == null) return null;
+		var original = ResourceRuntime.accounts(level.getServer()).accounts().find(host.reference().sourceId());
+		return original != null && original.owner().equals(security.getOwnerUUID()) ? original : null;
 	}
 
 	/** 返料不删除已付工作；该车道只允许原完整输入身份续接，未知工作继续锁定。 */
@@ -169,7 +193,7 @@ public final class ResourceCentrifugeProcessor {
 		try {
 			var account = retainedAccount(entity, host);
 			if (account == null) return ItemStack.EMPTY;
-			if (unresolvedLane(account, lane)) return ItemStack.EMPTY;
+			if (laneBlocked(account, lane)) return ItemStack.EMPTY;
 			var raw = account.centrifugeWork(lane);
 			if (raw == null) {
 				if (host.centrifugeProcessor != null) host.centrifugeProcessor.decoded.remove(lane);
@@ -193,20 +217,29 @@ public final class ResourceCentrifugeProcessor {
 		return cached.work();
 	}
 
-	private static boolean unresolvedLane(ResourceAccount account, int lane) {
-		if (account.laneSuspended(lane)) return true;
-		var ticket = account.productionTicket();
-		if (ticket == null) return false;
-		var context = account.productionContext(ticket);
-		return "resource_centrifuging".equals(context.getString("host"))
-				&& context.contains("lane", net.minecraft.nbt.Tag.TAG_INT) && context.getInt("lane") == lane;
+	/** 活动确认仍阻止重复执行；展示状态只把真实未知请求报为未决。 */
+	public static ResourceAccount.CentrifugeLaneState laneState(BlockEntity entity, int lane) {
+		var host = ResourceHiveHost.existing(entity);
+		if (host == null || host.reference() == null) return ResourceAccount.CentrifugeLaneState.READY;
+		try {
+			return host.account(entity).centrifugeLaneState(lane);
+		} catch (IllegalStateException stale) {
+			var account = originalAccount(entity, host);
+			if (account == null) return ResourceAccount.CentrifugeLaneState.UNRESOLVED;
+			return account.centrifugeWork(lane) != null || laneBlocked(account, lane)
+					? ResourceAccount.CentrifugeLaneState.UNRESOLVED : ResourceAccount.CentrifugeLaneState.READY;
+		}
+	}
+
+	private static boolean laneBlocked(ResourceAccount account, int lane) {
+		return account.centrifugeLaneState(lane) != ResourceAccount.CentrifugeLaneState.READY;
 	}
 
 	private Result advance(Access access, ResourceHiveHost host, ResourceAccount account, ServerLevel level,
 			int virtualTicks, net.minecraft.world.item.crafting.RecipeHolder<ResourceCentrifugeRecipe> current) {
 		ResourceAccount.Ticket ticket = null;
 		try {
-			if (unresolvedLane(account, access.lane())) return Result.BLOCKED;
+			if (laneBlocked(account, access.lane())) return Result.BLOCKED;
 			if (!account.canExtract(host.reference())) {
 				// 未决请求的车道由 laneSuspended 保管；其它原输入可返还，不清除已付周期。
 				access.returnInput();
@@ -396,14 +429,46 @@ public final class ResourceCentrifugeProcessor {
 				} catch (RuntimeException isolationFailure) {
 					failure.addSuppressed(isolationFailure);
 				}
-				ProductiveBeesGenesis.LOGGER.error("资源离心结果未知，账户 {} 请求 {}，位置 {}",
-						ticket.source().sourceId(), ticket.sequence(), access.entity().getBlockPos(), failure);
-			} else {
-				com.ayoshiko.productivebeesgenesis.util.LogThrottle.warnWithCooldown("resource_centrifuge_plan", 5_000L,
-						"资源离心准备失败，位置 {}，保留输入与已付进度", access.entity().getBlockPos(), failure);
 			}
+			reportLaneFailure(access, account, ticket, failure);
 			host.status(ticket == null ? "invalid_centrifuge_plan" : "production_uncertain");
 			return Result.BLOCKED;
+		}
+	}
+
+	private void reportLaneFailure(Access access, ResourceAccount account, ResourceAccount.Ticket ticket,
+			Throwable failure) {
+		LaneFailure first = laneFailures.get(access.lane());
+		boolean firstReport = first == null;
+		if (firstReport) {
+			first = new LaneFailure(failure, access.entity().getBlockPos().immutable(), account.reference().sourceId(),
+					ticket == null ? "准备" : "资产交接");
+			laneFailures.put(access.lane(), first);
+		}
+		if (ticket != null && first.request != ticket.sequence()) {
+			first.request = ticket.sequence();
+			firstReport = true;
+		}
+		if (firstReport) {
+			if (ticket == null) {
+				LogThrottle.warnWithCooldown("resource_centrifuge_failure", 60_000L,
+						"资源离心准备失败，账户 {}，车道 {}，位置 {}；保留输入与已付进度",
+						first.accountId, access.lane(), first.position, first.cause);
+			} else {
+				LogThrottle.errorWithCooldown("resource_centrifuge_failure", 60_000L,
+						"资源离心结果未知，账户 {}，请求 {}，车道 {}，位置 {}；原请求继续保管",
+						first.accountId, first.request, access.lane(), first.position, first.cause);
+			}
+		} else {
+			first.repeats++;
+			long now = System.nanoTime();
+			if (now - first.lastSummaryNanos >= 60_000_000_000L) {
+				first.lastSummaryNanos = now;
+				LogThrottle.warnWithCooldown("resource_centrifuge_failure", 60_000L,
+						"资源离心故障仍在保管，账户 {}，请求 {}，车道 {}，位置 {}，阶段 {}，首因 {}，期间重复 {} 次",
+						first.accountId, first.request, access.lane(), first.position, first.phase,
+						first.cause.toString(), first.repeats);
+			}
 		}
 	}
 
@@ -417,6 +482,12 @@ public final class ResourceCentrifugeProcessor {
 		else decoded.put(access.lane(), new Cached(account, account.centrifugeWork(access.lane()),
 				level.registryAccess(), next));
 		host.status("ready");
+		LaneFailure first = laneFailures.remove(access.lane());
+		if (first != null) {
+			LogThrottle.infoWithCooldown("resource_centrifuge_recovery", 60_000L,
+					"资源离心车道已恢复，账户 {}，车道 {}，位置 {}，原失败阶段 {}，首因 {}，期间重复 {} 次",
+					first.accountId, access.lane(), first.position, first.phase, first.cause.toString(), first.repeats);
+		}
 	}
 
 	private static boolean exact(ItemStack actual, ItemStack expected, int count) {

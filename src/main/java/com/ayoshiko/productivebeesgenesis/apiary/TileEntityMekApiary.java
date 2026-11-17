@@ -7,6 +7,7 @@ import com.ayoshiko.productivebeesgenesis.mek.MekCreativeEnergyHelper;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeEnergyScaling;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2GridNodeManager;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
@@ -66,7 +67,8 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	/** 生产周期：1200 ticks = 60秒（MEK原版标准） */
 	public static final int APIARY_TICKS_REQUIRED = 1200;
 
-	private static final LogThrottle AE2_ERROR_THROTTLE = new LogThrottle(100L, 5000L);
+	private final ApiaryFailureLog[] routingFailures = new ApiaryFailureLog[5];
+	private boolean routedItemOutput;
 
 	protected ApiarySlotManager slotManager;
 	protected FeederSlotManager feederSlotManager;
@@ -371,32 +373,64 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 
 	/** Prepares AE2 only after this invocation wins the real-tick gate. */
 	void prepareAe2ForTick() {
-		try { ae2HostAdapter.tryConnectNode(); } catch (Exception | LinkageError e) { logAe2(e, "tryConnectNode"); }
-		try { ae2HostAdapter.refreshAe2ConfigCache(); } catch (Exception | LinkageError e) { logAe2(e, "refreshAe2ConfigCache"); }
+		try {
+			ae2HostAdapter.tryConnectNode();
+			if (routingFailures[0] != null && Ae2IntegrationLoader.isAe2Loaded()
+					&& Ae2GridNodeManager.getGridNodeState(this)
+					== Ae2GridNodeManager.STATE_ONLINE) {
+				ApiaryFailureLog.recovered(getBlockPos(), routingFailures[0]);
+				routingFailures[0] = null;
+			}
+		} catch (Exception | LinkageError e) {
+			routingFailures[0] = ApiaryFailureLog.record(getBlockPos(), routingFailures[0], this, "ae2-connect", -1, e);
+		}
+		try {
+			if (ae2HostAdapter.refreshAe2ConfigCache()) {
+				ApiaryFailureLog.recovered(getBlockPos(), routingFailures[1]);
+				routingFailures[1] = null;
+			}
+		} catch (Exception | LinkageError e) {
+			routingFailures[1] = ApiaryFailureLog.record(getBlockPos(), routingFailures[1], this, "ae2-config", -1, e);
+		}
 	}
 
 	/** Runs apiary post-production routing once for the selected real game tick. */
 	private void productivebeesgenesis$runPostProductionAe2() {
 		if (hasInvalidFluidData() || upgradeRecovery().blocked()) return;
-		// LinkageError 兜底：NoClassDefFoundError 属 Error 非 Exception，原 catch 拦不住类加载失败；
-		// 漏守卫路径降级为节流日志而非 tick 崩溃（Issue #8 防御深度）
-		try { directEjectHandler.tryDirectEject(); } catch (Exception | LinkageError e) { logAe2(e, "tryDirectEject"); }
+		try {
+			if (directEjectHandler.tryDirectEject()) {
+				ApiaryFailureLog.recovered(getBlockPos(), routingFailures[2]);
+				routingFailures[2] = null;
+			}
+		} catch (Exception | LinkageError e) {
+			routingFailures[2] = ApiaryFailureLog.record(getBlockPos(), routingFailures[2], this, "direct-eject", -1, e);
+		}
 		// 缓冲区产物直通：在 AE 推送之前，先让相邻容器把积压产物取走
 		// （顺序与产出阶段一致：离心机直连 → 相邻容器直通 → AE）
-		try { directContainerOutput.drainBuffer(); } catch (Exception | LinkageError e) {
-			logAe2(e, "drainDirectContainerOutput");
+		try {
+			if (directContainerOutput.drainBuffer()) {
+				ApiaryFailureLog.recovered(getBlockPos(), routingFailures[3]);
+				routingFailures[3] = null;
+			}
+		} catch (Exception | LinkageError e) {
+			routingFailures[3] = ApiaryFailureLog.record(getBlockPos(), routingFailures[3], this, "direct-container", -1, e);
 		}
-		try { ae2HostAdapter.pushOutputs(); } catch (Exception | LinkageError e) { logAe2(e, "pushOutputs"); }
+		try {
+			routedItemOutput = false;
+			ae2HostAdapter.pushOutputs();
+			if (routedItemOutput) {
+				ApiaryFailureLog.recovered(getBlockPos(), routingFailures[4]);
+				routingFailures[4] = null;
+			}
+		} catch (Exception | LinkageError e) {
+			routingFailures[4] = ApiaryFailureLog.record(getBlockPos(), routingFailures[4], this, "ae2-output", -1, e);
+		}
 	}
-	private void logAe2(Throwable e, String n) {
-		// NPE 防御:getLevel() 在方块实体卸载后可能返回 null(参考 MEK BlockEntity 源码),
-		// tryLog 失败时降级为直接日志输出,避免日志记录本身引发二次异常
-		Level level = getLevel();
-		if (level != null) {
-			AE2_ERROR_THROTTLE.tryLog(level.getGameTime(), s -> ProductiveBeesGenesis.LOGGER.error("AE2 {} 异常", n, e));
-		} else {
-			ProductiveBeesGenesis.LOGGER.error("AE2 {} 异常(关卡已卸载,跳过节流)", n, e);
-		}
+
+	@Override
+	public void productivebeesgenesis$onAe2PushComplete(int pushedItems) {
+		IAe2OutputHostBase.super.productivebeesgenesis$onAe2PushComplete(pushedItems);
+		routedItemOutput |= pushedItems > 0;
 	}
 
 	/** 标记直连弹出检测为脏 — 委托 ApiaryDirectEjectHandler.markEjectDirty()，下 tick 立即执行 */

@@ -1,10 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.TickAccelTracker;
 import com.ayoshiko.productivebeesgenesis.mek.TickBatchSkipState;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
@@ -58,8 +56,8 @@ class ApiaryTickHandler {
 	/** 蜂笼输入 tick 处理器 — 蜜蜂在蜂笼与蜂槽间双向转移 */
 	private final CageTickProcessor cageProcessor;
 
-	/** 蜜蜂槽位处理异常日志冷却器（tick 模式，与 {@link BeeSlotTickProcessor} 共享） */
-	private final LogThrottle slotErrorThrottle = new LogThrottle();
+	private ApiaryFailureLog tickerFailure;
+	private ApiaryFailureLog redistributeFailure;
 
 	/** Shared TickAccelTracker (tile AE2 state holder) - same virtual-tick bank credited by JDTE coalesced/legacy paths */
 	private final TickAccelTracker tickAccelTracker;
@@ -91,7 +89,7 @@ class ApiaryTickHandler {
 		this.soundHandler = new ApiarySoundHandler(tile);
 		this.conversionProcessor = new ApiaryConversionProcessor(tile, slotManager, feederManager);
 		this.beeSlotProcessor = new BeeSlotTickProcessor(tile, slotManager, produceProcessor,
-				upgradeHandler, feederManager, activationCounter, slotErrorThrottle,
+				upgradeHandler, feederManager, activationCounter,
 				conversionProcessor);
 		this.cageProcessor = new CageTickProcessor(slotManager,
 				new GeneTreatAutoFeeder(tile, slotManager));
@@ -238,15 +236,10 @@ class ApiaryTickHandler {
 				tile.processPbUpgradeInput();
 				// Bug 4：递减PB升级动画计数器
 				tile.tickPbUpgradeAnim();
+				ApiaryFailureLog.recovered(tile.getBlockPos(), tickerFailure);
+				tickerFailure = null;
 			} catch (Exception | LinkageError e) {
-				// 捕获异常防止 tick 崩溃，记录错误日志（节流避免刷屏）；
-				// LinkageError 与 AE2 兜底捕获保持同一防御深度（未装 AE2 时的类加载缺失）
-				final Throwable cause = e;
-				// 统一使用 ms 时间源，避免 tick/ms 双模式混用导致节流失效（Task 15）
-				slotErrorThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
-					ProductiveBeesGenesis.LOGGER.error("ApiaryTickHandler 处理蜜蜂槽位时异常"
-							+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), cause);
-				});
+				tickerFailure = ApiaryFailureLog.record(tile.getBlockPos(), tickerFailure, tile, "ticker", -1, e);
 			}
 		}
 		// F4: 重试将缓冲区产物注入输出槽
@@ -255,10 +248,10 @@ class ApiaryTickHandler {
 		if (!skipBeeProcessing || (tickAccelTracker.getMultiplier() & 3) == 0) {
 			try {
 				tile.getOutputBuffer().tickRedistribute(tile.getSlotManager().getOutputSlots());
+				ApiaryFailureLog.recovered(tile.getBlockPos(), redistributeFailure);
+				redistributeFailure = null;
 			} catch (Exception e) {
-				// 节流：本调用每 tick 执行，异常若持续存在会每 tick 刷屏
-				LogThrottle.warn("apiary_buffer_redistribute",
-						"ApiaryOutputBuffer tickRedistribute 异常: {}", e.toString());
+				redistributeFailure = ApiaryFailureLog.record(tile.getBlockPos(), redistributeFailure, tile, "buffer-redistribute", -1, e);
 			}
 		}
 		// active 状态管理 — O(1) 计数器读取

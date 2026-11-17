@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.logistics;
 import com.ayoshiko.productivebeesgenesis.inventory.OutputFluidTank;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
@@ -624,6 +625,30 @@ class OutputCustodyMinecraftTest {
         assertTrue(owner.blocked());
         assertEquals(3, owner.amount());
         assertEquals(0, owner.handoffItem(new ItemStack(Items.EMERALD, 3), "replay", () -> fail("no replay")));
+
+        try (var logs = mockStatic(LogThrottle.class)) {
+            var notificationFailure = new IllegalStateException("committed state notification failed");
+            boolean[] contextNotificationFails = {false};
+            var contextualOwner = new OutputCustody(() -> {
+                if (contextNotificationFails[0]) throw notificationFailure;
+            });
+            var request = UUID.randomUUID();
+            assertTrue(contextualOwner.beginSharedItem(request, new ItemStack(Items.DIAMOND), 6, "context-target"));
+            contextualOwner.sharedItemReceipt(6);
+            contextNotificationFails[0] = true;
+            contextualOwner.confirmSourceDebit(6);
+            assertFalse(contextualOwner.blocked());
+            assertEquals(0, contextualOwner.sourceDebitPending());
+            assertThrows(IllegalStateException.class, () -> contextualOwner.handoffItem(
+                    new ItemStack(Items.EMERALD, 2), "later-target", () -> fail("preparation must stop")));
+            logs.verify(() -> LogThrottle.error(eq("output_custody_notification"), anyString(),
+                    eq(request), eq("context-target"), eq(6L), eq(""), same(notificationFailure)), times(1));
+            contextNotificationFails[0] = false;
+            assertEquals(2, contextualOwner.handoffItem(new ItemStack(Items.EMERALD, 2), "later-target", () -> 2));
+            logs.verify(() -> LogThrottle.infoWithCooldown(eq("output_custody_notification_recovered"),
+                    eq(LogThrottle.DEFAULT_COOLDOWN_MS), anyString(), eq(request), eq("context-target"),
+                    eq(6L), eq(notificationFailure.toString())), times(1));
+        }
     }
 
     @Test

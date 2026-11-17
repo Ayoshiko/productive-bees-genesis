@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
 import mekanism.api.IContentsListener;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
 import mekanism.api.recipes.inputs.IInputHandler;
@@ -86,9 +87,6 @@ public class TileEntityMekCentrifugeFactory extends AbstractMekCentrifugeFactory
 			((TieredInputSlot) outputSlot).productivebeesgenesis$setInputStackMultiplier(outputMultiplier);
 			((TieredInputSlot) secondaryOutputSlot).productivebeesgenesis$setInputStackMultiplier(outputMultiplier);
 			((TieredInputSlot) tertiaryOutputSlot).productivebeesgenesis$setInputStackMultiplier(outputMultiplier);
-			MekCentrifugeFactoryHelper.bindOutputSettlement(this, i, 0, outputSlot);
-			MekCentrifugeFactoryHelper.bindOutputSettlement(this, i, 1, secondaryOutputSlot);
-			MekCentrifugeFactoryHelper.bindOutputSettlement(this, i, 2, tertiaryOutputSlot);
 			tertiaryOutputSlots[i] = tertiaryOutputSlot;
 
 			FactoryInputInventorySlot inputSlot = FactoryInputInventorySlot.create(this, i, outputSlot, secondaryOutputSlot,
@@ -98,9 +96,11 @@ public class TileEntityMekCentrifugeFactory extends AbstractMekCentrifugeFactory
 			((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(inputMultiplier);
 			// 性能：标记输入槽 → 退回保护在发配插入热路径上对本槽提前短路，省去每次插入的冗余配方校验。
 			((TieredInputSlot) inputSlot).productivebeesgenesis$markInputSlot();
-			MekCentrifugeFactoryHelper.bindInputSettlement(this, i, inputSlot);
 
 			int index = i;
+			// 原 validator 已执行同一全局准入，canInsert 只保留当前车道的输出兼容性。
+			((BasicInventorySlotAccessor) inputSlot).productivebeesgenesis$setCanInsert(
+					(stack, automation) -> inputProducesOutput(index, stack, outputSlot, secondaryOutputSlot, false));
 			builder.addSlot(inputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,
 					getWarningCheck(RecipeError.NOT_ENOUGH_INPUT,
 							index)));

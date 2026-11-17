@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2FluidPusher;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2InputPuller;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
@@ -56,11 +55,17 @@ class MekCentrifugeTickHandler {
 	/** 上一tick是否在处理PB配方 — 用于检测PB停止时恢复SMELTING激活状态 */
 	private boolean pbWasProcessing;
 
-	/** 进程异常日志冷却器（tick 模式） */
-	private final LogThrottle pbErrorThrottle = new LogThrottle();
+	private final Ae2Failure[] ae2Failures = new Ae2Failure[2];
 
-	/** AE2 tick 阶段异常日志冷却器（ms 模式，与 PB 异常分开节流避免相互覆盖） */
-	private final LogThrottle ae2ErrorThrottle = new LogThrottle();
+	private static final class Ae2Failure {
+		final Throwable cause;
+		long repeats;
+		long lastSummaryNanos = System.nanoTime();
+
+		Ae2Failure(Throwable cause) {
+			this.cause = cause;
+		}
+	}
 
 	/** 工作声音处理器 — 服务端按概率播放降噪后的离心机声（替代 Mekanism withSound 客户端循环，避免破坏后残留满音量循环） */
 	private final MekCentrifugeSoundHandler soundHandler;
@@ -206,7 +211,7 @@ class MekCentrifugeTickHandler {
 			try {
 				Ae2FluidPusher.pushFluids(tile);
 			} catch (Exception | LinkageError e) {
-				logAe2(e, "pushFluids");
+				logAe2(e, 0, "pushFluids");
 			}
 		}
 
@@ -238,7 +243,7 @@ class MekCentrifugeTickHandler {
 				// 配方执行期间写入本地罐的流体需要在同一真实 tick 内立即收尾排空。
 				Ae2FluidPusher.pushLocalTankContentsNow(tile);
 			} catch (Exception | LinkageError e) {
-				logAe2(e, "pushOutputs");
+				logAe2(e, 1, "pullInputs/pushOutputs");
 			}
 		}
 
@@ -259,11 +264,28 @@ class MekCentrifugeTickHandler {
 	 * （属 Error 非 Exception），isAe2Loaded 守卫无法拦截；降级为节流日志而非 tick 崩溃，
 	 * 与蜂箱路径（{@code TileEntityMekApiary.logAe2}）保持同一防御深度（Issue #8）。
 	 */
-	private void logAe2(Throwable e, String stage) {
-		final Throwable cause = e;
-		ae2ErrorThrottle.tryLogMs(System.currentTimeMillis(), suppressed ->
-				ProductiveBeesGenesis.LOGGER.error("AE2 {} 异常"
-						+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), stage, cause));
+	private void logAe2(Throwable cause, int index, String stage) {
+		Ae2Failure first = ae2Failures[index];
+		if (first == null) {
+			first = new Ae2Failure(cause);
+			ae2Failures[index] = first;
+			LogThrottle.errorWithCooldown("centrifuge_ae2_tick", 60_000L,
+					"单机离心机 AE2 阶段 {} 失败，位置 {}；原资产与首因保留",
+					stage, tile.getBlockPos(), first.cause);
+			return;
+		}
+		first.repeats++;
+		long now = System.nanoTime();
+		if (now - first.lastSummaryNanos >= 60_000_000_000L) {
+			first.lastSummaryNanos = now;
+			LogThrottle.warnWithCooldown("centrifuge_ae2_tick", 60_000L,
+					"单机离心机 AE2 阶段 {} 持续失败，位置 {}，首因 {}，期间重复 {} 次",
+					stage, tile.getBlockPos(), first.cause.toString(), first.repeats);
+		}
+	}
+
+	void clearTransientFailures() {
+		java.util.Arrays.fill(ae2Failures, null);
 	}
 
 
@@ -303,6 +325,7 @@ class MekCentrifugeTickHandler {
 			// 优化3：复用已查找的 PB 配方，避免 tryProcessPbRecipe 内部再次 findPbRecipe
 			// 万象创世路径下 preFoundRecipe 传 null（走 myriadHandler 特殊路径，不使用 PB 配方）
 			RecipeHolder<CentrifugeRecipe> preFoundRecipe = isMyriad ? null : pbProcessor.findPbRecipe(input);
+			pbProcessor.markLaneRecovery(0, "配方查找或空槽排空");
 			boolean hasPbRecipe = isMyriad || preFoundRecipe != null;
 
 			if (hasPbRecipe) {
@@ -319,16 +342,11 @@ class MekCentrifugeTickHandler {
 
 			// 委托给 PbRecipeProcessor 处理 PB 配方（含万象创世路径、输出聚合、Task 8 输出槽满前置检查）
 			return pbProcessor.tryProcessPbRecipe(0);
-		} catch (Exception e) {
-			// 捕获异常防止tick崩溃，记录错误日志并重置PB状态（节流避免刷屏）
-			final Exception cause = e;
-			// 统一使用 ms 时间源，避免 tick/ms 双模式混用导致节流失效（Task 15）
-			pbErrorThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
-				ProductiveBeesGenesis.LOGGER.error("tryProcessPbRecipe 异常，重置PB状态"
-						+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), cause);
-			});
-			pbProcessor.resetPbState(0);
+		} catch (Exception | LinkageError failure) {
+			pbProcessor.reportLaneFailure(0, "配方查找或空槽排空", failure);
 			return false;
+		} finally {
+			pbProcessor.finishLaneAttempt(0);
 		}
 	}
 }

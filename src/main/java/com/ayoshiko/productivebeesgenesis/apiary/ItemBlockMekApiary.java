@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.BeeInfoHelper;
 import com.ayoshiko.productivebeesgenesis.util.ItemStackBlockEntityDataHelper;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.NumberFormatter;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
@@ -85,7 +86,7 @@ public class ItemBlockMekApiary extends ItemBlockTooltip<MekApiaryBlock<?, ?>> {
 			}
 		} catch (Exception e) {
 			// 防御：扳手拆卸后能量容器DataComponents可能缺失，跳过储能显示
-			ProductiveBeesGenesis.LOGGER.warn("蜂箱tooltip储能显示异常（可能为拆卸后组件缺失）", e);
+			LogThrottle.warn("apiary_tooltip_energy", "蜂箱tooltip储能显示异常（可能为拆卸后组件缺失）", e);
 		}
 	}
 
@@ -147,7 +148,7 @@ public class ItemBlockMekApiary extends ItemBlockTooltip<MekApiaryBlock<?, ?>> {
 			superSucceeded = true;
 		} catch (Exception e) {
 			// 防御：拆卸后组件不完整时防止客户端tooltip崩溃
-			ProductiveBeesGenesis.LOGGER.warn("显示蜂箱Shift详情时异常（可能为拆卸后组件缺失）", e);
+			LogThrottle.warn("apiary_tooltip_details", "显示蜂箱Shift详情时异常（可能为拆卸后组件缺失）", e);
 		}
 		// 修复 v14：super 抛异常时独立渲染 UPGRADES tooltip（防重复：super 成功时不重复渲染）
 		if (!superSucceeded) {
@@ -183,7 +184,7 @@ public class ItemBlockMekApiary extends ItemBlockTooltip<MekApiaryBlock<?, ?>> {
 			}
 		} catch (Exception e) {
 			// 防御：UPGRADES 组件缺失或格式异常时跳过，不影响其他 tooltip 渲染
-			ProductiveBeesGenesis.LOGGER.warn("渲染蜂箱 MEK 升级 tooltip 时异常", e);
+			LogThrottle.warn("apiary_tooltip_mek_upgrades", "渲染蜂箱 MEK 升级 tooltip 时异常", e);
 		}
 	}
 

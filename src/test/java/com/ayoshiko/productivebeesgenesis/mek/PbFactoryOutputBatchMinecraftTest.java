@@ -87,8 +87,7 @@ class PbFactoryOutputBatchMinecraftTest {
             var type = ResourceLocation.parse("productivebees:iron");
             var selected = List.of(type);
             var snapshot = mock(MyriadBeeTypeCache.BeeTypeCacheSnapshot.class);
-            when(snapshot.selectTemplates(eq(selected), eq(false), any()))
-                    .thenReturn(Map.of(type, new ItemStack(Items.IRON_INGOT)));
+            when(snapshot.honeycombVariants()).thenReturn(Map.of(type, List.of(new ItemStack(Items.IRON_INGOT))));
             var selector = mock(WeightedTypeSelector.class);
             when(selector.getWeightsFor(selected)).thenReturn(new double[]{1});
             try (var events = mockStatic(MyriadCreationsEventHandler.class);
@@ -141,8 +140,7 @@ class PbFactoryOutputBatchMinecraftTest {
         var type = ResourceLocation.parse("productivebees:iron");
         var selected = List.of(type);
         var snapshot = mock(MyriadBeeTypeCache.BeeTypeCacheSnapshot.class);
-        when(snapshot.selectTemplates(eq(selected), eq(true), any()))
-                .thenReturn(Map.of(type, new ItemStack(Items.IRON_INGOT)));
+        when(snapshot.combBlockVariants()).thenReturn(Map.of(type, List.of(new ItemStack(Items.IRON_INGOT))));
         var selector = mock(WeightedTypeSelector.class);
         when(selector.getWeightsFor(selected)).thenReturn(new double[]{1});
         when(selector.selectForProcess(eq(0), eq(1), eq(level), eq(selected), eq(fixture.context))).thenReturn(selected);

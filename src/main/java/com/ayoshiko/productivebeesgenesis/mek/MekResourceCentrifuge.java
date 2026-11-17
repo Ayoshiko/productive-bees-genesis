@@ -1,10 +1,10 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceAccount.CentrifugeLaneState;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
-import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -43,21 +43,13 @@ final class MekResourceCentrifuge {
 	}
 
 	static boolean suspended(PbRecipeContext context, int lane) {
-		if (!(context instanceof BlockEntity entity)) return false;
-		var host = com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.existing(entity);
-		if (host == null || host.reference() == null) return false;
-		try {
-			var account = host.account(entity);
-			if (account.laneSuspended(lane)) return true;
-			if (account.canExtract(host.reference())) return false;
-			var ticket = account.productionTicket();
-			if (ticket == null) return false;
-			var production = account.productionContext(ticket);
-			// 扣费后尚未交给普通 pending 的车道也必须保管；其它普通车道不受账户隔离牵连。
-			return "resource_centrifuging".equals(production.getString("host"))
-					&& production.contains("lane", Tag.TAG_INT) && production.getInt("lane") == lane;
-		}
-		catch (IllegalStateException invalid) { return false; }
+		return context instanceof BlockEntity entity
+				&& ResourceCentrifugeProcessor.laneState(entity, lane) == CentrifugeLaneState.UNRESOLVED;
+	}
+
+	static boolean blocked(PbRecipeContext context, int lane) {
+		return context instanceof BlockEntity entity
+				&& ResourceCentrifugeProcessor.laneState(entity, lane) != CentrifugeLaneState.READY;
 	}
 
 	record Access(PbRecipeContext context, int lane, long budget, Progress display,

@@ -12,6 +12,8 @@ import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import com.ayoshiko.productivebeesgenesis.mek.WeightedTypeSelector;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import cy.jdkdigital.productivebees.init.ModFluids;
+import cy.jdkdigital.productivebees.init.ModItems;
+import cy.jdkdigital.productivebees.init.ModDataComponents;
 import mekanism.api.IContentsListener;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.core.BlockPos;
@@ -261,7 +263,7 @@ class ApiaryCustodyMinecraftTest {
         assertTrue(state.conversionCompleted(0, false));
         var conversion = spy(new ApiaryConversionProcessor(tile, manager, feeder));
         var ticker = new BeeSlotTickProcessor(tile, manager, processor, tile.upgradeHandler, feeder,
-                new ApiaryBeeActivationCounter(manager.getBeeSlotCount()), new LogThrottle(), conversion);
+                new ApiaryBeeActivationCounter(manager.getBeeSlotCount()), conversion);
         try (var balance = mockStatic(BalanceConfig.class);
                 var fluid = mockStatic(com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver.class)) {
             fluid.when(() -> com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver.resolveFluidOutput(type, level))
@@ -422,7 +424,7 @@ class ApiaryCustodyMinecraftTest {
         state.fail(new IllegalStateException("old generation interrupted"));
         var conversion = spy(new ApiaryConversionProcessor(tile, manager, feeder));
         var ticker = new BeeSlotTickProcessor(tile, manager, processor, tile.upgradeHandler, feeder,
-                new ApiaryBeeActivationCounter(manager.getBeeSlotCount()), new LogThrottle(), conversion);
+                new ApiaryBeeActivationCounter(manager.getBeeSlotCount()), conversion);
         try (var balance = mockStatic(BalanceConfig.class);
                 var resources = mockStatic(ResourceRuntime.class);
                 var fluid = mockStatic(com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver.class);
@@ -466,6 +468,7 @@ class ApiaryCustodyMinecraftTest {
             caches.when(MyriadBeeTypeCache::snapshot).thenReturn(cache);
             selectors.when(WeightedTypeSelector::getInstance).thenReturn(selector);
             for (boolean blocks : new boolean[]{false, true}) {
+                doThrow(original).when(selector).selectForProcess(anyInt(), anyInt(), eq(level), any(), any());
                 var builder = new MyriadAggregatedStacksBuilder();
                 if (blocks) {
                     events.when(() -> MyriadCreationsEventHandler.getAggregatedRandomCombBlocks(anyInt(), any()))
@@ -480,6 +483,14 @@ class ApiaryCustodyMinecraftTest {
                 });
                 assertSame(original, failure.getCause());
                 assertArrayEquals(new Throwable[]{secondary}, failure.getSuppressed());
+                doThrow(new IllegalStateException("Later random selection failure")).when(selector)
+                        .selectForProcess(anyInt(), anyInt(), eq(level), any(), any());
+                var repeated = assertThrows(IllegalStateException.class, () -> {
+                    if (blocks) builder.buildAggregatedCombBlocks(3, level, this);
+                    else builder.buildAggregatedHoneycombs(3, level, this);
+                });
+                assertSame(original, repeated.getCause());
+                assertArrayEquals(new Throwable[]{secondary}, repeated.getSuppressed());
                 ItemStack output = new ItemStack(blocks ? Blocks.HONEYCOMB_BLOCK.asItem() : Items.HONEYCOMB, blocks ? 12 : 3);
                 if (blocks) {
                     events.when(() -> MyriadCreationsEventHandler.getAggregatedRandomCombBlocks(eq(12), any()))
@@ -492,6 +503,29 @@ class ApiaryCustodyMinecraftTest {
                         : builder.buildAggregatedHoneycombs(3, level, this);
                 assertEquals(1, recovered.size());
                 assertTrue(ItemStack.matches(output, recovered.getFirst()));
+            }
+            doReturn(List.of(type)).when(selector).selectForProcess(anyInt(), anyInt(), eq(level), any(), any());
+            when(selector.getWeightsFor(List.of(type))).thenReturn(new double[]{1});
+            for (boolean blocks : new boolean[]{false, true}) {
+                var template = new ItemStack(blocks ? ModItems.CONFIGURABLE_COMB_BLOCK.get() : ModItems.CONFIGURABLE_HONEYCOMB.get());
+                template.set(ModDataComponents.BEE_TYPE, type);
+                template.set(DataComponents.CUSTOM_NAME, Component.literal("完整万象模板"));
+                template.set(DataComponents.MAX_STACK_SIZE, 16);
+                when(cache.selectTemplates(eq(List.of(type)), eq(blocks), any())).thenReturn(Map.of(type, template));
+                var builder = new MyriadAggregatedStacksBuilder();
+                var result = blocks ? builder.buildAggregatedCombBlocks(576, level, this)
+                        : builder.buildAggregatedHoneycombs(576, level, this);
+                int expected = blocks ? 2304 : 576;
+                assertEquals(expected, result.stream().mapToInt(ItemStack::getCount).sum());
+                assertTrue(result.stream().allMatch(stack -> ItemStack.isSameItemSameComponents(template, stack)));
+                assertEquals(1, template.getCount());
+                var state = new ApiaryProductionState(1, () -> {});
+                state.freeze(new BeeProduceProcessor.Generated(result, FluidStack.EMPTY, 0));
+                var restored = new ApiaryProductionState(1, () -> {});
+                restored.load(registries(), state.save(registries()));
+                assertFalse(restored.hasInvalidData());
+                assertEquals(expected, restored.items().stream().mapToInt(ItemStack::getCount).sum());
+                assertTrue(restored.items().stream().allMatch(stack -> ItemStack.isSameItemSameComponents(template, stack)));
             }
         }
     }
@@ -549,7 +583,7 @@ class ApiaryCustodyMinecraftTest {
                     .thenThrow(new IllegalStateException("primary random selection failure"));
             var conversion = spy(new ApiaryConversionProcessor(tile, manager, feeder));
             var ticker = new BeeSlotTickProcessor(tile, manager, processor, tile.upgradeHandler, feeder,
-                    new ApiaryBeeActivationCounter(manager.getBeeSlotCount()), new LogThrottle(), conversion);
+                    new ApiaryBeeActivationCounter(manager.getBeeSlotCount()), conversion);
             var failedBee = state.bees[0].getBeeData().copy();
             var snapshot = new ApiaryBatchUpgradeSnapshot(0, false, false, 1, false, blocks, false, false, true, false);
             try (var balance = mockStatic(BalanceConfig.class);
@@ -745,6 +779,9 @@ class ApiaryCustodyMinecraftTest {
         state.counts[0] = 4;
         state.capture(0, bee);
         assertTrue(state.canAdvance(0, bee));
+        state.detachReplaced(new BeeSlot[]{bee});
+        assertEquals(4, state.counts[0]);
+        assertNull(state.retained());
         assertNotSame(data, state.bees[0].getBeeData());
         state.releaseEmptyBee(0);
         assertTrue(state.canAdvance(0, bee));
@@ -757,7 +794,16 @@ class ApiaryCustodyMinecraftTest {
         assertFalse(restored.canAdvance(0, bee));
         bee.setBeeData(data.copy());
         assertTrue(restored.canAdvance(0, bee));
+        restored.detachReplaced(new BeeSlot[]{bee});
+        assertEquals(4, restored.counts[0]);
+        assertNull(restored.retained());
+        bee.setBeeData(replacement.copy());
+        restored.detachReplaced(new BeeSlot[]{bee});
+        assertEquals(0, restored.counts[0]);
+        assertEquals(4, restored.retained().total());
+        assertEquals(data, restored.retained().bees[0].getBeeData());
         assertTrue(restored.canAdvance(0, bee));
+        bee.setBeeData(data.copy());
         var group = new OrderedSlotIndex();
         group.reset(1);
         group.add(0);
@@ -1128,6 +1174,9 @@ class ApiaryCustodyMinecraftTest {
             context.put("mixed_local", mixed.context(registries()));
             var request = source.productionState().beginLocal(0, context, generated);
             source.productionState().fail(new IllegalStateException("legacy save callback unavailable"));
+            String firstFailure = source.productionState().failure();
+            source.productionState().fail(new IllegalStateException("later local recovery failure"));
+            assertEquals(firstFailure, source.productionState().failure());
             var saved = source.productionState().save(registries());
             saved.putInt("version", 2);
             saved.remove("held_groups");
@@ -1227,8 +1276,8 @@ class ApiaryCustodyMinecraftTest {
                     Ingredient.of(failedOutput), 1, 1, 1);
             var healthyRecipe = new ChancedOutput(
                     Ingredient.of(healthyOutput), 1, 1, 1);
-            doThrow(new IllegalStateException("recipe preparation failed"))
-                    .when(processor).getCachedProduce(failedType, level, feeder);
+            var originalFailure = new IllegalStateException("recipe preparation failed");
+            doThrow(originalFailure).when(processor).getCachedProduce(failedType, level, feeder);
             doReturn(Map.of(healthyOutput, healthyRecipe))
                     .when(processor).getCachedProduce(healthyType, level, feeder);
             var state = tile.productionState();
@@ -1305,12 +1354,15 @@ class ApiaryCustodyMinecraftTest {
             assertTrue(state.conversionCompleted(0, false));
             var conversion = spy(new ApiaryConversionProcessor(tile, manager, feeder));
             var ticker = new BeeSlotTickProcessor(tile, manager, processor, tile.upgradeHandler, feeder,
-                    new ApiaryBeeActivationCounter(manager.getBeeSlotCount()),
-                    new LogThrottle(), conversion);
-            try (var config = mockStatic(BalanceConfig.class)) {
-                for (int tick = 0; tick < 10; tick++) {
+                    new ApiaryBeeActivationCounter(manager.getBeeSlotCount()), conversion);
+            var failurePosition = tile.getBlockPos();
+            try (var config = mockStatic(BalanceConfig.class);
+                    var logging = mockStatic(LogThrottle.class)) {
+                for (int tick = 0; tick < 30; tick++) {
                     ticker.tick();
                 }
+                logging.verify(() -> LogThrottle.errorWithCooldown(eq("apiary_failure_first"), eq(60_000L), anyString(),
+                        eq(failurePosition), eq("paid-group"), eq(0), eq(state.bees[0].getBeeData()), same(originalFailure)), times(1));
                 assertEquals(BeeState.PREPARATION_FAILED, manager.getBeeSlots()[0].getState());
                 assertEquals(4, state.counts[0]);
                 assertEquals(0, state.counts[1]);
@@ -1327,6 +1379,8 @@ class ApiaryCustodyMinecraftTest {
                     ticker.tick();
                 }
                 verify(conversion, never()).processGroupConversions(eq(failedType), any(), any(), any(), any());
+                logging.verify(() -> LogThrottle.infoWithCooldown(eq("apiary_failure_recovered"), eq(60_000L), anyString(),
+                        eq(failurePosition), eq("paid-group"), eq(0), eq(originalFailure.toString())), times(1));
                 assertEquals(0, state.total());
                 assertFalse(state.suspended());
                 assertEquals(4, tile.getOutputSlots().stream()

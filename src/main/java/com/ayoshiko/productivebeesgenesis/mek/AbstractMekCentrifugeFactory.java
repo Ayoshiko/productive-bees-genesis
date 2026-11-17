@@ -141,6 +141,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 			MekCentrifugeFactoryHelper.GLOBAL_ERROR_TYPES
 		);
 		pbProcessor = new PbRecipeProcessor(this, getPbProcessorName());
+		MekCentrifugeFactoryHelper.bindSettlements(this, pbProcessor);
 		pbUpgradeDelegate = new FactoryPbUpgradeDelegate(this);
 		guiAccessor = new FactoryGuiAccessor(this);
 		EnergyInventorySlot energySlot = ((TileEntityFactoryAccessor) this).productivebeesgenesis$getEnergySlot();

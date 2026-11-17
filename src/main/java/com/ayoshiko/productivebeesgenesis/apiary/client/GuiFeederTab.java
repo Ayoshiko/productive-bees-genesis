@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiary.client;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
 import com.ayoshiko.productivebeesgenesis.inventory.CustomWindowData;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import mekanism.client.gui.IGuiWrapper;
 import mekanism.client.gui.element.tab.window.GuiWindowCreatorTab;
 import mekanism.client.gui.element.window.GuiWindow;
@@ -55,7 +56,7 @@ public class GuiFeederTab extends GuiWindowCreatorTab<TileEntityMekApiary, GuiFe
 					.productivebeesgenesis$setCustomSaveName("window_feeder");
 		} catch (ClassCastException e) {
 			// Mixin 应用失败时降级，窗口位置不持久化
-			ProductiveBeesGenesis.LOGGER.warn("GuiFeederTab Mixin 应用失败，窗口位置不持久化", e);
+			LogThrottle.warn("apiary_feeder_tab_window", "GuiFeederTab Mixin 应用失败，窗口位置不持久化", e);
 		}
 	}
 

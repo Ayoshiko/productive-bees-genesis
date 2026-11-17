@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import net.minecraft.core.BlockPos;
 
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -48,8 +48,8 @@ public class ApiaryUpgradeCache {
 	/** 所属升级处理器引用 — 用于调用原方法计算倍率 */
 	private final ApiaryUpgradeHandler handler;
 
-	/** 刷新异常日志冷却器（ms 模式，避免高频异常刷屏） */
-	private final LogThrottle errorThrottle = new LogThrottle();
+	private final BlockPos position;
+	private ApiaryFailureLog refreshFailure;
 
 	/** 缓存的时间倍率（默认 1.0 = 无加速） */
 	private volatile float cachedTimeMultiplier = 1.0f;
@@ -86,8 +86,9 @@ public class ApiaryUpgradeCache {
 	 *
 	 * @param handler 所属升级处理器，用于调用原方法计算倍率
 	 */
-	public ApiaryUpgradeCache(ApiaryUpgradeHandler handler) {
+	public ApiaryUpgradeCache(ApiaryUpgradeHandler handler, BlockPos position) {
 		this.handler = handler;
+		this.position = position;
 	}
 
 	/**
@@ -145,14 +146,11 @@ public class ApiaryUpgradeCache {
 			cachedGeneSamplerCount = geneSamplerCount;
 			cachedHasCreativeUpgrade = hasCreativeUpgrade;
 			refreshFailed = false;
+			ApiaryFailureLog.recovered(position, refreshFailure);
+			refreshFailure = null;
 		} catch (Exception e) {
 			refreshFailed = true;
-			errorThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
-				ProductiveBeesGenesis.LOGGER.warn(
-						"ApiaryUpgradeCache 刷新异常，退化为直接调用 handler compute* 方法{}",
-						suppressed > 0 ? " (抑制 " + suppressed + " 次)" : "",
-						e);
-			});
+			refreshFailure = ApiaryFailureLog.record(position, refreshFailure, handler, "upgrade-cache", -1, e);
 		}
 	}
 

@@ -10,6 +10,7 @@ import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRollPlan;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceProductionRecipe;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceProductionSnapshot;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.init.ModEntities;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
@@ -224,7 +225,8 @@ final class ApiaryResourceProduction {
 			host.productionMonitor().observe(index, spec.outputs(), ResourceProductionSnapshot.State.PRODUCING, level.getGameTime());
 			host.status("ready");
 			if (energyNotificationFailure != null) {
-				ProductiveBeesGenesis.LOGGER.info("机械蜂箱费用通知异常已按实际扣量自动结清，位置 {}，槽位 {}，蜂种 {}，费用 {}",
+				LogThrottle.infoWithCooldown("apiary_resource_energy_recovered", 60_000L,
+						"机械蜂箱费用通知异常已按实际扣量自动结清，位置 {}，槽位 {}，蜂种 {}，费用 {}",
 						tile.getBlockPos(), index, type, cost, energyNotificationFailure);
 			}
 			return BeeState.WORKING;
@@ -238,7 +240,8 @@ final class ApiaryResourceProduction {
 			} catch (RuntimeException isolationFailure) {
 				failure.addSuppressed(isolationFailure);
 			}
-			ProductiveBeesGenesis.LOGGER.error("机械蜂箱资源结算结果未知，账户 {} 请求 {}，位置 {}，槽位 {}，蜂种 {}",
+			LogThrottle.error("apiary_resource_uncertain",
+					"机械蜂箱资源结算结果未知，账户 {} 请求 {}，位置 {}，槽位 {}，蜂种 {}",
 					ticket.source().sourceId(), ticket.sequence(), tile.getBlockPos(), index, type, failure);
 			host.productionMonitor().observe(index, spec.outputs(), ResourceProductionSnapshot.State.WAITING_RESOURCE,
 					level.getGameTime());
@@ -255,7 +258,8 @@ final class ApiaryResourceProduction {
                     tile.getLevel().getGameTime());
         }
         if (firstFailure) {
-            ProductiveBeesGenesis.LOGGER.warn("扩展资源准备失败，位置 {}，槽位 {}，蜂种 {}",
+            LogThrottle.warn("apiary_resource_preparation",
+                    "扩展资源准备失败，位置 {}，槽位 {}，蜂种 {}",
                     tile.getBlockPos(), index, type, failure);
         }
     }

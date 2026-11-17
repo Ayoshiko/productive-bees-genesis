@@ -9,6 +9,7 @@ import appeng.api.storage.MEStorage;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
+import mekanism.api.Action;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.core.BlockPos;
@@ -293,6 +294,7 @@ class Ae2CandidateScanMinecraftTest {
                 return extracted;
             });
             var slot = BasicInventorySlot.at(null, 0, 0);
+            fixture.inputSlots = List.of(slot);
             var fairness = new Ae2InputFairnessScheduler();
             try (var health = mockStatic(Ae2StorageHealth.class, CALLS_REAL_METHODS)) {
                 health.when(() -> Ae2StorageHealth.isPathological(anyLong())).thenReturn(false);
@@ -300,7 +302,7 @@ class Ae2CandidateScanMinecraftTest {
                     when(fixture.level.getGameTime()).thenReturn(tick);
                     fairness.roll(tick);
                     var result = Ae2InputExecution.execute(fixture.host, fixture.holder,
-                            fixture.buffers, fixture.collect(tick), List.of(slot), fixture.storage,
+                            fixture.buffers, fixture.collect(tick), fixture.buffers.inputLaneSnapshot(), List.of(slot), fixture.storage,
                             fixture.backoff, fairness, 64, 64, 64, IActionSource.empty());
                     assertEquals(0, result.totalPulled());
                     assertEquals(10, live[0]);
@@ -314,7 +316,7 @@ class Ae2CandidateScanMinecraftTest {
                 when(fixture.level.getGameTime()).thenReturn(106L);
                 fairness.roll(106);
                 var refilled = Ae2InputExecution.execute(fixture.host, fixture.holder,
-                        fixture.buffers, fixture.collect(106), List.of(slot), fixture.storage,
+                        fixture.buffers, fixture.collect(106), fixture.buffers.inputLaneSnapshot(), List.of(slot), fixture.storage,
                         fixture.backoff, fairness, 64, 64, 64, IActionSource.empty());
                 assertEquals(7, refilled.totalPulled());
                 assertEquals(7, slot.getCount());
@@ -365,7 +367,7 @@ class Ae2CandidateScanMinecraftTest {
         }
         var fairness = new Ae2InputFairnessScheduler();
         var candidates = Ae2InputCandidatePolicy.collect(fixture.host, fixture.holder, fixture.buffers,
-                fixture.level, fixture.service, fixture.storage, 100, 1152, 18,
+                fixture.level, fixture.service, fixture.storage, 100, 1152, slots,
                 fixture.filter, true, fixture.backoff, IActionSource.empty());
         assertEquals(List.of(keys.get(0), keys.get(1)),
                 candidates.stream().map(entry -> entry.key).toList());
@@ -374,7 +376,7 @@ class Ae2CandidateScanMinecraftTest {
         try (var health = mockStatic(Ae2StorageHealth.class, CALLS_REAL_METHODS)) {
             health.when(() -> Ae2StorageHealth.isPathological(anyLong())).thenReturn(false);
             var first = Ae2InputExecution.execute(fixture.host, fixture.holder, fixture.buffers,
-                    candidates, slots, fixture.storage, fixture.backoff, fairness,
+                    candidates, fixture.buffers.inputLaneSnapshot(), slots, fixture.storage, fixture.backoff, fairness,
                     1152, 1152, 64, IActionSource.empty());
             assertEquals(1152, first.totalPulled());
             assertEquals(9, slots.stream().filter(slot -> keys.get(0).matches(slot.getStack())).count());
@@ -384,17 +386,38 @@ class Ae2CandidateScanMinecraftTest {
                 assertEquals(10L, stock.get(key));
             }
 
-            slots.getFirst().setEmpty();
+            slots.getFirst().setStackSize(60, Action.EXECUTE);
+            stock.put(keys.get(0), 14L);
             stock.put(keys.get(2), 74L);
             when(fixture.level.getGameTime()).thenReturn(101L);
+            clearInvocations(fixture.storage);
+            var topUp = Ae2InputCandidatePolicy.collect(fixture.host, fixture.holder, fixture.buffers,
+                    fixture.level, fixture.service, fixture.storage, 101, 4, slots,
+                    fixture.filter, true, fixture.backoff, IActionSource.empty());
+            assertEquals(List.of(keys.get(0)), topUp.stream().map(entry -> entry.key).toList());
+            assertEquals(4, topUp.getFirst().remaining);
+            verify(fixture.storage, times(1)).extract(eq(keys.get(0)), eq(Long.MAX_VALUE), eq(Actionable.SIMULATE), any());
+            verifyNoMoreInteractions(fixture.storage);
+            fairness.roll(101);
+            var toppedUp = Ae2InputExecution.execute(fixture.host, fixture.holder, fixture.buffers,
+                    topUp, fixture.buffers.inputLaneSnapshot(), slots, fixture.storage, fixture.backoff, fairness,
+                    4, 4, 64, IActionSource.empty());
+            assertEquals(4, toppedUp.totalPulled());
+            assertEquals(64, slots.getFirst().getCount());
+            assertEquals(10L, stock.get(keys.get(0)));
+            assertEquals(74L, stock.get(keys.get(2)));
+
+            slots.getFirst().setEmpty();
+            stock.put(keys.get(2), 74L);
+            when(fixture.level.getGameTime()).thenReturn(102L);
             var replenished = Ae2InputCandidatePolicy.collect(fixture.host, fixture.holder, fixture.buffers,
-                    fixture.level, fixture.service, fixture.storage, 101, 64, 18,
+                    fixture.level, fixture.service, fixture.storage, 102, 64, slots,
                     fixture.filter, true, fixture.backoff, IActionSource.empty());
             assertEquals(List.of(keys.get(2)), replenished.stream().map(entry -> entry.key).toList());
             assertEquals(64, replenished.getFirst().remaining);
-            fairness.roll(101);
+            fairness.roll(102);
             var resumed = Ae2InputExecution.execute(fixture.host, fixture.holder, fixture.buffers,
-                    replenished, slots, fixture.storage, fixture.backoff, fairness,
+                    replenished, fixture.buffers.inputLaneSnapshot(), slots, fixture.storage, fixture.backoff, fairness,
                     64, 64, 64, IActionSource.empty());
             assertEquals(64, resumed.totalPulled());
             assertTrue(keys.get(2).matches(slots.getFirst().getStack()));
@@ -462,13 +485,13 @@ class Ae2CandidateScanMinecraftTest {
             try (var health = mockStatic(Ae2StorageHealth.class, CALLS_REAL_METHODS)) {
                 health.when(() -> Ae2StorageHealth.isPathological(anyLong())).thenReturn(false);
                 var candidates = Ae2InputCandidatePolicy.collect(fixture.host, fixture.holder, fixture.buffers,
-                        fixture.level, fixture.service, fixture.storage, 100, 256, 4,
+                        fixture.level, fixture.service, fixture.storage, 100, 256, slots,
                         fixture.filter, true, fixture.backoff, IActionSource.empty());
                 assertEquals(blocks, candidates.stream().map(entry -> entry.key).toList());
                 assertEquals(List.of(128, 128), candidates.stream().map(entry -> entry.remaining).toList());
                 fairness.roll(100);
                 var filled = Ae2InputExecution.execute(fixture.host, fixture.holder, fixture.buffers,
-                        candidates, slots, fixture.storage, fixture.backoff, fairness,
+                        candidates, fixture.buffers.inputLaneSnapshot(), slots, fixture.storage, fixture.backoff, fairness,
                         256, 256, 64, IActionSource.empty());
                 assertEquals(256, filled.totalPulled());
                 assertEquals(2, slots.stream().filter(slot -> ironBlock.matches(slot.getStack())).count());
@@ -482,13 +505,13 @@ class Ae2CandidateScanMinecraftTest {
                 stock.put(ironComb, 74L);
                 when(fixture.level.getGameTime()).thenReturn(101L);
                 var replenished = Ae2InputCandidatePolicy.collect(fixture.host, fixture.holder, fixture.buffers,
-                        fixture.level, fixture.service, fixture.storage, 101, 64, 4,
+                        fixture.level, fixture.service, fixture.storage, 101, 64, slots,
                         fixture.filter, true, fixture.backoff, IActionSource.empty());
                 assertEquals(List.of(ironComb), replenished.stream().map(entry -> entry.key).toList());
                 assertEquals(64, replenished.getFirst().remaining);
                 fairness.roll(101);
                 var refilled = Ae2InputExecution.execute(fixture.host, fixture.holder, fixture.buffers,
-                        replenished, slots, fixture.storage, fixture.backoff, fairness,
+                        replenished, fixture.buffers.inputLaneSnapshot(), slots, fixture.storage, fixture.backoff, fairness,
                         64, 64, 64, IActionSource.empty());
                 assertEquals(64, refilled.totalPulled());
                 assertTrue(ironComb.matches(slots.getFirst().getStack()));
@@ -586,6 +609,8 @@ class Ae2CandidateScanMinecraftTest {
         final Ae2PushBuffers buffers = new Ae2PushBuffers();
         final Ae2InputFilter filter = holder.getOrCreateInputFilter();
         final Ae2KeyBackoffRegistry<AEItemKey> backoff = spy(new Ae2KeyBackoffRegistry<AEItemKey>());
+        List<IInventorySlot> inputSlots = List.of(BasicInventorySlot.at(null, 0, 0),
+                BasicInventorySlot.at(null, 0, 0), BasicInventorySlot.at(null, 0, 0));
 
         Fixture() {
             holder.setSmeltingCompatEnabled(false);
@@ -603,12 +628,12 @@ class Ae2CandidateScanMinecraftTest {
 
         List<Ae2InputExecution.PullEntry> collect(long tick) {
             return Ae2InputCandidatePolicy.collect(host, holder, buffers, level, service, storage,
-                    tick, 64, 3, filter, false, backoff, IActionSource.empty());
+                    tick, 64, inputSlots, filter, false, backoff, IActionSource.empty());
         }
 
         List<Ae2InputExecution.PullEntry> collectWithoutFilter(long tick) {
             return Ae2InputCandidatePolicy.collect(host, holder, buffers, level, service, storage,
-                    tick, 64, 3, null, false, backoff, IActionSource.empty());
+                    tick, 64, inputSlots, null, false, backoff, IActionSource.empty());
         }
     }
 }

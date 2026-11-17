@@ -2,7 +2,6 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.WeightedAllocation;
 import com.ayoshiko.productivebeesgenesis.mek.WeightedTypeSelector;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
@@ -22,9 +21,8 @@ import java.util.Map;
 /**
 	 * 万象创世蜜蜂产出预聚合器
 	 * <br/>
-	 * 将万象创世蜜蜂的随机产出预聚合为 ≤9 个聚合 ItemStack（每种 bee_type 1 个 stack，
-	 * count &gt; 64 时按 64 拆分），替代原 576 个独立 ItemStack 设计，
-	 * 将 {@code BeeProduceProcessor.distributeToOutput} 迭代次数从 576 降为 ≤9。
+	 * 万象创世蜜蜂每批选取最多三种模板，每个模板保留一个完整数量的大堆叠。
+	 * 冻结状态与输出交接沿用普通采样的大堆叠协议，避免生成阶段按 64 拆栈后重复合并。
 	 * <p>
 	 * <b>设计要点</b>：
 	 * <ul>
@@ -61,11 +59,9 @@ public class MyriadAggregatedStacksBuilder {
 	/** 蜜脾块 4× 缩放系数（与原 Mixin 单次产出 4 个蜜脾块语义一致） */
 	private static final int COMB_BLOCK_SCALE = 4;
 
-	/** 单个 ItemStack 堆叠上限 */
-	private static final int MAX_STACK_SIZE = 64;
-
-	/** 降级日志冷却器（ms 模式，5 秒冷却，避免高频异常刷屏） */
-	private final LogThrottle degradeThrottle = new LogThrottle();
+	/** 主路径未恢复期间保留首因；回退成功不等于主路径已经恢复。 */
+	private Exception honeycombFailure;
+	private Exception combBlockFailure;
 
 	/** 默认构造 — 无状态对象 */
 	public MyriadAggregatedStacksBuilder() {
@@ -87,7 +83,7 @@ public class MyriadAggregatedStacksBuilder {
 	 * @param level       世界（用于权重表刷新与降级路径的随机源）
 	 * @param factoryKey  工厂实例（作为 {@link WeightedTypeSelector} 工厂级 tick 缓存的 key，
 	 *                    {@code null} 时跳过 tick 缓存，每次都触发实际选型）
-	 * @return 聚合后的 ItemStack 列表（≤9 个），异常时退化为原版随机路径
+	 * @return 每个已选模板一个大堆叠，异常时退化为原版随机路径
 	 */
 	public List<ItemStack> buildAggregatedHoneycombs(int totalCount, Level level, Object factoryKey) {
 		if (totalCount <= 0 || !MyriadCreationsEventHandler.isMyriadCreationsEnabled()) {
@@ -95,7 +91,7 @@ public class MyriadAggregatedStacksBuilder {
 		}
 		MyriadBeeTypeCache.BeeTypeCacheSnapshot snapshot = MyriadBeeTypeCache.snapshot();
 		List<ResourceLocation> allTypes = snapshot.beeTypes();
-		if (allTypes == null || allTypes.isEmpty()) {
+		if (allTypes.isEmpty()) {
 			return List.of();
 		}
 
@@ -109,7 +105,13 @@ public class MyriadAggregatedStacksBuilder {
 			Map<ResourceLocation, Integer> allocation = WeightedAllocation.allocateByWeight(
 					totalCount, selectedTypes, weights);
 
-			return buildStacksFromAllocation(allocation, snapshot.selectTemplates(selectedTypes, false, level.getRandom()));
+			List<ItemStack> result = buildStacksFromAllocation(allocation, snapshot.selectTemplates(selectedTypes, false, level.getRandom()));
+			if (honeycombFailure != null && !result.isEmpty()) {
+				LogThrottle.infoWithCooldown("apiary_myriad_recovered", 60_000L,
+						"万象蜂箱蜜脾主生成已恢复，原首因 {}；同类恢复合并报告", honeycombFailure.toString());
+				honeycombFailure = null;
+			}
+			return result;
 		} catch (Exception e) {
 			return degradeToHoneycombs(totalCount, level, e);
 		}
@@ -127,7 +129,7 @@ public class MyriadAggregatedStacksBuilder {
 	 * @param totalCount  蜜脾块等价总数（未缩放，方法内部按 4× 放大）
 	 * @param level       世界
 	 * @param factoryKey  工厂实例
-	 * @return 聚合后的 ItemStack 列表（蜜脾块路径因 4× 缩放最坏可达 ≤36 个：3 类型 × ceil(576×4/3/64)=12），异常时退化为原版随机路径
+	 * @return 每个已选模板一个大堆叠，保留四倍数量；异常时退化为原版随机路径
 	 */
 	public List<ItemStack> buildAggregatedCombBlocks(int totalCount, Level level, Object factoryKey) {
 		if (totalCount <= 0 || !MyriadCreationsEventHandler.isMyriadCreationsEnabled()) {
@@ -135,7 +137,7 @@ public class MyriadAggregatedStacksBuilder {
 		}
 		MyriadBeeTypeCache.BeeTypeCacheSnapshot snapshot = MyriadBeeTypeCache.snapshot();
 		List<ResourceLocation> allTypes = snapshot.combBlockBeeTypes();
-		if (allTypes == null || allTypes.isEmpty()) {
+		if (allTypes.isEmpty()) {
 			return List.of();
 		}
 
@@ -151,18 +153,22 @@ public class MyriadAggregatedStacksBuilder {
 			Map<ResourceLocation, Integer> allocation = WeightedAllocation.allocateByWeight(
 					scaledTotal, selectedTypes, weights);
 
-			return buildStacksFromAllocation(allocation, snapshot.selectTemplates(selectedTypes, true, level.getRandom()));
+			List<ItemStack> result = buildStacksFromAllocation(allocation, snapshot.selectTemplates(selectedTypes, true, level.getRandom()));
+			if (combBlockFailure != null && !result.isEmpty()) {
+				LogThrottle.infoWithCooldown("apiary_myriad_recovered", 60_000L,
+						"万象蜂箱蜜脾块主生成已恢复，原首因 {}；同类恢复合并报告", combBlockFailure.toString());
+				combBlockFailure = null;
+			}
+			return result;
 		} catch (Exception e) {
 			return degradeToCombBlocks(totalCount, level, e);
 		}
 	}
 
 	/**
-	 * 从分配映射构造聚合 ItemStack 列表
-	 * <br/>
-	 * 每种 bee_type 按 {@code ceil(count / 64)} 拆分为多个 stack，单个 stack 数量 ≤ {@value #MAX_STACK_SIZE}。
-	 * 在 {@code totalCount ≤ 576, selectedTypes.size() = 3} 的最坏场景下，
-	 * 总 stack 数 ≤ 3 × ceil(192 / 64) = 9，符合 spec 的 "≤9 个聚合 ItemStack" 约束。
+	 * 从分配映射构造聚合 ItemStack 列表。
+	 * 每个已选模板保留一个大堆叠，冻结状态保存独立数量，实际槽位仍由接收方限制。
+	 * 不先按 64 拆栈再在输出阶段合并；完整 bee_type 与其它组件继续来自本次模板。
 	 *
 	 * @param allocation      类型→数量映射（来自 {@link WeightedAllocation#allocateByWeight}）
 	 * @param templateByType  模板 Map（ResourceLocation → ItemStack），不可变快照
@@ -171,13 +177,10 @@ public class MyriadAggregatedStacksBuilder {
 	private List<ItemStack> buildStacksFromAllocation(
 			Map<ResourceLocation, Integer> allocation,
 			Map<ResourceLocation, ItemStack> templateByType) {
-		if (allocation == null || allocation.isEmpty()) {
+		if (allocation.isEmpty() || templateByType.isEmpty()) {
 			return List.of();
 		}
-		if (templateByType == null || templateByType.isEmpty()) {
-			return List.of();
-		}
-		List<ItemStack> result = new ArrayList<>(allocation.size() * 2);
+		List<ItemStack> result = new ArrayList<>(allocation.size());
 		for (Map.Entry<ResourceLocation, Integer> entry : allocation.entrySet()) {
 			int count = entry.getValue();
 			if (count <= 0) {
@@ -187,13 +190,7 @@ public class MyriadAggregatedStacksBuilder {
 			if (template == null || template.isEmpty()) {
 				return List.of();
 			}
-			int remaining = count;
-			int maxStackSize = Math.max(1, template.getMaxStackSize());
-			while (remaining > 0) {
-				int stackSize = Math.min(maxStackSize, remaining);
-				result.add(template.copyWithCount(stackSize));
-				remaining -= stackSize;
-			}
+			result.add(template.copyWithCount(count));
 		}
 		return result;
 	}
@@ -210,17 +207,19 @@ public class MyriadAggregatedStacksBuilder {
 	 * @return 原版随机路径返回的 ItemStack 列表
 	 */
 	private List<ItemStack> degradeToHoneycombs(int totalCount, Level level, Exception cause) {
-		degradeThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
-			ProductiveBeesGenesis.LOGGER.warn(
-					"万象创世预聚合蜜脾异常，退化为原版随机路径{}",
-					suppressed > 0 ? " (抑制 " + suppressed + " 次类似警告)" : "",
-					cause);
-		});
+		if (honeycombFailure == null) {
+			honeycombFailure = cause;
+			LogThrottle.errorWithCooldown("apiary_myriad_failure", 60_000L,
+					"万象蜂箱蜜脾主生成失败，使用原随机回退并保留首因；同类故障合并报告", cause);
+		} else {
+			LogThrottle.warnWithCooldown("apiary_myriad_failure_summary", 60_000L,
+					"万象蜂箱蜜脾主生成故障持续，原首因 {}；同类故障合并报告", honeycombFailure.toString());
+		}
 		try {
 			return MyriadCreationsEventHandler.getAggregatedRandomHoneycombs(
 					totalCount, level.getRandom());
 		} catch (Exception | LinkageError fallback) {
-			var failure = new IllegalStateException("Myriad honeycomb generation and fallback both failed", cause);
+			var failure = new IllegalStateException("Myriad honeycomb generation and fallback both failed", honeycombFailure);
 			failure.addSuppressed(fallback);
 			throw failure;
 		}
@@ -240,19 +239,21 @@ public class MyriadAggregatedStacksBuilder {
 	 * @return 原版随机路径返回的 ItemStack 列表
 	 */
 	private List<ItemStack> degradeToCombBlocks(int totalCount, Level level, Exception cause) {
-		degradeThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
-			ProductiveBeesGenesis.LOGGER.warn(
-					"万象创世预聚合蜜脾块异常，退化为原版随机路径{}",
-					suppressed > 0 ? " (抑制 " + suppressed + " 次类似警告)" : "",
-					cause);
-		});
+		if (combBlockFailure == null) {
+			combBlockFailure = cause;
+			LogThrottle.errorWithCooldown("apiary_myriad_failure", 60_000L,
+					"万象蜂箱蜜脾块主生成失败，使用原随机回退并保留首因；同类故障合并报告", cause);
+		} else {
+			LogThrottle.warnWithCooldown("apiary_myriad_failure_summary", 60_000L,
+					"万象蜂箱蜜脾块主生成故障持续，原首因 {}；同类故障合并报告", combBlockFailure.toString());
+		}
 		try {
 			int scaledTotal = SaturatingMath.saturatingToInt(
 					SaturatingMath.saturatingMultiply(totalCount, COMB_BLOCK_SCALE));
 			return MyriadCreationsEventHandler.getAggregatedRandomCombBlocks(
 					scaledTotal, level.getRandom());
 		} catch (Exception | LinkageError fallback) {
-			var failure = new IllegalStateException("Myriad comb block generation and fallback both failed", cause);
+			var failure = new IllegalStateException("Myriad comb block generation and fallback both failed", combBlockFailure);
 			failure.addSuppressed(fallback);
 			throw failure;
 		}

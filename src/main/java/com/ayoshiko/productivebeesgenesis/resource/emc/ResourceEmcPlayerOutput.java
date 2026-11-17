@@ -159,7 +159,7 @@ public final class ResourceEmcPlayerOutput {
                 iterator.remove();
             } catch (RuntimeException | LinkageError failure) {
                 entry.setValue(tick + 100);
-                LogThrottle.warnWithCooldown("emc_player_sync", 10000, "ProjectE EMC display sync failed; credited amount will not be replayed", failure);
+                LogThrottle.warn("emc_player_sync", "ProjectE EMC display sync failed; credited amount will not be replayed", failure);
             }
         }
         if (pending.isEmpty()) PENDING_SYNC.remove(server);

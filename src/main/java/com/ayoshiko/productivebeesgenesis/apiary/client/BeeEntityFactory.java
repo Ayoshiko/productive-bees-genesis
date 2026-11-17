@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary.client;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeNbtHelper;
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
 import net.minecraft.nbt.CompoundTag;
@@ -53,7 +53,7 @@ public final class BeeEntityFactory {
 			}
 		} catch (Exception e) {
 			// 捕获所有异常，避免单个蜜蜂数据异常导致渲染崩溃
-			ProductiveBeesGenesis.LOGGER.warn("创建 PB 蜜蜂实体失败，回退到原版蜜蜂", e);
+			LogThrottle.warn("apiary_client_bee_entity", "创建 PB 蜜蜂实体失败，回退到原版蜜蜂", e);
 		}
 		return createFallbackBee(level);
 	}

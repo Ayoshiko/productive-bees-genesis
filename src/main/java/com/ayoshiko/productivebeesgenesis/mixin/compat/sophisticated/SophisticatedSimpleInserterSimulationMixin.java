@@ -19,4 +19,9 @@ public interface SophisticatedSimpleInserterSimulationMixin extends WholeInvento
 	default int productivebeesgenesis$simulateWholeItemInsert(ItemStack stack) {
 		return ItemPushHelper.accepted(stack, insertItem(stack.copy(), true));
 	}
+
+	@Override
+	default int productivebeesgenesis$executeWholeItemInsert(ItemStack stack) {
+		return ItemPushHelper.accepted(stack, insertItem(stack.copy(), false));
+	}
 }

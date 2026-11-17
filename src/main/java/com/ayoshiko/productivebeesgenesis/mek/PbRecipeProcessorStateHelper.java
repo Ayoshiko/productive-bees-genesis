@@ -39,6 +39,8 @@ final class PbRecipeProcessorStateHelper {
 			@NotNull FluidStack[] reservedFluidTypes, @NotNull PbRecipeProcessor processor) {
 		int reservedTypeCount = 0;
 		int reservationLimit = Math.min(context.fluidOutputTankCount(), reservedFluidTypes.length);
+		boolean suppressHoney = false;
+		boolean suppressionRead = false;
 		for (int i = 0, size = inputSlots.size(); i < size; i++) {
 			try {
 				ItemStack input = inputSlots.get(i).getStack();
@@ -53,8 +55,12 @@ final class PbRecipeProcessorStateHelper {
 				cachedRecipes[i] = recipe;
 				if (recipe == null || reservedTypeCount >= reservationLimit) continue;
 				var fluid = recipe.value().getFluidOutputs();
-				if (!fluid.isEmpty() && !(context.suppressesUselessByproducts()
-						&& UselessByproductUpgradeHelper.isHoney(fluid))) {
+				if (!fluid.isEmpty()) {
+					if (!suppressionRead) {
+						suppressHoney = context.suppressesUselessByproducts();
+						suppressionRead = true;
+					}
+					if (suppressHoney && UselessByproductUpgradeHelper.isHoney(fluid)) continue;
 					boolean alreadyReserved = false;
 					for (int reservedIndex = 0; reservedIndex < reservedTypeCount; reservedIndex++) {
 						if (FluidStack.isSameFluidSameComponents(reservedFluidTypes[reservedIndex], fluid)) {

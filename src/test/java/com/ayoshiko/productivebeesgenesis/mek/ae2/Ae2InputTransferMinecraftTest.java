@@ -445,9 +445,11 @@ class Ae2InputTransferMinecraftTest {
             }
             var fairness = new Ae2InputFairnessScheduler();
             fairness.roll(70);
+            var lanes = buffers.inputLaneSnapshot();
+            lanes.capture(slots, slots.size());
 
             var result = Ae2InputExecution.execute(host, holder, buffers, new ArrayList<>(List.of(first, second, third)),
-                    slots, storage, new Ae2KeyBackoffRegistry<>(), fairness, 192, 192, 64, IActionSource.empty());
+                    lanes, slots, storage, new Ae2KeyBackoffRegistry<>(), fairness, 192, 192, 64, IActionSource.empty());
 
             long supplied = noCandidateLane ? 189 : 192;
             assertEquals(supplied, result.totalPulled());

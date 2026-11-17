@@ -1,7 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
 import cy.jdkdigital.productivebees.common.entity.bee.ProductiveBee;
 import cy.jdkdigital.productivebees.common.item.BeeCage;
@@ -29,15 +27,16 @@ import net.minecraft.world.item.component.CustomData;
 	 * </ul>
 	 * <p>
 	 * 通过组合关系持有 {@link ApiarySlotManager} 引用，访问槽位数据与方块实体回调。
-	 * 不持有自有可变状态，所有数据仍由 ApiarySlotManager 管理，保持单一数据源。
+	 * 蜜蜂与库存数据仍由 ApiarySlotManager 管理；本类只保管各操作的首个日志根因。
 	 * <p>
 	 * 线程安全：与 ApiarySlotManager 相同，服务端单线程执行；
 	 * BeeSlot 内部 synchronized 保证客户端同步线程与服务端 tick 线程并发读写安全。
 	 */
 class ApiaryCageHandler {
 
-	/** 蜂笼输入异常日志节流（避免持续异常时每 tick 刷屏） */
-	private static final LogThrottle CAGE_ERROR_THROTTLE = new LogThrottle(100L, 5000L);
+	private ApiaryFailureLog inputFailure;
+	private ApiaryFailureLog spawnEggFailure;
+	private ApiaryFailureLog normalizationFailure;
 
 	/** 所属槽位管理器 — 访问蜜蜂槽、蜂笼槽、方块实体回调 */
 	private final ApiarySlotManager manager;
@@ -78,9 +77,15 @@ class ApiaryCageHandler {
 		try {
 			if (isCageItem(cageStack)) {
 				if (isFilledCage(cageStack)) {
-					tryInsertBeeFromCage(cageStack);
+					if (tryInsertBeeFromCage(cageStack)) {
+						ApiaryFailureLog.recovered(manager.getTile().getBlockPos(), inputFailure);
+						inputFailure = null;
+					}
 				} else {
-					tryExtractBeeToCage(cageStack);
+					if (tryExtractBeeToCage(cageStack)) {
+						ApiaryFailureLog.recovered(manager.getTile().getBlockPos(), inputFailure);
+						inputFailure = null;
+					}
 				}
 				return;
 			}
@@ -93,8 +98,8 @@ class ApiaryCageHandler {
 				return;
 			}
 		} catch (Exception e) {
-			CAGE_ERROR_THROTTLE.tryLog(manager.getLevel().getGameTime(), suppressed ->
-					ProductiveBeesGenesis.LOGGER.error("处理蜂笼输入时异常（已抑制 {} 次类似警告）", suppressed, e));
+			inputFailure = ApiaryFailureLog.record(manager.getTile().getBlockPos(), inputFailure,
+					manager, "cage-input", -1, e);
 		}
 	}
 
@@ -128,6 +133,8 @@ class ApiaryCageHandler {
 		if (inserted > 0) {
 			manager.getCageInSlot().shrinkStack(inserted, Action.EXECUTE);
 			manager.getTile().setChanged();
+			ApiaryFailureLog.recovered(manager.getTile().getBlockPos(), inputFailure);
+			inputFailure = null;
 		}
 	}
 
@@ -418,10 +425,14 @@ class ApiaryCageHandler {
 			ItemStack cage = new ItemStack(ModItems.BEE_CAGE.get());
 			BeeCage.captureEntity(bee, cage);
 			CustomData customData = cage.get(DataComponents.CUSTOM_DATA);
-			return customData == null ? null : customData.copyTag();
+			if (customData == null) return null;
+			CompoundTag result = customData.copyTag();
+			ApiaryFailureLog.recovered(manager.getTile().getBlockPos(), spawnEggFailure);
+			spawnEggFailure = null;
+			return result;
 		} catch (RuntimeException e) {
-			CAGE_ERROR_THROTTLE.tryLog(manager.getLevel().getGameTime(), suppressed ->
-					ProductiveBeesGenesis.LOGGER.warn("构造刷怪蛋蜜蜂数据失败（已抑制 {} 次类似警告）: {}", suppressed, e.toString()));
+			spawnEggFailure = ApiaryFailureLog.record(manager.getTile().getBlockPos(), spawnEggFailure,
+					manager, "spawn-egg-data", -1, e);
 			return null;
 		}
 	}
@@ -476,10 +487,14 @@ class ApiaryCageHandler {
 			ItemStack cage = new ItemStack(ModItems.BEE_CAGE.get());
 			BeeCage.captureEntity(bee, cage);
 			CustomData customData = cage.get(DataComponents.CUSTOM_DATA);
-			return customData == null ? copy : customData.copyTag();
+			if (customData == null) return copy;
+			CompoundTag result = customData.copyTag();
+			ApiaryFailureLog.recovered(manager.getTile().getBlockPos(), normalizationFailure);
+			normalizationFailure = null;
+			return result;
 		} catch (RuntimeException e) {
-			CAGE_ERROR_THROTTLE.tryLog(manager.getLevel().getGameTime(), suppressed ->
-					ProductiveBeesGenesis.LOGGER.warn("迁移简化蜜蜂数据失败（已抑制 {} 次类似警告）: {}", suppressed, e.toString()));
+			normalizationFailure = ApiaryFailureLog.record(manager.getTile().getBlockPos(), normalizationFailure,
+					manager, "legacy-bee-data", -1, e);
 			return copy;
 		}
 	}

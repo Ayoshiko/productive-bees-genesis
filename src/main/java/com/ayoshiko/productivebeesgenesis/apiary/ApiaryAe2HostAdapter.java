@@ -10,6 +10,7 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2NbtKeys;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputStateHolder;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.MekAe2LifecycleHandler;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -115,7 +116,7 @@ class ApiaryAe2HostAdapter {
 		} catch (RuntimeException e) {
 			state.suspend();
 			tile.setChanged();
-			com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis.LOGGER.error(
+			LogThrottle.error("apiary_gene_treat_delivery",
 					"Gene-treat delivery suspended at {}", tile.getBlockPos(), e);
 		}
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
@@ -286,19 +287,19 @@ class ApiaryAe2HostAdapter {
 	 * 由 {@link TileEntityMekApiary#onUpdateServer()} 在每 tick 开头调用，
 	 * 早于 {@link #injectAe2Energy()} 和 {@link #pushOutputs()}，确保本 tick 使用最新缓存。
 	 */
-	void refreshAe2ConfigCache() {
-		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
-		if (ModConfig.SERVER == null) return;
+	boolean refreshAe2ConfigCache() {
+		if (!Ae2IntegrationLoader.isAe2Loaded()) return false;
+		if (ModConfig.SERVER == null) return false;
 		Level level = tile.getLevel();
-		if (level == null) return;
+		if (level == null) return false;
 		long currentTick = level.getGameTime();
 		long lastRefresh = lastAe2ConfigRefreshTick.get();
 		if (currentTick - lastRefresh < AE2_CONFIG_REFRESH_INTERVAL) {
-			return;
+			return false;
 		}
 		// CAS 推进时间戳：失败说明其他线程已先一步完成刷新，本线程无需重复加载
 		if (!lastAe2ConfigRefreshTick.compareAndSet(lastRefresh, currentTick)) {
-			return;
+			return false;
 		}
 		// 加载 AE2 配置到缓存（null 守卫：配置项在 AE2 未加载时为 null，此处 AE2 已加载故一般非 null）
 		if (ModConfig.SERVER.apiaryAeOutputEnabled != null) {
@@ -322,6 +323,7 @@ class ApiaryAe2HostAdapter {
 		} else {
 			cachedAeNativeEnergyInputEnabled = true;
 		}
+		return true;
 	}
 
 	/**

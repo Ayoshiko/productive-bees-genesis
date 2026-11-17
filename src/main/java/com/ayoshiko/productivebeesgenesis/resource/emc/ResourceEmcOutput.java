@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.resource.emc;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.api.resource.ResourceHostApi;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceOutputAccess;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
@@ -94,7 +94,7 @@ public final class ResourceEmcOutput implements IEmcStorage {
 			nextAttempt = now + 200;
 			if (!reportedFailure) {
 				reportedFailure = true;
-				ProductiveBeesGenesis.LOGGER.error("EMC 产物输出失败，位置 {}，保留未决结果", current.getBlockPos(), failure);
+				LogThrottle.error("resource_emc_output", "EMC 产物输出失败，位置 {}，保留未决结果", current.getBlockPos(), failure);
 			}
 		}
 	}

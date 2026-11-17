@@ -59,6 +59,7 @@ class SophisticatedStorageSimulationMinecraftTest {
 	void actualBarrelSimulationFindsLateCapacityAndPreservesComponentsAndAssets() throws Exception {
 		var barrel = barrel();
 		var iron = new ItemStack(Items.IRON_INGOT, 8192);
+		iron.set(DataComponents.CUSTOM_NAME, Component.literal("component-preserving iron"));
 		int[] limits = fill(barrel.inventory(), iron);
 		assertTrue(limits.length > 1);
 		assertInstanceOf(WholeInventoryItemSimulation.class, barrel.internal());
@@ -88,9 +89,13 @@ class SophisticatedStorageSimulationMinecraftTest {
 		assertEquals(8192, iron.getCount());
 
 		var custody = new OutputCustody(() -> {});
-		var remaining = ItemPushHelper.insert(barrel.external(), iron.copyWithCount(7), custody,
+		assertTrue(ItemStack.matches(named, ItemPushHelper.insert(barrel.external(), named, custody,
+				"component-distinct-barrel", () -> true)));
+		assertFalse(custody.blocked());
+		assertContents(partial, barrel.inventory());
+		var remaining = ItemPushHelper.insert(barrel.external(), iron, custody,
 				"actual-sophisticated-barrel", () -> true);
-		assertTrue(remaining.isEmpty());
+		assertTrue(ItemStack.matches(iron.copyWithCount(8185), remaining));
 		assertFalse(custody.blocked());
 		assertContents(full, barrel.inventory());
 		assertEquals(8192, iron.getCount());
@@ -120,6 +125,14 @@ class SophisticatedStorageSimulationMinecraftTest {
 		assertEquals(16, ItemPushHelper.simulateInsert(barrel.external(), iron));
 		assertEquals(16, ItemPushHelper.simulateInsert(barrel.external(), iron, () -> true));
 		assertContents(original, barrel.inventory());
+		var custody = new OutputCustody(() -> {});
+		assertTrue(ItemStack.matches(diamond, ItemPushHelper.insert(barrel.external(), diamond, custody,
+				"locked-barrel", () -> true)));
+		assertFalse(custody.blocked());
+		assertContents(original, barrel.inventory());
+		assertTrue(ItemPushHelper.insert(barrel.external(), iron, custody, "locked-existing-type", () -> true).isEmpty());
+		assertEquals(17, barrel.inventory().getStackInSlot(0).getCount());
+		var afterIron = contents(barrel.inventory());
 
 		barrel.toggleLock();
 		assertFalse(barrel.locked());
@@ -127,7 +140,11 @@ class SophisticatedStorageSimulationMinecraftTest {
 		assertNotSame(lockedInternal, barrel.internal());
 		assertEquals(16, ItemPushHelper.simulateInsert(barrel.external(), diamond));
 		assertEquals(16, ItemPushHelper.simulateInsert(barrel.external(), diamond, () -> true));
-		assertContents(original, barrel.inventory());
+		assertContents(afterIron, barrel.inventory());
+		assertTrue(ItemPushHelper.insert(barrel.external(), diamond, custody, "unlocked-barrel", () -> true).isEmpty());
+		assertEquals(16, barrel.inventory().getStackInSlot(1).getCount());
+		assertEquals(Items.DIAMOND, barrel.inventory().getStackInSlot(1).getItem());
+		assertFalse(custody.blocked());
 		assertEquals(16, diamond.getCount());
 		assertEquals(16, iron.getCount());
 	}
@@ -142,14 +159,24 @@ class SophisticatedStorageSimulationMinecraftTest {
 		var originalFull = contents(full.inventory());
 		var delegate = new AtomicReference<IItemHandler>(empty.internal());
 		var type = Class.forName(CACHED_INSERT);
-		Supplier<IItemHandler> supplier = delegate::get;
+		int[] delegateReads = {0};
+		long[] tick = {0L};
+		Supplier<IItemHandler> supplier = () -> {
+			delegateReads[0]++;
+			return delegate.get();
+		};
 		var wrapper = (IItemHandler) type.getConstructor(Supplier.class, LongSupplier.class)
-				.newInstance(supplier, (LongSupplier) () -> 0L);
+				.newInstance(supplier, (LongSupplier) () -> tick[0]);
 		var bridge = assertInstanceOf(WholeInventoryItemSimulation.class, wrapper);
 
 		assertEquals(16, ItemPushHelper.simulateInsert(wrapper, request, () -> true));
 		delegate.set(full.internal());
 		assertEquals(0, ItemPushHelper.simulateInsert(wrapper, request, () -> true));
+		assertEquals(0, bridge.productivebeesgenesis$executeWholeItemInsert(request));
+		int afterFailure = delegateReads[0];
+		assertEquals(0, bridge.productivebeesgenesis$executeWholeItemInsert(request));
+		assertEquals(afterFailure, delegateReads[0]);
+		tick[0]++;
 
 		var ordinary = new ItemStackHandler(1);
 		int ordinaryLimit = Math.min(ordinary.getSlotLimit(0), request.getMaxStackSize());
@@ -159,14 +186,49 @@ class SophisticatedStorageSimulationMinecraftTest {
 		delegate.set(unbridgedHandler(ordinary));
 		assertEquals(WholeInventoryItemSimulation.UNAVAILABLE,
 				bridge.productivebeesgenesis$simulateWholeItemInsert(request));
+		assertEquals(WholeInventoryItemSimulation.UNAVAILABLE,
+				bridge.productivebeesgenesis$executeWholeItemInsert(request));
 		assertEquals(3, ItemPushHelper.simulateInsert(wrapper, request));
 		assertEquals(3, ItemPushHelper.simulateInsert(wrapper, request, () -> true));
 		assertContents(ordinaryBefore, ordinary);
+		var custody = new OutputCustody(() -> {});
+		assertEquals(13, ItemPushHelper.insert(wrapper, request, custody, "unbridged-delegate", () -> true).getCount());
+		assertEquals(ordinaryLimit, ordinary.getStackInSlot(0).getCount());
+		assertFalse(custody.blocked());
 
 		delegate.set(empty.internal());
 		assertEquals(16, ItemPushHelper.simulateInsert(wrapper, request, () -> true));
 		assertContents(originalEmpty, empty.inventory());
 		assertContents(originalFull, full.inventory());
+		assertTrue(ItemPushHelper.insert(wrapper, request, custody, "current-empty-delegate", () -> true).isEmpty());
+		assertEquals(16, empty.inventory().getStackInSlot(0).getCount());
+		assertFalse(custody.blocked());
+
+		int[] executions = {0};
+		IItemHandler current = empty.internal();
+		delegate.set((IItemHandler) Proxy.newProxyInstance(type.getClassLoader(),
+				new Class<?>[]{IItemHandlerModifiable.class, WholeInventoryItemSimulation.class}, (proxy, method, arguments) -> {
+					if (method.getName().equals("productivebeesgenesis$executeWholeItemInsert")) {
+						executions[0]++;
+						assertEquals(16, ((WholeInventoryItemSimulation) current)
+								.productivebeesgenesis$executeWholeItemInsert((ItemStack) arguments[0]));
+						throw new IllegalStateException("actual whole insertion failed after acceptance");
+					}
+					try {
+						return method.invoke(current, arguments);
+					} catch (InvocationTargetException failure) {
+						throw failure.getCause();
+					}
+				}));
+		assertTrue(ItemPushHelper.insert(wrapper, request, custody, "unknown-whole-execution", () -> true).isEmpty());
+		assertEquals(32, empty.inventory().getStackInSlot(0).getCount());
+		assertTrue(custody.blocked());
+		assertEquals(16, custody.amount());
+		assertNotNull(custody.sequence());
+		assertTrue(custody.failure().contains("actual whole insertion failed after acceptance"));
+		assertTrue(ItemStack.matches(request, ItemPushHelper.insert(wrapper, request, custody,
+				"unknown-whole-replay", () -> true)));
+		assertEquals(1, executions[0]);
 		assertEquals(16, request.getCount());
 	}
 

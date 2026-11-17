@@ -1,7 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.common.item.HoneyTreat;
 import cy.jdkdigital.productivebees.util.GeneAttribute;
 import cy.jdkdigital.productivebees.util.GeneGroup;
@@ -64,8 +62,7 @@ class GeneTreatAutoFeeder {
 			GeneAttribute.WEATHER_TOLERANCE
 	};
 
-	/** 错误日志节流（tick 模式，避免持续异常每秒刷屏） */
-	private static final LogThrottle ERROR_THROTTLE = new LogThrottle(100L, 5000L);
+	private ApiaryFailureLog feedingFailure;
 
 	private final TileEntityMekApiary tile;
 	private final ApiarySlotManager slotManager;
@@ -122,11 +119,15 @@ class GeneTreatAutoFeeder {
 			if (targetIndex < 0) return false;
 
 			// 复用实体喂食路径，成功后从小食所在槽消耗 1 个
-			return ApiaryHoneyTreatFeeder.feedGeneTreatFromSlot(tile, targetIndex, treat, treatSlot);
+			boolean fed = ApiaryHoneyTreatFeeder.feedGeneTreatFromSlot(tile, targetIndex, treat, treatSlot);
+			if (fed) {
+				ApiaryFailureLog.recovered(tile.getBlockPos(), feedingFailure);
+				feedingFailure = null;
+			}
+			return fed;
 		} catch (Exception e) {
-			long gameTime = tile.getLevel() == null ? 0L : tile.getLevel().getGameTime();
-			ERROR_THROTTLE.tryLog(gameTime, suppressed -> ProductiveBeesGenesis.LOGGER.error(
-					"基因小食自动喂食异常（已抑制 {} 次）", suppressed, e));
+			feedingFailure = ApiaryFailureLog.record(tile.getBlockPos(), feedingFailure,
+					tile, "gene-treat-feed", -1, e);
 			return false;
 		}
 	}

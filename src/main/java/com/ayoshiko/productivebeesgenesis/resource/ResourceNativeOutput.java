@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.api.resource.ResourceHostApi;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import mekanism.api.Action;
 import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.ChemicalStack;
@@ -104,7 +104,7 @@ public final class ResourceNativeOutput {
             nextAttempt = now + 40;
             if (!reportedFailure) {
                 reportedFailure = true;
-                ProductiveBeesGenesis.LOGGER.error("扩展资源原生输出暂不可用，位置 {}，资源 {}；保留资产", host.getBlockPos(), chosen, failure);
+                LogThrottle.error("resource_native_output", "扩展资源原生输出暂不可用，位置 {}，资源 {}；保留资产", host.getBlockPos(), chosen, failure);
             }
         }
     }

@@ -46,7 +46,7 @@ final class FtbTeamEmcRecipients {
                     && Boolean.TRUE.equals(Api.SAME_TEAM.invoke(manager, owner, recipient));
         } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {
             Throwable cause = failure instanceof InvocationTargetException invoked ? invoked.getCause() : failure;
-            LogThrottle.warnWithCooldown("emc_ftb_team", 10000, "FTB EMC recipient query failed; retaining machine balance", cause);
+            LogThrottle.warn("emc_ftb_team", "FTB EMC recipient query failed; retaining machine balance", cause);
             return false;
         }
     }

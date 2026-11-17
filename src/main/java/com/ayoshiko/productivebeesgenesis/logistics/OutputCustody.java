@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.logistics;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tile.interfaces.ISideConfiguration;
 import net.minecraft.core.HolderLookup;
@@ -33,6 +33,11 @@ public final class OutputCustody {
     private long amount;
     private String destination = "";
     private String failure = "";
+    /** 通知不拥有资产；持续失败保留首次原因，正常回调后清理。 */
+    private Throwable notificationFailure;
+    private UUID notificationRequest;
+    private String notificationTarget;
+    private long notificationAmount;
     private boolean executing;
     private boolean resolved;
     private CompoundTag invalid;
@@ -186,16 +191,15 @@ public final class OutputCustody {
                     sequence();
                     failure = error.getClass().getSimpleName() + ": " + String.valueOf(error.getMessage());
                     if (failure.length() > 512) failure = failure.substring(0, 512);
-                    ProductiveBeesGenesis.LOGGER.error("Local output awaiting inventory verification: request={}, target={}, amount={}",
-                            sequence, destination, amount, error);
-                    notifyCommittedState();
+                    LogThrottle.error("output_custody_local_unknown", "Local output awaiting inventory verification: request={}, target={}, amount={}, failure={}",
+                            sequence, destination, amount, failure, error);
+                    notifyState(true);
                     return requested;
                 }
-                ProductiveBeesGenesis.LOGGER.error("Local output callback failed; actual receipt verified: target={}, requested={}, accepted={}",
+                LogThrottle.error("output_custody_verified_callback", "Local output callback failed; actual receipt verified: target={}, requested={}, accepted={}",
                         target, requested, accepted, error);
             }
-            reset();
-            notifyCommittedState();
+            clear();
             return accepted;
         } finally {
             executing = false;
@@ -287,13 +291,16 @@ public final class OutputCustody {
 
     private void settleObservedLocal(long accepted) {
         UUID original = sequence;
+        String originalTarget = destination;
+        long originalAmount = amount;
         amount -= accepted;
         resolved = true;
         failure = "";
         clearLocalEvidence();
         if (amount == 0) reset();
-        notifyCommittedState();
-        ProductiveBeesGenesis.LOGGER.info("Local output automatically verified: request={}, accepted={}, remaining={}", original, accepted, amount);
+        notifyState(true, original, originalTarget, originalAmount);
+        LogThrottle.infoWithCooldown("output_custody_local_recovered", LogThrottle.DEFAULT_COOLDOWN_MS,
+                "Local output automatically verified: request={}, target={}, accepted={}, remaining={}", original, originalTarget, accepted, amount);
     }
 
     private void recoverLocal(long requested, LongSupplier observe, LongSupplier insert) {
@@ -303,12 +310,14 @@ public final class OutputCustody {
         executing = true;
         try {
             try {
-                changed.run();
+                notifyState(false);
             } catch (RuntimeException | LinkageError error) {
                 resolved = true;
                 clearLocalEvidence();
-                ProductiveBeesGenesis.LOGGER.error("Local recovery preparation failed; known remainder retained: request={}, target={}",
-                        sequence, destination, error);
+                if (failure.isEmpty()) {
+                    failure = error.getClass().getSimpleName() + ": " + String.valueOf(error.getMessage());
+                    if (failure.length() > 512) failure = failure.substring(0, 512);
+                }
                 return;
             }
             long accepted;
@@ -321,21 +330,27 @@ public final class OutputCustody {
                 } catch (RuntimeException | LinkageError unreadable) {
                     error.addSuppressed(unreadable);
                     resolved = false;
-                    failure = error.getClass().getSimpleName() + ": " + String.valueOf(error.getMessage());
-                    if (failure.length() > 512) failure = failure.substring(0, 512);
-                    ProductiveBeesGenesis.LOGGER.error("Local recovery awaiting inventory verification: request={}, target={}, amount={}",
-                            sequence, destination, amount, error);
-                    notifyCommittedState();
+                    if (failure.isEmpty()) {
+                        failure = error.getClass().getSimpleName() + ": " + String.valueOf(error.getMessage());
+                        if (failure.length() > 512) failure = failure.substring(0, 512);
+                    }
+                    LogThrottle.error("output_custody_local_unknown", "Local recovery awaiting inventory verification: request={}, target={}, amount={}, failure={}",
+                            sequence, destination, amount, failure, error);
+                    notifyState(true);
                     return;
                 }
-                ProductiveBeesGenesis.LOGGER.error("Local recovery callback failed; actual receipt verified: request={}, accepted={}",
+                LogThrottle.error("output_custody_verified_callback", "Local recovery callback failed; actual receipt verified: request={}, accepted={}",
                         sequence, accepted, error);
             }
+            UUID originalRequest = sequence;
+            String originalTarget = destination;
+            long originalAmount = amount;
             amount -= accepted;
             resolved = true;
+            failure = "";
             clearLocalEvidence();
             if (amount == 0) reset();
-            notifyCommittedState();
+            notifyState(true, originalRequest, originalTarget, originalAmount);
         } finally {
             executing = false;
         }
@@ -385,7 +400,7 @@ public final class OutputCustody {
         sourceDebitPending = accepted;
         receiptKnown = true;
         try {
-            changed.run();
+            notifyState(false);
         } finally {
             executing = false;
         }
@@ -400,11 +415,11 @@ public final class OutputCustody {
         if (failure.length() > 512) failure = failure.substring(0, 512);
         receiptKnown = false;
         try {
-            changed.run();
+            notifyState(false);
         } finally {
             executing = false;
-            ProductiveBeesGenesis.LOGGER.error("Shared item output suspended: request={}, target={}, amount={}",
-                    sequence, destination, amount, error);
+            LogThrottle.error("output_custody_external_unknown", "Shared item output suspended: request={}, target={}, amount={}, failure={}",
+                    sequence, destination, amount, failure, error);
         }
     }
 
@@ -431,12 +446,14 @@ public final class OutputCustody {
         sourceDebitUnknown = false;
         executing = true;
         prepareHandoff();
+        UUID clearedRequest = null;
         try {
             long accepted = insert.getAsLong();
             if (accepted < 0 || accepted > requested) {
                 throw new IllegalStateException("Invalid output receipt: " + accepted);
             }
             if (accepted == 0) {
+                clearedRequest = sequence;
                 reset();
             } else {
                 amount = accepted;
@@ -448,13 +465,14 @@ public final class OutputCustody {
             sequence();
             failure = exception.getClass().getSimpleName() + ": " + String.valueOf(exception.getMessage());
             if (failure.length() > 512) failure = failure.substring(0, 512);
-            ProductiveBeesGenesis.LOGGER.error("Fluid output suspended: request={}, target={}, amount={}",
-                    sequence, destination, amount, exception);
+            LogThrottle.error("output_custody_external_unknown", "Fluid output suspended: request={}, target={}, amount={}, failure={}",
+                    sequence, destination, amount, failure, exception);
             return requested;
         } finally {
             if (sourceDebitPending > 0) sequence();
             executing = false;
-            notifyCommittedState();
+            if (amount == 0) notifyState(true, clearedRequest, target, requested);
+            else notifyState(true);
         }
     }
 
@@ -470,19 +488,21 @@ public final class OutputCustody {
             clear();
             return;
         }
-        changed.run();
+        notifyState(false);
     }
 
     public void markSourceDebitUnknown(Throwable error) {
         sourceDebitUnknown = true;
-        failure = "Source debit unknown: " + error.getClass().getSimpleName() + ": " + error.getMessage();
-        if (failure.length() > 512) failure = failure.substring(0, 512);
+        if (failure.isEmpty()) {
+            failure = "Source debit unknown: " + error.getClass().getSimpleName() + ": " + error.getMessage();
+            if (failure.length() > 512) failure = failure.substring(0, 512);
+        }
         sequence();
         try {
-            changed.run();
+            notifyState(false);
         } finally {
-            ProductiveBeesGenesis.LOGGER.error("Fluid source debit suspended: request={}, target={}, remaining={}",
-                    sequence, destination, sourceDebitPending, error);
+            LogThrottle.error("output_custody_source_debit_unknown", "Fluid source debit suspended: request={}, target={}, remaining={}, failure={}",
+                    sequence, destination, sourceDebitPending, failure, error);
         }
     }
 
@@ -494,7 +514,7 @@ public final class OutputCustody {
         sourceDebitPending = 0;
         sourceDebitUnknown = false;
         if (receiptKnown) clear();
-        changed.run();
+        notifyState(false);
     }
 
     private long handoff(ItemStack template, FluidStack fluidTemplate, long requested,
@@ -510,16 +530,15 @@ public final class OutputCustody {
         try {
             long accepted = insert.getAsLong();
             if (accepted < 0 || accepted > requested) throw new IllegalStateException("Invalid output receipt: " + accepted);
-            reset();
-            notifyCommittedState();
+            clear();
             return accepted;
         } catch (RuntimeException | LinkageError exception) {
             sequence();
             failure = exception.getClass().getSimpleName() + ": " + String.valueOf(exception.getMessage());
             if (failure.length() > 512) failure = failure.substring(0, 512);
-            notifyCommittedState();
-            ProductiveBeesGenesis.LOGGER.error("Output suspended: request={}, target={}, amount={}",
-                    sequence, destination, amount, exception);
+            notifyState(true);
+            LogThrottle.error("output_custody_external_unknown", "Output suspended: request={}, target={}, amount={}, failure={}",
+                    sequence, destination, amount, failure, exception);
             // 外部可能已写入；把整份请求从原库存移到未决记录，不退回、不再次调用接收方。
             return requested;
         } finally {
@@ -542,7 +561,7 @@ public final class OutputCustody {
         destination = reason;
         failure = "";
         resolved = true;
-        notifyCommittedState();
+        notifyState(true);
     }
 
     public void retainFluid(FluidStack template, long retained, String reason) {
@@ -555,7 +574,7 @@ public final class OutputCustody {
         destination = reason;
         failure = "";
         resolved = true;
-        notifyCommittedState();
+        notifyState(true);
     }
 
     /** 管理员已在两端核验实际接收量；剩余仍留本机，不能由命令直接发给玩家或生成掉落。 */
@@ -569,7 +588,7 @@ public final class OutputCustody {
         resolved = true;
         failure = "";
         if (amount == 0) clear();
-        changed.run();
+        notifyState(false);
     }
 
     public ItemStack recoveredItem() {
@@ -590,10 +609,10 @@ public final class OutputCustody {
             accepted = insert.applyAsInt(offered);
         } catch (RuntimeException | LinkageError error) {
             resolved = false;
-            failure = error.toString();
-            notifyCommittedState();
-            ProductiveBeesGenesis.LOGGER.error("Local item recovery suspended: request={}, target={}, amount={}",
-                    sequence, destination, amount, error);
+            if (failure.isEmpty()) failure = error.toString();
+            notifyState(true);
+            LogThrottle.error("output_custody_local_unknown", "Local item recovery suspended: request={}, target={}, amount={}, failure={}",
+                    sequence, destination, amount, failure, error);
             return;
         }
         consumeRecovered(accepted);
@@ -607,10 +626,10 @@ public final class OutputCustody {
             accepted = insert.applyAsInt(offered);
         } catch (RuntimeException | LinkageError error) {
             resolved = false;
-            failure = error.toString();
-            notifyCommittedState();
-            ProductiveBeesGenesis.LOGGER.error("Local fluid recovery suspended: request={}, target={}, amount={}",
-                    sequence, destination, amount, error);
+            if (failure.isEmpty()) failure = error.toString();
+            notifyState(true);
+            LogThrottle.error("output_custody_local_unknown", "Local fluid recovery suspended: request={}, target={}, amount={}, failure={}",
+                    sequence, destination, amount, failure, error);
             return;
         }
         consumeRecovered(accepted);
@@ -623,14 +642,17 @@ public final class OutputCustody {
 
     public void consumeRecovered(long consumed) {
         if (!resolved || consumed < 0 || consumed > amount) throw new IllegalStateException("Invalid recovered debit");
+        UUID originalRequest = sequence;
+        String originalTarget = destination;
+        long originalAmount = amount;
         amount -= consumed;
-        if (amount == 0) clear();
-        else notifyCommittedState();
+        if (amount == 0) reset();
+        notifyState(true, originalRequest, originalTarget, originalAmount);
     }
 
     private void prepareHandoff() {
         try {
-            changed.run();
+            notifyState(false);
         } catch (RuntimeException | LinkageError error) {
             // 接收方尚未被调用，源资产仍由调用方持有。
             executing = false;
@@ -639,19 +661,44 @@ public final class OutputCustody {
         }
     }
 
-    private void notifyCommittedState() {
+    /** 提交后通知失败只保留首因；准备失败继续沿原调用边界中止未执行的交接。 */
+    private void notifyState(boolean committed) {
+        notifyState(committed, sequence, destination, amount);
+    }
+
+    private void notifyState(boolean committed, UUID request, String target, long notifiedAmount) {
         try {
             changed.run();
         } catch (RuntimeException | LinkageError error) {
-            // 交接已经结束；保存通知失败不能改变真实回执或把请求重新交付。
-            ProductiveBeesGenesis.LOGGER.error("Output state notification failed: request={}, target={}",
-                    sequence, destination, error);
+            if (notificationFailure == null) {
+                notificationFailure = error;
+                notificationRequest = request;
+                notificationTarget = target;
+                notificationAmount = notifiedAmount;
+                LogThrottle.error("output_custody_notification", "Output state notification failed: request={}, target={}, amount={}, failure={}",
+                        request, target, notifiedAmount, failure, error);
+            }
+            if (!committed) throw error;
+            return;
+        }
+        if (notificationFailure != null) {
+            Throwable recovered = notificationFailure;
+            notificationFailure = null;
+            LogThrottle.infoWithCooldown("output_custody_notification_recovered", LogThrottle.DEFAULT_COOLDOWN_MS,
+                    "Output state notification recovered: request={}, target={}, amount={}, cause={}",
+                    notificationRequest, notificationTarget, notificationAmount, recovered.toString());
+            notificationRequest = null;
+            notificationTarget = null;
+            notificationAmount = 0;
         }
     }
 
     private void clear() {
+        UUID originalRequest = sequence;
+        String originalTarget = destination;
+        long originalAmount = amount;
         reset();
-        notifyCommittedState();
+        notifyState(true, originalRequest, originalTarget, originalAmount);
     }
 
     private void reset() {
@@ -770,7 +817,7 @@ public final class OutputCustody {
             } catch (RuntimeException | LinkageError error) {
                 invalid = tag.copy();
                 failure = "Invalid output custody; original data preserved";
-                ProductiveBeesGenesis.LOGGER.error("Output custody data could not be restored", error);
+                LogThrottle.error("output_custody_restore", "Output custody data could not be restored", error);
             }
             return;
         }
@@ -856,7 +903,7 @@ public final class OutputCustody {
         } catch (RuntimeException | LinkageError exception) {
             invalid = tag.copy();
             failure = "Invalid output custody; original data preserved";
-            ProductiveBeesGenesis.LOGGER.error("Output custody data could not be restored", exception);
+            LogThrottle.error("output_custody_restore", "Output custody data could not be restored", exception);
         }
     }
 }

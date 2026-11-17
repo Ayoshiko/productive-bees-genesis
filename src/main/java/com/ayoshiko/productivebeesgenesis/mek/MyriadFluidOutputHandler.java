@@ -1,7 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
@@ -10,7 +9,9 @@ import cy.jdkdigital.productivebees.init.ModFluids;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 import net.minecraft.nbt.CompoundTag;
@@ -32,7 +33,7 @@ import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
 	 * <b>性能优化：</b>缓存流体槽满载状态，避免循环内重复调用
 	 * {@link IExtendedFluidTank#getFluidAmount()} 和 {@link IExtendedFluidTank#getCapacity()}。
 	 * <p>
-	 * <b>线程安全：</b>方块实体在服务端单线程执行，volatile 保证可见性即可，无需 synchronized。
+	 * <b>线程安全：</b>缓存只由服务端线程读取和失效。
 	 *
 	 * @since 1.0.0
 	 */
@@ -64,19 +65,28 @@ public class MyriadFluidOutputHandler {
 	/** 日志前缀（区分原版/ME/EME工厂） */
 	private final String logPrefix;
 
-	/** 每进程的流体诊断日志冷却器 — 避免流体不产出时 WARN 刷屏 */
-	private final LogThrottle[] fluidDiagThrottles;
+	private final FluidFailure[] fluidFailures;
+
+	private static final class FluidFailure {
+		final String phase;
+		final Throwable cause;
+		final ItemStack input;
+		final ResourceLocation recipe;
+		long repeats;
+		long lastSummaryNanos = System.nanoTime();
+
+		FluidFailure(String phase, Throwable cause, ItemStack input, ResourceLocation recipe) {
+			this.phase = phase;
+			this.cause = cause;
+			this.input = input.copyWithCount(1);
+			this.recipe = recipe;
+		}
+	}
 	private final long[] pendingFluidAmounts;
 	private Tag invalidPendingFluid;
 
-	/**
-	 * Task 3 性能优化：每 tick 缓存的流体槽满载状态
-	 * <br/>
-	 * 避免循环内重复调用 {@link IExtendedFluidTank#getFluidAmount()} 和
-	 * {@link IExtendedFluidTank#getCapacity()}。在 {@link #initFluidTankFullCache()} 中计算，
-	 * {@link #insertFluidOutput} 后通过 {@link #refreshFluidTankFullCache()} 更新。
-	 */
-	private volatile boolean cachedFluidTankFull = false;
+	/** 本地输出资格共享同刻快照，真实流体交付后失效，下一次资格查询再计算。 */
+	private boolean cachedFluidTankFull;
 	private long lastFullCacheTick = Long.MIN_VALUE;
 
 	/**
@@ -92,11 +102,8 @@ public class MyriadFluidOutputHandler {
 		this.context = context;
 		this.recipeFinder = recipeFinder;
 		this.logPrefix = logPrefix;
-		this.fluidDiagThrottles = new LogThrottle[processes];
+		this.fluidFailures = new FluidFailure[processes];
 		this.pendingFluidAmounts = new long[processes];
-		for (int i = 0; i < processes; i++) {
-			this.fluidDiagThrottles[i] = new LogThrottle();
-		}
 	}
 
 	/**
@@ -134,23 +141,8 @@ public class MyriadFluidOutputHandler {
 		return cachedFluidTankFull;
 	}
 
-	/**
-	 * 刷新流体槽满载缓存（在 insertFluidOutput 后调用）
-	 * <br/>
-	 * insertFluidOutput 通过 tank.insert 改变流体槽内容，可能使槽变满。
-	 * 调用此方法更新缓存，避免循环内 isFluidTankFull() 返回 stale 值。
-	 * fluidOutputTank() 为 O(1) 字段访问，每次产物插入后调用一次无性能影响。
-	 * <p>
-	 * Task 4 修复:使用复合判断,与 initFluidTankFullCache 保持一致。
-	 */
-	public void refreshFluidTankFullCache() {
-		if (context.suppressesUselessByproducts()) {
-			cachedFluidTankFull = false;
-			return;
-		}
-		cachedFluidTankFull = context.areAllFluidTanksFull() && !context.canAllocateNewFluidTank();
-		Level level = context.level();
-		lastFullCacheTick = level == null ? Long.MIN_VALUE : level.getGameTime();
+	void invalidateFluidTankFullCache() {
+		lastFullCacheTick = Long.MIN_VALUE;
 	}
 
 	/**
@@ -219,8 +211,11 @@ public class MyriadFluidOutputHandler {
 	 */
 	public InsertResult insertFluidOutput(ItemStack input, long amount, int processIndex) {
 		if (amount <= 0) {
-			logThrottledWarn(processIndex,
-					"{}insertFluidOutput 跳过：amount<=0 amount={} input={}", logPrefix, amount, input);
+			if (DevModeManager.isLoggingEnabled("centrifuge_batch")) {
+				LogThrottle.infoWithCooldown("myriad_empty_fluid_batch", 60_000L,
+						"[DEV][centrifuge_batch] {}流体批次为空，车道 {}，amount={} input={}",
+						logPrefix, processIndex, amount, input);
+			}
 			return InsertResult.COMPLETE;
 		}
 		// Task 8 修复：万象创世蜜脾没有 PB CentrifugeRecipe（其产物是动态随机蜜脾），
@@ -270,6 +265,7 @@ public class MyriadFluidOutputHandler {
 		FluidStack scaledFluid = fluid.copyWithAmount(offeredAmount);
 		FluidStack remainder = tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
 		long inserted = scaledFluid.getAmount() - (remainder.isEmpty() ? 0L : remainder.getAmount());
+		if (inserted > 0L) invalidateFluidTankFullCache();
 		if (inserted > 0L && LocalFluidDrainPolicy.shouldDrainAfterCommit(
 				tank.getNeeded(), amount)) {
 			context.productivebeesgenesis$onLocalFluidOutputCommitted();
@@ -368,10 +364,12 @@ public class MyriadFluidOutputHandler {
 		boolean isCombBlock = MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
 		boolean isHoneycomb = MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input);
 		if (isCombBlock) {
+			completeFluidRecovery(processIndex);
 			// 蜜脾块 = 4 个蜜脾,流体产出 4 × 100mB = 400mB
 			return new FluidStack(ModFluids.HONEY.get(), 400);
 		}
 		if (isHoneycomb) {
+			completeFluidRecovery(processIndex);
 			// 蜜脾 = 100mB,与 PB 原版 honeycomb.json 标准一致
 			return new FluidStack(ModFluids.HONEY.get(), 100);
 		}
@@ -387,17 +385,15 @@ public class MyriadFluidOutputHandler {
 					// 直接访问 fluidOutput 字段构造 FluidStack 作为 fallback
 					fluidOutput = extractFluidFromIngredient(recipe);
 				}
+				completeFluidRecovery(processIndex);
 				if (!fluidOutput.isEmpty()) return fluidOutput;
-			} catch (RuntimeException e) {
-				LogThrottle.warn("fluid_output_lookup",
-						"PB 配方流体输出查询异常，不生成流体：recipe={}, error={}", recipeHolder.id(), e.toString());
+			} catch (RuntimeException | LinkageError failure) {
+				reportFluidFailure(processIndex, input, recipeHolder.id(), "流体配方查询", failure);
 			}
 		} else {
 			// 普通 PB 蜜脾查找失败 — 真正异常（非万象创世场景），保留 WARN 日志。
 			// 没有可验证的配方时不能伪造蜂蜜输出。
-			logThrottledWarn(processIndex,
-					"{}resolveFluidOutput 未找到PB配方（非万象创世蜜脾），不生成流体：input={}",
-					logPrefix, input);
+			reportFluidFailure(processIndex, input, null, "缺少流体配方", null);
 		}
 		// 普通 PB 配方没有流体输出时必须返回 EMPTY。蜂蜜只属于万象创世固定副产物，
 		// 不能因为配方缺少 fluid 字段而隐式生成 250 mB 蜂蜜。
@@ -415,40 +411,47 @@ public class MyriadFluidOutputHandler {
 	 * @return 构造的 FluidStack，若 ingredient 无匹配流体则返回 EMPTY
 	 */
 	private FluidStack extractFluidFromIngredient(CentrifugeRecipe recipe) {
-		try {
-			SizedFluidIngredient sized = recipe.fluidOutput;
-			if (sized == null) return FluidStack.EMPTY;
-			// getFluids() 返回的栈可能 amount=0（仅表示流体类型），用 sized.amount() 保证正确数量
-			for (FluidStack stack : sized.getFluids()) {
-				return stack.copyWithAmount(sized.amount());
-			}
-			return FluidStack.EMPTY;
-		} catch (Exception e) {
-			LogThrottle.warn("fluid_extract", "extractFluidFromIngredient 异常: {}", e.getMessage());
-			return FluidStack.EMPTY;
+		SizedFluidIngredient sized = recipe.fluidOutput;
+		if (sized == null) return FluidStack.EMPTY;
+		// getFluids() 返回的栈可能 amount=0（仅表示流体类型），用 sized.amount() 保证正确数量。
+		for (FluidStack stack : sized.getFluids()) {
+			return stack.copyWithAmount(sized.amount());
+		}
+		return FluidStack.EMPTY;
+	}
+
+	private void reportFluidFailure(int lane, ItemStack input, ResourceLocation recipe, String phase, Throwable failure) {
+		FluidFailure first = fluidFailures[lane];
+		if (first == null) {
+			first = new FluidFailure(phase, failure, input, recipe);
+			fluidFailures[lane] = first;
+			LogThrottle.warnWithCooldown("myriad_fluid_query_failure", 60_000L,
+					"{}流体查询失败，车道 {}，位置 {}，阶段 {}，配方 {}，输入 {}；保留原首因",
+					logPrefix, lane, context instanceof BlockEntity entity ? entity.getBlockPos() : null,
+					first.phase, first.recipe, first.input, first.cause);
+			return;
+		}
+		first.repeats++;
+		long now = System.nanoTime();
+		if (now - first.lastSummaryNanos >= 60_000_000_000L) {
+			first.lastSummaryNanos = now;
+			LogThrottle.warnWithCooldown("myriad_fluid_query_failure", 60_000L,
+					"{}流体查询持续失败，车道 {}，位置 {}，原阶段 {}，配方 {}，首因 {}，期间重复 {} 次",
+					logPrefix, lane, context instanceof BlockEntity entity ? entity.getBlockPos() : null,
+					first.phase, first.recipe, first.cause == null ? "缺少配方" : first.cause.toString(), first.repeats);
 		}
 	}
 
-	/**
-	 * 记录流体诊断 WARN 日志（带冷却和抑制计数）
-	 * <br/>
-	 * L-28 修复：冷却期内仅计数不输出，冷却结束后输出日志并附加上次抑制次数，
-	 * 避免 256x 加速下多进程同时阻塞时 WARN 刷屏。
-	 *
-	 * @param processIndex 进程索引
-	 * @param pattern      日志消息模板（SLF4J 风格 {}）
-	 * @param args         模板参数
-	 */
-	private void logThrottledWarn(int processIndex, String pattern, Object... args) {
-		Level level = context.level();
-		if (level == null) return;
-		long currentTick = level.getGameTime();
-		LogThrottle throttle = fluidDiagThrottles[processIndex];
-		if (throttle.canLog(currentTick)) {
-			throttle.logged(currentTick);
-			ProductiveBeesGenesis.LOGGER.warn(pattern, args);
-		} else {
-			throttle.incrementSuppressed();
-		}
+	private void completeFluidRecovery(int lane) {
+		FluidFailure first = fluidFailures[lane];
+		if (first == null) return;
+		fluidFailures[lane] = null;
+		LogThrottle.infoWithCooldown("myriad_fluid_query_recovery", 60_000L,
+				"{}流体查询已恢复，车道 {}，位置 {}，原阶段 {}，期间重复 {} 次",
+				logPrefix, lane, context instanceof BlockEntity entity ? entity.getBlockPos() : null, first.phase, first.repeats);
+	}
+
+	void clearTransientFailures() {
+		java.util.Arrays.fill(fluidFailures, null);
 	}
 }

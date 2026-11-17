@@ -223,7 +223,7 @@ public final class Ae2InputPuller {
 		fairness.roll(currentTick);
 		List<Ae2InputExecution.PullEntry> pullList = Ae2InputCandidatePolicy.collect(
 				host, holder, buffers, level, storageService, meStorage, currentTick, inputCapacity,
-				processCount, filter, unlimitedMode, keyBackoff, ActionSourceHolder.INSTANCE);
+				inputSlots, filter, unlimitedMode, keyBackoff, ActionSourceHolder.INSTANCE);
 		if (pullList.isEmpty()) {
 			// 候选可能都在等待库存保留线，未执行提取的扫描不累计失败退避。
 			holder.updateLastPullTick(currentTick);
@@ -232,7 +232,7 @@ public final class Ae2InputPuller {
 		}
 		holder.setInputCandidateCursor(pullList.getLast().key);
 		Ae2InputExecution.Result result = Ae2InputExecution.execute(
-				host, holder, buffers, pullList, inputSlots, meStorage, keyBackoff, fairness,
+				host, holder, buffers, pullList, buffers.inputLaneSnapshot(), inputSlots, meStorage, keyBackoff, fairness,
 				inputCapacity, normalQuota, perSlotQuota, ActionSourceHolder.INSTANCE);
 		long totalPulled = result.totalPulled();
 		boolean unlimitedSucceeded = result.unlimitedSucceeded();

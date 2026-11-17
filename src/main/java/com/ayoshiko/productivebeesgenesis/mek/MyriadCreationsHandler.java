@@ -4,8 +4,6 @@ import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
-import mekanism.api.Action;
-import mekanism.api.AutomationType;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -13,7 +11,6 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -48,6 +45,7 @@ public class MyriadCreationsHandler {
 		myriadProductPools = new MyriadProductPool[context.processes()];
 		for (int process = 0; process < myriadProductPools.length; process++) {
 			myriadProductPools[process] = new MyriadProductPool(context);
+			completers[process].bindMyriadFluidOutput(fluidOutputHandler);
 		}
 	}
 
@@ -59,18 +57,20 @@ public class MyriadCreationsHandler {
 
 	public boolean tryProcessMyriadCreations(int processIndex, ItemStack input,
 			long energyPerTick, int operationsPerTick, int virtualTicks, long energyBudget) {
-		return tryProcessMyriadCreations(processIndex, input, energyPerTick,
-				operationsPerTick, virtualTicks, energyBudget, false);
-	}
-
-	boolean tryProcessMyriadCreations(int processIndex, ItemStack input,
-			long energyPerTick, int operationsPerTick, int virtualTicks, long energyBudget, boolean resumePaidCycle) {
 		if (!drainPendingOutputs(processIndex) || !MyriadCreationsEventHandler.isMyriadCreationsEnabled()) {
 			pbProcessing[processIndex] = false;
 			return false;
 		}
 		PbRecipeCompleter completer = completers[processIndex];
 		if (completer.hasPaidPendingOutputs() && !PbRecipeFlushHelper.flushCompleted(completer, processIndex)) return false;
+		long availableEnergy = Math.min(context.energyContainer().getEnergy(), Math.max(0L, energyBudget));
+		return tryProcessMyriadCreations(processIndex, context.inputSlot(processIndex).getStack(), energyPerTick,
+				operationsPerTick, virtualTicks, availableEnergy, false);
+	}
+
+	boolean tryProcessMyriadCreations(int processIndex, ItemStack input,
+			long energyPerTick, int operationsPerTick, int virtualTicks, long energyBudget, boolean resumePaidCycle) {
+		PbRecipeCompleter completer = completers[processIndex];
 		Level level = context.level();
 		if (level == null || level.isClientSide) return false;
 		int processingTime = cache.getCachedTicksForBase(context);
@@ -78,13 +78,19 @@ public class MyriadCreationsHandler {
 		cachedPbRecipes[processIndex] = null;
 		int maxOps = cache.refreshAndGetMaxOps(level);
 		int effectiveOps = maxOps > 0 ? Math.min(operationsPerTick, maxOps) : operationsPerTick;
-		int inputCount = context.inputSlot(processIndex).getCount();
+		int inputCount = input.getCount();
 		effectiveOps = Math.min(effectiveOps, inputCount);
-		long energy = Math.min(context.energyContainer().getEnergy(), Math.max(0L, energyBudget));
+		long energy = energyBudget;
 		if (effectiveOps <= 0) return false;
-		fluidOutputHandler.initFluidTankFullCache();
-		boolean blocked = !context.productivebeesgenesis$isDirectAeOutputEnabled()
-				&& (MyriadCreationsCache.areOutputSlotsFull(context, processIndex) || fluidOutputHandler.isFluidTankFull());
+		boolean blocked = false;
+		if (!context.productivebeesgenesis$isDirectAeOutputEnabled()) {
+			if (MyriadCreationsCache.areOutputSlotsFull(context, processIndex)) {
+				blocked = true;
+			} else {
+				fluidOutputHandler.initFluidTankFullCache();
+				blocked = fluidOutputHandler.isFluidTankFull();
+			}
+		}
 		if (blocked || resumePaidCycle) {
 			virtualTicks = Math.min(virtualTicks, Math.max(1, processingTime - pbOperatingTicks[processIndex]));
 		}
@@ -122,7 +128,6 @@ public class MyriadCreationsHandler {
 		pbProcessing[processIndex] = true;
 		context.productivebeesgenesis$markForSave();
 		if (completed > 0) completer.flushCompletedBatch(processIndex);
-		fluidOutputHandler.refreshFluidTankFullCache();
 		return true;
 	}
 
@@ -150,18 +155,12 @@ public class MyriadCreationsHandler {
 		selected = selected.subList(0, (int) Math.min(selected.size(), Math.min(OUTPUT_SLOT_COUNT, total)));
 		Map<ResourceLocation, Long> allocation = WeightedAllocation.allocateByWeight(
 				total, selected, WeightedTypeSelector.getInstance().getWeightsFor(selected));
-		Map<ResourceLocation, ItemStack> templates = MyriadBeeTypeCache.snapshot()
-				.selectTemplates(selected, block, level.getRandom());
-		Map<ItemStack, Long> outputs = new LinkedHashMap<>();
-		for (var entry : allocation.entrySet()) {
-			ItemStack template = templates.get(entry.getKey());
-			if (template == null || template.isEmpty()) return null;
-			outputs.put(template.copyWithCount(1), entry.getValue());
-		}
+		var snapshot = MyriadBeeTypeCache.snapshot();
+		var variants = block ? snapshot.combBlockVariants() : snapshot.honeycombVariants();
 		long fluidAmount = Math.multiplyExact(Math.multiplyExact((long) fluid.getAmount(), inputs), modifier);
 		PbRecipeCompleter batch = completers[processIndex].prepareMyriadCompleted(
-				outputs, fluid, fluidAmount, input, inputs);
-		return new PreparedOutputs(batch, allocation);
+				selected, allocation, variants, level.getRandom(), fluid, fluidAmount, input, inputs);
+		return batch == null ? null : new PreparedOutputs(batch, allocation);
 	}
 
 	public boolean hasUnresolvedState() {
@@ -174,6 +173,10 @@ public class MyriadCreationsHandler {
 
 	public void clearCachedTicksForBase() {
 		cache.clearCachedTicksForBase();
+	}
+
+	void clearTransientFailures() {
+		fluidOutputHandler.clearTransientFailures();
 	}
 
 	public void saveAdditional(CompoundTag nbt) {

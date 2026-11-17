@@ -8,7 +8,9 @@ import appeng.api.storage.MEStorage;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.MekCentrifugeFactoryHelper;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.List;
 import java.util.Set;
@@ -109,8 +111,12 @@ final class Ae2InputCandidatePolicy {
 	/** 三条候选路径共用本机分类、过滤额度与资源出口；精确提交由执行轮负责。 */
 	static List<Ae2InputExecution.PullEntry> collect(IAe2InputHost host, Ae2OutputStateHolder holder,
 			Ae2PushBuffers buffers, Level level, IStorageService storageService, MEStorage meStorage,
-			long currentTick, long inputCapacity, int processCount, Ae2InputFilter filter,
+			long currentTick, long inputCapacity, List<IInventorySlot> inputSlots, Ae2InputFilter filter,
 			boolean unlimitedMode, Ae2KeyBackoffRegistry<AEItemKey> keyBackoff, IActionSource actionSource) {
+		int processCount = inputSlots.size();
+		Ae2InputLaneSnapshot lanes = buffers.inputLaneSnapshot();
+		// pending 恢复已经结束；候选查询不写输入槽，执行轮继续使用并逐次刷新这份快照。
+		lanes.capture(inputSlots, processCount, host instanceof BlockEntity entity ? entity : null);
 		boolean smeltingEnabled = MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(host);
 		// 标签表达式过滤：未配置时使用 ALLOW_ALL，热路径零额外开销。
 		Ae2TagFilter tagFilter = holder.getAeTagFilter();
@@ -195,6 +201,7 @@ final class Ae2InputCandidatePolicy {
 						(directStart + directOffset) % directEntries.size());
 				AEItemKey key = direct.key();
 				if (key == null || keyBackoff.shouldSkip(key, nanoNow)) continue;
+				if (lanes.isIndexed() && lanes.candidateLanes(key) == 0L) continue;
 				Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
 						level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
 				if (!kind.isAllowed() || !pullKeys.add(key)) continue;
@@ -256,6 +263,7 @@ final class Ae2InputCandidatePolicy {
 							(directStart + directOffset) % directEntries.size());
 					AEItemKey key = direct.key();
 					if (key == null || keyBackoff.shouldSkip(key, nanoNow)) continue;
+					if (lanes.isIndexed() && lanes.candidateLanes(key) == 0L) continue;
 					Ae2InputCandidatePolicy.CandidateKind kind = Ae2InputCandidatePolicy.classify(
 							level, key, smeltingEnabled, buffers.smeltingInputCache, tagGate, combGate);
 					boolean whitelistEntry = filterSnapshot.mode == Ae2InputFilter.FilterMode.WHITELIST;
@@ -350,6 +358,7 @@ final class Ae2InputCandidatePolicy {
 			Predicate<AEItemKey> acceptableCandidate = key -> {
 				if (pullKeys.contains(key)) return false;
 				if (keyBackoff.shouldSkip(key, nanoNow)) return false;
+				if (lanes.isIndexed() && lanes.candidateLanes(key) == 0L) return false;
 				long cachedAvailable = scanInventory.get(key);
 				if (cachedAvailable <= 0L && !stockPolicyActive) return false;
 				long limit;

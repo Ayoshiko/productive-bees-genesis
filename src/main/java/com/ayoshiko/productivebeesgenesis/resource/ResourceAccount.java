@@ -215,10 +215,25 @@ public final class ResourceAccount {
 		return suspendedLanes.isEmpty() ? null : new Ticket(reference(), suspendedLanes.values().iterator().next().production.sequence);
 	}
 
-	/** 未知结果只占原车道；已从可用余额分离的记录不阻断其它车道。 */
+	/** 待确认和未知结果均占原车道，不能在当前批次结清前重新生产。 */
 	public boolean laneSuspended(int lane) {
 		accounts.checkThread();
 		return suspendedLanes.containsKey(lane);
+	}
+
+	public enum CentrifugeLaneState { READY, WAITING_CONFIRMATION, UNRESOLVED }
+
+	/** 正常活动确认不等于结果未知；查询不复制生产凭据或创建临时票据。 */
+	public CentrifugeLaneState centrifugeLaneState(int lane) {
+		accounts.checkThread();
+		var pending = suspendedLanes.get(lane);
+		if (pending != null) {
+			return pending.production.phase == Phase.WAITING_OUTPUT && pending.activeCompletion != null
+					? CentrifugeLaneState.WAITING_CONFIRMATION : CentrifugeLaneState.UNRESOLVED;
+		}
+		if (production != null && "resource_centrifuging".equals(production.context.getString("host"))
+				&& productionLane(production.context) == lane) return CentrifugeLaneState.UNRESOLVED;
+		return CentrifugeLaneState.READY;
 	}
 
 	private Production pendingProduction(Ticket ticket) {

@@ -1,7 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.logistics;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import java.util.AbstractList;
 import java.util.BitSet;
 import java.util.IdentityHashMap;
@@ -90,7 +90,8 @@ public final class IndexedOutputSlots extends AbstractList<BasicInventorySlot> i
                 stack = slots.get(index).getStack();
             } catch (RuntimeException | LinkageError error) {
                 if (!unreadableSlots.get(index)) {
-                    ProductiveBeesGenesis.LOGGER.error("Local output slot could not be indexed; other slots remain available: slot={}", index, error);
+                    LogThrottle.error("local_output_slot_index_failure",
+                            "Local output slot could not be indexed; other slots remain available: slot={}", index, error);
                 }
                 unreadableSlots.set(index);
                 // 保留原索引与脏标记；未知位置不作为空槽，后续查询继续恢复读取。
@@ -118,7 +119,8 @@ public final class IndexedOutputSlots extends AbstractList<BasicInventorySlot> i
 			changedSlots.clear(index);
             if (unreadableSlots.get(index)) {
                 unreadableSlots.clear(index);
-                ProductiveBeesGenesis.LOGGER.info("Local output slot became readable again: slot={}", index);
+                LogThrottle.infoWithCooldown("local_output_slot_index_recovered", 60_000L,
+                        "Local output slot became readable again: slot={}", index);
             }
 		}
 	}

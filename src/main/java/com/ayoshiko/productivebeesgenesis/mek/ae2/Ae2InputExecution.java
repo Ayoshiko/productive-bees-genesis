@@ -16,7 +16,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -47,7 +46,7 @@ final class Ae2InputExecution {
 	}
 
 	static Result execute(IAe2InputHost host, Ae2OutputStateHolder holder, Ae2PushBuffers buffers,
-			List<PullEntry> pullList, List<IInventorySlot> inputSlots, MEStorage meStorage,
+			List<PullEntry> pullList, Ae2InputLaneSnapshot laneSnapshot, List<IInventorySlot> inputSlots, MEStorage meStorage,
 			Ae2KeyBackoffRegistry<AEItemKey> keyBackoff, Ae2InputFairnessScheduler fairness,
 			long inputCapacity, long normalQuota, long perSlotQuota, IActionSource actionSource) {
 		Level level = host.productivebeesgenesis$getAe2Level();
@@ -74,9 +73,7 @@ final class Ae2InputExecution {
 		int typeCount = pullList.size();
 		int slotStart = holder.getPushState().getAndAdvanceInputSlotRotation(processCount);
 		long[] inputSlotCapacities = buffers.borrowInputSlotCapacities(processCount);
-		// 余量恢复结束后采集；执行中每次交付立即刷新该车道。
-		Ae2InputLaneSnapshot laneSnapshot = buffers.inputLaneSnapshot();
-		laneSnapshot.capture(inputSlots, processCount, host instanceof BlockEntity entity ? entity : null);
+		// 候选收集前已经采集；执行中每次交付立即刷新该车道。
 		boolean boundedCapacityPlanning = laneSnapshot.canBoundCapacityPlanning();
 		int passes = typeCount > 1 ? 2 : 1;
 		boolean fairPassTruncated = false;
@@ -155,6 +152,12 @@ final class Ae2InputExecution {
 					int slotOffset = 0;
 					while ((!boundedCapacityPlanning || typeAvailable < requested)
 							&& (indexed ? candidateLanes != 0L : slotOffset < processCount)) {
+						if (indexed && protectLanes && newLanes >= newLaneBudget) {
+							long suppressed = candidateLanes & laneSnapshot.emptyLanes();
+							lanesSuppressed |= suppressed != 0L;
+							candidateLanes &= ~suppressed;
+							if (candidateLanes == 0L) break;
+						}
 						int slotIdx;
 						if (indexed) {
 							long afterStart = candidateLanes & (-1L << typeSlotStart);
@@ -299,7 +302,7 @@ final class Ae2InputExecution {
 		}
 		if (laneItem == null) {
 			// 空槽也必须按真实候选求上限：珍珠、工具和 MAX_STACK_SIZE 组件可能低于空栈上限。
-			if (!entry.acceptsProbe(slotIdx, basicSlot, probe)) {
+			if (!basicSlot.isItemValidForInsertion(probe, AutomationType.INTERNAL)) {
 				return 0;
 			}
 			return Ae2InputLaneSnapshot.safeLimit(slot, probe);
@@ -310,7 +313,7 @@ final class Ae2InputExecution {
 		if (limit <= count) return 0;
 		if (!entry.matchesComponents(slotIdx, lanes.stack(slotIdx), probe,
 				lanes.patchSize(slotIdx), lanes.beeType(slotIdx))) return 0;
-		if (!entry.acceptsProbe(slotIdx, basicSlot, probe)) {
+		if (!basicSlot.isItemValidForInsertion(probe, AutomationType.INTERNAL)) {
 			return 0;
 		}
 		return limit - count;
@@ -527,9 +530,6 @@ final class Ae2InputExecution {
 		private boolean componentMatchCacheActive;
 		private int[] touchedSlots = new int[0];
 		private int touchedSlotCount;
-		/** Validator predicates may capture a slot or process index. Cache by slot identity. */
-		private BasicInventorySlot[] validatorSlots = new BasicInventorySlot[0];
-		private byte[] validatorStates = new byte[0];
 		/** 本条目 key 的组件补丁数（每轮准备一次，供内层循环直接比较）。 */
 		private int keyPatchSize;
 		/** 本条目 key 的「唯一 bee_type」签名；不满足快径条件时为 null。 */
@@ -561,10 +561,6 @@ final class Ae2InputExecution {
 				componentMatchGenerations = Arrays.copyOf(componentMatchGenerations, slotCount);
 				touchedSlots = Arrays.copyOf(touchedSlots, slotCount);
 			}
-			if (slotCount > validatorSlots.length) {
-				validatorSlots = Arrays.copyOf(validatorSlots, slotCount);
-				validatorStates = Arrays.copyOf(validatorStates, slotCount);
-			}
 			if (++componentMatchGeneration == 0) {
 				Arrays.fill(componentMatchGenerations, 0);
 				componentMatchGeneration = 1;
@@ -585,23 +581,6 @@ final class Ae2InputExecution {
 			int patchSize = keyStack.getComponentsPatch().size();
 			keyPatchSize = patchSize;
 			keyBeeType = Ae2InputLaneSnapshot.singleBeeType(keyStack, entryKey.getItem(), patchSize);
-		}
-
-		/**
-		 * 同类槽位也可能绑定不同的 validator；只在同一规划轮内复用同一槽的结果。
-		 */
-		boolean acceptsProbe(int slotIndex, BasicInventorySlot slot, ItemStack probe) {
-			boolean cacheable = componentMatchCacheActive && slotIndex >= 0 && slotIndex < validatorSlots.length;
-			if (cacheable && validatorSlots[slotIndex] == slot) {
-				return validatorStates[slotIndex] == 1;
-			}
-			boolean accepted = slot.isItemValidForInsertion(probe, AutomationType.INTERNAL);
-			if (cacheable) {
-				touchSlot(slotIndex);
-				validatorSlots[slotIndex] = slot;
-				validatorStates[slotIndex] = (byte) (accepted ? 1 : 0);
-			}
-			return accepted;
 		}
 
 		/** 按「槽位当前栈对象 + 当前 PullEntry key」缓存昂贵的组件匹配。 */
@@ -642,9 +621,9 @@ final class Ae2InputExecution {
 			return matches;
 		}
 
-		/** 组件和 validator 共用触碰表，同一槽位至多登记一次。 */
+		/** 组件匹配的触碰表，同一槽位至多登记一次。 */
 		private void touchSlot(int slotIndex) {
-			if (componentMatchStacks[slotIndex] == null && validatorSlots[slotIndex] == null) {
+			if (componentMatchStacks[slotIndex] == null) {
 				touchedSlots[touchedSlotCount++] = slotIndex;
 			}
 		}
@@ -654,7 +633,6 @@ final class Ae2InputExecution {
 			for (int index = 0; index < touchedSlotCount; index++) {
 				int slotIndex = touchedSlots[index];
 				componentMatchStacks[slotIndex] = null;
-				validatorSlots[slotIndex] = null;
 			}
 			touchedSlotCount = 0;
 			componentMatchCacheActive = false;

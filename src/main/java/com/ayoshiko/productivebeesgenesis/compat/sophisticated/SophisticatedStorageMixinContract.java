@@ -14,7 +14,7 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
-/** 整体模拟的两个桥必须同时满足二进制合同；只读字节码，不提前加载可选类。 */
+/** 整体插入的两个桥必须同时满足二进制合同；只读字节码，不提前加载可选类。 */
 public final class SophisticatedStorageMixinContract {
 
 	static final String SIMPLE_INSERTER = "net/p3pp3rf1y/sophisticatedcore/inventory/IItemHandlerSimpleInserter";
@@ -75,7 +75,64 @@ public final class SophisticatedStorageMixinContract {
 			return "Missing public external insert method";
 		}
 		if (!forwardsSimulation(externalInsert)) return "Changed external simulation policy";
+		if (!forwardsCachedExecution(externalInsert)) return "Changed external execution policy";
 		return null;
+	}
+
+	/** 原执行只有本刻拒收记忆和当前处理器委托；其它政策出现时回退原逐槽能力。 */
+	private static boolean forwardsCachedExecution(MethodNode method) {
+		var code = new ArrayList<AbstractInsnNode>();
+		for (AbstractInsnNode instruction : method.instructions) {
+			if (instruction.getOpcode() >= 0) code.add(instruction);
+		}
+		if (code.size() != 52 || !method.tryCatchBlocks.isEmpty()) return false;
+		return variable(code.get(11), Opcodes.ALOAD, 0)
+				&& field(code.get(12), Opcodes.GETFIELD, "currentCacheTime", "J")
+				&& variable(code.get(13), Opcodes.ALOAD, 0)
+				&& field(code.get(14), Opcodes.GETFIELD, "timeSupplier", "Ljava/util/function/LongSupplier;")
+				&& call(code.get(15), "java/util/function/LongSupplier", "getAsLong", "()J")
+				&& code.get(16).getOpcode() == Opcodes.LCMP
+				&& code.get(17).getOpcode() == Opcodes.IFEQ
+				&& variable(code.get(18), Opcodes.ALOAD, 0)
+				&& field(code.get(19), Opcodes.GETFIELD, "failedInsertStacks", "Ljava/util/Set;")
+				&& call(code.get(20), "java/util/Set", "clear", "()V")
+				&& variable(code.get(21), Opcodes.ALOAD, 0)
+				&& variable(code.get(22), Opcodes.ALOAD, 0)
+				&& field(code.get(23), Opcodes.GETFIELD, "timeSupplier", "Ljava/util/function/LongSupplier;")
+				&& call(code.get(24), "java/util/function/LongSupplier", "getAsLong", "()J")
+				&& field(code.get(25), Opcodes.PUTFIELD, "currentCacheTime", "J")
+				&& variable(code.get(26), Opcodes.ALOAD, 0)
+				&& field(code.get(27), Opcodes.GETFIELD, "failedInsertStacks", "Ljava/util/Set;")
+				&& variable(code.get(28), Opcodes.ALOAD, 2)
+				&& call(code.get(29), "java/util/Set", "contains", "(Ljava/lang/Object;)Z")
+				&& code.get(30).getOpcode() == Opcodes.IFEQ
+				&& variable(code.get(31), Opcodes.ALOAD, 2)
+				&& code.get(32).getOpcode() == Opcodes.ARETURN
+				&& variable(code.get(33), Opcodes.ALOAD, 0)
+				&& field(code.get(34), Opcodes.GETFIELD, "wrappedHandlerGetter", "Ljava/util/function/Supplier;")
+				&& call(code.get(35), "java/util/function/Supplier", "get", "()Ljava/lang/Object;")
+				&& code.get(36) instanceof TypeInsnNode cast && cast.getOpcode() == Opcodes.CHECKCAST
+				&& cast.desc.equals(MODIFIABLE_HANDLER)
+				&& variable(code.get(37), Opcodes.ILOAD, 1)
+				&& variable(code.get(38), Opcodes.ALOAD, 2)
+				&& code.get(39).getOpcode() == Opcodes.ICONST_0
+				&& call(code.get(40), MODIFIABLE_HANDLER, "insertItem", "(I" + ITEM_STACK + "Z)" + ITEM_STACK)
+				&& variable(code.get(41), Opcodes.ASTORE, 4)
+				&& variable(code.get(42), Opcodes.ALOAD, 4)
+				&& variable(code.get(43), Opcodes.ALOAD, 2)
+				&& code.get(44).getOpcode() == Opcodes.IF_ACMPNE
+				&& variable(code.get(45), Opcodes.ALOAD, 0)
+				&& field(code.get(46), Opcodes.GETFIELD, "failedInsertStacks", "Ljava/util/Set;")
+				&& variable(code.get(47), Opcodes.ALOAD, 2)
+				&& call(code.get(48), "java/util/Set", "add", "(Ljava/lang/Object;)Z")
+				&& code.get(49).getOpcode() == Opcodes.POP
+				&& variable(code.get(50), Opcodes.ALOAD, 4)
+				&& code.get(51).getOpcode() == Opcodes.ARETURN;
+	}
+
+	private static boolean field(AbstractInsnNode instruction, int opcode, String name, String descriptor) {
+		return instruction instanceof FieldInsnNode field && field.getOpcode() == opcode
+				&& field.owner.equals(CACHED_INSERT) && field.name.equals(name) && field.desc.equals(descriptor);
 	}
 
 	private static boolean forwardsSimulation(MethodNode method) {
@@ -132,7 +189,7 @@ public final class SophisticatedStorageMixinContract {
 	}
 
 	private static boolean disabled(String reason) {
-		System.err.println("[ProductiveBeesGenesis] Sophisticated whole-inventory simulation disabled: " + reason);
+		System.err.println("[ProductiveBeesGenesis] Sophisticated whole-inventory insertion disabled: " + reason);
 		return false;
 	}
 }

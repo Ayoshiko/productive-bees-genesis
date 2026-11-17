@@ -8,6 +8,7 @@ import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeFluidTankMultiplie
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeInputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.CentrifugeOutputStackMultipliers;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
 import com.ayoshiko.productivebeesgenesis.mek.CentrifugeFactoryCommonLogic;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryPbContextDelegate;
 import com.ayoshiko.productivebeesgenesis.mek.FactoryPbUpgradeDelegate;
@@ -170,6 +171,7 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 	public TileEntityExtraMekCentrifugeFactory(Holder<Block> blockProvider, BlockPos pos, BlockState state) {
 		super(blockProvider, pos, state);
 		pbProcessor = new PbRecipeProcessor(this, "ME工厂离心机");
+		MekCentrifugeFactoryHelper.bindSettlements(this, pbProcessor);
 		pbUpgradeDelegate = new FactoryPbUpgradeDelegate(this);
 		EnergyInventorySlot energySlot = ((TileEntityExtraFactoryAccessor) this).productivebeesgenesis$getEnergySlot();
 		// Task 13: 传入 fluidOutputHolder 和 fluidOutputTank,在 MULTI_PER_FLUID 模式下让 Ejector 自动遍历所有槽
@@ -220,9 +222,6 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 			((TieredInputSlot) outputSlot).productivebeesgenesis$setInputStackMultiplier(outputMultiplier);
 			((TieredInputSlot) secondaryOutputSlot).productivebeesgenesis$setInputStackMultiplier(outputMultiplier);
 			((TieredInputSlot) tertiaryOutputSlot).productivebeesgenesis$setInputStackMultiplier(outputMultiplier);
-			MekCentrifugeFactoryHelper.bindOutputSettlement(this, i, 0, outputSlot);
-			MekCentrifugeFactoryHelper.bindOutputSettlement(this, i, 1, secondaryOutputSlot);
-			MekCentrifugeFactoryHelper.bindOutputSettlement(this, i, 2, tertiaryOutputSlot);
 			tertiaryOutputSlots[i] = tertiaryOutputSlot;
 
 			ExtraFactoryInputInventorySlot inputSlot = ExtraFactoryInputInventorySlot.create(
@@ -232,9 +231,11 @@ public class TileEntityExtraMekCentrifugeFactory extends TileEntityExtraItemStac
 			((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(
 					CentrifugeInputStackMultipliers.forMEFactory(tier.ordinal()));
 			((TieredInputSlot) inputSlot).productivebeesgenesis$markInputSlot();
-			MekCentrifugeFactoryHelper.bindInputSettlement(this, i, inputSlot);
 
 			int index = i;
+			// 原 validator 已执行同一全局准入，canInsert 只保留当前车道的输出兼容性。
+			((BasicInventorySlotAccessor) inputSlot).productivebeesgenesis$setCanInsert(
+					(stack, automation) -> inputProducesOutput(index, stack, outputSlot, secondaryOutputSlot, false));
 			builder.addSlot(inputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,
 				getWarningCheck(RecipeError.NOT_ENOUGH_INPUT,
 				index)));

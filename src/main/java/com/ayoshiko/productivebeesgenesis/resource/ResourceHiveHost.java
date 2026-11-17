@@ -499,7 +499,10 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 		if (!(entity.getLevel() instanceof ServerLevel level)) return;
 		var hive = entity;
 		var state = existing(hive);
-		if (state != null) state.productionMonitor = null;
+		if (state != null) {
+			state.productionMonitor = null;
+			state.centrifugeProcessor = null;
+		}
 		if (state == null || state.reference == null || state.preservedInvalid != null) return;
 		var accounts = ResourceRuntime.accounts(level.getServer()).accounts();
 		var account = accounts.find(state.reference.sourceId());

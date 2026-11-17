@@ -15,10 +15,13 @@ import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.common.inventory.slot.BasicInventorySlot;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -76,11 +79,13 @@ public class PbRecipeCompleter {
 
 	/** PB配方处理上下文 */
 	private final PbRecipeContext context;
+	private final int lane;
 
 	/** flush 执行器 — 持有 simStacks 等执行相关实例字段,与 completer 生命周期一致 */
 	private final PbRecipeFlusher flusher;
 	private final PendingTemplates pendingTemplates;
 	private PbFactoryOutputBatch factoryOutputBatch;
+	private MyriadFluidOutputHandler myriadFluidOutput;
 
 	/**
 	 * 本 tick 尚未插入的 PB 配方输出(按 ItemStack key 累加数量)
@@ -127,13 +132,47 @@ public class PbRecipeCompleter {
 	private PendingFailure retainedPendingFailure;
 	/** 只缓存准备结果；每次准入仍复核当前槽位和外部路由状态。 */
 	private PbOutputCapacityCache capacityCache;
+	private NotificationFailure[] notificationFailures;
 
-	public PbRecipeCompleter(PbRecipeContext context) {
-		this(context, new PbRecipeFlusher(), new PendingTemplates());
+	private enum NotificationKind {
+		PAYMENT("centrifuge_payment_notification"),
+		INPUT("centrifuge_input_notification"),
+		SAVE("centrifuge_save_notification");
+
+		final String logKey;
+
+		NotificationKind(String logKey) {
+			this.logKey = logKey;
+		}
 	}
 
-	private PbRecipeCompleter(PbRecipeContext context, PbRecipeFlusher flusher, PendingTemplates pendingTemplates) {
+	private static final class NotificationFailure {
+		final String phase;
+		final Throwable cause;
+		final BlockPos position;
+		final java.util.UUID request;
+		long repeats;
+		long lastSummaryNanos = System.nanoTime();
+
+		NotificationFailure(String phase, Throwable cause, BlockPos position, java.util.UUID request) {
+			this.phase = phase;
+			this.cause = cause;
+			this.position = position;
+			this.request = request;
+		}
+	}
+
+	public PbRecipeCompleter(PbRecipeContext context) {
+		this(context, -1);
+	}
+
+	public PbRecipeCompleter(PbRecipeContext context, int lane) {
+		this(context, new PbRecipeFlusher(), new PendingTemplates(), lane);
+	}
+
+	private PbRecipeCompleter(PbRecipeContext context, PbRecipeFlusher flusher, PendingTemplates pendingTemplates, int lane) {
 		this.context = context;
+		this.lane = lane;
 		this.flusher = flusher;
 		this.pendingTemplates = pendingTemplates;
 	}
@@ -281,7 +320,7 @@ public class PbRecipeCompleter {
 
 	/** 在原聚合器中准备独占结果；不修改本实例、库存、进度或费用。 */
 	PbRecipeCompleter prepare(CentrifugeRecipe recipe, int inputs, long seed, boolean maximum) {
-		var batch = new PbRecipeCompleter(context, flusher, pendingTemplates);
+		var batch = new PbRecipeCompleter(context, flusher, pendingTemplates, lane);
 		prepareInto(batch, recipe, inputs, seed, maximum);
 		return batch;
 	}
@@ -293,17 +332,39 @@ public class PbRecipeCompleter {
 		return batch;
 	}
 
-	PbRecipeCompleter prepareMyriadCompleted(Map<ItemStack, Long> items, FluidStack fluid, long amount,
+	/** 模板按原选型顺序抽取，输出按分配顺序直接进入独占批次，只复制一次共享模板。 */
+	PbRecipeCompleter prepareMyriadCompleted(List<ResourceLocation> selected, Map<ResourceLocation, Long> allocation,
+			Map<ResourceLocation, List<ItemStack>> variants, RandomSource random, FluidStack fluid, long amount,
 			ItemStack input, int inputs) {
 		PbRecipeCompleter batch = completedBatch();
 		batch.clearPendingOutputs();
-		batch.freezeMyriadBatch(items, fluid, amount, input, inputs);
+		batch.resetPendingRecipe();
+		ItemStack[] templates = new ItemStack[selected.size()];
+		for (int index = 0; index < selected.size(); index++) {
+			List<ItemStack> choices = variants.get(selected.get(index));
+			if (choices == null || choices.isEmpty()) continue;
+			templates[index] = choices.get(choices.size() == 1 ? 0 : random.nextInt(choices.size()));
+		}
+		for (var entry : allocation.entrySet()) {
+			ItemStack template = templates[selected.indexOf(entry.getKey())];
+			if (template == null || template.isEmpty()) return null;
+			batch.addPendingOutput(template.copyWithCount(1), entry.getValue());
+			batch.pendingItemCount = Math.addExact(batch.pendingItemCount, entry.getValue());
+		}
+		batch.pendingFluidTemplate = fluid.isEmpty() ? null : fluid.copyWithAmount(1);
+		batch.pendingFluidAmount = amount;
+		batch.pendingInputShrink = inputs;
+		batch.freezeCompletedBatch(input);
 		return batch;
+	}
+
+	void bindMyriadFluidOutput(MyriadFluidOutputHandler handler) {
+		myriadFluidOutput = handler;
 	}
 
 	private PbRecipeCompleter completedBatch() {
 		if (completedBatch == null) {
-			completedBatch = new PbRecipeCompleter(context, flusher, pendingTemplates);
+			completedBatch = new PbRecipeCompleter(context, flusher, pendingTemplates, lane);
 		}
 		return completedBatch;
 	}
@@ -483,6 +544,7 @@ public class PbRecipeCompleter {
 		paymentKnown = false;
 		try {
 			charged = container.extract(requested, Action.EXECUTE, AutomationType.INTERNAL);
+			completeNotificationRecovery(NotificationKind.PAYMENT);
 		} catch (RuntimeException | LinkageError failure) {
 			charged = before - ((BasicEnergyContainerAccessor) container).productivebeesgenesis$getStored();
 			if (charged < 0 || charged > requested) {
@@ -502,14 +564,50 @@ public class PbRecipeCompleter {
 	private void notifyPaymentChange() {
 		try {
 			context.productivebeesgenesis$markForSave();
+			completeNotificationRecovery(NotificationKind.SAVE);
 		} catch (RuntimeException | LinkageError failure) {
-			reportPaymentFailure("付款保存通知失败，保留原进度、输入与费用并继续结算", failure);
+			reportNotificationFailure(NotificationKind.SAVE, "付款保存通知失败，保留原进度、输入与费用并继续结算", failure);
 		}
 	}
 
 	private void reportPaymentFailure(String phase, Throwable failure) {
-		LogThrottle.error("centrifuge_payment_notification", "离心机 {}，位置 {}，请求 {}",
-				phase, context instanceof BlockEntity entity ? entity.getBlockPos() : "unknown", paymentRequest(), failure);
+		reportNotificationFailure(NotificationKind.PAYMENT, phase, failure);
+	}
+
+	private void reportNotificationFailure(NotificationKind kind, String phase, Throwable failure) {
+		if (notificationFailures == null) notificationFailures = new NotificationFailure[NotificationKind.values().length];
+		NotificationFailure first = notificationFailures[kind.ordinal()];
+		if (first == null) {
+			BlockPos position = context instanceof BlockEntity entity ? entity.getBlockPos().immutable() : null;
+			first = new NotificationFailure(phase, failure, position, paymentRequest());
+			notificationFailures[kind.ordinal()] = first;
+			LogThrottle.errorWithCooldown(kind.logKey, 60_000L,
+					"离心机 {}，车道 {}，位置 {}，付款请求 {}；保留已确认资产与原故障首因",
+					first.phase, lane, first.position, first.request, first.cause);
+			return;
+		}
+		first.repeats++;
+		long now = System.nanoTime();
+		if (now - first.lastSummaryNanos >= 60_000_000_000L) {
+			first.lastSummaryNanos = now;
+			LogThrottle.warnWithCooldown(kind.logKey, 60_000L,
+					"离心机通知故障持续，车道 {}，位置 {}，付款请求 {}，原阶段 {}，首因 {}，期间重复 {} 次",
+					lane, first.position, first.request, first.phase, first.cause.toString(), first.repeats);
+		}
+	}
+
+	private void completeNotificationRecovery(NotificationKind kind) {
+		if (notificationFailures == null) return;
+		NotificationFailure first = notificationFailures[kind.ordinal()];
+		if (first == null) return;
+		notificationFailures[kind.ordinal()] = null;
+		LogThrottle.infoWithCooldown("centrifuge_notification_recovery", 60_000L,
+				"离心机通知已恢复，车道 {}，位置 {}，付款请求 {}，原阶段 {}，首因 {}，期间重复 {} 次",
+				lane, first.position, first.request, first.phase, first.cause.toString(), first.repeats);
+	}
+
+	void clearTransientFailures() {
+		notificationFailures = null;
 	}
 
 	boolean paymentPending() { return paymentPending; }
@@ -530,7 +628,8 @@ public class PbRecipeCompleter {
 		paymentRequest = null;
 		paymentPending = false;
 		paymentKnown = false;
-		ProductiveBeesGenesis.LOGGER.info("离心机自动结清已知付款：请求 {}，车道 {}，位置 {}；仅扣尚未支付的费用，继续原进度与产物",
+		LogThrottle.infoWithCooldown("centrifuge_known_payment_recovery", 60_000L,
+				"离心机自动结清已知付款：请求 {}，车道 {}，位置 {}；仅扣尚未支付的费用，继续原进度与产物",
 				request, lane,
 				context instanceof net.minecraft.world.level.block.entity.BlockEntity entity ? entity.getBlockPos() : "unknown");
 		notifyPaymentChange();
@@ -594,19 +693,18 @@ public class PbRecipeCompleter {
 			pendingInputShrink -= consumed;
 			if (pendingInputShrink == 0) pendingInputTemplate = ItemStack.EMPTY;
 			if (debitFailure != null) {
-				LogThrottle.error("centrifuge_input_notification",
-						"离心机输入通知失败，车道 {}，位置 {}；按已提交的本地数量结清，不重复扣料",
-						processIndex, context instanceof BlockEntity entity ? entity.getBlockPos() : "unknown", debitFailure);
+				reportNotificationFailure(NotificationKind.INPUT, "输入通知失败，按已提交的本地数量结清，不重复扣料", debitFailure);
+			} else {
+				completeNotificationRecovery(NotificationKind.INPUT);
 			}
 		} else {
 			retainInputFailure(before, requested, new IllegalStateException("Input source changed during debit"));
 		}
 		try {
 			context.productivebeesgenesis$markForSave();
+			completeNotificationRecovery(NotificationKind.SAVE);
 		} catch (RuntimeException | LinkageError failure) {
-			LogThrottle.error("centrifuge_input_save_notification",
-					"离心机输入结算后的保存通知失败，车道 {}，位置 {}；保留已结清数量与原产物",
-					processIndex, context instanceof BlockEntity entity ? entity.getBlockPos() : "unknown", failure);
+			reportNotificationFailure(NotificationKind.SAVE, "输入结算后的保存通知失败，保留已结清数量与原产物", failure);
 		}
 		return !invalidPending() && pendingInputShrink == 0;
 	}
@@ -907,6 +1005,7 @@ public class PbRecipeCompleter {
 	void debitPendingFluid(long accepted) {
 		if (accepted > pendingFluidAmount) throw new IllegalStateException("Centrifuge fluid receipt exceeds pending output");
 		pendingFluidAmount -= accepted;
+		if (accepted > 0 && myriadFluidOutput != null) myriadFluidOutput.invalidateFluidTankFullCache();
 	}
 
 	/** 保存通知没有接收副作用，失败不能改写确定回执或中断后续来源扣账。 */
@@ -914,10 +1013,9 @@ public class PbRecipeCompleter {
 		if (pendingInputShrink != 0) return;
 		try {
 			context.productivebeesgenesis$markForSave();
+			completeNotificationRecovery(NotificationKind.SAVE);
 		} catch (RuntimeException | LinkageError failure) {
-			LogThrottle.error("centrifuge_output_save_notification",
-					"离心机产物扣账后的保存通知失败，位置 {}；确定回执已扣账，继续排空与其它车道生产",
-					context instanceof BlockEntity entity ? entity.getBlockPos() : "unknown", failure);
+			reportNotificationFailure(NotificationKind.SAVE, "产物扣账后的保存通知失败，确定回执已扣账，继续排空与其它车道生产", failure);
 		}
 	}
 

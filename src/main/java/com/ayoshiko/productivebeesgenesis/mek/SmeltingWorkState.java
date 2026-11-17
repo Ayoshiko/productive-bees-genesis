@@ -141,7 +141,13 @@ final class SmeltingWorkState {
         save(retained, provider);
         load(retained, provider);
         retryInvalidOnTick = false;
+        for (int lane = 0; lane < lanes.length; lane++) {
+            if (invalid == null) processor.markLaneRecovery(lane, "熔炼原始数据解码");
+            if (invalidEnergy == null) processor.markLaneRecovery(lane, "熔炼共享费用数据解码");
+            if (invalidLanes[lane] == null) processor.markLaneRecovery(lane, "熔炼车道数据解码");
+        }
         notifyChanged();
+        for (int lane = 0; lane < lanes.length; lane++) processor.finishLaneAttempt(lane);
     }
 
     void retain(int lane, ItemStack input, int inputs, ItemStack output, long outputs,
@@ -220,8 +226,12 @@ final class SmeltingWorkState {
             if (completion.outputPending > 0) return false;
         }
         lanes[lane] = null;
+        processor.markLaneRecovery(lane, "input");
+        processor.markLaneRecovery(lane, "output");
+        processor.markLaneRecovery(lane, "熔炼已付输入收尾");
+        processor.markLaneRecovery(lane, "熔炼已付产物收尾");
         notifyChanged();
-        processor.completeLaneRecovery(lane);
+        processor.finishLaneAttempt(lane);
         return true;
     }
 
@@ -268,8 +278,17 @@ final class SmeltingWorkState {
             }
             return settled;
         }
-        if (energyPending == 0) clearEnergy();
+        if (energyPending == 0) {
+            clearEnergy();
+            for (int lane = 0; lane < lanes.length; lane++) {
+                processor.markLaneRecovery(lane, "熔炼共享费用收尾");
+                processor.markLaneRecovery(lane, "熔炼共享费用恢复");
+            }
+        }
         notifyChanged();
+        if (energyPending == 0) {
+            for (int lane = 0; lane < lanes.length; lane++) processor.finishLaneAttempt(lane);
+        }
         return energyPending == 0;
     }
 
@@ -300,15 +319,25 @@ final class SmeltingWorkState {
     void confirmSettled(UUID request) {
         if (request.equals(energyRequest) && energyUnknown) {
             clearEnergy();
+            for (int lane = 0; lane < lanes.length; lane++) {
+                processor.markLaneRecovery(lane, "熔炼共享费用收尾");
+                processor.markLaneRecovery(lane, "熔炼共享费用恢复");
+            }
             notifyChanged();
+            for (int lane = 0; lane < lanes.length; lane++) processor.finishLaneAttempt(lane);
             return;
         }
         for (int lane = 0; lane < lanes.length; lane++) {
             Completion completion = lanes[lane];
             if (completion != null && request.equals(completion.request) && completion.unknown) {
                 lanes[lane] = null;
+                processor.markLaneRecovery(lane, "input");
+                processor.markLaneRecovery(lane, "output");
+                processor.markLaneRecovery(lane, "processing");
+                processor.markLaneRecovery(lane, "熔炼已付输入收尾");
+                processor.markLaneRecovery(lane, "熔炼已付产物收尾");
                 notifyChanged();
-                processor.completeLaneRecovery(lane);
+                processor.finishLaneAttempt(lane);
                 return;
             }
         }
@@ -477,6 +506,7 @@ final class SmeltingWorkState {
         refreshLocks();
         try {
             context.productivebeesgenesis$markForSave();
+            processor.markLaneRecovery(0, "熔炼保存通知");
         } catch (RuntimeException | LinkageError failure) {
             processor.reportLaneFailure(0, "熔炼保存通知", failure);
         }

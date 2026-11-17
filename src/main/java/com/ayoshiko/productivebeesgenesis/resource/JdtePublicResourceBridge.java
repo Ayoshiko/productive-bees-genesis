@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.api.resource.*;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.JdteNativeResourceRecipes;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import cy.jdkdigital.productivebees.ProductiveBees;
 import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
 import cy.jdkdigital.productivebees.util.GeneAttribute;
@@ -129,7 +130,7 @@ final class JdtePublicResourceBridge {
             } catch (RuntimeException | LinkageError rejectionFailure) {
                 failure.addSuppressed(rejectionFailure);
             }
-            com.ayoshiko.productivebeesgenesis.util.LogThrottle.warnWithCooldown("jdte_native_resource_recipe", 5000,
+            LogThrottle.warn("jdte_native_resource_recipe",
                     "JDTE native resource recipe unavailable at {}", host.getBlockPos(), failure);
         }
     }
@@ -147,7 +148,7 @@ final class JdtePublicResourceBridge {
             if ((boolean) call(event, "handled")) return;
             call(event, "claim");
         } catch (RuntimeException | LinkageError failure) {
-            com.ayoshiko.productivebeesgenesis.util.LogThrottle.warnWithCooldown("jdte_resource_claim", 5000,
+            LogThrottle.warn("jdte_resource_claim",
                     "JDTE resource cycle claim failed at {}", host.getBlockPos(), failure);
             return;
         }
@@ -202,7 +203,7 @@ final class JdtePublicResourceBridge {
             }
         } catch (RuntimeException | LinkageError failure) {
             state.status("production_uncertain");
-            com.ayoshiko.productivebeesgenesis.util.LogThrottle.warnWithCooldown("jdte_resource_public", 5000,
+            LogThrottle.warn("jdte_resource_public",
                     "JDTE public resource cycle paused at {}", host.getBlockPos(), failure);
         }
     }

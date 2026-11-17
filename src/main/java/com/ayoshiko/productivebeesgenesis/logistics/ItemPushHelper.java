@@ -103,6 +103,27 @@ public final class ItemPushHelper {
 			BooleanSupplier targetValid) {
 		ItemStack remaining = stack.copy();
 		if (!targetValid.getAsBoolean()) return remaining;
+		if (target instanceof WholeInventoryItemSimulation insertion) {
+			boolean[] unavailable = {false};
+			int handed;
+			try {
+				handed = (int) custody.handoffItem(remaining, remaining.getCount(), destination, () -> {
+					if (!targetValid.getAsBoolean()) return 0;
+					int accepted = insertion.productivebeesgenesis$executeWholeItemInsert(remaining.copy());
+					unavailable[0] = accepted == WholeInventoryItemSimulation.UNAVAILABLE;
+					return unavailable[0] ? 0 : accepted;
+				});
+			} catch (RuntimeException | LinkageError failure) {
+				LogThrottle.error("item_output_handoff_preparation", "物品整库存外送登记失败，目标尚未执行，target={} remaining={}",
+						destination, remaining.getCount(), failure);
+				return remaining;
+			}
+			if (!unavailable[0]) {
+				remaining.shrink(handed);
+				return remaining;
+			}
+			if (!targetValid.getAsBoolean()) return remaining;
+		}
 		int slots;
 		try {
 			slots = target.getSlots();

@@ -9,6 +9,7 @@ import appeng.api.storage.MEStorage;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.api.resource.ResourceHostApi;
 import com.ayoshiko.productivebeesgenesis.resource.*;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -271,7 +272,8 @@ public final class Ae2ResourceOutput implements IInWorldGridNodeHost {
 			// 异常路径不再查询可能失败的账户库或节点；下次只读检测失败仍受退避限制。
 			if (!reportedFailure) {
 				reportedFailure = true;
-				ProductiveBeesGenesis.LOGGER.error("资源 ME 输出暂不可用，位置 {}；保留资产并等待条件恢复", endpoint.getBlockPos(), failure);
+				LogThrottle.error("ae2_resource_output_failure",
+						"资源 ME 输出暂不可用，位置 {}；保留资产并等待条件恢复", endpoint.getBlockPos(), failure);
 			}
 			disconnect();
 		}

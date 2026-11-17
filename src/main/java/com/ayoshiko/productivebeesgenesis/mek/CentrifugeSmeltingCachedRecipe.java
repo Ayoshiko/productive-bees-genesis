@@ -55,7 +55,7 @@ final class CentrifugeSmeltingCachedRecipe
         notificationFailed = false;
         try {
             super.process();
-            if (!notificationFailed) processor.completeLaneRecovery(lane);
+            if (!notificationFailed && enteredPayment) processor.markLaneRecovery(lane, "熔炼准备");
         } catch (RuntimeException | LinkageError failure) {
             resetCache();
             progress.accept(getOperatingTicks());
@@ -76,6 +76,7 @@ final class CentrifugeSmeltingCachedRecipe
         super.setOnFinish(() -> {
             try {
                 onFinish.run();
+                processor.markLaneRecovery(lane, "熔炼完成通知");
             } catch (RuntimeException | LinkageError failure) {
                 notificationFailed = true;
                 processor.reportLaneFailure(lane, "熔炼完成通知", failure);
@@ -103,6 +104,7 @@ final class CentrifugeSmeltingCachedRecipe
         enteredPayment = true;
         try {
             super.useEnergy(operations);
+            processor.markLaneRecovery(lane, "熔炼能量扣账通知已结算");
         } catch (RuntimeException | LinkageError failure) {
             long requested = MekCentrifugeEnergyScaling.batchEnergyCost(energyPerTick.getAsLong(), operations, 1);
             long charged = before - ((BasicEnergyContainerAccessor) container).productivebeesgenesis$getStored();
@@ -129,6 +131,7 @@ final class CentrifugeSmeltingCachedRecipe
         int consumed;
         try {
             consumed = inputSlot.shrinkStack(inputs, Action.EXECUTE);
+            processor.markLaneRecovery(lane, "熔炼输入扣账通知已结算");
         } catch (RuntimeException | LinkageError failure) {
             try {
                 consumed = SmeltingWorkState.removed(beforeInputs,
@@ -143,6 +146,7 @@ final class CentrifugeSmeltingCachedRecipe
                 processor.smeltingWork().retain(lane, input, inputs - consumed, output, outputs, false, "input", failure);
                 throw failure;
             }
+            notificationFailed = true;
             processor.reportLaneFailure(lane, "熔炼输入扣账通知已结算", failure);
         }
         if (consumed < inputs) {
@@ -157,6 +161,7 @@ final class CentrifugeSmeltingCachedRecipe
             ItemStack remainder = outputSlot.insertItem(output.copyWithCount(outputs), Action.EXECUTE,
                     AutomationType.INTERNAL);
             accepted = outputs - remainder.getCount();
+            processor.markLaneRecovery(lane, "熔炼产物接收通知已结算");
         } catch (RuntimeException | LinkageError failure) {
             try {
                 accepted = SmeltingWorkState.accepted(beforeOutputs,
@@ -171,6 +176,7 @@ final class CentrifugeSmeltingCachedRecipe
                 processor.smeltingWork().retain(lane, input, 0, output, outputs - accepted, false, "output", failure);
                 throw failure;
             }
+            notificationFailed = true;
             processor.reportLaneFailure(lane, "熔炼产物接收通知已结算", failure);
         }
         if (accepted < outputs) {

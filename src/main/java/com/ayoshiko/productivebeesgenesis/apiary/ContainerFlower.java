@@ -151,7 +151,7 @@ public final class ContainerFlower {
             if (matched || tagged || registries == null || !ModList.get().isLoaded("ae2")) return matched;
             return com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2ContainerFlower.matchesRequirement(stack, registries, this);
         } catch (RuntimeException | LinkageError failure) {
-            LogThrottle.warnWithCooldown("container_flower", 10000, "Container flower query failed for {}", original.getItem(), failure);
+            LogThrottle.warnWithCooldown("container_flower", 60_000L, "Container flower query failed for {}", original.getItem(), failure);
             return false;
         }
     }

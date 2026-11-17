@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
@@ -10,6 +9,8 @@ import mekanism.common.block.attribute.AttributeUpgradeSupport;
 import mekanism.common.tile.base.TileEntityMekanism;
 import mekanism.common.tile.component.TileComponentUpgrade;
 
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.function.IntUnaryOperator;
 
 /**
@@ -29,8 +30,21 @@ final class MekExtraUpgradeSupport {
 	/** Conservative STACK cap used while the server balance snapshot is unavailable. */
 	static final int DEFAULT_STACK_UPGRADE_LIMIT = 8;
 
-	/** 升级查询异常日志限流器（ms 模式，5 秒冷却）— 静态工具类无 Level 访问 */
-	private static final LogThrottle UPGRADE_WARN_THROTTLE = new LogThrottle(100L, 5000L);
+	/** 升级查询同时由服务端与客户端展示调用；弱键不保留已卸载机器。 */
+	private static final Map<TileEntityMekanism, QueryFailure> STACK_FAILURES = new WeakHashMap<>();
+	private static final Map<TileEntityMekanism, QueryFailure> CREATIVE_FAILURES = new WeakHashMap<>();
+	private static volatile boolean stackFailuresPresent;
+	private static volatile boolean creativeFailuresPresent;
+
+	private static final class QueryFailure {
+		final Throwable cause;
+		long repeats;
+		long lastSummaryNanos = System.nanoTime();
+
+		QueryFailure(Throwable cause) {
+			this.cause = cause;
+		}
+	}
 
 	private MekExtraUpgradeSupport() {}
 
@@ -102,10 +116,11 @@ final class MekExtraUpgradeSupport {
 			TileComponentUpgrade component = tile.getComponent();
 			if (component == null) return 0;
 			int installed = component.getUpgrades(ExtraUpgrade.STACK);
-			return cappedStackUpgrades(installed, configuredStackLimit());
-		} catch (Exception e) {
-			UPGRADE_WARN_THROTTLE.tryLogMs(System.currentTimeMillis(), suppressed ->
-					ProductiveBeesGenesis.LOGGER.warn("查询 STACK 升级数量失败，返回 0（已抑制 {} 次类似警告）", suppressed, e));
+			int effective = cappedStackUpgrades(installed, configuredStackLimit());
+			if (stackFailuresPresent) completeQueryRecovery(tile, STACK_FAILURES, "STACK");
+			return effective;
+		} catch (Exception failure) {
+			reportQueryFailure(tile, STACK_FAILURES, "STACK", failure);
 			return 0;
 		}
 	}
@@ -164,11 +179,58 @@ final class MekExtraUpgradeSupport {
 		if (tile == null || ExtraUpgrade.CREATIVE == null) return false;
 		try {
 			TileComponentUpgrade component = tile.getComponent();
-			return component != null && component.getUpgrades(ExtraUpgrade.CREATIVE) > 0;
-		} catch (Exception e) {
-			UPGRADE_WARN_THROTTLE.tryLogMs(System.currentTimeMillis(), suppressed ->
-					ProductiveBeesGenesis.LOGGER.warn("查询 CREATIVE 升级失败，返回 false（已抑制 {} 次类似警告）", suppressed, e));
+			boolean installed = component != null && component.getUpgrades(ExtraUpgrade.CREATIVE) > 0;
+			if (creativeFailuresPresent) completeQueryRecovery(tile, CREATIVE_FAILURES, "CREATIVE");
+			return installed;
+		} catch (Exception failure) {
+			reportQueryFailure(tile, CREATIVE_FAILURES, "CREATIVE", failure);
 			return false;
+		}
+	}
+
+	private static void reportQueryFailure(TileEntityMekanism tile, Map<TileEntityMekanism, QueryFailure> failures,
+			String upgrade, Throwable failure) {
+		QueryFailure first;
+		boolean firstReport;
+		long repeats;
+		synchronized (failures) {
+			first = failures.get(tile);
+			firstReport = first == null;
+			if (firstReport) {
+				first = new QueryFailure(failure);
+				failures.put(tile, first);
+			} else {
+				first.repeats++;
+				long now = System.nanoTime();
+				if (now - first.lastSummaryNanos < 60_000_000_000L) return;
+				first.lastSummaryNanos = now;
+			}
+			repeats = first.repeats;
+			if (failures == STACK_FAILURES) stackFailuresPresent = true;
+			else creativeFailuresPresent = true;
+		}
+		if (firstReport) {
+			LogThrottle.warnWithCooldown("mek_extra_upgrade_query", 60_000L,
+					"查询 {} 升级失败，位置 {}；沿现有升级查询结果保留首因", upgrade, tile.getBlockPos(), first.cause);
+		} else {
+			LogThrottle.warnWithCooldown("mek_extra_upgrade_query", 60_000L,
+					"查询 {} 升级持续失败，位置 {}，首因 {}，期间重复 {} 次",
+					upgrade, tile.getBlockPos(), first.cause.toString(), repeats);
+		}
+	}
+
+	private static void completeQueryRecovery(TileEntityMekanism tile, Map<TileEntityMekanism, QueryFailure> failures,
+			String upgrade) {
+		QueryFailure first;
+		synchronized (failures) {
+			first = failures.remove(tile);
+			if (failures == STACK_FAILURES) stackFailuresPresent = !failures.isEmpty();
+			else creativeFailuresPresent = !failures.isEmpty();
+		}
+		if (first != null) {
+			LogThrottle.infoWithCooldown("mek_extra_upgrade_query_recovery", 60_000L,
+					"查询 {} 升级已恢复，位置 {}，首因 {}，期间重复 {} 次",
+					upgrade, tile.getBlockPos(), first.cause.toString(), first.repeats);
 		}
 	}
 

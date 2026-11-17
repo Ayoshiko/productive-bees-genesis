@@ -6,6 +6,7 @@ import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import com.mojang.serialization.JsonOps;
 import cy.jdkdigital.productivebees.common.block.entity.CentrifugeBlockEntity;
 import io.netty.buffer.Unpooled;
+import mekanism.common.lib.security.ISecurityTile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -144,6 +145,10 @@ class ResourceCentrifugeMinecraftTest {
 				assertNotNull(lane.completion);
 				assertNull(fixture.account.centrifugeWork(lane.lane));
 				assertTrue(fixture.account.laneSuspended(lane.lane));
+				assertEquals(ResourceAccount.CentrifugeLaneState.WAITING_CONFIRMATION,
+						fixture.account.centrifugeLaneState(lane.lane));
+				assertEquals(ResourceAccount.CentrifugeLaneState.WAITING_CONFIRMATION,
+						ResourceCentrifugeProcessor.laneState(lane.entity(), lane.lane));
 			}
 			assertTrue(fixture.account.available().isEmpty());
 			assertEquals(200L, fixture.account.frozenProduction().get(ResourceAccountsMinecraftTest.HYDROGEN));
@@ -158,6 +163,8 @@ class ResourceCentrifugeMinecraftTest {
 			assertEquals(BigInteger.valueOf(200), fixture.produced());
 			for (var lane : fixture.lanes) {
 				assertFalse(fixture.account.laneSuspended(lane.lane));
+				assertEquals(ResourceAccount.CentrifugeLaneState.READY,
+						ResourceCentrifugeProcessor.laneState(lane.entity(), lane.lane));
 				var work = ResourceCentrifugeWork.load(fixture.account.centrifugeWork(lane.lane), REGISTRIES);
 				assertEquals(5, work.paidTicks);
 				assertTrue(ItemStack.isSameItemSameComponents(lane.input, work.input));
@@ -182,6 +189,10 @@ class ResourceCentrifugeMinecraftTest {
 			fixture.lanes[1].completion.complete();
 			assertTrue(fixture.account.laneSuspended(0));
 			assertFalse(fixture.account.laneSuspended(1));
+			assertEquals(ResourceAccount.CentrifugeLaneState.UNRESOLVED,
+					ResourceCentrifugeProcessor.laneState(fixture.lanes[0].entity(), 0));
+			assertEquals(ResourceAccount.CentrifugeLaneState.READY,
+					ResourceCentrifugeProcessor.laneState(fixture.lanes[1].entity(), 1));
 			assertEquals(firstTicket, fixture.account.productionTicket());
 			assertEquals(100L, fixture.account.available().get(ResourceAccountsMinecraftTest.HYDROGEN));
 			assertEquals(BigInteger.valueOf(100), fixture.produced());
@@ -197,10 +208,28 @@ class ResourceCentrifugeMinecraftTest {
 			assertFalse(restoredStore.hasInvalidData());
 			var restored = restoredStore.find(firstTicket.source().sourceId());
 			assertTrue(restored.laneSuspended(0));
+			assertEquals(ResourceAccount.CentrifugeLaneState.UNRESOLVED, restored.centrifugeLaneState(0));
 			assertEquals(5, restored.centrifugeWork(1).getInt("paid_ticks"));
 			restored.resolveProduction(ResourceAccountsMinecraftTest.OWNER, firstTicket, true);
 			assertEquals(200L, restored.available().get(ResourceAccountsMinecraftTest.HYDROGEN));
 			assertEquals(5, ResourceCentrifugeWork.load(restored.centrifugeWork(0), REGISTRIES).paidTicks);
+			var data = mock(ResourceAccountsSavedData.class);
+			when(data.accounts()).thenReturn(fixture.store);
+			fixture.runtime.when(() -> ResourceRuntime.accounts(fixture.server)).thenReturn(data);
+			when(fixture.host.account(fixture.entity)).thenThrow(new IllegalStateException("Host binding retired"));
+			assertEquals(ResourceAccount.CentrifugeLaneState.UNRESOLVED,
+					ResourceCentrifugeProcessor.laneState(fixture.entity, 0));
+			assertEquals(ResourceAccount.CentrifugeLaneState.UNRESOLVED,
+					ResourceCentrifugeProcessor.laneState(fixture.entity, 1));
+			assertEquals(ResourceAccount.CentrifugeLaneState.READY,
+					ResourceCentrifugeProcessor.laneState(fixture.entity, 2));
+			assertTrue(ResourceCentrifugeProcessor.hasWork(fixture.entity, 0));
+			assertTrue(ResourceCentrifugeProcessor.hasWork(fixture.entity, 1));
+			assertEquals(ResourceCentrifugeProcessor.Result.BLOCKED,
+					ResourceCentrifugeProcessor.tick(fixture.lanes[1], 25));
+			assertEquals(saved, fixture.store.save());
+			assertEquals(1, fixture.lanes[1].inputDebits);
+			assertEquals(1, fixture.lanes[1].energyDebits);
 		}
 	}
 
@@ -270,7 +299,7 @@ class ResourceCentrifugeMinecraftTest {
 		private final ResourceAccount account = ResourceAccountsMinecraftTest.account(store);
 		private final ResourceProductionMonitor monitor = new ResourceProductionMonitor(() -> 1000L);
 		private final ResourceHiveHost host = mock(ResourceHiveHost.class);
-		private final BlockEntity entity = mock(BlockEntity.class);
+		private final BlockEntity entity = mock(BlockEntity.class, withSettings().extraInterfaces(ISecurityTile.class));
 		private final ServerLevel level = mock(ServerLevel.class);
 		private final MinecraftServer server = mock(MinecraftServer.class);
 		private final CompoundTag ordinary = new CompoundTag();
@@ -295,6 +324,7 @@ class ResourceCentrifugeMinecraftTest {
 			when(level.getGameTime()).thenReturn(100L);
 			when(entity.getLevel()).thenReturn(level);
 			when(entity.getBlockPos()).thenReturn(BlockPos.ZERO);
+			when(((ISecurityTile) entity).getOwnerUUID()).thenReturn(ResourceAccountsMinecraftTest.OWNER);
 			when(host.reference()).thenReturn(account.reference());
 			when(host.account(entity)).thenReturn(account);
 			when(host.capacity()).thenReturn(10_000L);

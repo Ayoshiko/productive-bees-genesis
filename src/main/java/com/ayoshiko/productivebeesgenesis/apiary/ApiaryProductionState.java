@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -32,6 +32,7 @@ public final class ApiaryProductionState {
     private String failure = "";
     private CompoundTag localContext;
     private CompoundTag invalid;
+    private Throwable invalidFailure;
     private ApiaryRetainedCycles retained;
     private boolean activeRetained;
     private long frozenVersion;
@@ -74,12 +75,16 @@ public final class ApiaryProductionState {
 
     boolean canAdvance(int slot, BeeSlot bee) {
         if (slotSuspended(slot) || retryableGeneration(slot)) return false;
-        if (counts[slot] == 0) return true;
+        return counts[slot] == 0 || samePaidBee(slot, bee);
+    }
+
+    /** 同一源引用对应同一封闭快照；加载或换蜂后只在首次匹配时核对完整身份。 */
+    private boolean samePaidBee(int slot, BeeSlot bee) {
         CompoundTag source = bee.getBeeData();
         CompoundTag held = bees[slot].getBeeData();
         BeeSnapshot cached = beeSnapshots[slot];
         if (cached != null && cached.source() == source && cached.data() == held) return true;
-        if (held == null || !held.equals(source)) return false;
+        if (!held.equals(source)) return false;
         beeSnapshots[slot] = new BeeSnapshot(source, held);
         return true;
     }
@@ -90,8 +95,7 @@ public final class ApiaryProductionState {
             return;
         }
         for (int i = 0; i < counts.length; i++) {
-            if (slotSuspended(i) || counts[i] <= 0 || !current[i].isEmpty()
-                    && bees[i].getBeeData().equals(current[i].getBeeData())) {
+            if (counts[i] <= 0 || slotSuspended(i) || !current[i].isEmpty() && samePaidBee(i, current[i])) {
                 continue;
             }
             if (retained == null) {
@@ -313,7 +317,8 @@ public final class ApiaryProductionState {
         UUID original = request;
         live.setTicksInHive(next);
         commitLocal(original);
-        ProductiveBeesGenesis.LOGGER.info("Automatically resumed local bee production: request={}, slot={}; zero energy, no flower debit, original output retained",
+        LogThrottle.infoWithCooldown("apiary_local_recovered", 60_000L,
+                "Automatically resumed local bee production: request={}, slot={}; zero energy, no flower debit, original output retained; similar recoveries combined",
                 original, slot);
         return true;
     }
@@ -381,8 +386,10 @@ public final class ApiaryProductionState {
     }
 
     void fail(Throwable error) {
-        failure = error.getClass().getSimpleName() + ": " + error.getMessage();
-        if (failure.length() > 512) failure = failure.substring(0, 512);
+        if (failure.isEmpty()) {
+            failure = error.getClass().getSimpleName() + ": " + error.getMessage();
+            if (failure.length() > 512) failure = failure.substring(0, 512);
+        }
         if (request != null && !"local".equals(phase)) {
             // 本项目的生成准备不扣费或交付；花源已完成，重试不得再消费花源。
             if (!"generation".equals(phase)) {
@@ -532,7 +539,10 @@ public final class ApiaryProductionState {
         retained = null;
         activeRetained = false;
         localContext = null;
-        if (tag.isEmpty()) return;
+        if (tag.isEmpty()) {
+            invalidFailure = null;
+            return;
+        }
         try {
             // NBT 宽松 getter 会把错误类型当空值或截断数字；资产快照必须先核对原始类型。
             if (!Set.of("version", "pending", "items", "fluid_amount", "fluid", "request", "active", "phase", "failure",
@@ -711,14 +721,23 @@ public final class ApiaryProductionState {
                     if (!"generation".equals(group.phase())) continue;
                     retainConvertedCycles(group.slots(), group.retained());
                     heldGroups.remove(i);
-                    ProductiveBeesGenesis.LOGGER.info("Automatically resumed paid bee generation: version={}, request={}, slots={}, retained={}, previousFailure={}",
+                    LogThrottle.infoWithCooldown("apiary_generation_recovered", 60_000L,
+                            "Automatically resumed paid bee generation: version={}, request={}, slots={}, retained={}, previousFailure={}; similar recoveries combined",
                             tag.getInt("version"), group.request(), Arrays.toString(group.slots()), group.retained(), group.failure());
                 }
             }
+            invalidFailure = null;
         } catch (RuntimeException | LinkageError error) {
             invalid = tag.copy();
             failure = "Invalid paid production; original preserved";
-            ProductiveBeesGenesis.LOGGER.error("Paid bee production could not be restored; original data preserved", error);
+            if (invalidFailure == null) {
+                invalidFailure = error;
+                LogThrottle.errorWithCooldown("apiary_invalid_first", 60_000L,
+                        "Paid bee production could not be restored; original data and first cause preserved; similar failures combined", error);
+            } else {
+                LogThrottle.warnWithCooldown("apiary_invalid_summary", 60_000L,
+                        "Paid bee production remains invalid; original data preserved, first cause {}; similar failures combined", invalidFailure.toString());
+            }
         }
     }
 

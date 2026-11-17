@@ -44,6 +44,7 @@ final class Ae2InputLaneSnapshot {
 	private final Object2LongOpenHashMap<AEItemKey> preferredLaneMasks = new Object2LongOpenHashMap<>();
 	private long emptyLaneMask;
 	private long customLaneMask;
+	private long refillableLaneMask;
 	/** 槽内物品（空槽为 null）— 用于零虚调用的身份剪枝 */
 	private Item[] items = new Item[0];
 	/** 槽内栈引用 — 组件匹配需要（值比较，引用仅用于记忆表命中） */
@@ -95,6 +96,7 @@ final class Ae2InputLaneSnapshot {
 		preferredLaneMasks.clear();
 		emptyLaneMask = 0L;
 		customLaneMask = 0L;
+		refillableLaneMask = 0L;
 		if (slots.length < size) {
 			int length = Math.max(size, slots.length << 1);
 			slots = Arrays.copyOf(slots, length);
@@ -170,6 +172,7 @@ final class Ae2InputLaneSnapshot {
 			removeLane(preferredLaneMasks, preferredKeys[index], bit);
 			emptyLaneMask &= ~bit;
 			customLaneMask &= ~bit;
+			refillableLaneMask &= ~bit;
 		}
 		readLane(index, acceptedKey);
 		indexLane(index);
@@ -223,7 +226,10 @@ final class Ae2InputLaneSnapshot {
 		long bit = 1L << index;
 		if (slots[index] != null && !(slots[index] instanceof BasicInventorySlot)) customLaneMask |= bit;
 		if (currentKeys[index] == null) emptyLaneMask |= bit;
-		else addLane(occupiedLaneMasks, currentKeys[index], bit);
+		else {
+			addLane(occupiedLaneMasks, currentKeys[index], bit);
+			if (counts[index] < limits[index]) refillableLaneMask |= bit;
+		}
 		addLane(preferredLaneMasks, preferredKeys[index], bit);
 	}
 
@@ -248,7 +254,12 @@ final class Ae2InputLaneSnapshot {
 	}
 
 	long candidateLanes(AEItemKey key) {
-		return emptyLaneMask | customLaneMask | occupiedLaneMasks.getLong(key);
+		return emptyLaneMask | customLaneMask | (occupiedLaneMasks.getLong(key) & refillableLaneMask);
+	}
+
+	/** 公平份额用完后直接跳过剩余空车道，完整占用计数仍用于下一轮分配。 */
+	long emptyLanes() {
+		return emptyLaneMask;
 	}
 
 	int occupiedLaneCount(AEItemKey key) {

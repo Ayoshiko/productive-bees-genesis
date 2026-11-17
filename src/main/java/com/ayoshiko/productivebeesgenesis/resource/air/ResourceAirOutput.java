@@ -1,6 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.resource.air;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.api.resource.ResourceHostApi;
 import com.ayoshiko.productivebeesgenesis.resource.*;
 import me.desht.pneumaticcraft.api.PNCCapabilities;
@@ -102,7 +102,7 @@ public final class ResourceAirOutput {
 			nextAttempt = now + 200;
 			if (!reportedFailure) {
 				reportedFailure = true;
-				ProductiveBeesGenesis.LOGGER.error("空气产物口输出失败，位置 {}，接收位置 {}", current.getBlockPos(), pos, failure);
+				LogThrottle.error("resource_air_output", "空气产物口输出失败，位置 {}，接收位置 {}", current.getBlockPos(), pos, failure);
 			}
 		}
 	}

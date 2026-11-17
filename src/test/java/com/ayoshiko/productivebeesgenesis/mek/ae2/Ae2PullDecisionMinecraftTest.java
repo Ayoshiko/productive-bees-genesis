@@ -3,11 +3,13 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 import static org.junit.jupiter.api.Assertions.*;
 
 import appeng.api.stacks.AEItemKey;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
 import cy.jdkdigital.productivebees.init.ModItems;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import mekanism.api.AutomationType;
 import mekanism.common.inventory.slot.BasicInventorySlot;
+import mekanism.common.inventory.slot.InputInventorySlot;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -122,34 +124,24 @@ class Ae2PullDecisionMinecraftTest {
 	}
 
 	@Test
-	void validatorResultsStayBoundToTheirSlotWithinOnePlanningPass() {
-		var entry = new Ae2InputExecution.PullEntry(AEItemKey.of(Items.IRON_INGOT), 1);
-		var acceptedCalls = new AtomicInteger();
-		var rejectedCalls = new AtomicInteger();
-		var accepted = BasicInventorySlot.at(stack -> true, stack -> {
-			acceptedCalls.incrementAndGet();
-			return true;
-		}, null, 0, 0);
-		var rejected = BasicInventorySlot.at(stack -> true, stack -> {
-			rejectedCalls.incrementAndGet();
-			return false;
-		}, null, 0, 0);
+	void currentSlotAdmissionKeepsIndependentOutputPoliciesAndInputLocks() {
+		boolean[] outputAvailable = {true};
+		boolean[] inputAllowed = {true};
+		var accepted = InputInventorySlot.at(stack -> outputAvailable[0], stack -> stack.is(Items.IRON_INGOT), null, 0, 0);
+		var rejected = InputInventorySlot.at(stack -> false, stack -> stack.is(Items.IRON_INGOT), null, 0, 0);
+		((TieredInputSlot) accepted).productivebeesgenesis$setOutputInsertionAllowed(() -> inputAllowed[0]);
 		var probe = new ItemStack(Items.IRON_INGOT);
 
-		entry.beginComponentMatchCache(2);
-		assertTrue(entry.acceptsProbe(0, accepted, probe));
-		assertFalse(entry.acceptsProbe(1, rejected, probe));
-		assertTrue(entry.acceptsProbe(0, accepted, probe));
-		assertFalse(entry.acceptsProbe(1, rejected, probe));
-		assertEquals(1, acceptedCalls.get());
-		assertEquals(1, rejectedCalls.get());
-
-		entry.beginComponentMatchCache(2);
-		assertFalse(entry.acceptsProbe(0, rejected, probe));
-		assertTrue(entry.acceptsProbe(1, accepted, probe));
-		assertEquals(2, acceptedCalls.get());
-		assertEquals(2, rejectedCalls.get());
-		entry.clearComponentMatchCache();
+		assertTrue(accepted.isItemValidForInsertion(probe, AutomationType.INTERNAL));
+		assertFalse(rejected.isItemValidForInsertion(probe, AutomationType.INTERNAL));
+		assertFalse(accepted.isItemValidForInsertion(new ItemStack(Items.GOLD_INGOT), AutomationType.INTERNAL));
+		outputAvailable[0] = false;
+		assertFalse(accepted.isItemValidForInsertion(probe, AutomationType.INTERNAL));
+		outputAvailable[0] = true;
+		inputAllowed[0] = false;
+		assertFalse(accepted.isItemValidForInsertion(probe, AutomationType.INTERNAL));
+		inputAllowed[0] = true;
+		assertTrue(accepted.isItemValidForInsertion(probe, AutomationType.INTERNAL));
 	}
 
 	@Test
@@ -158,33 +150,23 @@ class Ae2PullDecisionMinecraftTest {
 		var entry = new Ae2InputExecution.PullEntry(iron, 8);
 		var probe = iron.toStack(1);
 		var stored = probe.copy();
-		boolean[] allowed = {true};
-		var slot = BasicInventorySlot.at(stack -> true, stack -> allowed[0], null, 0, 0);
-
 		entry.beginComponentMatchCache(65);
 		assertTrue(entry.matchesComponents(64, stored, probe, 0, null));
-		assertTrue(entry.acceptsProbe(64, slot, probe));
 		entry.clearComponentMatchCache();
 
-		allowed[0] = false;
 		stored.set(DataComponents.CUSTOM_NAME, Component.literal("changed"));
 		entry.beginComponentMatchCache(65);
 		assertFalse(entry.matchesComponents(64, stored, probe, 1, null));
-		assertFalse(entry.acceptsProbe(64, slot, probe));
 		entry.clearComponentMatchCache();
 
 		var gold = AEItemKey.of(Items.GOLD_INGOT);
 		entry.reset(gold, 5, false);
-		allowed[0] = true;
 		entry.beginComponentMatchCache(1);
 		assertTrue(entry.matchesComponents(0, gold.toStack(1), gold.toStack(1), 0, null));
-		assertTrue(entry.acceptsProbe(0, slot, gold.toStack(1)));
 		entry.clearComponentMatchCache();
 
 		entry.reset(iron, 3, false);
-		allowed[0] = false;
 		entry.beginComponentMatchCache(65);
-		assertFalse(entry.acceptsProbe(64, slot, probe));
 		assertFalse(entry.matchesComponents(64, stored, probe, 1, null));
 		entry.clearComponentMatchCache();
 	}

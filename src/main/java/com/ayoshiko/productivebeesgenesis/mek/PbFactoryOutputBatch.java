@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.PbFactoryOutputGroups.Group;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.LocalBatch.Completion;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerLevel;
@@ -134,10 +135,17 @@ final class PbFactoryOutputBatch implements DeferredItemOutput {
         }
         deferred = true;
         try {
-            if (available(outputEpoch) && Ae2IntegrationLoader.deferItemOutput(this) && !cancelled) return true;
+            if (available(outputEpoch) && Ae2IntegrationLoader.deferItemOutput(this) && !cancelled) {
+                if (context instanceof IFactoryPbDelegateAccess factory) {
+                    for (int index = 0; index < count; index++) {
+                        factory.productivebeesgenesis$getPbProcessor().markLaneRecovery(order[index], "刻末产物排队");
+                    }
+                }
+                return true;
+            }
         } catch (RuntimeException | LinkageError failure) {
             // 注册阶段不执行外部交付；撤销代际后可安全沿当前已收集批次同步交付。
-            ProductiveBeesGenesis.LOGGER.error("普通离心产物刻末排队失败，撤销票据并沿原路线交付", failure);
+            for (int index = 0; index < count; index++) reportFailure(order[index], "刻末产物排队", failure);
         }
         deferred = false;
         deferredLevel = null;
@@ -316,7 +324,14 @@ final class PbFactoryOutputBatch implements DeferredItemOutput {
             try {
                 if (!PbRecipeFlusher.outputBlocked(context, lane) && owners[lane].flushAfterFactoryAe(lane)
                         && context instanceof IFactoryPbDelegateAccess factory) {
-                    factory.productivebeesgenesis$getPbProcessor().completeLaneRecovery(lane);
+                    PbRecipeProcessor processor = factory.productivebeesgenesis$getPbProcessor();
+                    processor.markLaneRecovery(lane, "本地输出排空");
+                    processor.markLaneRecovery(lane, "物品分组交付");
+                    processor.markLaneRecovery(lane, "流体分组交付");
+                    processor.markLaneRecovery(lane, "输出分组准备");
+                    processor.markLaneRecovery(lane, "刻末产物排队");
+                    processor.markLaneRecovery(lane, "付款恢复或已付产物排空");
+                    processor.finishLaneAttempt(lane);
                 }
             } catch (RuntimeException | LinkageError failure) {
                 if (hasResourceCompletions && (owners[lane].invalidPending()
@@ -338,6 +353,11 @@ final class PbFactoryOutputBatch implements DeferredItemOutput {
                     if (!owner.invalidPending() && !owner.paymentPending()
                             && owner.getPendingInputShrink() == 0 && !owner.hasPendingOutputs()) {
                         owner.clearPendingOutputs();
+                        if (context instanceof IFactoryPbDelegateAccess factory) {
+                            PbRecipeProcessor processor = factory.productivebeesgenesis$getPbProcessor();
+                            processor.markLaneRecovery(lane, "批次收尾");
+                            processor.finishLaneAttempt(lane);
+                        }
                     }
                 } catch (RuntimeException | LinkageError failure) {
                     if (hasResourceCompletions) uncertain[lane] = true;
@@ -388,6 +408,11 @@ final class PbFactoryOutputBatch implements DeferredItemOutput {
                 completion.uncertain("Factory output requires reconciliation");
             } else {
                 completion.complete();
+                if (context instanceof IFactoryPbDelegateAccess factory) {
+                    PbRecipeProcessor processor = factory.productivebeesgenesis$getPbProcessor();
+                    processor.markLaneRecovery(lane, "资源组合交付确认");
+                    processor.finishLaneAttempt(lane);
+                }
             }
         } catch (RuntimeException | LinkageError failure) {
             try {
@@ -403,7 +428,8 @@ final class PbFactoryOutputBatch implements DeferredItemOutput {
         if (context instanceof IFactoryPbDelegateAccess factory) {
             factory.productivebeesgenesis$getPbProcessor().reportLaneFailure(lane, phase, failure);
         } else {
-            ProductiveBeesGenesis.LOGGER.error("离心机车道 {} 的 {} 失败，原输入与已付产物保留", lane, phase, failure);
+            LogThrottle.errorWithCooldown("centrifuge_batch_failure", 60_000L,
+                "离心机车道 {} 的 {} 失败，原输入与已付产物保留", lane, phase, failure);
         }
     }
 

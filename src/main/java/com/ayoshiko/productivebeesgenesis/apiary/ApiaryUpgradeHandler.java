@@ -1,8 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mek.MekUpgradeSupport;
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
 import mekanism.common.util.MekanismUtils;
@@ -54,8 +52,7 @@ public class ApiaryUpgradeHandler {
 	/** 所属方块实体引用 — 用于查询 MEK 升级组件和 PB 升级数量 */
 	private final TileEntityMekApiary tile;
 
-	/** MEK 升级查询异常日志冷却器（ms 模式，避免高频异常刷屏） */
-	private final LogThrottle upgradeErrorThrottle = new LogThrottle();
+	private final ApiaryFailureLog[] upgradeFailures = new ApiaryFailureLog[2];
 
 	/**
 	 * 升级倍率缓存 — 100 tick 刷新一次，避免每 tick 重复 Math.pow 与 EnumMap 查询。
@@ -72,7 +69,7 @@ public class ApiaryUpgradeHandler {
 	 */
 	public ApiaryUpgradeHandler(TileEntityMekApiary tile) {
 		this.tile = tile;
-		this.upgradeCache = new ApiaryUpgradeCache(this);
+		this.upgradeCache = new ApiaryUpgradeCache(this, tile.getBlockPos());
 	}
 
 	/**
@@ -113,18 +110,6 @@ public class ApiaryUpgradeHandler {
 		return tile != null && tile.getLevel() != null && tile.getLevel().isClientSide();
 	}
 
-	/**
-	 * 节流记录 MEK 升级查询异常（避免高频异常刷屏）
-	 *
-	 * @param context 异常上下文描述
-	 * @param e       异常
-	 */
-	private void logUpgradeError(String context, Exception e) {
-		upgradeErrorThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
-			ProductiveBeesGenesis.LOGGER.warn("{}异常{}", context, suppressed > 0 ? " (抑制 " + suppressed + " 次)" : "", e);
-		});
-	}
-
 	// ===== MEK 升级查询 =====
 
 	/**
@@ -137,9 +122,13 @@ public class ApiaryUpgradeHandler {
 		try {
 			var component = tile.getComponent();
 			if (component == null) return 0;
-			return component.getUpgrades(Upgrade.SPEED);
+			int count = component.getUpgrades(Upgrade.SPEED);
+			ApiaryFailureLog.recovered(tile.getBlockPos(), upgradeFailures[0]);
+			upgradeFailures[0] = null;
+			return count;
 		} catch (Exception e) {
-			logUpgradeError("查询 MEK 速度升级数量", e);
+			upgradeFailures[0] = ApiaryFailureLog.record(tile.getBlockPos(), upgradeFailures[0],
+					tile, "mek-speed-upgrade", -1, e);
 			return 0;
 		}
 	}
@@ -154,9 +143,13 @@ public class ApiaryUpgradeHandler {
 		try {
 			var component = tile.getComponent();
 			if (component == null) return 0;
-			return component.getUpgrades(Upgrade.ENERGY);
+			int count = component.getUpgrades(Upgrade.ENERGY);
+			ApiaryFailureLog.recovered(tile.getBlockPos(), upgradeFailures[1]);
+			upgradeFailures[1] = null;
+			return count;
 		} catch (Exception e) {
-			logUpgradeError("查询 MEK 能量升级数量", e);
+			upgradeFailures[1] = ApiaryFailureLog.record(tile.getBlockPos(), upgradeFailures[1],
+					tile, "mek-energy-upgrade", -1, e);
 			return 0;
 		}
 	}

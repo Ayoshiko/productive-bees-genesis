@@ -117,6 +117,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 		super(blockProvider, pos, state, BASE_TICKS_REQUIRED);
 		// super() 期间已通过 getInitialInventory() 懒初始化 slotManager，此处非空
 		pbProcessor = new PbRecipeProcessor(this, "MEK离心机");
+		MekCentrifugeFactoryHelper.bindSettlements(this, pbProcessor);
 		ae2Handler = new MekCentrifugeAe2Handler(this);
 		pbUpgradeHandler = new MekCentrifugePbUpgradeHandler(this);
 		saveHandler = new MekCentrifugeSaveHandler(pbProcessor, this, pbUpgradeHandler, ae2Handler);
@@ -617,6 +618,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	public void setRemoved() {
 		super.setRemoved();
 		pbProcessor.clearTransientCaches();
+		tickHandler.clearTransientFailures();
 		ae2Handler.handleRemove();
 	}
 	/** 区块卸载时委托 AE2 处理器销毁节点（幂等，与 setRemoved 重复调用安全） */
@@ -624,6 +626,7 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	public void onChunkUnloaded() {
 		super.onChunkUnloaded();
 		pbProcessor.clearTransientCaches();
+		tickHandler.clearTransientFailures();
 		ae2Handler.handleChunkUnload();
 	}
 	/** 获取 AE2 生命周期处理器 — 供 IAe2OutputHostBase default 方法委托使用 */

@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 
@@ -43,9 +42,6 @@ final class Ae2ConfigCache {
 
 	private volatile int cachedInputRatePerTick = 64;
 	private volatile int cachedInputIntervalTicks = 20;
-
-	/** 配置缓存刷新异常日志冷却器（ms 模式，避免高频刷新下刷屏） */
-	private final LogThrottle configReadThrottle = new LogThrottle();
 
 	/** 判断配置缓存是否过期（当前时间戳与上次刷新差 >= 刷新间隔） */
 	boolean isStale() {
@@ -98,11 +94,7 @@ final class Ae2ConfigCache {
 			// LinkageError 覆盖配置版本不兼容；RuntimeException 覆盖配置读取异常。
 			// 不捕获 Throwable 以避免吞没 OOM 等严重错误。
 			// 配置读取异常，保持当前缓存值，节流记录 WARN 便于调试
-			final Throwable cause = t;
-			configReadThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
-				ProductiveBeesGenesis.LOGGER.warn("AE2 配置缓存刷新异常，保持当前缓存值"
-						+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), cause);
-			});
+			LogThrottle.warn("ae2_config_read_failure", "AE2 配置缓存刷新异常，保持当前缓存值", t);
 		}
 	}
 

@@ -57,7 +57,9 @@ class Ae2InputCapacityMinecraftTest {
 		var candidates = new ArrayList<>(List.of(entry));
 		try {
 			fairness.roll(200);
-			var blocked = Ae2InputExecution.execute(host, holder, buffers, candidates, slots, storage,
+			var lanes = buffers.inputLaneSnapshot();
+			lanes.capture(slots, slots.size());
+			var blocked = Ae2InputExecution.execute(host, holder, buffers, candidates, lanes, slots, storage,
 					backoff, fairness, 63, 10, 10, IActionSource.empty());
 			assertEquals(0, blocked.totalPulled());
 			assertEquals(10, available[0]);
@@ -67,7 +69,8 @@ class Ae2InputCapacityMinecraftTest {
 			slot.setEmpty();
 			when(level.getGameTime()).thenReturn(201L);
 			fairness.roll(201);
-			var accepted = Ae2InputExecution.execute(host, holder, buffers, candidates, slots, storage,
+			lanes.capture(slots, slots.size());
+			var accepted = Ae2InputExecution.execute(host, holder, buffers, candidates, lanes, slots, storage,
 					backoff, fairness, 64, 10, 10, IActionSource.empty());
 			assertEquals(10, accepted.totalPulled());
 			assertEquals(0, available[0]);
@@ -113,8 +116,10 @@ class Ae2InputCapacityMinecraftTest {
 		var candidates = new ArrayList<>(List.of(entry));
 		try {
 			fairness.roll(300);
+			var lanes = buffers.inputLaneSnapshot();
+			lanes.capture(slots, slots.size());
 			assertThrows(IllegalStateException.class, () -> Ae2InputExecution.execute(host, holder,
-					buffers, candidates, slots, storage, backoff, fairness, 128, 10, 10, IActionSource.empty()));
+					buffers, candidates, lanes, slots, storage, backoff, fairness, 128, 10, 10, IActionSource.empty()));
 			assertEquals(10, available[0]);
 			assertTrue(first.isEmpty());
 			assertTrue(second.isEmpty());
@@ -125,7 +130,8 @@ class Ae2InputCapacityMinecraftTest {
 			failSecond[0] = false;
 			when(level.getGameTime()).thenReturn(301L);
 			fairness.roll(301);
-			var result = Ae2InputExecution.execute(host, holder, buffers, candidates, slots, storage,
+			lanes.capture(slots, slots.size());
+			var result = Ae2InputExecution.execute(host, holder, buffers, candidates, lanes, slots, storage,
 					backoff, fairness, 128, 10, 10, IActionSource.empty());
 			assertEquals(10, result.totalPulled());
 			assertEquals(10, first.getCount());
@@ -169,8 +175,10 @@ class Ae2InputCapacityMinecraftTest {
 		var entry = new Ae2InputExecution.PullEntry(key, 19);
 		try {
 			fairness.roll(403);
+			var lanes = buffers.inputLaneSnapshot();
+			lanes.capture(slots, slots.size());
 			var result = Ae2InputExecution.execute(host, holder, buffers, new ArrayList<>(List.of(entry)),
-					slots, storage, new Ae2KeyBackoffRegistry<>(), fairness, 1216, 19, 64,
+					lanes, slots, storage, new Ae2KeyBackoffRegistry<>(), fairness, 1216, 19, 64,
 					IActionSource.empty());
 			assertEquals(19, result.totalPulled());
 			for (ItemStack stack : stored) {
@@ -207,8 +215,11 @@ class Ae2InputCapacityMinecraftTest {
 		var goldEntry = new Ae2InputExecution.PullEntry(gold, 2);
 		try {
 			fairness.roll(402);
+			List<IInventorySlot> slots = List.of(first, second);
+			var lanes = buffers.inputLaneSnapshot();
+			lanes.capture(slots, slots.size());
 			var result = Ae2InputExecution.execute(host, holder, buffers,
-					new ArrayList<>(List.of(ironEntry, goldEntry)), List.of(first, second), storage,
+					new ArrayList<>(List.of(ironEntry, goldEntry)), lanes, slots, storage,
 					new Ae2KeyBackoffRegistry<>(), fairness, 128, 10, 64, IActionSource.empty());
 			assertEquals(10, result.totalPulled());
 			assertTrue(first.getStack().is(Items.IRON_INGOT));

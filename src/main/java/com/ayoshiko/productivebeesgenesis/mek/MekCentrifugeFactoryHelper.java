@@ -61,32 +61,37 @@ public final class MekCentrifugeFactoryHelper {
 	private MekCentrifugeFactoryHelper() {
 	}
 
-	/** 未决账本固定原数量，仅原物理槽暂缓插入和提取。 */
-	public static void bindOutputSettlement(PbRecipeContext context, int lane, int slotIndex, IInventorySlot slot) {
+	/** 父构造已装配库存，处理器赋值后只绑定一次，槽准入直接复用稳定所有者。 */
+	public static void bindSettlements(PbRecipeContext context, PbRecipeProcessor processor) {
+		for (int lane = 0; lane < context.processes(); lane++) {
+			bindInputSettlement(lane, context.inputSlot(lane), processor);
+			bindOutputSettlement(context, lane, 0, context.primaryOutputSlot(lane), processor);
+			IInventorySlot secondary = context.secondaryOutputSlot(lane);
+			if (secondary != null) bindOutputSettlement(context, lane, 1, secondary, processor);
+			IInventorySlot tertiary = context.tertiaryOutputSlot(lane);
+			if (tertiary != null) bindOutputSettlement(context, lane, 2, tertiary, processor);
+		}
+	}
+
+	private static void bindOutputSettlement(PbRecipeContext context, int lane, int slotIndex, IInventorySlot slot,
+			PbRecipeProcessor processor) {
 		TieredInputSlot tiered = (TieredInputSlot) slot;
 		tiered.productivebeesgenesis$setOutputExtractionAllowed(() ->
 				!OutputCustody.of(context).localOutputBlocked()
 						&& !OutputCustody.of(context).localItemBlocked(lane * 3 + slotIndex)
 						&& !Ae2OutputLedger.blocks(context, lane, slotIndex)
-						&& (slotIndex != 0 || !smeltingProcessor(context).smeltingOutputLocked(lane)));
+						&& (slotIndex != 0 || !processor.smeltingOutputLocked(lane)));
 		tiered.productivebeesgenesis$setOutputInsertionAllowed(() ->
 				!Ae2OutputLedger.blocks(context, lane, slotIndex)
-						&& (slotIndex != 0 || !smeltingProcessor(context).smeltingOutputLocked(lane)));
+						&& (slotIndex != 0 || !processor.smeltingOutputLocked(lane)));
 	}
 
 	/** 已付熔炼余量仍拥有原输入；普通菜单及自动化仅隔离这一车道。 */
-	public static void bindInputSettlement(PbRecipeContext context, int lane, IInventorySlot slot) {
+	private static void bindInputSettlement(int lane, IInventorySlot slot, PbRecipeProcessor processor) {
 		TieredInputSlot tiered = (TieredInputSlot) slot;
-		BooleanSupplier allowed = () -> !smeltingProcessor(context).smeltingInputLocked(lane);
+		BooleanSupplier allowed = () -> !processor.smeltingInputLocked(lane);
 		tiered.productivebeesgenesis$setOutputInsertionAllowed(allowed);
 		tiered.productivebeesgenesis$setOutputExtractionAllowed(allowed);
-	}
-
-	private static PbRecipeProcessor smeltingProcessor(PbRecipeContext context) {
-		if (context instanceof IFactoryPbDelegateAccess factory) {
-			return factory.productivebeesgenesis$getPbProcessor();
-		}
-		return ((TileEntityMekCentrifuge) context).productivebeesgenesis$getPbProcessor();
 	}
 
 	/** Forces Mekanism to resolve the active recipe again after a per-tile recipe mode change. */
@@ -156,6 +161,7 @@ public final class MekCentrifugeFactoryHelper {
 				for (int lane = 0; lane < monitors.length; lane++) {
 					try {
 						monitors[lane].unpause();
+						processor.markLaneRecovery(lane, "熔炼解除旧断电暂停");
 					} catch (RuntimeException | LinkageError failure) {
 						processor.reportLaneFailure(lane, "熔炼解除旧断电暂停", failure);
 					}
@@ -173,7 +179,9 @@ public final class MekCentrifugeFactoryHelper {
 	public static boolean processSmeltingMonitor(PbRecipeProcessor processor, int lane, BooleanSupplier updateAndProcess) {
 		try {
 			if (!processor.prepareSmeltingLane(lane)) return false;
-			return updateAndProcess.getAsBoolean();
+			boolean updated = updateAndProcess.getAsBoolean();
+			processor.markLaneRecovery(lane, "熔炼缓存准备");
+			return updated;
 		} catch (RuntimeException | LinkageError failure) {
 			processor.reportLaneFailure(lane, "熔炼缓存准备", failure);
 			return false;
@@ -185,7 +193,10 @@ public final class MekCentrifugeFactoryHelper {
 		CachedRecipe<?>[] cached = new CachedRecipe<?>[monitors.length];
 		for (int lane = 0; lane < monitors.length; lane++) {
 			try {
-				if (processor.canProcessSmeltingLane(lane)) cached[lane] = monitors[lane].getCachedRecipe(lane);
+				if (processor.canProcessSmeltingLane(lane)) {
+					cached[lane] = monitors[lane].getCachedRecipe(lane);
+					processor.markLaneRecovery(lane, "熔炼缓存快照读取");
+				}
 			} catch (RuntimeException | LinkageError failure) {
 				processor.reportLaneFailure(lane, "熔炼缓存快照读取", failure);
 			}
@@ -203,6 +214,7 @@ public final class MekCentrifugeFactoryHelper {
 				try {
 					accel.productivebeesgenesis$bindBatchEnergyLedger(ledger);
 					accel.productivebeesgenesis$startBatch(ticks);
+					processor.markLaneRecovery(lane, "熔炼加速准备");
 				} catch (RuntimeException | LinkageError failure) {
 					processor.reportLaneFailure(lane, "熔炼加速准备", failure);
 					continue;
@@ -229,6 +241,7 @@ public final class MekCentrifugeFactoryHelper {
 			if (!(cached[lane] instanceof ICachedRecipeBatchAccel accel)) continue;
 			try {
 				accel.productivebeesgenesis$finishBatch();
+				processor.markLaneRecovery(lane, "熔炼加速窗口关闭");
 			} catch (RuntimeException | LinkageError failure) {
 				// finishBatch 的正式实现只撤销纯内存窗口，没有输入、输出或费用接收副作用。
 				processor.reportLaneFailure(lane, "熔炼加速窗口关闭", failure);
@@ -271,6 +284,8 @@ public final class MekCentrifugeFactoryHelper {
 		if (charged != requested) {
 			processor.smeltingWork().retainEnergy(requested - charged, false,
 					new IllegalStateException("Smelting batch energy was only partly debited"));
+		} else {
+			processor.markLaneRecovery(0, "熔炼能量扣账通知已结算");
 		}
 		ledger.reset();
 	}
@@ -433,14 +448,7 @@ public final class MekCentrifugeFactoryHelper {
 		int batchMultiplier = pbProcessor.consumeTickMultiplier();
 		// PB配方独立处理 — 只处理非SMELTING配方且输入不为空的进程
 		int processStart = pbProcessor.getAndAdvanceProcessStart(processes);
-		int remainingInputLanes = 0;
-		for (int i = 0; i < processes; i++) {
-			try {
-				if (!inputSlots.get(i).getStack().isEmpty()) remainingInputLanes++;
-			} catch (RuntimeException | LinkageError failure) {
-				pbProcessor.reportLaneFailure(i, "输入资格读取", failure);
-			}
-		}
+		int remainingInputLanes = pbProcessor.countFactoryInputLanes(inputSlots);
 		// Remaining PB energy budget for this tick; debit only actual consumption so
 		// a shared buffer cannot be over-committed across parallel lanes.
 		long remainingEnergy = Math.max(0L, energyContainer.getEnergy());
@@ -448,10 +456,8 @@ public final class MekCentrifugeFactoryHelper {
 		try {
 			for (int processOffset = 0; processOffset < processes; processOffset++) {
 				int i = (processStart + processOffset) % processes;
-				PbRecipeProcessor.LaneState previous = pbProcessor.getLaneState(i);
 				long energyBeforeProcess = energyContainer.getEnergy();
 				try {
-					pbProcessor.refreshLaneState(i);
 					ItemStack input = inputSlots.get(i).getStack();
 					pbProcessor.updateFactoryInputState(i, input.isEmpty());
 					if (input.isEmpty()) continue;
@@ -470,7 +476,6 @@ public final class MekCentrifugeFactoryHelper {
 					if (!isMyriad && preFoundRecipe == null && pbProcessor.hasSmeltingRecipe(i, input)) {
 						pbProcessor.resetPbState(i);
 						context.productivebeesgenesis$onProcessDeactivated(i);
-						pbProcessor.completeLaneRecovery(i);
 						continue;
 					}
 					pbProcessor.setTickMultiplier(batchMultiplier);
@@ -484,7 +489,7 @@ public final class MekCentrifugeFactoryHelper {
 				} finally {
 					remainingEnergy = Math.max(0L,
 							remainingEnergy - Math.max(0L, energyBeforeProcess - energyContainer.getEnergy()));
-					pbProcessor.finishLaneAttempt(i, previous);
+					pbProcessor.finishLaneAttempt(i);
 				}
 			}
 

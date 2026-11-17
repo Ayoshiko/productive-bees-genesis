@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mek;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.apiary.PbUpgradeType;
 import com.ayoshiko.productivebeesgenesis.util.ItemStackBlockEntityDataHelper;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.NumberFormatter;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Upgrade;
@@ -201,7 +202,7 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 			}
 		} catch (Exception e) {
 			// 防御：UPGRADES 组件缺失或格式异常时跳过，不影响其他 tooltip 渲染
-			ProductiveBeesGenesis.LOGGER.warn("渲染离心机 MEK 升级 tooltip 时异常", e);
+			LogThrottle.warn("centrifuge_upgrade_tooltip", "渲染离心机 MEK 升级 tooltip 时异常", e);
 		}
 	}
 
@@ -329,7 +330,7 @@ public class ItemBlockMekCentrifuge extends ItemBlockTooltip<MekCentrifugeBlock<
 			super.addTypeDetails(stack, context, tooltip, flag);
 		} catch (Exception e) {
 			// Bug 6：防御扳手拆卸后组件缺失导致 NPE
-			ProductiveBeesGenesis.LOGGER.warn("离心机tooltip类型详情显示异常（可能为拆卸后组件缺失）", e);
+			LogThrottle.warn("centrifuge_details_tooltip", "离心机tooltip类型详情显示异常（可能为拆卸后组件缺失）", e);
 		}
 	}
 
