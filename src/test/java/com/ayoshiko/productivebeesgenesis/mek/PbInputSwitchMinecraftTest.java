@@ -251,13 +251,16 @@ class PbInputSwitchMinecraftTest {
 	}
 
 	@Test
-	void unfinishedPaymentStillBlocksReplacementAndKeepsItsRequest() {
+	void legacyUnknownPaymentStillBlocksReplacementAndKeepsItsRequest() {
 		Fixture fixture = new Fixture(1);
 		ItemStack original = named(Items.HONEYCOMB, "payment original");
 		fixture.inputs[0].setStack(original);
 		when(fixture.energy.extract(anyLong(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL)))
 				.thenThrow(new IllegalStateException("controlled payment failure"));
 		assertFalse(fixture.run(0, recipe("old", Items.DIAMOND), 7));
+		CompoundTag legacy = fixture.save();
+		legacy.getList("productivebeesgenesis_pb_committed_pending", 10).getCompound(0).remove("payment_known");
+		fixture.processor.loadAdditional(legacy, REGISTRIES);
 		var request = fixture.processor.paymentStatus().getFirst();
 		fixture.inputs[0].setStack(named(Items.HONEYCOMB, "replacement"));
 		fixture.processor.reconcileInputWork();

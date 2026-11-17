@@ -75,44 +75,84 @@ public final class WannaBeeAmberAdapter {
 	 */
 	public static List<ItemStack> sampleBatches(ServerLevel level, BlockPos origin, FeederSlotManager feeder,
 			long[] productionCounts, float multiplier) {
-		return sampleBatches(level, origin, feeder, productionCounts, multiplier, false);
-	}
 
-	public static List<ItemStack> sampleBatches(ServerLevel level, BlockPos origin, FeederSlotManager feeder,
-			long[] productionCounts, float multiplier, boolean strict) {
 		if (level == null || origin == null || feeder == null || productionCounts == null
 				|| !Float.isFinite(multiplier) || multiplier <= 0.0F) return List.of();
-		List<CustomData> candidates = feeder.getAmberEntityDataSnapshot();
-		if (candidates.isEmpty()) return List.of();
+		return prepareBatch(level, origin, feeder, productionCounts, null).sample(level, productionCounts, multiplier);
+	}
 
+	/** 先执行原有最多 16 个代表事件，预算缩段与产量采样共用这些真实候选池。 */
+	public static BatchSnapshot prepareBatch(ServerLevel level, BlockPos origin, FeederSlotManager feeder,
+			long[] productionCounts, EssenceConversionUpgradeHelper.BatchPlan conversion) {
+		List<CustomData> candidates = feeder.getAmberEntityDataSnapshot();
+		if (candidates.isEmpty()) return new BatchSnapshot(List.of(), conversion);
 		int[] sampleCounts = WannaBeeBatchPlan.allocateSampleCounts(productionCounts);
-		List<AggregatedDrop> aggregated = new ArrayList<>();
+		List<SamplePool> pools = new ArrayList<>();
 		ThreadLocalRandom random = ThreadLocalRandom.current();
 		for (int productivityLevel = 0; productivityLevel < sampleCounts.length; productivityLevel++) {
-			int samplesForLevel = sampleCounts[productivityLevel];
-			long eventCount = productionCounts[productivityLevel];
-			for (int sampleIndex = 0; sampleIndex < samplesForLevel; sampleIndex++) {
-				long representedEvents = WannaBeeBatchPlan.weightAt(eventCount, samplesForLevel, sampleIndex);
-				long rollCount = BeeProduceBatchSampler.sampleRollCount(random, representedEvents, multiplier);
-				if (rollCount <= 0) continue;
+			for (int sampleIndex = 0; sampleIndex < sampleCounts[productivityLevel]; sampleIndex++) {
 				LootPool pool;
 				try {
 					pool = createLootPool(level, origin, candidates, random);
-				} catch (Exception e) {
-					if (strict) throw new IllegalStateException("Wanna Bee resource batch generation failed", e);
-					LogThrottle.warn("wanna_bee_amber_loot",
-							"Wanna Bee 无法读取封存生物战利品，跳过本次代表事件: origin={}", origin, e);
-					continue;
+				} catch (Exception error) {
+					throw new IllegalStateException("Wanna Bee batch loot preparation failed at " + origin, error);
 				}
-				sampleRolls(level, aggregated, pool, rollCount, productivityLevel);
+				pools.add(new SamplePool(productivityLevel, sampleIndex, sampleCounts[productivityLevel], pool));
 			}
 		}
+		return new BatchSnapshot(List.copyOf(pools), conversion);
+	}
 
-		List<ItemStack> result = new ArrayList<>(aggregated.size());
-		for (AggregatedDrop drop : aggregated) {
-			ItemStackMergeHelper.appendBulkCount(result, drop.template, drop.count);
+	private record SamplePool(int level, int index, int samples, LootPool pool) {}
+
+	public static final class BatchSnapshot {
+		private final List<SamplePool> pools;
+		private final long maximumUnit;
+		private final long maximumIdentities;
+		private final int conversionForms;
+
+		private BatchSnapshot(List<SamplePool> pools, EssenceConversionUpgradeHelper.BatchPlan conversion) {
+			this.pools = pools;
+			long maximum = 0;
+			long identities = 0;
+			for (SamplePool sampled : pools) {
+				identities += sampled.pool().eligibleDrops.size();
+				for (ItemStack drop : sampled.pool().eligibleDrops) {
+					long amount = BeeProductivityGene.adjustCount(drop.getCount(), sampled.level());
+					long converted = conversion == null ? amount : conversion.maximumUnitCount(drop, amount);
+					maximum = Math.max(maximum, converted);
+				}
+			}
+			maximumUnit = maximum;
+			maximumIdentities = identities;
+			conversionForms = conversion == null ? 1 : 3;
 		}
-		return result;
+
+		/** 每轮只选一个候选；实际非空身份不超过轮数，不能把整个大候选池当成已生成结果。 */
+		public boolean fitsStackBudget(long rolls, int availableStacks) {
+			if (rolls == 0 || maximumUnit == 0) return true;
+			long amountLimit = (long) availableStacks * Integer.MAX_VALUE;
+			if (rolls > amountLimit / maximumUnit) return false;
+			long amount = maximumUnit * rolls;
+			long identities = Math.min(rolls, maximumIdentities);
+			return conversionForms * (amount / Integer.MAX_VALUE + identities) <= availableStacks;
+		}
+
+		public List<ItemStack> sample(ServerLevel level, long[] productionCounts, float multiplier) {
+			List<AggregatedDrop> aggregated = new ArrayList<>();
+			ThreadLocalRandom random = ThreadLocalRandom.current();
+			for (SamplePool sampled : pools) {
+				long events = WannaBeeBatchPlan.weightAt(
+						productionCounts[sampled.level()], sampled.samples(), sampled.index());
+				long rolls = BeeProduceBatchSampler.sampleRollCount(random, events, multiplier);
+				if (rolls > 0) sampleRolls(level, aggregated, sampled.pool(), rolls, sampled.level());
+			}
+			List<ItemStack> result = new ArrayList<>(aggregated.size());
+			for (AggregatedDrop drop : aggregated) {
+				ItemStackMergeHelper.appendBulkCount(result, drop.template, drop.count);
+			}
+			return result;
+		}
 	}
 
 	private static LootPool createLootPool(ServerLevel level, BlockPos origin, List<CustomData> candidates,

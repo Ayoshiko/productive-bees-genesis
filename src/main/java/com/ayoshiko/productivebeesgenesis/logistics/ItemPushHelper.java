@@ -110,8 +110,8 @@ public final class ItemPushHelper {
 			LogThrottle.error("item_output_slot_count", "物品输出目标槽数查询失败，target={}", destination, error);
 			return remaining;
 		}
-		for (int pass = 0; pass < 2 && !remaining.isEmpty() && !custody.blocked(); pass++) {
-			for (int i = 0; i < slots && !remaining.isEmpty() && !custody.blocked(); i++) {
+		for (int pass = 0; pass < 2 && !remaining.isEmpty() && !custody.externalOutputBlocked(); pass++) {
+			for (int i = 0; i < slots && !remaining.isEmpty() && !custody.externalOutputBlocked(); i++) {
 				if (!targetValid.getAsBoolean()) return remaining;
 				ItemStack current;
 				try {
@@ -124,11 +124,18 @@ public final class ItemPushHelper {
 				if (pass == 0 ? current.isEmpty() || !ItemStack.isSameItemSameComponents(current, remaining) : !current.isEmpty()) continue;
 				int slot = i;
 				int requested = remaining.getCount();
-				int handed = (int) custody.handoffItem(remaining, requested, destination + "/" + slot, () -> {
-					if (!targetValid.getAsBoolean()) return 0;
-					ItemStack rest = target.insertItem(slot, remaining.copy(), false);
-					return accepted(remaining, rest);
-				});
+				int handed;
+				try {
+					handed = (int) custody.handoffItem(remaining, requested, destination + "/" + slot, () -> {
+						if (!targetValid.getAsBoolean()) return 0;
+						ItemStack rest = target.insertItem(slot, remaining.copy(), false);
+						return accepted(remaining, rest);
+					});
+				} catch (RuntimeException | LinkageError failure) {
+					LogThrottle.error("item_output_handoff_preparation", "物品外送登记失败，接收方尚未执行；保留已知余量，target={} slot={} remaining={}",
+							destination, slot, remaining.getCount(), failure);
+					return remaining;
+				}
 				remaining.shrink(handed);
 			}
 		}

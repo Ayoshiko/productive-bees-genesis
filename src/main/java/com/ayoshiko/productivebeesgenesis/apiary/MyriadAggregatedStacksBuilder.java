@@ -40,7 +40,7 @@ import java.util.Map;
 	 * <b>降级路径</b>：任一异常时退化为 {@link MyriadCreationsEventHandler#getAggregatedRandomHoneycombs} /
 	 * {@link MyriadCreationsEventHandler#getAggregatedRandomCombBlocks}（原 576 路径），
 	 * 通过 {@link LogThrottle} 节流警告日志，避免高频异常刷屏。
-	 * 二次异常时返回 {@link List#of()}，确保不影响 flush 主流程。
+	 * 两条生成路径都失败时保留首根因与回退异常，由宿主保管该组已付周期。
 	 * <p>
 	 * <b>线程安全</b>：无状态对象，依赖 {@link WeightedTypeSelector} 与 {@link MyriadBeeTypeCache}
 	 * 的线程安全保证。服务端单线程 tick 场景下无需额外同步。
@@ -202,12 +202,12 @@ public class MyriadAggregatedStacksBuilder {
 	 * 蜜脾预聚合异常降级路径
 	 * <br/>
 	 * 退化为 {@link MyriadCreationsEventHandler#getAggregatedRandomHoneycombs}（原 576 路径），
-	 * 通过 {@link LogThrottle} 节流警告日志。二次异常时返回 {@link List#of()}，避免影响 flush 主流程。
+	 * 通过 {@link LogThrottle} 节流警告日志。两条路径都失败时由宿主保管原已付周期。
 	 *
 	 * @param totalCount 原始蜜脾总数
 	 * @param level      世界（提供随机源）
 	 * @param cause      触发降级的异常
-	 * @return 原版随机路径返回的 ItemStack 列表，或二次异常时返回空列表
+	 * @return 原版随机路径返回的 ItemStack 列表
 	 */
 	private List<ItemStack> degradeToHoneycombs(int totalCount, Level level, Exception cause) {
 		degradeThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
@@ -219,8 +219,10 @@ public class MyriadAggregatedStacksBuilder {
 		try {
 			return MyriadCreationsEventHandler.getAggregatedRandomHoneycombs(
 					totalCount, level.getRandom());
-		} catch (Exception fallback) {
-			return List.of();
+		} catch (Exception | LinkageError fallback) {
+			var failure = new IllegalStateException("Myriad honeycomb generation and fallback both failed", cause);
+			failure.addSuppressed(fallback);
+			throw failure;
 		}
 	}
 
@@ -230,12 +232,12 @@ public class MyriadAggregatedStacksBuilder {
 	 * 退化为 {@link MyriadCreationsEventHandler#getAggregatedRandomCombBlocks}（原 576 路径），
 	 * 传入 4× 缩放后的总数以保持机制平衡（与原 {@code BeeProduceProcessor} 调用
 	 * {@code getAggregatedRandomCombBlocks(cappedMyriadCount * 4, random)} 语义一致）。
-	 * 二次异常时返回 {@link List#of()}。
+	 * 两条路径都失败时保留两次根因，不能以空产物提交已付周期。
 	 *
 	 * @param totalCount 原始蜜脾块等价总数（未缩放）
 	 * @param level      世界（提供随机源）
 	 * @param cause      触发降级的异常
-	 * @return 原版随机路径返回的 ItemStack 列表，或二次异常时返回空列表
+	 * @return 原版随机路径返回的 ItemStack 列表
 	 */
 	private List<ItemStack> degradeToCombBlocks(int totalCount, Level level, Exception cause) {
 		degradeThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
@@ -249,8 +251,10 @@ public class MyriadAggregatedStacksBuilder {
 					SaturatingMath.saturatingMultiply(totalCount, COMB_BLOCK_SCALE));
 			return MyriadCreationsEventHandler.getAggregatedRandomCombBlocks(
 					scaledTotal, level.getRandom());
-		} catch (Exception fallback) {
-			return List.of();
+		} catch (Exception | LinkageError fallback) {
+			var failure = new IllegalStateException("Myriad comb block generation and fallback both failed", cause);
+			failure.addSuppressed(fallback);
+			throw failure;
 		}
 	}
 }

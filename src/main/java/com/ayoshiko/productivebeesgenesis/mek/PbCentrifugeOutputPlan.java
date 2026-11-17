@@ -60,7 +60,7 @@ final class PbCentrifugeOutputPlan implements ResourceCentrifugeProcessor.LocalP
                 committed = true;
                 owner.acceptPrepared(batch);
                 owner.flushPendingPbOutputs(lane);
-                if (OutputCustody.of(owner.getContext()).blocked())
+                if (PbRecipeFlusher.outputBlocked(owner.getContext(), lane))
                     throw new IllegalStateException("Combined centrifuge output outcome uncertain");
             }
         };

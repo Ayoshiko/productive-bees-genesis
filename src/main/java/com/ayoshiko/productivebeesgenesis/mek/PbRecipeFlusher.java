@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputLedger;
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
@@ -114,7 +115,7 @@ public final class PbRecipeFlusher {
 			return Outcome.COMMITTED;
 		}
 		PbRecipeContext context = completer.getContext();
-		if (outputBlocked(context)) return Outcome.BLOCKED;
+		if (outputBlocked(context, processIndex)) return Outcome.BLOCKED;
 		// 诊断信息只描述本次尝试：否则「流体满」导致的失败会读到上一次种类溢出的陈旧标记，
 		// 让调用方误判为需要延迟提交（流体满应保持原语义：暂停并保留输入）。
 		lastPlanUnplaceableType = false;
@@ -157,7 +158,7 @@ public final class PbRecipeFlusher {
 				consumePendingInput(completer, context, processIndex);
 				deferralBudget = Long.MAX_VALUE;
 			}
-			if (outputBlocked(context)) {
+			if (outputBlocked(context, processIndex)) {
 				consumePendingInput(completer, context, processIndex);
 				return Outcome.DEFERRED;
 			}
@@ -222,7 +223,7 @@ public final class PbRecipeFlusher {
 	/** 复用本地放置模拟；三槽种类溢出沿用一槽余量预算，单输入仍可形成有界已付批次。 */
 	boolean fitsPrepared(PbRecipeCompleter batch, int lane, int inputs) {
 		var context = batch.getContext();
-		if (outputBlocked(context)) return false;
+		if (outputBlocked(context, lane)) return false;
 		int slots = buildOutputSlots(context, lane);
 		planner.snapshot(batch.getPendingOutputs().keySet(), batch.getPendingOutputs());
 		planner.simulate(reusableOutputSlots, slots);
@@ -246,8 +247,28 @@ public final class PbRecipeFlusher {
 
 	static boolean outputBlocked(PbRecipeContext context) {
 		var custody = custody(context);
-		return custody != null && custody.blocked();
+		return custody != null && custody.externalOutputBlocked();
 	}
+
+    static boolean outputBlocked(PbRecipeContext context, int lane) {
+        var custody = custody(context);
+        if (custody == null) return false;
+        if (custody.localOutputBlocked()) return true;
+        for (int slot = 0; slot < PbOutputPlacementPlanner.MAX_SLOTS; slot++) {
+            if (custody.localItemBlocked(lane * PbOutputPlacementPlanner.MAX_SLOTS + slot)) return true;
+        }
+        return false;
+    }
+
+    private static com.ayoshiko.productivebeesgenesis.logistics.OutputCustody fluidCustody(
+            PbRecipeContext context, IExtendedFluidTank tank) {
+        var custody = custody(context);
+        if (custody == null) return null;
+        for (int i = 0; i < context.fluidOutputTankCount(); i++) {
+            if (context.fluidOutputTank(i) == tank) return custody.localFluid(i);
+        }
+        throw new IllegalStateException("Centrifuge output tank is not owned by its context");
+    }
 
 	/** 存在无处安放的产物种类（减半批量无效，只能延迟提交） */
 	boolean lastPlanHasUnplaceableType() {
@@ -291,14 +312,13 @@ public final class PbRecipeFlusher {
 		lastPlanSlotCapacity = planner.slotCapacity();
 
 		if (planner.placedAll()) {
-			if (planner.execute(reusableOutputSlots, slotCount, reusableSlotIdxMap, context, processIndex)) {
-				completer.consumeAllPendingItems();
-				return Outcome.COMMITTED;
-			}
-			// 槽位对数量做了截断（异常路径）：写入无法回滚，按实际写入量记账并挂起剩余产物，
-			// 保证「输入只扣一次、产物不丢失」。
-			consumePlacedItems(completer, pendingOutputs);
-			return Outcome.DEFERRED;
+            boolean exact;
+            try {
+                exact = planner.execute(reusableOutputSlots, slotCount, reusableSlotIdxMap, context, processIndex);
+            } finally {
+                consumePlacedItems(completer, pendingOutputs);
+            }
+            return exact ? Outcome.COMMITTED : Outcome.DEFERRED;
 		}
 		if (deferralBudget <= 0) {
 			return Outcome.BLOCKED; // 原子语义：空间不足时不执行任何修改
@@ -309,8 +329,11 @@ public final class PbRecipeFlusher {
 		if (!planner.placedAny()) {
 			return Outcome.BLOCKED;
 		}
-		planner.execute(reusableOutputSlots, slotCount, reusableSlotIdxMap, context, processIndex);
-		consumePlacedItems(completer, pendingOutputs);
+        try {
+            planner.execute(reusableOutputSlots, slotCount, reusableSlotIdxMap, context, processIndex);
+        } finally {
+            consumePlacedItems(completer, pendingOutputs);
+        }
 		DevLog.debug("pb_recipe",
 				"产物种类多于输出槽，已部分提交并延迟剩余产物: 进程{} 延迟上限={}",
 				processIndex, planner.maxDeferredPerType());
@@ -356,17 +379,17 @@ public final class PbRecipeFlusher {
 	 */
 	private int buildOutputSlots(PbRecipeContext context, int processIndex) {
 		reusableOutputSlots.clear();
-		reusableOutputSlots.add(context.primaryOutputSlot(processIndex));
+		reusableOutputSlots.add(Ae2OutputLedger.blocks(context, processIndex, 0) ? null : context.primaryOutputSlot(processIndex));
 		reusableSlotIdxMap[0] = 0; // primary
 		int slotCount = 1;
 		IInventorySlot secondary = context.secondaryOutputSlot(processIndex);
 		if (secondary != null) {
-			reusableOutputSlots.add(secondary);
+			reusableOutputSlots.add(Ae2OutputLedger.blocks(context, processIndex, 1) ? null : secondary);
 			reusableSlotIdxMap[slotCount++] = 1; // secondary
 		}
 		IInventorySlot tertiary = context.tertiaryOutputSlot(processIndex);
 		if (tertiary != null) {
-			reusableOutputSlots.add(tertiary);
+			reusableOutputSlots.add(Ae2OutputLedger.blocks(context, processIndex, 2) ? null : tertiary);
 			reusableSlotIdxMap[slotCount++] = 2; // tertiary
 		}
 		return slotCount;
@@ -385,13 +408,13 @@ public final class PbRecipeFlusher {
 		}
 		int scaledAmount = (int) Math.min(pending, Integer.MAX_VALUE);
 		FluidStack scaledFluid = template.copyWithAmount(scaledAmount);
-		var custody = custody(context);
+		var custody = fluidCustody(context, tank);
 		java.util.function.LongSupplier insert = () -> {
 			FluidStack remainder = tank.insert(scaledFluid, Action.EXECUTE, AutomationType.INTERNAL);
 			return scaledAmount - (remainder.isEmpty() ? 0 : remainder.getAmount());
 		};
 		long inserted = custody == null ? insert.getAsLong()
-				: custody.handoffFluid(template, scaledAmount, "centrifuge-tank", insert);
+				: custody.handoffLocalFluid(template, scaledAmount, tank.getFluid(), "centrifuge-tank", tank::getFluid, insert);
 		completer.consumePendingFluid(inserted);
 		if (inserted > 0L && LocalFluidDrainPolicy.shouldDrainAfterCommit(
 				tank.getNeeded(), scaledAmount)) {
@@ -486,42 +509,21 @@ public final class PbRecipeFlusher {
 	}
 
 	private static int directItemToNeighbors(PbRecipeContext context, ItemStack template, int amount) {
-		try {
-			int handed = context.productivebeesgenesis$pushGeneratedItemToNeighbors(template, amount);
-			if (handed < 0 || handed > amount) throw new IllegalStateException("Invalid direct output receipt");
-			return handed;
-		} catch (RuntimeException | LinkageError failure) {
-			var custody = custody(context);
-			if (custody == null || custody.blocked()) throw failure;
-			return (int) custody.handoffItem(template, amount, "centrifuge-direct-neighbor",
-					() -> { throw new IllegalStateException("Direct output outcome uncertain", failure); });
-		}
+        int handed = context.productivebeesgenesis$pushGeneratedItemToNeighbors(template, amount);
+        if (handed < 0 || handed > amount) throw new IllegalStateException("Invalid direct output receipt");
+        return handed;
 	}
 
 	static long directItemToAe(PbRecipeContext context, ItemStack template, long amount) {
-		try {
-			long handed = context.productivebeesgenesis$pushGeneratedItemToAe(template, amount);
-			if (handed < 0 || handed > amount) throw new IllegalStateException("Invalid direct output receipt");
-			return handed;
-		} catch (RuntimeException | LinkageError failure) {
-			var custody = custody(context);
-			if (custody == null || custody.blocked()) throw failure;
-			return custody.handoffItem(template, amount, "centrifuge-direct-ae",
-					() -> { throw new IllegalStateException("Direct output outcome uncertain", failure); });
-		}
+        long handed = context.productivebeesgenesis$pushGeneratedItemToAe(template, amount);
+        if (handed < 0 || handed > amount) throw new IllegalStateException("Invalid direct output receipt");
+        return handed;
 	}
 
 	static long directFluid(PbRecipeContext context, FluidStack template, long amount) {
-		try {
-			long handed = context.productivebeesgenesis$pushGeneratedFluidToAe(template, amount);
-			if (handed < 0 || handed > amount) throw new IllegalStateException("Invalid direct fluid receipt");
-			return handed;
-		} catch (RuntimeException | LinkageError failure) {
-			var custody = custody(context);
-			if (custody == null || custody.blocked()) throw failure;
-			return custody.handoffFluid(template, amount, "centrifuge-direct-ae-fluid",
-					() -> { throw new IllegalStateException("Direct fluid outcome uncertain", failure); });
-		}
+        long handed = context.productivebeesgenesis$pushGeneratedFluidToAe(template, amount);
+        if (handed < 0 || handed > amount) throw new IllegalStateException("Invalid direct fluid receipt");
+        return handed;
 	}
 
 	private static boolean canStorePendingFluidLocally(

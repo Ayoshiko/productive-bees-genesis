@@ -327,6 +327,46 @@ class PbFactoryOutputBatchMinecraftTest {
     }
 
     @Test
+    void sharedFactoryEntryPointIsolatesRecipeLookupAndProcessesFollowingLane() {
+        var fixture = new Fixture(mock(IFactoryPbDelegateAccess.class), 2, true);
+        var factory = (IFactoryPbDelegateAccess) fixture.context;
+        when(factory.productivebeesgenesis$getPbProcessor()).thenReturn(fixture.processor);
+        var level = mock(ServerLevel.class);
+        when(level.registryAccess()).thenReturn(REGISTRIES);
+        when(fixture.context.level()).thenReturn(level);
+        when(fixture.context.canFunction()).thenReturn(true);
+        var energy = mock(MachineEnergyContainer.class);
+        when(fixture.context.energyContainer()).thenReturn(energy);
+        when(energy.getEnergy()).thenReturn(100L);
+        when(fixture.context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))
+                .thenAnswer(call -> call.getArgument(1));
+        fixture.inputs[0].setStack(new ItemStack(Items.HONEYCOMB));
+        fixture.inputs[1].setStack(new ItemStack(Items.STONE));
+        var processor = spy(fixture.processor);
+        var healthyRecipe = new RecipeHolder<>(ResourceLocation.parse("productivebeesgenesis:healthy_lane"),
+                Fixture.resourceRecipe(Items.GOLD_INGOT));
+        doThrow(new IllegalStateException("lane recipe lookup unavailable")).when(processor)
+                .findPbRecipe(argThat(input -> input.is(Items.HONEYCOMB)));
+        doReturn(healthyRecipe).when(processor).findPbRecipe(argThat(input -> input.is(Items.STONE)));
+        doAnswer(call -> {
+            fixture.owners[1].freezeMyriadBatch(Map.of(new ItemStack(Items.GOLD_INGOT), 7L),
+                    FluidStack.EMPTY, 0, fixture.inputs[1].getStack(), 1);
+            assertTrue(fixture.owners[1].flushCompletedBatch(1));
+            return true;
+        }).when(processor).tryProcessPbRecipe(eq(1), eq(healthyRecipe), anyLong());
+
+        assertDoesNotThrow(() -> MekCentrifugeFactoryHelper.processPbRecipesAndUpdate(
+                false, 100L, energy, 2, List.of(fixture.inputs), processor,
+                fixture.context, false, active -> {}, usage -> {}));
+        assertEquals(1, fixture.inputs[0].getCount());
+        assertEquals(PbRecipeProcessor.LaneState.PROCESSING_FAILED, processor.getLaneState(0));
+        assertTrue(fixture.inputs[1].isEmpty());
+        assertEquals(0, pending(fixture.owners[1]));
+        verify(fixture.context).productivebeesgenesis$pushGeneratedItemToAe(
+                argThat(stack -> stack.is(Items.GOLD_INGOT)), eq(7L));
+    }
+
+    @Test
     void preDrainLeavesUncommittedPaymentAndLegacyOutputOnOriginalRecoveryPaths() {
         var fixture = new Fixture(mock(PbRecipeContext.class), 4);
         for (int lane = 0; lane < 4; lane++) {
@@ -392,7 +432,8 @@ class PbFactoryOutputBatchMinecraftTest {
         when(ejector.outputCustody()).thenReturn(custody);
         var fixture = new Fixture(machine);
         when(machine.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))
-                .thenThrow(new IllegalStateException("receiver accepted an unknown prefix"));
+                .thenAnswer(call -> custody.handoffItem(call.getArgument(0), call.getArgument(1),
+                        "test-network", () -> { throw new IllegalStateException("receiver accepted an unknown prefix"); }));
         fixture.batch.begin();
         fixture.prepare(0, named("same"), 3_000_000_000L, 0);
         fixture.prepare(1, named("same"), 1_000_000_000L, 0);
@@ -402,6 +443,10 @@ class PbFactoryOutputBatchMinecraftTest {
         assertEquals(0, pending(fixture.owners[0]) + pending(fixture.owners[1]));
         var restored = new OutputCustody(() -> {});
         restored.load(REGISTRIES, custody.save(REGISTRIES));
+        assertTrue(restored.blocked());
+        assertEquals(4_000_000_000L, restored.amount());
+        assertEquals(0, restored.handoffItem(named("same"), 4_000_000_000L,
+                "replay", () -> fail("reloaded unknown request cannot be replayed")));
         restored.resolve(restored.sequence(), 1_000_000_000L);
         assertEquals(3_000_000_000L, restored.amount());
         assertEquals(Integer.MAX_VALUE, restored.recoveredItem().getCount());
@@ -430,7 +475,8 @@ class PbFactoryOutputBatchMinecraftTest {
             }
         };
         when(machine.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))
-                .thenThrow(new IllegalStateException("unknown receipt"));
+                .thenAnswer(call -> custody.handoffItem(call.getArgument(0), call.getArgument(1),
+                        "test-network", () -> { throw new IllegalStateException("unknown receipt"); }));
         try (var conversion = mockStatic(RawOreSmeltingUpgradeHelper.class)) {
             conversion.when(() -> RawOreSmeltingUpgradeHelper.convertPendingLongOutputs(eq(level), anyMap()))
                     .thenAnswer(call -> {
@@ -511,10 +557,12 @@ class PbFactoryOutputBatchMinecraftTest {
         when(machine.getEjector()).thenReturn(ejector);
         when(ejector.outputCustody()).thenReturn(custody);
         var fixture = new Fixture(machine, 3);
+        machine.primaryOutputSlot(2).setStack(ItemStack.EMPTY);
         var affected = mock(Completion.class);
         var untouched = mock(Completion.class);
         when(machine.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))
-                .thenThrow(new IllegalStateException("mixed network receipt unknown"));
+                .thenAnswer(call -> custody.handoffItem(call.getArgument(0), call.getArgument(1),
+                        "test-network", () -> { throw new IllegalStateException("mixed network receipt unknown"); }));
         fixture.batch.begin();
         fixture.prepareResource(0, 3, affected);
         fixture.prepare(1, new ItemStack(Items.IRON_INGOT), 7, 0);
@@ -523,12 +571,192 @@ class PbFactoryOutputBatchMinecraftTest {
         assertEquals(10, custody.amount());
         assertEquals(0, pending(fixture.owners[0]));
         assertEquals(0, pending(fixture.owners[1]));
-        assertEquals(11, pending(fixture.owners[2]));
+        assertEquals(0, pending(fixture.owners[2]));
+        assertTrue(machine.primaryOutputSlot(2).getStack().is(Items.GOLD_INGOT));
+        assertEquals(11, machine.primaryOutputSlot(2).getCount());
         verify(affected).uncertain(anyString());
         verify(affected, never()).complete();
         verify(untouched).complete();
         verify(untouched, never()).uncertain(anyString());
         verify(machine, times(1)).productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong());
+    }
+
+    @Test
+    void localFlushFailureKeepsItsLaneAndAllowsOtherLaneToDrain() {
+        var fixture = new Fixture(mock(IFactoryPbDelegateAccess.class), 2, true);
+        var factory = (IFactoryPbDelegateAccess) fixture.context;
+        when(factory.productivebeesgenesis$getPbProcessor()).thenReturn(fixture.processor);
+        var firstOutput = fixture.context.primaryOutputSlot(0);
+        fixture.context.primaryOutputSlot(1).setStack(ItemStack.EMPTY);
+        fixture.batch.begin();
+        fixture.prepare(0, new ItemStack(Items.IRON_INGOT), 3, 0);
+        fixture.prepare(1, new ItemStack(Items.GOLD_INGOT), 7, 0);
+        when(fixture.context.primaryOutputSlot(0)).thenThrow(new IllegalStateException("local lane output unavailable"));
+
+        assertDoesNotThrow(() -> fixture.batch.finish());
+        assertEquals(3, pending(fixture.owners[0]));
+        assertEquals(PbRecipeProcessor.LaneState.PROCESSING_FAILED, fixture.processor.getLaneState(0));
+        assertEquals(0, pending(fixture.owners[1]));
+        assertTrue(fixture.context.primaryOutputSlot(1).getStack().is(Items.GOLD_INGOT));
+        assertEquals(7, fixture.context.primaryOutputSlot(1).getCount());
+
+        doReturn(firstOutput).when(fixture.context).primaryOutputSlot(0);
+        firstOutput.setStack(ItemStack.EMPTY);
+        fixture.processor.refreshLaneState(0);
+        fixture.batch.begin();
+        assertTrue(fixture.owners[0].flushCompletedBatch(0));
+        fixture.batch.finish();
+        assertEquals(PbRecipeProcessor.LaneState.READY, fixture.processor.getLaneState(0));
+        assertEquals(0, pending(fixture.owners[0]));
+        assertTrue(firstOutput.getStack().is(Items.IRON_INGOT));
+        assertEquals(3, firstOutput.getCount());
+        assertEquals(7, fixture.context.primaryOutputSlot(1).getCount());
+    }
+
+    @Test
+    void sourceSaveNotificationFailureDebitsKnownItemsAndContinuesOtherOutputs() {
+        var fixture = new Fixture(mock(IFactoryPbDelegateAccess.class), 3, true);
+        var factory = (IFactoryPbDelegateAccess) fixture.context;
+        when(factory.productivebeesgenesis$getPbProcessor()).thenReturn(fixture.processor);
+        fixture.context.primaryOutputSlot(0).setStack(ItemStack.EMPTY);
+        List<Long> receipts = new ArrayList<>();
+        when(fixture.context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))
+                .thenAnswer(call -> {
+                    ItemStack template = call.getArgument(0);
+                    if (template.is(Items.EMERALD)) return 0L;
+                    long amount = call.getArgument(1);
+                    receipts.add(amount);
+                    return amount;
+                });
+        fixture.batch.begin();
+        Map<ItemStack, Long> firstOutputs = new java.util.LinkedHashMap<>();
+        firstOutputs.put(new ItemStack(Items.IRON_INGOT), 3L);
+        firstOutputs.put(new ItemStack(Items.EMERALD), 2L);
+        fixture.prepareOutputs(0, firstOutputs);
+        fixture.prepare(1, new ItemStack(Items.IRON_INGOT), 7, 0);
+        fixture.prepare(2, new ItemStack(Items.GOLD_INGOT), 11, 0);
+        boolean[] failed = {false};
+        doAnswer(call -> {
+            if (!failed[0]) {
+                failed[0] = true;
+                assertEquals(2, pending(fixture.owners[0]));
+                assertEquals(0, pending(fixture.owners[1]));
+                throw new IllegalStateException("known receipt source save failed");
+            }
+            return null;
+        }).when(fixture.context).productivebeesgenesis$markForSave();
+
+        assertDoesNotThrow(() -> fixture.batch.finish());
+        assertTrue(failed[0]);
+        assertEquals(List.of(10L, 11L), receipts);
+        assertTrue(fixture.context.primaryOutputSlot(0).getStack().is(Items.EMERALD));
+        assertEquals(2, fixture.context.primaryOutputSlot(0).getCount());
+        for (int lane = 0; lane < fixture.owners.length; lane++) {
+            assertEquals(PbRecipeProcessor.LaneState.READY, fixture.processor.getLaneState(lane));
+            assertEquals(0, pending(fixture.owners[lane]));
+            assertFalse(fixture.owners[lane].outputUncertainPending());
+            assertNull(fixture.owners[lane].saveCommittedPending(REGISTRIES));
+        }
+
+        fixture.batch.begin();
+        fixture.prepare(1, new ItemStack(Items.IRON_INGOT), 5, 0);
+        fixture.batch.finish();
+        assertEquals(List.of(10L, 11L, 5L), receipts);
+        assertEquals(0, pending(fixture.owners[1]));
+    }
+
+    @Test
+    void sourceSaveNotificationFailureDebitsKnownFluidsAndContinuesOtherGroup() {
+        var fixture = new Fixture(mock(PbRecipeContext.class), 3);
+        List<Long> receipts = new ArrayList<>();
+        when(fixture.context.productivebeesgenesis$pushGeneratedFluidToAe(any(), anyLong()))
+                .thenAnswer(call -> {
+                    long amount = call.getArgument(1);
+                    receipts.add(amount);
+                    return amount;
+                });
+        fixture.batch.begin();
+        fixture.prepareFluid(0, new FluidStack(Fluids.WATER, 1), 3);
+        fixture.prepareFluid(1, new FluidStack(Fluids.WATER, 1), 7);
+        fixture.prepareFluid(2, new FluidStack(Fluids.LAVA, 1), 11);
+        boolean[] failed = {false};
+        doAnswer(call -> {
+            if (!failed[0]) {
+                failed[0] = true;
+                assertEquals(0, fixture.owners[0].getPendingFluidAmount());
+                assertEquals(0, fixture.owners[1].getPendingFluidAmount());
+                throw new IllegalStateException("known fluid receipt source save failed");
+            }
+            return null;
+        }).when(fixture.context).productivebeesgenesis$markForSave();
+
+        assertDoesNotThrow(() -> fixture.batch.finish());
+        assertTrue(failed[0]);
+        assertEquals(List.of(10L, 11L), receipts);
+        for (var owner : fixture.owners) {
+            assertEquals(0, owner.getPendingFluidAmount());
+            assertFalse(owner.outputUncertainPending());
+            assertNull(owner.saveCommittedPending(REGISTRIES));
+        }
+    }
+
+    @Test
+    void sourceDebitFailureKeepsAllContributingLanesAndCompletesOtherGroup() {
+        var fixture = new Fixture(mock(IFactoryPbDelegateAccess.class), 3, true);
+        var factory = (IFactoryPbDelegateAccess) fixture.context;
+        when(factory.productivebeesgenesis$getPbProcessor()).thenReturn(fixture.processor);
+        var level = mock(ServerLevel.class);
+        when(level.registryAccess()).thenReturn(REGISTRIES);
+        when(fixture.context.level()).thenReturn(level);
+        fixture.context.primaryOutputSlot(0).setStack(ItemStack.EMPTY);
+        List<Long> receipts = new ArrayList<>();
+        when(fixture.context.productivebeesgenesis$pushGeneratedItemToAe(any(), anyLong()))
+                .thenAnswer(call -> {
+                    ItemStack template = call.getArgument(0);
+                    if (template.is(Items.IRON_INGOT)) {
+                        for (var entry : fixture.owners[0].getPendingOutputs().entrySet()) {
+                            if (entry.getKey().is(Items.IRON_INGOT)) entry.setValue(2L);
+                        }
+                    }
+                    long amount = call.getArgument(1);
+                    receipts.add(amount);
+                    return amount;
+                });
+        fixture.batch.begin();
+        Map<ItemStack, Long> firstOutputs = new java.util.LinkedHashMap<>();
+        firstOutputs.put(new ItemStack(Items.IRON_INGOT), 3L);
+        firstOutputs.put(new ItemStack(Items.EMERALD), 2L);
+        fixture.prepareOutputs(0, firstOutputs);
+        fixture.prepare(1, new ItemStack(Items.IRON_INGOT), 7, 0);
+        fixture.prepare(2, new ItemStack(Items.GOLD_INGOT), 11, 0);
+
+        assertDoesNotThrow(() -> fixture.batch.finish());
+        assertEquals(List.of(10L, 11L), receipts);
+        assertEquals(PbRecipeProcessor.LaneState.OUTPUT_UNCERTAIN, fixture.processor.getLaneState(0));
+        assertEquals(PbRecipeProcessor.LaneState.OUTPUT_UNCERTAIN, fixture.processor.getLaneState(1));
+        assertEquals(4, pending(fixture.owners[0]));
+        assertEquals(7, pending(fixture.owners[1]));
+        assertEquals(0, pending(fixture.owners[2]));
+        assertTrue(fixture.context.primaryOutputSlot(0).isEmpty());
+        for (int lane = 0; lane < 2; lane++) {
+            var saved = fixture.owners[lane].saveCommittedPending(REGISTRIES);
+            var evidence = saved.getCompound("output_failure");
+            assertEquals(10, evidence.getLong("requested"));
+            assertTrue(evidence.getBoolean("receipt_known"));
+            assertEquals(10, evidence.getLong("received"));
+            assertEquals(2, evidence.getList("sources", 10).size());
+            assertEquals(3, evidence.getList("sources", 10).getCompound(0).getLong("before"));
+            assertEquals(7, evidence.getList("sources", 10).getCompound(1).getLong("before"));
+            assertTrue(evidence.contains("after"));
+            var restored = new PbRecipeCompleter(fixture.context);
+            restored.loadCommittedPending(saved, REGISTRIES);
+            assertTrue(restored.outputUncertainPending());
+            assertFalse(restored.flushPendingPbOutputs(lane));
+            assertEquals(saved, restored.saveCommittedPending(REGISTRIES));
+        }
+        fixture.batch.begin();
+        fixture.batch.finish();
+        assertEquals(List.of(10L, 11L), receipts);
     }
 
     @Test

@@ -44,6 +44,28 @@ class CentrifugeConfiguredReturnMinecraftTest {
 	}
 
 	@Test
+	void localOutputVerificationDoesNotBlockIndependentKnownInputReturn() {
+		var source = BasicInventorySlot.at(stack -> true, () -> {}, 0, 0);
+		source.setStack(new ItemStack(Items.IRON_INGOT, 3));
+		var custody = new OutputCustody(() -> {});
+		var held = custody.localItem(0);
+		assertEquals(5, held.handoffLocalItem(new ItemStack(Items.DIAMOND), 5, ItemStack.EMPTY,
+				"machine-slot:0",
+				() -> { throw new IllegalStateException("unreadable output slot"); },
+				() -> { throw new IllegalStateException("output listener failed"); }));
+		var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+		var before = held.save(registries);
+		var target = new ItemStackHandler(1);
+		assertTrue(custody.blocked());
+		assertFalse(custody.externalOutputBlocked());
+		assertEquals(3, CentrifugeConfiguredOutputService.transferToTarget(source, target, custody, "input-return"));
+		assertTrue(source.isEmpty());
+		assertEquals(3, target.getStackInSlot(0).getCount());
+		assertTrue(held.blocked());
+		assertEquals(before, held.save(registries));
+	}
+
+	@Test
 	void knownPartialReceiptRestoresOnlyTheKnownRemainder() {
 		var source = BasicInventorySlot.at(stack -> true, () -> {}, 0, 0);
 		source.setStack(new ItemStack(Items.IRON_INGOT, 10));

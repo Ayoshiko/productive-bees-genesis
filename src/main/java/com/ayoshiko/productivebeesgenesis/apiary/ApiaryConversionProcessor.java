@@ -69,6 +69,11 @@ final class ApiaryConversionProcessor {
 	private long cachedMatchRecipeVersion = Long.MIN_VALUE;
 	private ConversionMatch cachedMatch;
 	private final long[] resourceAttemptBatch;
+    private boolean groupConversionStarted;
+
+    boolean groupConversionStarted() {
+        return groupConversionStarted;
+    }
 
 	ApiaryConversionProcessor(TileEntityMekApiary tile, ApiarySlotManager slotManager,
 			FeederSlotManager feederManager) {
@@ -97,6 +102,7 @@ final class ApiaryConversionProcessor {
 	 */
 	void processGroupConversions(ResourceLocation beeTypeKey, Level level, BeeSlot[] beeSlots,
 			OrderedSlotIndex slotIndices, int[] pendingProductions) {
+		groupConversionStarted = false;
 		if (beeTypeKey == null || level == null || beeSlots == null || slotIndices == null
 				|| pendingProductions == null) {
 			return;
@@ -164,7 +170,9 @@ final class ApiaryConversionProcessor {
 	private ConversionOutcome attemptConversion(ResourceLocation beeTypeKey, Level level,
 			boolean itemEnabled, boolean blockEnabled) {
 		var match = cachedMatch(beeTypeKey, itemEnabled, blockEnabled);
-		return match == null ? ConversionOutcome.NONE : applyMatch(match, level);
+		if (match == null) return ConversionOutcome.NONE;
+        groupConversionStarted = true;
+        return applyMatch(match, level);
 	}
 
 	private ConversionMatch cachedMatch(ResourceLocation beeTypeKey, boolean itemEnabled, boolean blockEnabled) {
@@ -178,12 +186,13 @@ final class ApiaryConversionProcessor {
 			return cachedMatch;
 		}
 		// 缓存未命中：扫描饲养板找第一个匹配项（每蜜蜂类型每饲养板状态每配置组合最多一次）
+		ConversionMatch match = findFirstMatch(beeTypeKey, itemEnabled, blockEnabled);
 		cachedMatchBeeType = beeTypeKey;
 		cachedMatchFeederVersion = feederVersion;
 		cachedMatchItemEnabled = itemEnabled;
 		cachedMatchBlockEnabled = blockEnabled;
 		cachedMatchRecipeVersion = recipeVersion;
-		cachedMatch = findFirstMatch(beeTypeKey, itemEnabled, blockEnabled);
+		cachedMatch = match;
 		return cachedMatch;
 	}
 

@@ -186,7 +186,7 @@ class ResourceAccountsMinecraftTest {
 		}
 	}
 
-	@Test void restartNeverAutomaticallyCommitsOrCancelsPendingProduction() {
+	@Test void restartCancelsOnlyUnstartedProductionAndKeepsUnknownResultsIsolated() {
 		for (var phase : new ResourceAccount.Phase[]{ResourceAccount.Phase.RESERVED,
 				ResourceAccount.Phase.STARTED, ResourceAccount.Phase.FROZEN}) {
 			var store = new ResourceAccounts(() -> {});
@@ -194,17 +194,110 @@ class ResourceAccountsMinecraftTest {
 			var ticket = account.reserve(account.reference(), 8, new CompoundTag(), Map.of(HYDROGEN, 100L));
 			if (phase != ResourceAccount.Phase.RESERVED) account.start(ticket);
 			if (phase == ResourceAccount.Phase.FROZEN) account.freeze(ticket, Map.of(HYDROGEN, 70L));
-			var restored = ResourceAccounts.load(store.save(), () -> {}).find(account.reference().sourceId());
-			assertFalse(restored.suspension().isEmpty());
+			int[] notifications = {0};
+			var loaded = ResourceAccounts.load(store.save(), () -> notifications[0]++);
+			var restored = loaded.find(account.reference().sourceId());
 			assertTrue(restored.available().isEmpty());
-			if (phase == ResourceAccount.Phase.FROZEN) {
-				restored.resolveProduction(OWNER, ticket, true);
+			if (phase == ResourceAccount.Phase.RESERVED) {
+				assertEquals(1, notifications[0]);
+				assertTrue(restored.suspension().isEmpty());
+				assertNull(restored.productionTicket());
+				assertTrue(restored.canReserve(restored.reference(), Map.of(HYDROGEN, 100L)));
+				assertThrows(IllegalStateException.class, () -> restored.start(ticket));
+				produce(restored, 70);
 				assertEquals(70L, restored.available().get(HYDROGEN));
 			} else {
-				assertThrows(IllegalStateException.class, () -> restored.resolveProduction(OWNER, ticket, true));
-				restored.resolveProduction(OWNER, ticket, false);
-				assertTrue(restored.available().isEmpty());
+				assertEquals(0, notifications[0]);
+				assertFalse(restored.suspension().isEmpty());
+				assertFalse(restored.canReserve(restored.reference(), Map.of(HYDROGEN, 1L)));
+				if (phase == ResourceAccount.Phase.FROZEN) {
+					restored.resolveProduction(OWNER, ticket, true);
+					assertEquals(70L, restored.available().get(HYDROGEN));
+				} else {
+					assertThrows(IllegalStateException.class, () -> restored.resolveProduction(OWNER, ticket, true));
+					restored.resolveProduction(OWNER, ticket, false);
+					assertTrue(restored.available().isEmpty());
+				}
 			}
+		}
+	}
+
+	@Test void unstartedLaneRestoresOnceWithoutChangingBalancesWorkOrOtherUnknownRequests() {
+		for (boolean isolated : new boolean[]{false, true}) {
+			var store = new ResourceAccounts(() -> {});
+			var account = account(store);
+			produce(account, 90);
+			var work = new CompoundTag();
+			work.putInt("paid_ticks", 12);
+			work.putLong("seed", 17L);
+			work.putString("evidence", "保留原已付工作");
+			account.centrifugeWork.put(0, work.copy());
+			var unknown = frozenLane(account, 1, 20, 7);
+			account.suspendProduction(unknown, "payment outcome unknown");
+			var unknownData = account.requestData(unknown);
+			var context = new CompoundTag();
+			context.putString("host", "resource_centrifuging");
+			context.putInt("lane", 0);
+			context.put("work_before", work.copy());
+			context.putInt("input_before", 4);
+			context.putInt("input_consumed", 1);
+			context.putInt("next_ticks", 4);
+			context.putLong("energy_before", 100);
+			context.putLong("energy_cost", 25);
+			var reserved = account.reserve(account.reference(), 8, context, Map.of(HYDROGEN, 12L));
+			if (isolated) account.suspendProduction(reserved, "unfinished request restored from save");
+			var raw = store.save();
+			long nextSequence = account.nextSequence;
+			int[] notifications = {0};
+			var restoredStore = ResourceAccounts.load(raw, () -> notifications[0]++);
+			assertFalse(restoredStore.hasInvalidData());
+			assertEquals(1, notifications[0]);
+			var restored = restoredStore.find(account.reference().sourceId());
+			assertEquals(account.reference(), restored.reference());
+			assertEquals(BINDING, restored.binding());
+			assertEquals(nextSequence, restored.nextSequence);
+			assertEquals(account.availableExact(), restored.availableExact());
+			assertEquals(work, restored.centrifugeWork(0));
+			assertFalse(restored.laneSuspended(0));
+			assertTrue(restored.laneSuspended(1));
+			assertEquals(unknownData, restored.requestData(unknown));
+			assertThrows(IllegalStateException.class, () -> restored.requestData(reserved));
+			assertThrows(IllegalStateException.class, () -> restored.resolveProduction(OWNER, reserved, false));
+			assertTrue(restoredStore.reservedStorage() < store.reservedStorage());
+
+			var saved = restoredStore.save();
+			int[] repeated = {0};
+			var againStore = ResourceAccounts.load(saved, () -> repeated[0]++);
+			assertEquals(0, repeated[0]);
+			assertEquals(saved, againStore.save());
+			var again = againStore.find(account.reference().sourceId());
+			var replacement = again.reserve(again.reference(), 9, context, Map.of(HYDROGEN, 12L));
+			assertEquals(nextSequence, replacement.sequence());
+			again.start(replacement);
+			again.freeze(replacement, Map.of(HYDROGEN, 5L));
+			again.commit(replacement);
+			assertEquals(95L, again.available().get(HYDROGEN));
+			assertEquals(work, again.centrifugeWork(0));
+			assertTrue(again.laneSuspended(1));
+			assertEquals(unknownData, again.requestData(unknown));
+
+			var damaged = raw.copy();
+			var row = damaged.getList("accounts", 10).getCompound(0);
+			var pending = isolated
+					? row.getCompound("suspended_lanes").getCompound("0").getCompound("production")
+					: row.getCompound("production");
+			pending.put("result", ResourceExactAmounts.save(Map.of(HYDROGEN, java.math.BigInteger.ONE)));
+			int[] rejectedNotifications = {0};
+			var rejected = ResourceAccounts.load(damaged, () -> rejectedNotifications[0]++);
+			assertTrue(rejected.hasInvalidData());
+			assertEquals(damaged, rejected.save());
+			assertEquals(0, rejectedNotifications[0]);
+
+			var duplicate = raw.copy();
+			duplicate.getList("accounts", 10).add(raw.getList("accounts", 10).getCompound(0).copy());
+			var duplicateStore = ResourceAccounts.load(duplicate, () -> fail("invalid store must not migrate"));
+			assertTrue(duplicateStore.hasInvalidData());
+			assertEquals(duplicate, duplicateStore.save());
 		}
 	}
 
@@ -317,6 +410,84 @@ class ResourceAccountsMinecraftTest {
 		assertNull(restored.binding());
 	}
 
+
+	@Test void mechanicalLocalEmptyReservationKeepsOnlyItsOriginalSlotAcrossReload() {
+		var store = new ResourceAccounts(() -> {});
+		var binding = new ResourceAccount.Binding(ResourceLocation.parse("minecraft:overworld"), 123,
+				ResourceLocation.parse("productivebeesgenesis:mek_apiary"));
+		var account = store.create(OWNER, binding);
+		var context = new CompoundTag();
+		context.putString("host", "mek_apiary");
+		context.putString("bee", "example:zero_resource");
+		context.putInt("slot", 1);
+		var bee = new CompoundTag();
+		bee.putString("entity", "productivebees:configurable_bee");
+		bee.putString("type", "example:zero_resource");
+		context.put("bee_data", bee);
+		context.putInt("previous_ticks", 0);
+		context.putInt("next_ticks", 0);
+		context.putLong("cycles", 1);
+		context.putLong("energy_before", 100);
+		context.putLong("energy_cost", 1);
+
+		var original = store.save();
+		assertThrows(IllegalArgumentException.class,
+				() -> account.reserve(account.reference(), 1, new CompoundTag(), Map.of()));
+		var noWork = context.copy();
+		noWork.putLong("energy_cost", 0);
+		assertThrows(IllegalArgumentException.class, () -> account.reserve(account.reference(), 1, noWork, Map.of()));
+		var invalidSlot = context.copy();
+		invalidSlot.putInt("slot", 256);
+		assertThrows(IllegalArgumentException.class, () -> account.reserve(account.reference(), 1, invalidSlot, Map.of()));
+		assertEquals(original, store.save());
+
+		var ticket = account.reserve(account.reference(), 1, context, Map.of());
+		account.start(ticket);
+		account.freeze(ticket, Map.of());
+		account.suspendProduction(ticket, "Payment outcome uncertain");
+		assertTrue(account.laneSuspended(1));
+		assertTrue(account.canExtract(account.reference()));
+		var restoredStore = ResourceAccounts.load(store.save(), () -> {});
+		assertFalse(restoredStore.hasInvalidData());
+		var restored = restoredStore.find(account.reference().sourceId());
+		assertEquals(context, restored.productionContext(ticket));
+		assertTrue(restored.laneSuspended(1));
+		assertFalse(restored.laneSuspended(0));
+		assertTrue(restored.availableExact().isEmpty());
+		assertThrows(IllegalStateException.class, () -> restored.reserve(restored.reference(), 1, context, Map.of()));
+
+		var healthyContext = context.copy();
+		healthyContext.putInt("slot", 0);
+		var healthy = restored.reserve(restored.reference(), 1, healthyContext, Map.of());
+		restored.start(healthy);
+		restored.freeze(healthy, Map.of());
+		restored.commit(healthy);
+		assertTrue(restored.laneSuspended(1));
+		assertFalse(restored.laneSuspended(0));
+		assertEquals(ticket, restored.productionTicket());
+		restored.resolveProduction(OWNER, ticket, true);
+		assertFalse(restored.laneSuspended(1));
+		assertTrue(restored.availableExact().isEmpty());
+		assertThrows(IllegalStateException.class, () -> restored.resolveProduction(OWNER, ticket, true));
+
+		var local = context.copy();
+		local.putLong("energy_cost", 0);
+		var output = new CompoundTag();
+		output.putString("items_snbt", "[{id:\"minecraft:honeycomb\",count:1}]");
+		local.put("mixed_local", output);
+		var localTicket = restored.reserve(restored.reference(), 1, local, Map.of());
+		restored.start(localTicket);
+		restored.freeze(localTicket, Map.of());
+		restored.suspendProduction(localTicket, "Local output outcome uncertain");
+		var restoredLocalStore = ResourceAccounts.load(restoredStore.save(), () -> {});
+		assertFalse(restoredLocalStore.hasInvalidData());
+		var restoredLocal = restoredLocalStore.find(restored.reference().sourceId());
+		assertEquals(output, restoredLocal.productionContext(localTicket).getCompound("mixed_local"));
+		assertTrue(restoredLocal.availableExact().isEmpty());
+		restoredLocal.resolveProduction(OWNER, localTicket, true);
+		assertFalse(restoredLocal.laneSuspended(1));
+		assertTrue(restoredLocal.availableExact().isEmpty());
+	}
 
 	@Test void uncertainLanePreservesTicketAndAllowsOtherProductionAcrossReload() {
 		var store = new ResourceAccounts(() -> {});

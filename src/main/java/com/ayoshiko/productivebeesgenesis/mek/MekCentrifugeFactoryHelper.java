@@ -4,6 +4,10 @@ import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
 import com.ayoshiko.productivebeesgenesis.mek.ICachedRecipeBatchAccel;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.IAe2OutputHostBase;
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputLedger;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicEnergyContainerAccessor;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.RecipeCacheLookupMonitorAccessor;
 import com.ayoshiko.productivebeesgenesis.util.InputValidationCache;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
@@ -57,6 +61,34 @@ public final class MekCentrifugeFactoryHelper {
 	private MekCentrifugeFactoryHelper() {
 	}
 
+	/** 未决账本固定原数量，仅原物理槽暂缓插入和提取。 */
+	public static void bindOutputSettlement(PbRecipeContext context, int lane, int slotIndex, IInventorySlot slot) {
+		TieredInputSlot tiered = (TieredInputSlot) slot;
+		tiered.productivebeesgenesis$setOutputExtractionAllowed(() ->
+				!OutputCustody.of(context).localOutputBlocked()
+						&& !OutputCustody.of(context).localItemBlocked(lane * 3 + slotIndex)
+						&& !Ae2OutputLedger.blocks(context, lane, slotIndex)
+						&& (slotIndex != 0 || !smeltingProcessor(context).smeltingOutputLocked(lane)));
+		tiered.productivebeesgenesis$setOutputInsertionAllowed(() ->
+				!Ae2OutputLedger.blocks(context, lane, slotIndex)
+						&& (slotIndex != 0 || !smeltingProcessor(context).smeltingOutputLocked(lane)));
+	}
+
+	/** 已付熔炼余量仍拥有原输入；普通菜单及自动化仅隔离这一车道。 */
+	public static void bindInputSettlement(PbRecipeContext context, int lane, IInventorySlot slot) {
+		TieredInputSlot tiered = (TieredInputSlot) slot;
+		BooleanSupplier allowed = () -> !smeltingProcessor(context).smeltingInputLocked(lane);
+		tiered.productivebeesgenesis$setOutputInsertionAllowed(allowed);
+		tiered.productivebeesgenesis$setOutputExtractionAllowed(allowed);
+	}
+
+	private static PbRecipeProcessor smeltingProcessor(PbRecipeContext context) {
+		if (context instanceof IFactoryPbDelegateAccess factory) {
+			return factory.productivebeesgenesis$getPbProcessor();
+		}
+		return ((TileEntityMekCentrifuge) context).productivebeesgenesis$getPbProcessor();
+	}
+
 	/** Forces Mekanism to resolve the active recipe again after a per-tile recipe mode change. */
 	public static void invalidateRecipeMonitor(
 			mekanism.common.recipe.lookup.monitor.RecipeCacheLookupMonitor<?> monitor) {
@@ -95,131 +127,152 @@ public final class MekCentrifugeFactoryHelper {
 	/** 输出检查谓词 — 验证SMELTING配方输出与现有输出槽物品是否可堆叠 */
 	public static final TriPredicate<ItemStackToItemStackRecipe, ItemStack, ItemStack> OUTPUT_CHECK =
 			(recipe, input, output) -> InventoryUtils.areItemsStackable(recipe.getOutput(input), output);
-
 	/**
-	 * 轻量推进熔炼配方，并将本批次的虚拟 tick 能耗合并为一次容器写入。
-	 * <br/>
-	 * 已注入批处理接口的 lane 共享同一个 {@link BatchEnergyLedger}：每次配方计算只从
-	 * 「本地能量 - 已记账能量」读取预算，虚拟 tick 期间不访问 AE2 网络，
-	 * 批次结束后统一从 Mekanism 能量容器提取累计能耗。
-	 *
-	 * @param monitors 工厂的配方缓存监视器
-	 * @param batchMultiplier 批量倍率（≥2 时才有补调意义）
-	 * @param energyContainer 工厂本地能量容器
-	 * @return 是否有任意一次补调执行
+	 * 轻量推进熔炼配方；各车道独立准备与结算，虚拟 tick 共用一次本地能量扣账。
 	 */
 	public static boolean runLightSmeltingTicks(@NotNull RecipeCacheLookupMonitor<?>[] monitors,
-			int batchMultiplier, @NotNull MachineEnergyContainer<?> energyContainer) {
+			int batchMultiplier, @NotNull MachineEnergyContainer<?> energyContainer, PbRecipeProcessor processor) {
 		if (batchMultiplier <= 1 || monitors.length == 0) return false;
-		CachedRecipe<?>[] cachedRecipes = currentSmeltingRecipes(monitors);
 		BatchEnergyLedger ledger = new BatchEnergyLedger();
-		int boundCount = 0;
-		boolean updated = false;
-		Throwable processingFailure = null;
 		try (BatchEnergyLedger.Scope ignored = BatchEnergyLedger.activate(ledger)) {
-			int extraTicks = batchMultiplier - 1;
-			for (int index = 0; index < cachedRecipes.length; index++) {
-				boundCount = index + 1;
-				if (cachedRecipes[index] instanceof ICachedRecipeBatchAccel accel) {
-					accel.productivebeesgenesis$bindBatchEnergyLedger(ledger);
-					accel.productivebeesgenesis$startBatch(extraTicks);
-				}
+			CachedRecipe<?>[] cached = currentSmeltingRecipes(monitors, processor);
+			try {
+				return runSmeltingExtraTicks(cached, batchMultiplier - 1, ledger, processor);
+			} finally {
+				finishSmeltingBatch(cached, ledger, energyContainer, processor);
 			}
-			for (CachedRecipe<?> cached : cachedRecipes) {
-				if (cached == null) continue;
-				for (int j = 0; j < extraTicks; j++) {
-					cached.process();
-					updated = true;
-					if (cached instanceof ICachedRecipeBatchAccel accel
-							&& accel.productivebeesgenesis$isBatchExhausted()) break;
-				}
-			}
-		} catch (RuntimeException | Error failure) {
-			processingFailure = failure;
-			throw failure;
-		} finally {
-			finishSmeltingBatch(cachedRecipes, boundCount, ledger, energyContainer, processingFailure);
 		}
-		return updated;
 	}
 
-	/**
-	 * 完整 tick 后捕获当前缓存；整批共享费用，并在异常路径撤销所有已绑定会话。
-	 */
+	/** 首个真实 tick 与补 tick 共用原账本，车道准备故障不退出后续健康车道。 */
 	public static boolean runSmeltingBatch(@NotNull RecipeCacheLookupMonitor<?>[] monitors,
 			int batchMultiplier, @NotNull MachineEnergyContainer<?> energyContainer,
-			@NotNull BooleanSupplier fullTick) {
+			@NotNull BooleanSupplier fullTick, PbRecipeProcessor processor) {
 		if (batchMultiplier <= 1 || monitors.length == 0) return fullTick.getAsBoolean();
 		BatchEnergyLedger ledger = new BatchEnergyLedger();
-		CachedRecipe<?>[] cachedRecipes = null;
-		int boundCount = 0;
-		boolean updated = false;
-		Throwable processingFailure = null;
+		CachedRecipe<?>[] cached = new CachedRecipe<?>[monitors.length];
 		try (BatchEnergyLedger.Scope ignored = BatchEnergyLedger.activate(ledger)) {
-			// 兼容父类可能不传递 AE2 补能 listener；完整计算前恢复旧断电暂停。
-			for (RecipeCacheLookupMonitor<?> monitor : monitors) monitor.unpause();
-			updated = fullTick.getAsBoolean();
-			int extraTicks = batchMultiplier - 1;
-			cachedRecipes = currentSmeltingRecipes(monitors);
-			for (int index = 0; index < cachedRecipes.length; index++) {
-				boundCount = index + 1;
-				if (cachedRecipes[index] instanceof ICachedRecipeBatchAccel accel) {
+			try {
+				for (int lane = 0; lane < monitors.length; lane++) {
+					try {
+						monitors[lane].unpause();
+					} catch (RuntimeException | LinkageError failure) {
+						processor.reportLaneFailure(lane, "熔炼解除旧断电暂停", failure);
+					}
+				}
+				boolean updated = fullTick.getAsBoolean();
+				cached = currentSmeltingRecipes(monitors, processor);
+				return runSmeltingExtraTicks(cached, batchMultiplier - 1, ledger, processor) || updated;
+			} finally {
+				finishSmeltingBatch(cached, ledger, energyContainer, processor);
+			}
+		}
+	}
+
+	/** 首 tick 原 monitor 负责缓存更新；准备异常无资产副作用，下一真实 tick 可自然重试。 */
+	public static boolean processSmeltingMonitor(PbRecipeProcessor processor, int lane, BooleanSupplier updateAndProcess) {
+		try {
+			if (!processor.prepareSmeltingLane(lane)) return false;
+			return updateAndProcess.getAsBoolean();
+		} catch (RuntimeException | LinkageError failure) {
+			processor.reportLaneFailure(lane, "熔炼缓存准备", failure);
+			return false;
+		}
+	}
+
+	private static CachedRecipe<?>[] currentSmeltingRecipes(@NotNull RecipeCacheLookupMonitor<?>[] monitors,
+			PbRecipeProcessor processor) {
+		CachedRecipe<?>[] cached = new CachedRecipe<?>[monitors.length];
+		for (int lane = 0; lane < monitors.length; lane++) {
+			try {
+				if (processor.canProcessSmeltingLane(lane)) cached[lane] = monitors[lane].getCachedRecipe(lane);
+			} catch (RuntimeException | LinkageError failure) {
+				processor.reportLaneFailure(lane, "熔炼缓存快照读取", failure);
+			}
+		}
+		return cached;
+	}
+
+	private static boolean runSmeltingExtraTicks(CachedRecipe<?>[] cached, int ticks,
+			BatchEnergyLedger ledger, PbRecipeProcessor processor) {
+		boolean updated = false;
+		for (int lane = 0; lane < cached.length; lane++) {
+			CachedRecipe<?> recipe = cached[lane];
+			if (recipe == null) continue;
+			if (recipe instanceof ICachedRecipeBatchAccel accel) {
+				try {
 					accel.productivebeesgenesis$bindBatchEnergyLedger(ledger);
-					accel.productivebeesgenesis$startBatch(extraTicks);
+					accel.productivebeesgenesis$startBatch(ticks);
+				} catch (RuntimeException | LinkageError failure) {
+					processor.reportLaneFailure(lane, "熔炼加速准备", failure);
+					continue;
 				}
 			}
-			for (CachedRecipe<?> cached : cachedRecipes) {
-				if (cached == null) continue;
-				if (cached instanceof ICachedRecipeBatchAccel accel) {
-					for (int j = 0; j < extraTicks && !accel.productivebeesgenesis$isBatchExhausted(); j++) {
-						cached.process();
-						updated = true;
-					}
-				} else {
-					for (int j = 0; j < extraTicks; j++) {
-						cached.process();
-						updated = true;
-					}
+			try {
+				for (int tick = 0; tick < ticks && processor.canProcessSmeltingLane(lane); tick++) {
+					if (recipe instanceof ICachedRecipeBatchAccel accel
+							&& accel.productivebeesgenesis$isBatchExhausted()) break;
+					recipe.process();
+					updated = true;
 				}
+			} catch (RuntimeException | LinkageError failure) {
+				// 本模组正式缓存自行核对输入和输出；未知第三方缓存仍保管原车道，不能重跑。
+				processor.smeltingWork().retainUnknownProcess(lane, "processing", failure);
 			}
-		} catch (RuntimeException | Error failure) {
-			processingFailure = failure;
-			throw failure;
-		} finally {
-			finishSmeltingBatch(cachedRecipes, boundCount, ledger, energyContainer, processingFailure);
 		}
 		return updated;
 	}
 
-	/** 数组是单批次快照；保留空 lane 位置，避免为缓存和加速接口各分配一份列表。 */
-	private static CachedRecipe<?>[] currentSmeltingRecipes(@NotNull RecipeCacheLookupMonitor<?>[] monitors) {
-		CachedRecipe<?>[] cachedRecipes = new CachedRecipe<?>[monitors.length];
-		for (int i = 0; i < monitors.length; i++) cachedRecipes[i] = monitors[i].getCachedRecipe(i);
-		return cachedRecipes;
-	}
-
-	private static void finishSmeltingBatch(CachedRecipe<?>[] cachedRecipes, int boundCount,
-			BatchEnergyLedger ledger, MachineEnergyContainer<?> energyContainer, Throwable processingFailure) {
-		RuntimeException failure = null;
-		for (int index = 0; index < boundCount; index++) {
-			if (!(cachedRecipes[index] instanceof ICachedRecipeBatchAccel accel)) continue;
+	private static void finishSmeltingBatch(CachedRecipe<?>[] cached, BatchEnergyLedger ledger,
+			MachineEnergyContainer<?> energyContainer, PbRecipeProcessor processor) {
+		for (int lane = 0; lane < cached.length; lane++) {
+			if (!(cached[lane] instanceof ICachedRecipeBatchAccel accel)) continue;
 			try {
 				accel.productivebeesgenesis$finishBatch();
-			} catch (RuntimeException cleanupFailure) {
-				if (failure == null) failure = cleanupFailure;
-				else failure.addSuppressed(cleanupFailure);
+			} catch (RuntimeException | LinkageError failure) {
+				// finishBatch 的正式实现只撤销纯内存窗口，没有输入、输出或费用接收副作用。
+				processor.reportLaneFailure(lane, "熔炼加速窗口关闭", failure);
 			}
 		}
+		long requested = ledger.pendingEnergy();
+		if (requested == 0) return;
+		long before;
 		try {
-			ledger.flush(energyContainer);
-		} catch (RuntimeException debitFailure) {
-			if (failure == null) failure = debitFailure;
-			else failure.addSuppressed(debitFailure);
+			before = energyContainer.getEnergy();
+		} catch (RuntimeException | LinkageError failure) {
+			processor.smeltingWork().retainEnergy(requested, false, failure);
+			ledger.reset();
+			return;
 		}
-		if (failure != null) {
-			if (processingFailure != null) processingFailure.addSuppressed(failure);
-			else throw failure;
+		long charged;
+		try {
+			charged = energyContainer.extract(requested, mekanism.api.Action.EXECUTE,
+					mekanism.api.AutomationType.INTERNAL);
+		} catch (RuntimeException | LinkageError failure) {
+			boolean unknown = false;
+			charged = 0;
+			try {
+				charged = before - ((BasicEnergyContainerAccessor) energyContainer).productivebeesgenesis$getStored();
+				if (charged < 0 || charged > requested) throw new IllegalStateException("Smelting energy debit cannot be reconciled");
+			} catch (RuntimeException | LinkageError readFailure) {
+				failure.addSuppressed(readFailure);
+				unknown = true;
+			}
+			if (unknown) {
+				processor.smeltingWork().retainEnergy(requested, true, failure);
+			} else if (charged < requested) {
+				processor.smeltingWork().retainEnergy(requested - charged, false, failure);
+			} else {
+				processor.reportLaneFailure(0, "熔炼能量扣账通知已结算", failure);
+			}
+			ledger.reset();
+			return;
 		}
+		if (charged != requested) {
+			processor.smeltingWork().retainEnergy(requested - charged, false,
+					new IllegalStateException("Smelting batch energy was only partly debited"));
+		}
+		ledger.reset();
 	}
 
 	/** 工厂跟踪的配方错误类型（原版工厂构造函数使用） */
@@ -382,7 +435,11 @@ public final class MekCentrifugeFactoryHelper {
 		int processStart = pbProcessor.getAndAdvanceProcessStart(processes);
 		int remainingInputLanes = 0;
 		for (int i = 0; i < processes; i++) {
-			if (!inputSlots.get(i).getStack().isEmpty()) remainingInputLanes++;
+			try {
+				if (!inputSlots.get(i).getStack().isEmpty()) remainingInputLanes++;
+			} catch (RuntimeException | LinkageError failure) {
+				pbProcessor.reportLaneFailure(i, "输入资格读取", failure);
+			}
 		}
 		// Remaining PB energy budget for this tick; debit only actual consumption so
 		// a shared buffer cannot be over-committed across parallel lanes.
@@ -391,57 +448,44 @@ public final class MekCentrifugeFactoryHelper {
 		try {
 			for (int processOffset = 0; processOffset < processes; processOffset++) {
 				int i = (processStart + processOffset) % processes;
-				ItemStack input = inputSlots.get(i).getStack();
-				pbProcessor.updateFactoryInputState(i, input.isEmpty());
-				if (input.isEmpty()) {
-					continue;
-				}
-				// PB配方短路 — 万象创世蜜脾/蜜脾块或有PB离心配方的物品跳过 SMELTING 检查
-				// 原因：modularbees 为 c:honeycombs tag 注册了熔炼配方，导致所有 PB 蜜脾被 hasSmeltingRecipe 误判
-				long processEnergyBudget = PbProcessFairness.energyBudget(
-						remainingEnergy, remainingInputLanes);
-				remainingInputLanes--;
-				boolean isMyriad = MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
-						|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
-				RecipeHolder<CentrifugeRecipe> preFoundRecipe = null;
-				if (!isMyriad) {
-					preFoundRecipe = pbProcessor.hasReservedPbRecipe(i, input)
-							? pbProcessor.getReservedPbRecipe(i)
-							: pbProcessor.findPbRecipe(input);
-				}
-				if (isMyriad || preFoundRecipe != null) {
+				PbRecipeProcessor.LaneState previous = pbProcessor.getLaneState(i);
+				long energyBeforeProcess = energyContainer.getEnergy();
+				try {
+					pbProcessor.refreshLaneState(i);
+					ItemStack input = inputSlots.get(i).getStack();
+					pbProcessor.updateFactoryInputState(i, input.isEmpty());
+					if (input.isEmpty()) continue;
+					long processEnergyBudget = PbProcessFairness.energyBudget(
+							remainingEnergy, remainingInputLanes);
+					remainingInputLanes--;
+					// PB 配方优先于第三方 c:honeycombs 熔炼配方，保持蜜脾走离心路径。
+					boolean isMyriad = MyriadCreationsEventHandler.isMyriadCreationsHoneycomb(input)
+							|| MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
+					RecipeHolder<CentrifugeRecipe> preFoundRecipe = null;
+					if (!isMyriad) {
+						preFoundRecipe = pbProcessor.hasReservedPbRecipe(i, input)
+								? pbProcessor.getReservedPbRecipe(i)
+								: pbProcessor.findPbRecipe(input);
+					}
+					if (!isMyriad && preFoundRecipe == null && pbProcessor.hasSmeltingRecipe(i, input)) {
+						pbProcessor.resetPbState(i);
+						context.productivebeesgenesis$onProcessDeactivated(i);
+						pbProcessor.completeLaneRecovery(i);
+						continue;
+					}
 					pbProcessor.setTickMultiplier(batchMultiplier);
-					long energyBeforeProcess = energyContainer.getEnergy();
 					if (pbProcessor.tryProcessPbRecipe(i, preFoundRecipe, processEnergyBudget)) {
 						context.setPbActiveState(true, i);
 					} else {
 						context.productivebeesgenesis$onProcessDeactivated(i);
 					}
+				} catch (RuntimeException | LinkageError failure) {
+					pbProcessor.reportLaneFailure(i, "配方查找或空槽排空", failure);
+				} finally {
 					remainingEnergy = Math.max(0L,
 							remainingEnergy - Math.max(0L, energyBeforeProcess - energyContainer.getEnergy()));
-					continue;
+					pbProcessor.finishLaneAttempt(i, previous);
 				}
-				// 缓存SMELTING配方检查结果，输入变更时才重新查询
-				if (pbProcessor.hasSmeltingRecipe(i, input)) {
-					// SMELTING配方由super处理，跳过PB路径
-					// 修复：SMELTING 命中时必须重置 PB 状态，否则进度条显示旧 PB 进度而非 SMELTING 进度
-					// （与基础机器 MekCentrifugeTickHandler 对齐）
-					pbProcessor.resetPbState(i);
-					// Task 11: SMELTING 配方占用，PB 进程失活
-					context.productivebeesgenesis$onProcessDeactivated(i);
-					continue;
-				}
-				pbProcessor.setTickMultiplier(batchMultiplier);
-				long energyBeforeProcess = energyContainer.getEnergy();
-				if (pbProcessor.tryProcessPbRecipe(i, null, processEnergyBudget)) {
-					// setPbActiveState 同时更新激活计数和 Mekanism 状态。
-					context.setPbActiveState(true, i);
-				} else {
-					// Task 11: PB 处理失败，确保失活（pbProcessor 内部已 setPbActiveState(false)→onProcessDeactivated；此处状态守卫防重复）
-					context.productivebeesgenesis$onProcessDeactivated(i);
-				}
-				remainingEnergy = Math.max(0L,
-						remainingEnergy - Math.max(0L, energyBeforeProcess - energyContainer.getEnergy()));
 			}
 
 		} finally {

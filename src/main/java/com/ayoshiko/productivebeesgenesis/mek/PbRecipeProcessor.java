@@ -34,6 +34,21 @@ public class PbRecipeProcessor {
 	private static final String NBT_COMMITTED_PENDING = "productivebeesgenesis_pb_committed_pending";
 	private static final String NBT_PAID_WORK = "productivebeesgenesis_pb_paid_work";
 
+	/** 只描述当前车道的故障；资产所有权仍由原付款、输入和输出记录保存。 */
+	public enum LaneState {
+		READY,
+		PROCESSING_FAILED,
+		PAYMENT_UNCERTAIN,
+		INPUT_UNCERTAIN,
+		OUTPUT_UNCERTAIN,
+		RESOURCE_UNCERTAIN,
+		SMELTING_PENDING,
+		SHARED_PAYMENT_UNCERTAIN,
+		PAYMENT_PENDING
+	}
+
+	private static final LaneState[] LANE_STATES = LaneState.values();
+
 	/** PB配方处理上下文 — 由Factory TileEntity提供 */
 	private final PbRecipeContext context;
 
@@ -51,6 +66,7 @@ public class PbRecipeProcessor {
 
 	/** PB配方处理总时间（tick） — 每进程独立，同步到客户端用于进度条显示 */
 	private final int[] pbProcessingTime;
+	private final int[] laneStates;
 
 	/** PB离心配方缓存 — 每进程独立 */
 	@Nullable
@@ -91,6 +107,7 @@ public class PbRecipeProcessor {
 
 	/** SMELTING配方缓存（封装每进程的输入到SMELTING配方存在性映射） */
 	private final SmeltingRecipeCache smeltingCache;
+	private final SmeltingWorkState smeltingWork;
 
 	/** 上次缓存时的配方版本号 — 用于检测配方重载，volatile 保证可见性 */
 	private volatile long lastRecipeVersion = -1L;
@@ -147,6 +164,7 @@ public class PbRecipeProcessor {
 		this.pbProcessing = new boolean[processes];
 		this.emptyFactoryProcesses = new boolean[processes];
 		this.pbProcessingTime = new int[processes];
+		this.laneStates = new int[processes];
 		this.paidWork = new PbRecipeProcessorStateHelper.PaidWork[processes];
 		this.paidWorkCache = new PbPaidWorkCache(processes);
 		this.factoryPendingAttempted = new boolean[processes];
@@ -156,6 +174,7 @@ public class PbRecipeProcessor {
 		this.resumePaidCycle = new boolean[processes];
 		Arrays.fill(legacyInputs, ItemStack.EMPTY);
 		this.smeltingCache = new SmeltingRecipeCache(processes);
+		this.smeltingWork = new SmeltingWorkState(context, this, processes);
 		this.cachedPbRecipes = new RecipeHolder[processes];
 		this.reservedPbInputs = new ItemStack[processes];
 		this.reservedPbRecipes = new RecipeHolder[processes];
@@ -229,9 +248,14 @@ public class PbRecipeProcessor {
 		try {
 			for (int offset = 0; offset < recipeCompleters.length; offset++) {
 				int lane = (processStart + offset) % recipeCompleters.length;
-				PbRecipeCompleter owner = recipeCompleters[lane];
-				if (!owner.hasPaidPendingOutputs() || MekResourceCentrifuge.suspended(context, lane)) continue;
-				factoryPendingAttempted[lane] = factoryOutputBatch.defer(owner, lane);
+				try {
+					PbRecipeCompleter owner = recipeCompleters[lane];
+					recoverKnownPayment(lane);
+					if (!owner.hasPaidPendingOutputs() || MekResourceCentrifuge.suspended(context, lane)) continue;
+					factoryPendingAttempted[lane] = factoryOutputBatch.defer(owner, lane);
+				} catch (RuntimeException | LinkageError failure) {
+					reportLaneFailure(lane, "付款恢复或已付产物排空", failure);
+				}
 			}
 		} finally {
 			factoryOutputBatch.finish();
@@ -293,7 +317,7 @@ public class PbRecipeProcessor {
 		reservedPbRecipeCacheTick = tick;
 		reservedPbRecipeCacheVersion = ProductiveBeesGenesis.RECIPE_VERSION.get();
 		PbRecipeProcessorStateHelper.reserveActiveFluidOutputTypes(context, inputSlots, recipeFinder,
-				reservedPbInputs, reservedPbRecipes, reservedFluidTypes);
+				reservedPbInputs, reservedPbRecipes, reservedFluidTypes, this);
 	}
 
 	// ===== SMELTING配方缓存检查 =====
@@ -441,6 +465,7 @@ public class PbRecipeProcessor {
 	}
 
 	public boolean hasUnresolvedWork() {
+		if (smeltingWork.hasUnresolved()) return true;
 		if (invalidCommittedPending != null || invalidPaidWork != null || myriadHandler.hasUnresolvedState()) return true;
 		for (PbRecipeCompleter completer : recipeCompleters) {
 			if (completer.invalidPending() || completer.paymentRequest() != null) return true;
@@ -504,19 +529,17 @@ public class PbRecipeProcessor {
 	/** Processes one lane without allowing it to consume another lane's reserved energy. */
 	public boolean tryProcessPbRecipe(int processIndex, RecipeHolder<CentrifugeRecipe> preFoundRecipe,
 			long energyBudget) {
-		factoryOutputBatch.beforeOwnerMutation();
+		LaneState previous = getLaneState(processIndex);
 		try {
+			factoryOutputBatch.beforeOwnerMutation();
+			refreshLaneState(processIndex);
 			return tryProcessPbRecipeInternal(processIndex, preFoundRecipe, energyBudget);
-		} catch (Exception e) {
-			// 捕获异常防止tick崩溃，记录错误日志并重置PB状态（节流避免刷屏，Task 15 ms 时间源）
-			final Exception cause = e;
-			pbErrorThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
-				ProductiveBeesGenesis.LOGGER.error("tryProcessPbRecipe 进程{}异常，暂停并保留已付工作"
-						+ (suppressed > 0 ? " (抑制 " + suppressed + " 次)" : ""), processIndex, cause);
-			});
-			pbProcessing[processIndex] = false;
-			context.setPbActiveState(false, processIndex);
+		} catch (RuntimeException | LinkageError failure) {
+			reportLaneFailure(processIndex, "processing", failure);
 			return false;
+		} finally {
+			if (factoryPassActive) refreshOwnedLaneState(processIndex);
+			else finishLaneAttempt(processIndex, previous);
 		}
 	}
 
@@ -524,16 +547,19 @@ public class PbRecipeProcessor {
 			long energyBudget) {
 		Level level = context.level();
 		if (level == null || level.isClientSide) return false;
-		if (!context.canFunction() || context.hasUnresolvedInput()
+		if (!context.canFunction() || context.hasUnresolvedInput() || smeltingWork.blocked(processIndex)
 				|| invalidCommittedPending != null || invalidPaidWork != null) return false;
 		checkRecipeVersion();
 		PbRecipeCompleter completer = recipeCompleters[processIndex];
 		if (MekResourceCentrifuge.suspended(context, processIndex)) return false;
-		if (completer.hasPaidPendingOutputs()
-				&& (factoryPendingAttempted[processIndex]
-						|| !PbRecipeFlushHelper.flushCompleted(completer, processIndex))) {
-			pbProcessing[processIndex] = false;
-			return false;
+		recoverKnownPayment(processIndex);
+		if (completer.hasPaidPendingOutputs()) {
+			if (factoryPendingAttempted[processIndex]
+					|| !PbRecipeFlushHelper.flushCompleted(completer, processIndex)) {
+				pbProcessing[processIndex] = false;
+				return false;
+			}
+			completeLaneRecovery(processIndex);
 		}
 		if (!myriadHandler.drainPendingOutputs(processIndex)) return false;
 
@@ -569,6 +595,7 @@ public class PbRecipeProcessor {
 				boolean working = resourceResult == com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.Result.WORKING;
 				pbProcessing[processIndex] = working;
 				context.setPbActiveState(working, processIndex);
+				if (working && pbOperatingTicks[processIndex] == 0) completeLaneRecovery(processIndex);
 				return working;
 			}
 		}
@@ -589,6 +616,7 @@ public class PbRecipeProcessor {
 					resumePaidCycle[processIndex]);
 			if (pbOperatingTicks[processIndex] == 0 && !completer.paymentPending()) releasePaidWork(processIndex);
 			context.productivebeesgenesis$markForSave();
+			if (result && pbOperatingTicks[processIndex] == 0) completeLaneRecovery(processIndex);
 			return result;
 		}
 		RecipeHolder<CentrifugeRecipe> pbRecipe;
@@ -639,17 +667,17 @@ public class PbRecipeProcessor {
 			pbProcessing[processIndex] = false;
 			return false;
 		}
+		int completed = plan.completedOperations();
+		PbRecipeCompleter batch = completed == 0 ? null
+				: completer.prepareCompleted(recipeValue, completed, level.random.nextLong());
+		if (batch != null) completeLaneRecovery(processIndex);
 		if (!pausedWork.reserve(processIndex, work, level.registryAccess())) {
 			pbProcessing[processIndex] = false;
 			return false;
 		}
 		paidWork[processIndex] = work;
-		int completed = plan.completedOperations();
-		if (completed > 0) {
-			completer.accumulatePbRecipeOutputsBatch(recipeValue, processIndex, context.productivityModifier(), completed);
-			completer.freezeCompletedBatch(input);
-		}
-		if (!completer.payForPlan(plan, () -> pbOperatingTicks[processIndex] = plan.remainingProgress())) {
+		if (!completer.payForPrepared(batch, input, completed, plan,
+				() -> pbOperatingTicks[processIndex] = plan.remainingProgress())) {
 			pbProcessing[processIndex] = false;
 			return false;
 		}
@@ -677,9 +705,12 @@ public class PbRecipeProcessor {
 		PbRecipeCompleter completer = recipeCompleters[processIndex];
 		if (MekResourceCentrifuge.suspended(context, processIndex)) return false;
 		if (!myriadHandler.drainPendingOutputs(processIndex)) return false;
+		recoverKnownPayment(processIndex);
 		if (!completer.hasPaidPendingOutputs()) return false;
 		if (factoryPendingAttempted[processIndex]) return false;
-		return PbRecipeFlushHelper.flushCompleted(completer, processIndex);
+		boolean drained = PbRecipeFlushHelper.flushCompleted(completer, processIndex);
+		if (drained) completeLaneRecovery(processIndex);
+		return drained;
 	}
 
 	/** 空进程只在进入空闲时清理一次，已提交产物仍每刻重试排空。 */
@@ -748,6 +779,69 @@ public class PbRecipeProcessor {
 				recipeCompleters[processIndex]);
 	}
 
+	public LaneState getLaneState(int lane) {
+		return LANE_STATES[laneStates[lane]];
+	}
+
+	/** 只刷新持久所有者状态；未实际重试的准备故障继续显示。 */
+	public void refreshLaneState(int lane) {
+		refreshOwnedLaneState(lane);
+	}
+
+	/** 只由成功准备、排空或已确认的有效转路清除瞬态故障。 */
+	public void completeLaneRecovery(int lane) {
+		if (getLaneState(lane) != LaneState.PROCESSING_FAILED) return;
+		laneStates[lane] = LaneState.READY.ordinal();
+		refreshOwnedLaneState(lane);
+		if (getLaneState(lane) == LaneState.READY) {
+			ProductiveBeesGenesis.LOGGER.info("{} 车道 {} 已恢复，位置 {}", logPrefix, lane,
+					context instanceof net.minecraft.world.level.block.entity.BlockEntity entity ? entity.getBlockPos() : "unknown");
+		}
+	}
+
+	/** 所有者状态在处理结束后再发布；只有本次实际重试恢复才记录恢复。 */
+	public void finishLaneAttempt(int lane, LaneState previous) {
+		refreshOwnedLaneState(lane);
+		if (previous != LaneState.READY && previous != LaneState.PROCESSING_FAILED
+				&& getLaneState(lane) == LaneState.READY) {
+			ProductiveBeesGenesis.LOGGER.info("{} 车道 {} 已恢复，位置 {}", logPrefix, lane,
+					context instanceof net.minecraft.world.level.block.entity.BlockEntity entity ? entity.getBlockPos() : "unknown");
+		}
+	}
+
+	private void refreshOwnedLaneState(int lane) {
+		if (getLaneState(lane) != LaneState.PROCESSING_FAILED) laneStates[lane] = LaneState.READY.ordinal();
+		PbRecipeCompleter owner = recipeCompleters[lane];
+		LaneState smeltingState = smeltingWork.laneState(lane);
+		if (smeltingState != null) {
+			laneStates[lane] = smeltingState.ordinal();
+		} else if (owner.outputUncertainPending()) {
+			laneStates[lane] = LaneState.OUTPUT_UNCERTAIN.ordinal();
+		} else if (owner.paymentPending()) {
+			laneStates[lane] = (owner.knownPaymentPending() ? LaneState.PAYMENT_PENDING : LaneState.PAYMENT_UNCERTAIN).ordinal();
+		} else if (owner.invalidPending() || invalidCommittedPending != null || invalidPaidWork != null
+				|| context.hasUnresolvedInput()) {
+			laneStates[lane] = LaneState.INPUT_UNCERTAIN.ordinal();
+		} else if (MekResourceCentrifuge.suspended(context, lane)) {
+			laneStates[lane] = LaneState.RESOURCE_UNCERTAIN.ordinal();
+		} else if (PbRecipeFlusher.outputBlocked(context, lane)) {
+			laneStates[lane] = LaneState.OUTPUT_UNCERTAIN.ordinal();
+		}
+	}
+
+	public void reportLaneFailure(int lane, String phase, Throwable failure) {
+		laneStates[lane] = LaneState.PROCESSING_FAILED.ordinal();
+		refreshOwnedLaneState(lane);
+		pbProcessing[lane] = false;
+		context.productivebeesgenesis$onProcessDeactivated(lane);
+		pbErrorThrottle.tryLogMs(System.currentTimeMillis(), suppressed -> {
+			ProductiveBeesGenesis.LOGGER.error("{} 车道 {} 的 {} 失败，位置 {}，原输入与已付状态保留{}",
+					logPrefix, lane, phase,
+					context instanceof net.minecraft.world.level.block.entity.BlockEntity entity ? entity.getBlockPos() : "unknown",
+					suppressed > 0 ? " (抑制 " + suppressed + " 次)" : "", failure);
+		});
+	}
+
 	// ===== 客户端同步和持久化 =====
 
 	/**
@@ -781,6 +875,72 @@ public class PbRecipeProcessor {
 	public void addContainerTrackers(MekanismContainer container) {
 		PbRecipeProcessorStateHelper.addContainerTrackers(container, context.processes(), syncedOperatingTicks, pbProcessing,
 			pbProcessingTime);
+		container.trackArray(laneStates);
+	}
+
+	private void recoverKnownPayment(int lane) {
+		PbRecipeCompleter owner = recipeCompleters[lane];
+		if (!owner.paymentPending()) return;
+		Level level = context.level();
+		if (level == null || level.isClientSide) return;
+		owner.recoverKnownPayment(lane, progress -> {
+			pbOperatingTicks[lane] = progress;
+			if (progress == 0) releasePaidWork(lane);
+		});
+	}
+
+	SmeltingWorkState smeltingWork() {
+		return smeltingWork;
+	}
+
+	public boolean canProcessSmeltingLane(int lane) {
+		return !smeltingWork.blocked(lane);
+	}
+
+	public boolean prepareSmeltingLane(int lane) {
+		smeltingWork.retryInvalidOnFirstTick(context.level().registryAccess());
+		return smeltingWork.retryEnergy() && smeltingWork.retryCompletion(lane);
+	}
+
+	public boolean hasInvalidSmeltingData() {
+		return smeltingWork.hasInvalidData();
+	}
+
+	public void retrySmeltingData(HolderLookup.Provider provider) {
+		smeltingWork.retryInvalidData(provider);
+	}
+
+	/** 健康时复用原排序数组；只有实际未决输入才排除其来源和目标。 */
+	public <T> T[] sortableSmeltingInputs(T[] inputs, java.util.function.ToIntFunction<T> lane) {
+		if (!smeltingWork.hasInputLocks()) return inputs;
+		return Arrays.stream(inputs).filter(input -> !smeltingWork.inputLocked(lane.applyAsInt(input)))
+				.toArray(length -> Arrays.copyOf(inputs, length));
+	}
+
+	public boolean smeltingInputLocked(int lane) {
+		return smeltingWork.inputLocked(lane);
+	}
+
+	public boolean smeltingOutputLocked(int lane) {
+		return smeltingWork.outputLocked(lane);
+	}
+
+	public boolean hasSmeltingOutputLocks() {
+		return smeltingWork.hasOutputLocks();
+	}
+
+	public boolean hasSmeltingPaymentPending() {
+		return smeltingWork.sharedEnergyBlocked();
+	}
+
+	public record SmeltingStatus(int lane, java.util.UUID request, String phase, long energy, String failure) {}
+
+	public java.util.List<SmeltingStatus> smeltingStatus() {
+		return smeltingWork.status();
+	}
+
+	public void confirmSmeltingSettled(java.util.UUID request) {
+		smeltingWork.confirmSettled(request);
 	}
 
 	public record PaymentStatus(int lane, java.util.UUID request, long energy) {}
@@ -813,6 +973,7 @@ public class PbRecipeProcessor {
 	/** Persists PB progress to NBT (implementation moved to {@link PbRecipeProcessorStateHelper#saveAdditional}). */
 	public void saveAdditional(CompoundTag nbt, HolderLookup.Provider provider) {
 		cancelDeferredOutput();
+		smeltingWork.save(nbt, provider);
 		PbRecipeProcessorStateHelper.saveAdditional(nbt, pbOperatingTicks, pbProcessing, pbProcessingTime);
 		myriadHandler.saveAdditional(nbt);
 		savePaidWork(nbt, provider);
@@ -834,6 +995,7 @@ public class PbRecipeProcessor {
 	/** Restores PB progress from NBT (implementation moved to {@link PbRecipeProcessorStateHelper#loadAdditional}). */
 	public void loadAdditional(CompoundTag nbt, HolderLookup.Provider provider) {
 		factoryOutputBatch.beforeOwnerMutation();
+		smeltingWork.load(nbt, provider);
 		paidWorkCache.clear();
 		java.util.Arrays.fill(emptyFactoryProcesses, false);
 		PbRecipeProcessorStateHelper.loadAdditional(nbt, pbOperatingTicks, pbProcessing, pbProcessingTime);

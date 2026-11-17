@@ -477,6 +477,12 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 		return new Upgrade(host, state);
 	}
 
+	/** 升级失败且原机器尚未替换时取消准备，不改变账户引用、代际或资产。 */
+	public static void cancelUpgradePreparation(BlockEntity host) {
+		var state = existing(host);
+		if (state != null) state.upgradePrepared = false;
+	}
+
 	/** 仅由 LevelChunk 的真实移除／替换入口调用；正常卸载不进入这里。 */
 	public static boolean sameLiveReference(BlockEntity previous, BlockEntity replacement) {
 		if (previous == replacement || replacement == null || replacement.isRemoved()
@@ -488,8 +494,9 @@ public final class ResourceHiveHost implements INBTSerializable<CompoundTag> {
 				&& before.reference != null && before.reference.equals(after.reference);
 	}
 
-	public static void removed(net.minecraft.world.level.block.entity.BlockEntity entity) {
-		if (!supports(entity) || !(entity.getLevel() instanceof ServerLevel level)) return;
+	/** 当前生产适配器已失效时仍按原附件退役绑定；不执行旧宿主的生产或消费。 */
+	public static void removed(BlockEntity entity) {
+		if (!(entity.getLevel() instanceof ServerLevel level)) return;
 		var hive = entity;
 		var state = existing(hive);
 		if (state != null) state.productionMonitor = null;

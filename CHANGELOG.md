@@ -31,6 +31,32 @@
 
 ## [Unreleased]
 
+## [1.2.6] - 未发布候选
+
+**蜜脾块升级与机器自动恢复维护更新。** 客户端与服务端须一起更新。 / **Comb block upgrade and automatic machine recovery maintenance update.** Update clients and servers together.
+
+### 修复
+
+- **蜜脾块与欧米茄升级**：机械蜂箱读档和等级升级后立即按已恢复的 PB 升级生产，避免首批偶发普通蜜脾。普通采蜜的蜜脾映射与 PB 13.14.0 一致，保留数量和蜂种；已生成的旧库存保持原产物。
+- **单槽故障与自动恢复**：蜂箱某组生成准备或输出路由失败、离心工厂某车道加工失败时，其它正常生产继续；已付周期、原料和产物保留。升级后自动解除可确认的旧生成悬挂与零费用付款等待，本地输出回调异常按实际库存自动核对恢复，大容量槽位的原数量可完整保存。故障位置不会阻止健康位置继续自动弹出或写入 AE，已知回执扣账后的保存通知错误也不会永久冻结车道。故障状态与日志明确显示原因，实际恢复后才清除提示；缺乏凭据的外部交付未决继续单独保管。
+- **历史恢复与供料效率**：完整读档后自动撤销未进入消费阶段的旧资源预约；已有明确回执的 AE 输入余量自动收尾并保留原料／仅回网来源。等待资源出口的候选不再占用健康输入的供料份额。AE 已接收但本地尚未结清的账本仅锁原输出槽，避免后续生产或提取改写其凭据。升级源端清理失败在尚未交出数据的当前调用内撤销；旧原端状态完整一致时正常加载自动解除遗留暂停。
+- **已付大批产出与转换缓存**：超出单次展开预算的普通已付蜂箱周期按可生成的前段连续结算，余下原周期继续保管，不重新扣花源或费用。单花生产只按本次选中的花源分批，不因其它花源无谓缩批；全花模式保留全部花源产出。新保管周期不并入结果未知的旧组。转换准备异常不发布缓存键，条件恢复后重新匹配，避免沿用其它蜂种的转换配方。
+- **熔炼加速与健康槽位**：已完成扣料、出料或扣费后发生通知异常时，机器按实际已提交状态自动结清，继续使用剩余可支付的加速时间，保留已付进度、总产量和费用。未决输入或输出只保护对应原槽位，健康车道继续生产、自动排序和输出。
+- **本地付款与抽取回执**：资源蜂及普通／万象离心路线在已扣能量后通知失败时，按本地实际扣量结清；已知未付余费保存并自动续付，保留原进度和产物。自有物品／流体输出扣量后的通知失败仍返回完整实际抽取量，交接准备失败保留已交前缀并回填剩余资产。AE 存储总线与主动输出统一排除未决熔炼主槽，健康副输出继续。
+- **故障提示**：离心车道区分已知费用待结清与真实费用未决；Jade 分别显示准备失败、资源等待与交付保管，不再把这些状态汇总成容量等待。
+
+### English
+
+#### Fixed
+
+- **Comb Block and Omega upgrades**: mechanical apiaries use restored PB upgrades immediately after loading or tier upgrades, preventing ordinary combs in the first batches. Normal honeycomb conversion follows PB 13.14.0 while preserving quantities and bee types; previously generated inventory retains its original outputs.
+- **Per-slot failures and automatic recovery**: a failed bee group, output route or centrifuge factory lane allows healthy production to continue while preserving paid cycles, inputs and outputs. Updating the mod automatically resumes verifiable legacy generation requests and zero-cost payment waits, and local output callback errors reconcile against actual inventory with complete original counts for large-capacity slots. A failed location allows healthy locations to continue automatic ejection and AE output, and save-notification errors after known receipts no longer permanently freeze a lane. Clear states and logs retain the cause until recovery succeeds; external transfers without a verifiable receipt remain separately retained.
+- **Legacy recovery and input throughput**: fully validated loads cancel legacy resource reservations that never entered consumption. Known AE input remainders settle automatically while preserving their local-input or network-return origin. Candidates waiting for resource outlets no longer consume healthy input shares. Accepted AE output receipts protect only their original slots until the local debit settles, keeping subsequent production and extraction from changing the evidence. Source-side upgrade clearing failures roll back before data is handed off; intact legacy source records automatically resume after complete loading.
+- **Large paid outputs and conversion caches**: ordinary paid apiary cycles exceeding the per-generation expansion budget settle in fitting prefixes, preserving the remaining cycles without charging flowers or energy again. Single-flower production budgets only the selected flower, avoiding unnecessary batch reductions caused by other flowers; all-flower mode retains every flower's output. Newly retained cycles stay separate from older groups with unknown outcomes. Failed conversion preparation does not publish cache keys, allowing a fresh match after recovery and preventing another bee type's recipe from being reused.
+- **Smelting acceleration and healthy slots**: notification errors after confirmed input, output or energy changes reconcile against committed machine state, allowing the remaining affordable acceleration time to continue while preserving paid progress, output totals and energy costs. Unresolved inputs or outputs protect their original slots; healthy lanes continue processing, automatic sorting and output.
+- **Local payments and extraction receipts**: resource bees and normal or Myriad centrifuge processing reconcile notification failures against actual local energy debits. Known unpaid remainders are saved and paid automatically while preserving the original progress and outputs. Notification failures after local item or fluid extraction still return the complete actual receipt; failed handoff preparation preserves delivered prefixes and returns the remaining assets. AE storage buses and active output consistently exclude unresolved smelting primary slots while healthy secondary outputs continue.
+- **Failure messages**: centrifuge lanes distinguish known payment remainders awaiting settlement from uncertain debits. Jade reports preparation failures, resource waits and retained transfers separately instead of counting them as capacity waits.
+
 ## [1.2.5] - 2026-11-14
 
 **AE2 供能与大数结算修复。** 客户端与服务端须一起更新。 / **AE2 energy and large-quantity fixes.** Update clients and servers together.

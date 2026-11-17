@@ -79,10 +79,24 @@ public final class Ae2InputPuller {
 		// Spark 优化：缓存 holder 到局部变量，消除后续 10+ 次冗余 getAe2StateHolder() 接口分发
 		// （每次2层接口分发：getLifecycleHandler→getStateHolder，热力图显示为热点）
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
-		if (holder == null || holder.getPendingItemBuffer().isBlocked()) return;
+		if (holder == null) return;
 		Level level = host.productivebeesgenesis$getAe2Level();
 		if (level == null) return;
 		long currentTick = level.getGameTime();
+		if (holder.getPendingItemBuffer().recoverKnownTransfer(currentTick)) host.productivebeesgenesis$markAe2StateChanged();
+		boolean pendingRetriedEarly = false;
+		if (holder.getPendingItemBuffer().isBlocked()) {
+			if (!holder.getPendingItemBuffer().hasRecoverableKnownTransfer()) return;
+			MEStorage recoveryStorage = !holder.getPushState().getReturnBackoff().shouldSkip(System.nanoTime())
+					&& holder.getPushState().getCachedNodeState(host) == Ae2GridNodeManager.STATE_ONLINE
+					? Ae2GridNodeManager.getCachedMeStorage(holder, host) : null;
+			if (Ae2LeftoverReturner.retryPendingItems(level, holder, recoveryStorage, List.of(), currentTick,
+					host instanceof BlockEntity entity ? entity : null, ActionSourceHolder.INSTANCE)) {
+				host.productivebeesgenesis$markAe2StateChanged();
+			}
+			pendingRetriedEarly = true;
+			if (holder.getPendingItemBuffer().isBlocked()) return;
+		}
 		if (holder.getReusableBuffers() instanceof Ae2PushBuffers existingBuffers
 				&& existingBuffers.resourceInputGate.hasWaitingRecipes()) {
 			var storage = holder.getPushState().getCachedNodeState(host) == Ae2GridNodeManager.STATE_ONLINE
@@ -107,8 +121,7 @@ public final class Ae2InputPuller {
 
 		Ae2PushBackoff returnBackoff = holder.getPushState().getReturnBackoff();
 		boolean returnCooling = returnBackoff.shouldSkip(System.nanoTime());
-		boolean pendingRetriedEarly = false;
-		if (pendingRetryable) {
+		if (pendingRetryable && !pendingRetriedEarly) {
 			MEStorage pendingStorage = !returnCooling
 					&& holder.getPushState().getCachedNodeState(host) == Ae2GridNodeManager.STATE_ONLINE
 					? Ae2GridNodeManager.getCachedMeStorage(holder, host) : null;

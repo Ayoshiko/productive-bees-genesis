@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
+import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputLedger;
 import mekanism.api.Action;
 import mekanism.api.inventory.IInventorySlot;
 import net.minecraft.world.item.ItemStack;
@@ -205,10 +206,10 @@ final class PbOutputPlacementPlanner {
 		Arrays.fill(placed, 0, templateCount, 0);
 		var custody = PbRecipeFlusher.custody(context);
 		for (int i = 0; i < slotCount; i++) {
-			if (custody != null && custody.blocked()) return false;
+			if (PbRecipeFlusher.outputBlocked(context, processIndex)) return false;
 			if (addAmounts[i] <= 0) continue;
 			IInventorySlot slot = slots.get(i);
-			if (slot == null) continue;
+			if (slot == null || Ae2OutputLedger.blocks(context, processIndex, slotIdxMap[i])) continue;
 			ItemStack current = slot.getStack();
 			boolean empty = current.isEmpty();
 			ItemStack template = setTemplates[i];
@@ -227,7 +228,8 @@ final class PbOutputPlacementPlanner {
 				return Math.max(0, (actual.isEmpty() ? 0 : actual.getCount()) - before);
 			};
 			int written = (int) (custody == null ? write.getAsLong()
-					: custody.handoffItem(identity, amount, "centrifuge-output-slot", write));
+					: custody.localItem(processIndex * MAX_SLOTS + slotIndex).handoffLocalItem(identity, amount, current,
+                                "centrifuge-output-slot:" + processIndex + ":" + slotIndex, slot::getStack, write));
 			if (written != amount) exact = false;
 			// 同一槽可能由多个完整身份相同的配方条目贡献；逐条核销，未执行的槽不扣 pending。
 			for (int t = 0; t < templateCount && written > 0; t++) {
@@ -236,7 +238,7 @@ final class PbOutputPlacementPlanner {
 				written -= handed;
 			}
 		}
-		return exact && (custody == null || !custody.blocked());
+		return exact && !PbRecipeFlusher.outputBlocked(context, processIndex);
 	}
 
 	// ===== 结果查询 =====

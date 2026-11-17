@@ -12,7 +12,7 @@ import mekanism.api.AutomationType;
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
-import mekanism.common.capabilities.fluid.BasicFluidTank;
+import com.ayoshiko.productivebeesgenesis.inventory.OutputFluidTank;
 import mekanism.common.capabilities.holder.fluid.FluidTankHelper;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import mekanism.common.capabilities.holder.slot.IInventorySlotHolder;
@@ -126,6 +126,7 @@ class MekCentrifugeSlotManager {
 				CentrifugeInputStackMultipliers.forBasic());
 		// 性能：标记为输入槽 → 输出槽退回保护在发配插入热路径上对本槽提前短路，省去每次插入的冗余配方校验。
 		((TieredInputSlot) inputSlot).productivebeesgenesis$markInputSlot();
+		MekCentrifugeFactoryHelper.bindInputSettlement(tile, 0, inputSlot);
 		// 外部发配使用真实槽容量；单批数量由供应器决定，样板目标另有共享调用预算。
 		builder.addSlot(inputSlot)
 				.tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,
@@ -157,6 +158,9 @@ class MekCentrifugeSlotManager {
 		tertiaryOutputSlot = TieredOutputInventorySlot.at(stackMultiplier, outputListener,
 				FactoryLayoutHelper.getCentrifugeOutputX(), FactoryLayoutHelper.getCentrifugeOutputY(2));
 		builder.addSlot(tertiaryOutputSlot);
+		MekCentrifugeFactoryHelper.bindOutputSettlement(tile, 0, 0, outputSlot);
+		MekCentrifugeFactoryHelper.bindOutputSettlement(tile, 0, 1, secondaryOutputSlot);
+		MekCentrifugeFactoryHelper.bindOutputSettlement(tile, 0, 2, tertiaryOutputSlot);
 
 		// 能量槽 — 与父类相同位置
 		EnergyInventorySlot energySlot = EnergyInventorySlot.fillOrConvert(
@@ -184,9 +188,9 @@ class MekCentrifugeSlotManager {
 			IContentsListener recipeCacheListener,
 			IContentsListener recipeCacheUnpauseListener) {
 		FluidTankHelper helper = FluidTankHelper.forSideWithConfig(tile);
-		fluidOutputTank = BasicFluidTank.create(ModConfig.SERVER.mekCentrifugeFluidTankCapacity.get(),
+		fluidOutputTank = new OutputFluidTank(ModConfig.SERVER.mekCentrifugeFluidTankCapacity.get(),
 				(stack, automation) -> !tile.hasUnresolvedFluidState()
-						&& (automation == AutomationType.INTERNAL || !OutputCustody.of(tile).blocked()),
+						&& !OutputCustody.of(tile).localOutputBlocked() && !OutputCustody.of(tile).localFluidBlocked(0),
 				(stack, automation) -> !tile.hasUnresolvedFluidState() && automation == AutomationType.INTERNAL,
 				stack -> true, listener);
 		helper.addTank(fluidOutputTank);

@@ -54,6 +54,10 @@ class FrozenOutputBackpressureMinecraftTest {
     private static Fixture fixture() {
         var state = BuiltInRegistries.BLOCK.get(ResourceLocation.parse("productivebeesgenesis:mek_apiary")).defaultBlockState();
         var tile = spy(new TileEntityMekApiary(Holder.direct(state.getBlock()), BlockPos.ZERO, state));
+        var level = mock(ServerLevel.class);
+        when(level.getGameTime()).thenReturn(100L);
+        when(level.registryAccess()).thenReturn(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+        tile.setLevel(level);
         var output = spy(BasicInventorySlot.at((IContentsListener) tile::onOutputSlotContentsChanged, 0, 0));
         doReturn(List.of(output)).when(tile).getOutputSlots();
         doReturn(false).when(tile).shouldHoldForCentrifuge(any());
@@ -131,14 +135,19 @@ class FrozenOutputBackpressureMinecraftTest {
         doThrow(new IllegalStateException("later route unavailable")).when(fixture.tile())
                 .shouldHoldForCentrifuge(argThat(stack -> stack.getItem() == Items.EMERALD));
         clearInvocations(fixture.tile());
-        var failure = assertThrows(IllegalStateException.class, () -> fixture.processor().flushFrozen(LOCAL));
-        assertEquals("later route unavailable", failure.getMessage());
+        assertFalse(fixture.processor().flushFrozen(LOCAL));
+        assertTrue(fixture.processor().frozenRoutingFailed());
         assertEquals(Items.DIAMOND, fixture.output().getStack().getItem());
         assertEquals(4, fixture.output().getCount());
         assertEquals(1, fixture.processor().production.items().size());
         assertEquals(Items.EMERALD, fixture.processor().production.items().getFirst().getItem());
         assertEquals(3, fixture.processor().production.items().getFirst().getCount());
         verify(fixture.tile()).setChanged();
+        fixture.output().setStack(ItemStack.EMPTY);
+        assertTrue(fixture.processor().flushFrozen(LOCAL));
+        assertEquals(Items.EMERALD, fixture.output().getStack().getItem());
+        assertEquals(3, fixture.output().getCount());
+        assertFalse(fixture.processor().frozenRoutingFailed());
     }
 
     @Test
@@ -352,7 +361,10 @@ class FrozenOutputBackpressureMinecraftTest {
                         : restoredTile.getProduceProcessor().flushFrozen(LOCAL);
                 assertFalse(resumed);
                 assertEquals(amount, ownedFluid(restoredTile) + OutputCustody.of(restoredTile).amount());
-                output.verify(() -> Ae2FluidPusher.pushLocalTankContentsNow(any()), times(1));
+                assertEquals(tank.getCapacity(), restoredTile.getFluidTank().getFluidAmount());
+                assertEquals(tank.getCapacity(), restoredTile.getPendingHoneyFluidAmount()
+                        + restoredTile.productionState().fluidAmount());
+                output.verify(() -> Ae2FluidPusher.pushLocalTankContentsNow(tile), times(1));
             }
         }
     }
@@ -366,13 +378,25 @@ class FrozenOutputBackpressureMinecraftTest {
         try (var integration = aeLoaded(); var output = mockStatic(Ae2FluidPusher.class)) {
             output.when(() -> Ae2FluidPusher.pushLocalTankContentsNow(tile))
                     .thenThrow(new IllegalStateException("Drain unavailable before external insertion"));
-            var error = assertThrows(IllegalStateException.class, tile.getProduceProcessor()::flushPendingFluid);
-            assertEquals("Drain unavailable before external insertion", error.getMessage());
+            assertFalse(tile.getProduceProcessor().flushPendingFluid());
+            assertTrue(tile.getProduceProcessor().frozenRoutingFailed());
             assertEquals(2L * tile.getFluidTank().getCapacity(), tile.getPendingHoneyFluidAmount());
             assertEquals(amount, ownedFluid(tile));
             assertFalse(tile.getProduceProcessor().flushPendingFluid());
             output.verify(() -> Ae2FluidPusher.pushLocalTankContentsNow(tile), times(1));
-            restoreFluidState(tile);
+            var restored = restoreFluidState(tile);
+            var resumedTile = restored.tile();
+            long[] delivered = {0};
+            output.when(() -> Ae2FluidPusher.pushLocalTankContentsNow(resumedTile)).thenAnswer(call -> {
+                var localTank = resumedTile.getFluidTank();
+                delivered[0] += localTank.shrinkStack(localTank.getFluidAmount(), Action.EXECUTE);
+                return null;
+            });
+            assertTrue(resumedTile.getProduceProcessor().flushPendingFluid());
+            resumedTile.productivebeesgenesis$onLocalFluidOutputCommitted();
+            assertEquals(amount, delivered[0]);
+            assertEquals(0, ownedFluid(resumedTile));
+            assertFalse(resumedTile.getProduceProcessor().frozenRoutingFailed());
         }
     }
 

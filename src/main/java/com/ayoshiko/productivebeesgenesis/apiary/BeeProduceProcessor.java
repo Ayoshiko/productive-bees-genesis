@@ -3,6 +3,9 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.mek.SameTickFailureGate;
+import com.ayoshiko.productivebeesgenesis.logistics.LocalOutputTransfer;
+import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver;
 import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
@@ -60,6 +63,7 @@ public class BeeProduceProcessor {
 	final ApiaryOutputEvidenceCache outputEvidence = new ApiaryOutputEvidenceCache();
 	private final ApiaryFrozenItemBatch frozenItemBatch = new ApiaryFrozenItemBatch();
 	private final SameTickFailureGate frozenOutputFailure = new SameTickFailureGate();
+    private boolean frozenRoutingFailed;
 	private long frozenProductionVersion = Long.MIN_VALUE;
 	private int frozenTankAmount = -1;
 	private int frozenRoutingFlags = -1;
@@ -129,11 +133,13 @@ public class BeeProduceProcessor {
 									BlockPos origin, Level level,
 									ApiaryOutputBuffer outputBuffer,
 									ApiaryBatchUpgradeSnapshot upgrades, boolean multiFlowerBee) {
+		boolean includeMyriad = PBConstants.MYRIADCREATIONS_TYPE.equals(beeTypeKey)
+				&& (production == null || !production.activeMyriadCompleted());
 		var generated = generator.prepare(beeSlots, pendingCounts, groupSlotIndices, beeTypeKey, produceList,
 				feederManager, origin, level, upgrades, multiFlowerBee, true, -1,
-				upgrades.hasEssenceConversionUpgrade() && level != null ? EssenceConversionUpgradeHelper.plan(level) : null, null, 0);
+				upgrades.hasEssenceConversionUpgrade() && level != null ? EssenceConversionUpgradeHelper.plan(level) : null, null, 0, production != null, includeMyriad);
 		if (production != null) {
-            production.freeze(generated);
+            production.freeze(generated, generator.generatedPaidCounts(), includeMyriad);
             flushFrozen(upgrades);
         } else {
             if (pendingCounts != null && groupSlotIndices != null)
@@ -156,7 +162,7 @@ public class BeeProduceProcessor {
 		resourceCounts[0] = cycles;
 		try {
 			return generator.prepare(resourceSlots, resourceCounts, resourceIndex, type, outputs, apiary.getFeederSlotManager(), apiary.getBlockPos(),
-					apiary.getLevel(), upgrades, MultiFlowerBeeAdapter.isMultiFlowerBee(type), nativeProduction, rolls, conversion, sampling, seed);
+					apiary.getLevel(), upgrades, MultiFlowerBeeAdapter.isMultiFlowerBee(type), nativeProduction, rolls, conversion, sampling, seed, false, true);
 		} finally {
 			resourceSlots[0] = null;
 			resourceCounts[0] = 0;
@@ -267,10 +273,11 @@ public class BeeProduceProcessor {
 	}
 
 	boolean flushFrozen(ApiaryBatchUpgradeSnapshot upgrades) {
-        var custody = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(apiary);
-        if (production.suspended() || custody.blocked() || frozenItemBatch.active()) return false;
+        var custody = OutputCustody.of(apiary);
+        if (production.frozenOutputBlocked() || custody.localOutputBlocked() || frozenItemBatch.active()) return false;
         if (!production.hasFrozen()) {
             frozenOutputFailure.clear();
+            frozenRoutingFailed = false;
             return true;
         }
         long outputVersion = apiary.getOutputBuffer().getOutputVersion();
@@ -287,6 +294,7 @@ public class BeeProduceProcessor {
         long gameTick = apiary.getLevel().getGameTime();
         if (frozenOutputFailure.shouldSkip(gameTick, outputVersion)) return false;
         boolean itemsChanged = false;
+        frozenRoutingFailed = false;
         long originalFluidAmount = production.fluidAmount();
         List<ItemStack> frozenItems = production.items();
         boolean batchAeOutput = upgrades.directAeOutputEnabled() && !apiary.isCentrifugePriorityEnabled()
@@ -296,65 +304,96 @@ public class BeeProduceProcessor {
                 && frozenItems.size() > 1;
         try {
             if (batchAeOutput || batchCentrifugeOutput) {
-                frozenItemBatch.prepare(frozenItems, batchCentrifugeOutput);
+                try {
+                    frozenItemBatch.prepare(frozenItems, batchCentrifugeOutput);
+                } catch (RuntimeException | LinkageError error) {
+                    frozenItemBatch.clear();
+                    batchAeOutput = false;
+                    batchCentrifugeOutput = false;
+                    frozenRoutingFailed = true;
+                    LogThrottle.error("apiary_frozen_batch_prepare",
+                            "Apiary output grouping failed at {}; sources retained for local output", apiary.getBlockPos(), error);
+                }
             }
             for (int sourceIndex = 0; sourceIndex < frozenItems.size(); sourceIndex++) {
                 ItemStack stack = frozenItems.get(sourceIndex);
-                if (stack.isEmpty() || custody.blocked()) continue;
+                if (stack.isEmpty() || custody.localOutputBlocked()) continue;
                 int originalCount = stack.getCount();
+                boolean hold = true;
                 try {
-                    if (upgrades.directAeOutputEnabled() && !apiary.shouldHoldForCentrifuge(stack)) {
-                        if (batchAeOutput) {
-                            frozenItemBatch.push(sourceIndex, apiary);
-                        } else {
-                            stack.shrink(apiary.pushGeneratedItemToAe(stack));
+                    try {
+                        if (upgrades.directAeOutputEnabled() && !custody.blocked() && !apiary.shouldHoldForCentrifuge(stack)) {
+                            if (batchAeOutput) {
+                                frozenItemBatch.push(sourceIndex, apiary);
+                            } else {
+                                stack.shrink(apiary.pushGeneratedItemToAe(stack));
+                            }
                         }
-                    }
-                    if (!stack.isEmpty() && upgrades.centrifugeDirectTransferEnabled() && !custody.blocked()) {
-                        if (!batchCentrifugeOutput || !frozenItemBatch.pushToCentrifuges(sourceIndex, apiary)) {
-                            apiary.directTransferProducedToCentrifuges(List.of(stack));
+                        if (!stack.isEmpty() && upgrades.centrifugeDirectTransferEnabled() && !custody.blocked()) {
+                            if (!batchCentrifugeOutput || !frozenItemBatch.pushToCentrifuges(sourceIndex, apiary)) {
+                                apiary.directTransferProducedToCentrifuges(List.of(stack));
+                            }
                         }
+                        if (!stack.isEmpty() && upgrades.directContainerOutputEnabled() && !custody.blocked()
+                                && !apiary.shouldHoldForCentrifuge(stack)) {
+                            stack.shrink(apiary.pushGeneratedItemToNeighbors(stack));
+                        }
+                        if (!stack.isEmpty()) hold = apiary.shouldHoldForCentrifuge(stack);
+                    } catch (RuntimeException | LinkageError error) {
+                        // 执行窗口由 OutputCustody 接管；这里仍抛出的准备错误没有交出剩余源。
+                        frozenRoutingFailed = true;
+                        LogThrottle.error("apiary_frozen_route",
+                                "Apiary output route failed at {}, source={}; remaining source uses local output",
+                                apiary.getBlockPos(), sourceIndex, error);
                     }
-                    if (!stack.isEmpty() && upgrades.directContainerOutputEnabled() && !apiary.shouldHoldForCentrifuge(stack)) {
-                        stack.shrink(apiary.pushGeneratedItemToNeighbors(stack));
+                    if (!stack.isEmpty() && !custody.localOutputBlocked()) {
+                        stack.shrink(LocalOutputTransfer.insert(apiary.getOutputSlots(), stack, custody));
                     }
-                    if (!stack.isEmpty() && !custody.blocked()) {
-                        stack.shrink(com.ayoshiko.productivebeesgenesis.logistics.LocalOutputTransfer.insert(
-                                apiary.getOutputSlots(), stack, custody));
-                    }
-                    if (!stack.isEmpty()) {
-                        boolean hold = apiary.shouldHoldForCentrifuge(stack);
+                    if (!stack.isEmpty() && !custody.localOutputBlocked()) {
                         stack.shrink(apiary.getOutputBuffer().accept(stack, hold));
-                        if (!stack.isEmpty() && hold && !custody.blocked()) stack.shrink(apiary.pushGeneratedItemToAe(stack));
+                        if (!stack.isEmpty() && hold && !custody.blocked()) {
+                            try {
+                                stack.shrink(apiary.pushGeneratedItemToAe(stack));
+                            } catch (RuntimeException | LinkageError error) {
+                                frozenRoutingFailed = true;
+                                LogThrottle.error("apiary_frozen_overflow_route",
+                                        "Apiary overflow route failed at {}, source={}; remaining output stays in its original batch",
+                                        apiary.getBlockPos(), sourceIndex, error);
+                            }
+                        }
                     }
                 } finally {
                     itemsChanged |= originalCount != stack.getCount();
                 }
             }
         } finally {
-            if (batchAeOutput || batchCentrifugeOutput) {
+            if (frozenItemBatch.active()) {
                 itemsChanged |= frozenItemBatch.changed();
                 frozenItemBatch.clear();
             }
-            // 后续路线异常也必须提交已接收前缀，原异常仍交给调用方处理。
             if (itemsChanged) production.itemsChanged();
         }
         boolean fluidBudgetDeferred = false;
-        if (production.fluidAmount() > 0 && !custody.blocked()) {
+        if (production.fluidAmount() > 0 && !custody.localOutputBlocked()) {
             var result = fluidOutput.flush(production.fluid(), production.fluidAmount(),
                     upgrades.directAeOutputEnabled(), production::debitFluid);
             fluidBudgetDeferred = result == ApiaryFluidOutput.Result.DEFERRED;
         }
-        boolean completed = !production.hasFrozen() && !custody.blocked();
+        boolean completed = !production.hasFrozen() && !custody.localOutputBlocked();
+        if (completed) frozenRoutingFailed = false;
         if (completed || itemsChanged || originalFluidAmount != production.fluidAmount() || fluidBudgetDeferred) {
             frozenOutputFailure.clear();
-        } else if (!custody.blocked()) {
+        } else if (!custody.localOutputBlocked()) {
             frozenOutputFailure.recordFailure(gameTick, apiary.getOutputBuffer().getOutputVersion());
         }
         frozenProductionVersion = production.frozenVersion();
         frozenTankAmount = apiary.getFluidTank().getFluidAmount();
         frozenRoutingFlags = routingFlags;
         return completed;
+    }
+
+    boolean frozenRoutingFailed() {
+        return frozenRoutingFailed || fluidOutput.preparationFailed();
     }
 
 	void onOutputRoutingChanged() {

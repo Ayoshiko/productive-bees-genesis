@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.logistics;
 
+import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
+import com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext;
 import com.ayoshiko.productivebeesgenesis.mek.SameTickFailureGate;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.RoundRobinSlotTraversal;
@@ -86,7 +88,7 @@ public final class FastItemEjector {
 	 */
 	public void tick(TileEntityMekanism tile, TileComponentEjector ejector,
 			@Nullable ConfigInfo itemConfig, long gameTime, long outputVersion, boolean hasOutput) {
-		if (OutputCustody.of(owner).blocked() || itemConfig == null || !ejector.isEjecting(itemConfig, TransmissionType.ITEM)) return;
+		if (OutputCustody.of(owner).externalOutputBlocked() || itemConfig == null || !ejector.isEjecting(itemConfig, TransmissionType.ITEM)) return;
 		if (!hasOutput) {
 			sameTickGate.clear();
 			return;
@@ -136,18 +138,34 @@ public final class FastItemEjector {
 	private long pushToTransporter(TileEntityMekanism tile, TileComponentEjector ejector,
 			List<IInventorySlot> slots, IItemHandler target) {
 		var custody = OutputCustody.of(owner);
-		if (custody.blocked()) return 0;
+		if (custody.externalOutputBlocked()) return 0;
 		for (int offset = 0; offset < slots.size(); offset++) {
 			int index = RoundRobinSlotTraversal.index(transporterCursor, offset, slots.size());
 			IInventorySlot slot = slots.get(index);
-			ItemStack taken = slot.extractItem(slot.getCount(), Action.EXECUTE, AutomationType.EXTERNAL);
+			int count;
+			try {
+				if (slot == null || slot.isEmpty()) continue;
+				count = slot.getCount();
+			} catch (RuntimeException | LinkageError error) {
+				LogThrottle.error("neighbor_output_source_prepare", "物品弹出源槽读取失败，pos={} slot={}，其它槽继续输出",
+						owner.getBlockPos(), index, error);
+				continue;
+			}
+			ItemStack taken = slot.extractItem(count, Action.EXECUTE, AutomationType.EXTERNAL);
 			if (taken.isEmpty()) continue;
 			transporterCursor = RoundRobinSlotTraversal.advance(index, slots.size());
-			var request = TransitRequest.simple(taken.copy());
-			int handed = custody.handoffItem(taken, "transporter", () -> {
-				var response = request.eject(tile, target, 0, ignored -> ejector.getOutputColor());
-				return response.isEmpty() ? 0 : response.getSendingAmount();
-			});
+			int handed;
+			try {
+				handed = custody.handoffItem(taken, "transporter", () -> {
+					var request = TransitRequest.simple(taken.copy());
+					var response = request.eject(tile, target, 0, ignored -> ejector.getOutputColor());
+					return response.isEmpty() ? 0 : response.getSendingAmount();
+				});
+			} catch (RuntimeException | LinkageError failure) {
+				handed = 0;
+				LogThrottle.error("transporter_handoff_preparation", "运输管道交接登记失败，尚未调用接收方；已取物品原样回填，pos={} slot={}",
+						owner.getBlockPos(), index, failure);
+			}
 			ItemStack rest = taken.copyWithCount(taken.getCount() - handed);
 			if (!rest.isEmpty()) returnHome(slots, slot, rest);
 			return handed;
@@ -174,7 +192,7 @@ public final class FastItemEjector {
 
 	public int pushDirect(TileComponentEjector ejector, @Nullable ConfigInfo itemConfig,
 			ItemStack stack, int amount, long gameTime) {
-		if (OutputCustody.of(owner).blocked() || stack.isEmpty() || amount <= 0 || itemConfig == null) return 0;
+		if (OutputCustody.of(owner).externalOutputBlocked() || stack.isEmpty() || amount <= 0 || itemConfig == null) return 0;
 		if (!ejector.isEjecting(itemConfig, TransmissionType.ITEM)) return 0;
 		List<Direction> sides = targets.outputSides(itemConfig);
 		if (sides.isEmpty()) return 0;
@@ -182,7 +200,7 @@ public final class FastItemEjector {
 		int total = amount;
 		int inserted = 0;
 		for (Direction side : sides) {
-			if (inserted >= total || OutputCustody.of(owner).blocked()) break;
+			if (inserted >= total || OutputCustody.of(owner).externalOutputBlocked()) break;
 			IItemHandler target;
 			try {
 				target = targets.handler(side);
@@ -207,7 +225,7 @@ public final class FastItemEjector {
 				inserted += accepted;
 				if (accepted == 0) {
 					state.rememberRejected(offered, gameTime);
-				} else if (!OutputCustody.of(owner).blocked()) {
+				} else if (!OutputCustody.of(owner).externalOutputBlocked()) {
 					state.recordSuccess();
 				}
 			} finally {
@@ -227,17 +245,25 @@ public final class FastItemEjector {
 		int start = RoundRobinSlotTraversal.normalize(state.slotCursor, slotCount);
 		long moved = 0L;
 		for (int offset = 0; offset < slotCount; offset++) {
-			if (!state.isValid() || OutputCustody.of(owner).blocked()
+			if (!state.isValid() || OutputCustody.of(owner).externalOutputBlocked()
 					|| !state.budget.canAttempt(gameTime, false)) break;
 			int slotIndex = RoundRobinSlotTraversal.index(start, offset, slotCount);
 			state.slotCursor = RoundRobinSlotTraversal.advance(slotIndex, slotCount);
 			IInventorySlot slot = slots.get(slotIndex);
-			var binding = state.binding(slotIndex, slot);
-			if (slot == null || slot.isEmpty()) continue;
-			if (state.isRejected(binding, gameTime)) continue;
-			// 与 Mekanism 一致：用 EXTERNAL 模拟抽取判定真实可弹出量（尊重槽位抽取谓词）
-			ItemStack available = slot.extractItem(slot.getCount(), Action.SIMULATE, AutomationType.EXTERNAL);
-			if (available.isEmpty() || state.isRejected(available, gameTime, binding)) continue;
+			NeighborItemTransferState.SlotBinding binding;
+			ItemStack available;
+			try {
+				if (slot == null || slot.isEmpty()) continue;
+				binding = state.binding(slotIndex, slot);
+				if (state.isRejected(binding, gameTime)) continue;
+				// EXTERNAL 模拟抽取尊重真实槽位提取谓词，此阶段尚未扣除任何资产。
+				available = slot.extractItem(slot.getCount(), Action.SIMULATE, AutomationType.EXTERNAL);
+				if (available.isEmpty() || state.isRejected(available, gameTime, binding)) continue;
+			} catch (RuntimeException | LinkageError error) {
+				LogThrottle.error("neighbor_output_source_prepare", "物品弹出源槽读取失败，pos={} slot={}，其它槽继续输出",
+						owner.getBlockPos(), slotIndex, error);
+				continue;
+			}
 
 			long started = System.nanoTime();
 			try {
@@ -253,7 +279,7 @@ public final class FastItemEjector {
 						"neighbor", state::isValid);
 				int transferred = taken.getCount() - (leftover.isEmpty() ? 0 : leftover.getCount());
 				moved += transferred;
-				if (transferred > 0 && !OutputCustody.of(owner).blocked()) {
+				if (transferred > 0 && !OutputCustody.of(owner).externalOutputBlocked()) {
 					state.recordSuccess();
 				} else if (transferred == 0) {
 					state.rememberRejected(taken, gameTime);
@@ -274,15 +300,47 @@ public final class FastItemEjector {
 	 */
 	private void returnHome(List<IInventorySlot> slots, IInventorySlot source, ItemStack leftover) {
 		ItemStack remaining = leftover.copy();
+		OutputCustody custody = OutputCustody.of(owner);
 		for (int i = -1; i < slots.size() && !remaining.isEmpty(); i++) {
 			IInventorySlot slot = i < 0 ? source : slots.get(i);
 			if (slot == null || i >= 0 && slot == source) continue;
+			int physicalSlot;
+			ItemStack before;
+			try {
+				physicalSlot = outputSlotIndex(slot);
+				if (custody.localItemBlocked(physicalSlot)) continue;
+				before = slot.getStack();
+			} catch (RuntimeException | LinkageError error) {
+				LogThrottle.error("neighbor_output_return_prepare", "物品余量回填准备失败，pos={}，余量保管并尝试其它槽",
+						owner.getBlockPos(), error);
+				continue;
+			}
 			ItemStack offered = remaining.copy();
-			int handed = OutputCustody.of(owner).handoffItem(offered, "return-home", () ->
-					ItemPushHelper.accepted(offered, slot.insertItem(offered.copy(), Action.EXECUTE, AutomationType.INTERNAL)));
-			remaining.shrink(handed);
+			try {
+				int handed = (int) custody.localItem(physicalSlot).handoffLocalItem(offered, offered.getCount(), before,
+						"return-home:" + physicalSlot, slot::getStack, () -> ItemPushHelper.accepted(offered,
+								slot.insertItem(offered.copy(), Action.EXECUTE, AutomationType.INTERNAL)));
+				remaining.shrink(handed);
+			} catch (RuntimeException | LinkageError error) {
+				LogThrottle.error("neighbor_output_return_prepare", "物品余量回填登记失败，pos={} slot={}，已抽取余量继续保管",
+						owner.getBlockPos(), physicalSlot, error);
+			}
 		}
-		if (!remaining.isEmpty()) OutputCustody.of(owner).retainItem(remaining, "return-home-full");
+		if (!remaining.isEmpty()) custody.retainItem(remaining, "return-home-full");
+	}
+
+	private int outputSlotIndex(IInventorySlot slot) {
+		if (owner instanceof TileEntityMekApiary apiary) {
+			int index = apiary.getOutputSlots().indexOf(slot);
+			if (index >= 0) return index;
+		} else if (owner instanceof PbRecipeContext context) {
+			for (int lane = 0; lane < context.processes(); lane++) {
+				if (context.primaryOutputSlot(lane) == slot) return lane * 3;
+				if (context.secondaryOutputSlot(lane) == slot) return lane * 3 + 1;
+				if (context.tertiaryOutputSlot(lane) == slot) return lane * 3 + 2;
+			}
+		}
+		throw new IllegalStateException("Unregistered local output slot");
 	}
 
 	private NeighborItemTransferState transferState(Direction side, IItemHandler target) {

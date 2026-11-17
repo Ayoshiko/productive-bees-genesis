@@ -139,6 +139,7 @@ class BeeSlotTickProcessor {
 
 	/** Reused eligibility snapshot for fair partial-batch energy allocation. */
 	private final boolean[] runnableBeeSlots;
+    private final boolean[] preparationFailed;
 	private final PbResourceCatalog.Spec[] resourceSpecs;
 	private final ApiaryResourceProduction.Prepared[] resourcePrepared;
 
@@ -181,6 +182,7 @@ class BeeSlotTickProcessor {
 		this.cachedBeeWorkTraits = new BeeWorkConditionEvaluator.WorkTraits[slotManager.getBeeSlotCount()];
 		this.beeTypeKeyBySlot = new ResourceLocation[slotManager.getBeeSlotCount()];
 		this.runnableBeeSlots = new boolean[slotManager.getBeeSlotCount()];
+        this.preparationFailed = new boolean[slotManager.getBeeSlotCount()];
 		this.resourceSpecs = new PbResourceCatalog.Spec[slotManager.getBeeSlotCount()];
 		this.resourcePrepared = new ApiaryResourceProduction.Prepared[slotManager.getBeeSlotCount()];
 		this.pendingProductionGroups = new PendingProductionGroup[slotManager.getBeeSlotCount()];
@@ -289,14 +291,22 @@ class BeeSlotTickProcessor {
 		boolean pendingFluidBlocked = !produceProcessor.flushPendingFluid();
         ApiaryProductionState production = produceProcessor.production;
         ApiaryBatchUpgradeSnapshot batchUpgrades = ApiaryBatchUpgradeSnapshot.capture(tile, upgradeHandler);
+        try {
+            production.recoverLocal(beeSlots, level.registryAccess());
+        } catch (RuntimeException | LinkageError error) {
+            slotErrorThrottle.tryLogMs(System.currentTimeMillis(), suppressed ->
+                    ProductiveBeesGenesis.LOGGER.error("Legacy local apiary recovery failed at {}; original production state and output retained",
+                            tile.getBlockPos(), error));
+        }
         production.detachReplaced(beeSlots);
         BeeState sharedBlockingState = null;
-        if (production.suspended()) {
+        if (production.hasInvalidData()) {
             sharedBlockingState = BeeState.PRODUCTION_SUSPENDED;
-        } else if (OutputCustody.of(tile).blocked()) {
+        } else if (OutputCustody.of(tile).localOutputBlocked()) {
             sharedBlockingState = BeeState.OUTPUT_SUSPENDED;
         } else if (production.hasFrozen() && !produceProcessor.flushFrozen(batchUpgrades)) {
-            sharedBlockingState = BeeState.WAITING_FROZEN_OUTPUT;
+            sharedBlockingState = produceProcessor.frozenRoutingFailed()
+                    ? BeeState.OUTPUT_PREPARATION_FAILED : BeeState.WAITING_FROZEN_OUTPUT;
         } else if (tile.getOutputBuffer().hasInvalidData()) {
             sharedBlockingState = BeeState.OUTPUT_DATA_INVALID;
         } else if (tile.getOutputBuffer().productionBlocked()) {
@@ -332,6 +342,7 @@ class BeeSlotTickProcessor {
 				continue;
 			}
 
+			try {
 			ResourceLocation beeTypeKey = resolveBeeTypeKeyForSlot(slot, i);
 			beeTypeKeyBySlot[i] = beeTypeKey;
 			if (beeTypeKey == null) {
@@ -370,7 +381,13 @@ class BeeSlotTickProcessor {
 					: ApiaryResourceProduction.prepare(tile, resourceSpec, upgradeHandler, slot, i, beeTypeKey, resourcePrepared[i], batchUpgrades, flowerCacheVersion);
 			boolean resourceBlocked = resourceSpec != null && resourcePrepared[i] == null;
 			BeeState blockingState = sharedBlockingState;
-			if (blockingState == null && !production.canAdvance(i, slot)) {
+			if (blockingState == null && production.slotSuspended(i)) {
+                blockingState = BeeState.PRODUCTION_SUSPENDED;
+            }
+            if (blockingState == null && preparationFailed[i] && pendingProductions[i] > 0) {
+                blockingState = BeeState.PREPARATION_FAILED;
+            }
+            if (blockingState == null && !production.canAdvance(i, slot)) {
 				blockingState = BeeState.WAITING_PREVIOUS_BEE;
 			}
 			if (blockingState == null && resourceBlocked) {
@@ -379,12 +396,13 @@ class BeeSlotTickProcessor {
 				} else if (!resourceSpec.validForMechanical()) {
 					blockingState = BeeState.WAITING_RESOURCE_RECIPE;
 				} else {
-					blockingState = BeeState.WAITING_RESOURCE;
+					blockingState = slot.getState();
 				}
 			}
 			if (blockingState == null && resourceSpec == null) {
 				if (pendingFluidBlocked) {
-					blockingState = BeeState.WAITING_FLUID;
+					blockingState = produceProcessor.frozenRoutingFailed()
+                            ? BeeState.OUTPUT_PREPARATION_FAILED : BeeState.WAITING_FLUID;
 				} else if (outputFull) {
 					blockingState = BeeState.WAITING_OUTPUT;
 				}
@@ -396,6 +414,14 @@ class BeeSlotTickProcessor {
 			}
 			runnableBeeSlots[i] = true;
 			runnableBeeCount++;
+            } catch (RuntimeException | LinkageError error) {
+                if (slot.getState() != BeeState.PREPARATION_FAILED) {
+                    ProductiveBeesGenesis.LOGGER.error("Bee preparation failed at {}, slot={}, bee={}",
+                            tile.getBlockPos(), i, slot.getBeeData(), error);
+                }
+                slot.setState(BeeState.PREPARATION_FAILED);
+                activationCounter.onBeeDeactivated(i);
+            }
 		}
 
 		ApiaryEnergyMath.BeeTickAllocation energyAllocation = ApiaryEnergyMath.allocateBeeTicks(
@@ -434,6 +460,8 @@ class BeeSlotTickProcessor {
 				continue;
 			}
 
+			try {
+            production.prepareBeeSnapshot(i, slot);
 			// 推进计时 — 委托 ApiaryProgressAdvancer（纯代码移动：计算完成周期、更新进度、累积待产出次数）
 			pendingEnergyCost = SaturatingMath.saturatingAdd(pendingEnergyCost,
 					ApiaryProgressAdvancer.advance(slot, i, allocatedTicks, currentTick,
@@ -443,6 +471,15 @@ class BeeSlotTickProcessor {
 			// 设置工作状态 — CAS 守卫仅在工作状态转换 0→1 时递增计数器
 			slot.setState(BeeState.WORKING);
 			activationCounter.onBeeActivated(i);
+            } catch (RuntimeException | LinkageError error) {
+                if (slot.getState() != BeeState.PREPARATION_FAILED) {
+                    ProductiveBeesGenesis.LOGGER.error("Bee progress preparation failed at {}, slot={}",
+                            tile.getBlockPos(), i, error);
+                }
+                slot.setState(BeeState.PREPARATION_FAILED);
+                preparationFailed[i] = true;
+                activationCounter.onBeeDeactivated(i);
+            }
 		}
 
 		// 批量刷新累积产出（Task 16.1 + 16.2 核心优化）
@@ -504,20 +541,29 @@ class BeeSlotTickProcessor {
 		// Task 5：复用主循环预算的 beeTypeKeyBySlot[i]，避免重复调用 resolveBeeTypeKeyForSlot
 		resetPendingProductionGroups();
 		for (int i = 0; i < beeSlots.length && i < pendingProductions.length; i++) {
-			if (pendingProductions[i] <= 0) continue;
+			if (pendingProductions[i] <= 0 || produceProcessor.production.groupSuspended(i, false)) continue;
 			BeeSlot slot = produceProcessor.production.bees[i];
 			if (slot.isEmpty()) {
 				continue;
 			}
-			ResourceLocation beeTypeKey = slot.getBeeTypeKey();
+			try {
+            ResourceLocation beeTypeKey = slot.getBeeTypeKey();
 			if (beeTypeKey == null) {
 				continue;
 			}
-			findPendingProductionGroup(beeTypeKey).slotIndices.add(i);
+			findPendingProductionGroup(beeTypeKey, produceProcessor.production.conversionCompleted(i, false),
+                    produceProcessor.production.myriadCompleted(i, false)).slotIndices.add(i);
+            } catch (RuntimeException | LinkageError error) {
+                if (beeSlots[i].getState() != BeeState.PREPARATION_FAILED) {
+                    ProductiveBeesGenesis.LOGGER.error("Paid bee snapshot preparation failed at {}, slot={}", tile.getBlockPos(), i, error);
+                }
+                beeSlots[i].setState(BeeState.PREPARATION_FAILED);
+                activationCounter.onBeeDeactivated(i);
+            }
 		}
 
 		// 输出空间检查 — 刷新前再次检查，避免产物丢失
-		if (slotManager.isOutputFull() || tile.getOutputBuffer().productionBlocked() || produceProcessor.production.suspended()) {
+		if (slotManager.isOutputFull() || tile.getOutputBuffer().productionBlocked() || produceProcessor.production.hasInvalidData()) {
 			// 输出已满，保留 pendingProductions 待下次刷新（不丢失累积产出）
 			return;
 		}
@@ -530,8 +576,8 @@ class BeeSlotTickProcessor {
 
 		ApiaryProductionState production = produceProcessor.production;
         for (int groupIndex = 0; groupIndex < activePendingProductionGroupCount; groupIndex++) {
-            if (production.suspended() || production.hasFrozen() || tile.getOutputBuffer().productionBlocked()
-                    || com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(tile).blocked()) break;
+            if (production.active() || production.hasFrozen() || production.hasInvalidData() || tile.getOutputBuffer().productionBlocked()
+                    || OutputCustody.of(tile).localOutputBlocked()) break;
             PendingProductionGroup group = pendingProductionGroups[groupIndex];
             settleProductionGroup(group.typeKey, group.slotIndices, production.bees, pendingProductions,
                     false, level, upgrades);
@@ -543,15 +589,23 @@ class BeeSlotTickProcessor {
             for (int offset = 0; offset < retained.counts.length && attempted < RETAINED_GROUPS_PER_FLUSH; offset++) {
                 int index = (start + offset) % retained.counts.length;
                 retainedRotationIndex = (index + 1) % retained.counts.length;
-                if (retained.counts[index] <= 0) {
+                if (retained.counts[index] <= 0 || production.groupSuspended(index, true)) {
                     continue;
                 }
-                if (production.suspended() || production.hasFrozen() || tile.getOutputBuffer().productionBlocked()
-                        || com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(tile).blocked()) {
+                if (production.active() || production.hasInvalidData() || production.hasFrozen() || tile.getOutputBuffer().productionBlocked()
+                        || OutputCustody.of(tile).localOutputBlocked()) {
                     break;
                 }
                 attempted++;
-                ResourceLocation type = retained.bees[index].getBeeTypeKey();
+                ResourceLocation type;
+                try {
+                    type = retained.bees[index].getBeeTypeKey();
+                } catch (RuntimeException | LinkageError error) {
+                    slotErrorThrottle.tryLogMs(System.currentTimeMillis(), suppressed ->
+                            ProductiveBeesGenesis.LOGGER.error("Retained bee preparation failed at {}, group={}",
+                                    tile.getBlockPos(), index, error));
+                    continue;
+                }
                 if (type == null) {
                     continue;
                 }
@@ -567,6 +621,9 @@ class BeeSlotTickProcessor {
 
     private void settleProductionGroup(ResourceLocation type, OrderedSlotIndex indices, BeeSlot[] paidBees,
             int[] paidCounts, boolean retained, Level level, ApiaryBatchUpgradeSnapshot upgrades) {
+        ApiaryProductionState production = produceProcessor.production;
+        boolean started = false;
+        try {
         // 尚未生成的已付周期仍属于原蜜蜂；禁用期间保留，重新启用后结清。
         if (MyriadCreationsEventHandler.isMyriadCreationsDisabled(type)) {
             return;
@@ -585,18 +642,46 @@ class BeeSlotTickProcessor {
         if (tile.isFeederConversionEnabled() && tile.getOutputBuffer().freeGroups() < indices.size()) {
             return;
         }
-        ApiaryProductionState production = produceProcessor.production;
+        started = true;
         production.begin(indices, retained);
-        try {
-            conversionProcessor.processGroupConversions(type, level, paidBees, indices, paidCounts);
-            production.converted();
+            if (!production.conversionCompleted(indices.get(0), retained)) {
+                conversionProcessor.processGroupConversions(type, level, paidBees, indices, paidCounts);
+                production.converted();
+            }
             produceProcessor.processBatchProduce(paidBees, paidCounts, indices, type, produceList,
                     slotManager, feederManager, tile.getBlockPos(), level, tile.getOutputBuffer(),
                     upgrades, feederDependentProduce);
+            if (!retained) {
+                for (int n = 0; n < indices.size(); n++) preparationFailed[indices.get(n)] = false;
+            }
         } catch (RuntimeException | LinkageError error) {
-            production.fail(error);
-            ProductiveBeesGenesis.LOGGER.error("Paid production suspended at {}, group={}, retained={}",
-                    tile.getBlockPos(), type, retained, error);
+            boolean retryableConversion = started && "conversion".equals(production.phase())
+                    && !conversionProcessor.groupConversionStarted();
+            boolean retryable = !started || retryableConversion
+                    || "generation".equals(production.phase()) || !production.active();
+            if (retryableConversion) production.retryConversionPreparation();
+            else if (started && production.active()) production.fail(error);
+            boolean report = retained;
+            BeeSlot[] live = slotManager.getBeeSlots();
+            for (int n = 0; n < indices.size(); n++) {
+                int index = indices.get(n);
+                if (!retained) {
+                    preparationFailed[index] = retryable;
+                    report |= live[index].getState() != (retryable ? BeeState.PREPARATION_FAILED : BeeState.PRODUCTION_SUSPENDED);
+                    live[index].setState(retryable ? BeeState.PREPARATION_FAILED : BeeState.PRODUCTION_SUSPENDED);
+                    activationCounter.onBeeDeactivated(index);
+                }
+            }
+            if (report) {
+                if (retained) {
+                    slotErrorThrottle.tryLogMs(System.currentTimeMillis(), suppressed ->
+                            ProductiveBeesGenesis.LOGGER.error("Retained paid bee group failed at {}, bee={}, retryable={}",
+                                    tile.getBlockPos(), type, retryable, error));
+                } else {
+                    ProductiveBeesGenesis.LOGGER.error("Paid bee group failed at {}, bee={}, retryable={}",
+                            tile.getBlockPos(), type, retryable, error);
+                }
+            }
         }
     }
 
@@ -605,30 +690,34 @@ class BeeSlotTickProcessor {
 		activePendingProductionGroupCount = 0;
 	}
 
-	private PendingProductionGroup findPendingProductionGroup(ResourceLocation typeKey) {
-		int hash = typeKey.hashCode();
+	private PendingProductionGroup findPendingProductionGroup(ResourceLocation typeKey, boolean converted, boolean myriadCompleted) {
+		int hash = 31 * (31 * typeKey.hashCode() + Boolean.hashCode(converted)) + Boolean.hashCode(myriadCompleted);
 		int tableMask = pendingProductionGroupTable.length - 1;
 		int bucket = (hash ^ (hash >>> 16)) & tableMask;
 		while (true) {
 			int encodedGroup = pendingProductionGroupTable[bucket];
 			if (encodedGroup == 0) {
 				PendingProductionGroup group = pendingProductionGroups[activePendingProductionGroupCount];
-				group.reset(typeKey, pendingProductions.length);
+				group.reset(typeKey, converted, myriadCompleted, pendingProductions.length);
 				pendingProductionGroupTable[bucket] = ++activePendingProductionGroupCount;
 				return group;
 			}
 			PendingProductionGroup group = pendingProductionGroups[encodedGroup - 1];
-			if (group.typeKey.equals(typeKey)) return group;
+			if (group.typeKey.equals(typeKey) && group.converted == converted && group.myriadCompleted == myriadCompleted) return group;
 			bucket = (bucket + 1) & tableMask;
 		}
 	}
 
 	private static final class PendingProductionGroup {
 		private ResourceLocation typeKey;
+        private boolean converted;
+        private boolean myriadCompleted;
 		private final OrderedSlotIndex slotIndices = new OrderedSlotIndex();
 
-		void reset(ResourceLocation typeKey, int slotCount) {
+		void reset(ResourceLocation typeKey, boolean converted, boolean myriadCompleted, int slotCount) {
 			this.typeKey = typeKey;
+            this.converted = converted;
+            this.myriadCompleted = myriadCompleted;
 			slotIndices.reset(slotCount);
 		}
 	}
@@ -682,6 +771,7 @@ class BeeSlotTickProcessor {
 	private void clearBeeDataCache(int index) {
 		produceProcessor.production.releaseEmptyBee(index);
 		resourcePrepared[index] = null;
+        preparationFailed[index] = false;
 		lastCheckedBeeData[index] = null;
 		cachedBeeTypeKeys[index] = null;
 		cachedBeeWorkTraits[index] = null;

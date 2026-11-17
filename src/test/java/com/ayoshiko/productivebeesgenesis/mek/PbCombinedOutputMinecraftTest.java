@@ -4,9 +4,16 @@ import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceAccount;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
+import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicEnergyContainerAccessor;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
+import mekanism.api.IContentsListener;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.common.inventory.slot.BasicInventorySlot;
+import mekanism.common.capabilities.energy.MachineEnergyContainer;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.Level;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -57,6 +64,24 @@ class PbCombinedOutputMinecraftTest {
     private static Map<String, Long> counts(PbRecipeCompleter batch) {
         return batch.getPendingOutputs().entrySet().stream().collect(Collectors.toMap(
                 e -> e.getKey().getItem().toString() + e.getKey().getComponentsPatch(), Map.Entry::getValue));
+    }
+
+    private static final class PaymentEnergy extends MachineEnergyContainer<TileEntityMekCentrifuge> {
+        boolean unreadable;
+
+        PaymentEnergy(IContentsListener listener) {
+            super(1_000, 10, automation -> true, automation -> true, null, listener);
+        }
+
+        @Override
+        public long getEnergy() {
+            if (unreadable) throw new IllegalStateException("public payment receipt unavailable");
+            return super.getEnergy();
+        }
+
+        long stored() {
+            return ((BasicEnergyContainerAccessor) (Object) this).productivebeesgenesis$getStored();
+        }
     }
 
     @Test void directAeKeepsReceiptBasedCommitWithEmptyOrFullLocalOutputs() {
@@ -338,25 +363,49 @@ class PbCombinedOutputMinecraftTest {
         }
     }
 
-    @Test void directOutputFailureEntersHostCustodyAndDoesNotRetryOrWriteLocalSlots() {
+    @Test void directOutputFailureRetainsOneSourceAndContinuesHealthyLocalOutputs() {
         var block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse("productivebeesgenesis:mek_centrifuge"));
         int[] calls = {0};
         var tile = new TileEntityMekCentrifuge(net.minecraft.core.Holder.direct(block), net.minecraft.core.BlockPos.ZERO, block.defaultBlockState()) {
             @Override public boolean productivebeesgenesis$isDirectAeOutputEnabled() { return true; }
             @Override public long productivebeesgenesis$pushGeneratedItemToAe(ItemStack template, long amount) {
-                calls[0]++;
-                throw new IllegalStateException("receiver wrote before failing");
+                return OutputCustody.of(this).handoffItem(template, amount, "test-ae-output", () -> {
+                    calls[0]++;
+                    throw new IllegalStateException("receiver wrote before failing");
+                });
             }
         };
         var owner = new PbRecipeCompleter(tile);
         owner.acceptPrepared(owner.prepare(recipe(1), 1, 0, false));
-        assertFalse(owner.flushPendingPbOutputs(0));
+        var expected = counts(owner);
+        assertEquals(4, expected.values().stream().mapToLong(Long::longValue).sum());
+        assertTrue(owner.flushPendingPbOutputs(0));
         assertEquals(1, calls[0]);
-        assertTrue(com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(tile).blocked());
-        assertTrue(tile.primaryOutputSlot(0).isEmpty());
-        var pending = owner.saveCommittedPending(REGISTRIES);
-        assertFalse(owner.flushPendingPbOutputs(0));
-        assertEquals(pending, owner.saveCommittedPending(REGISTRIES));
+        var custody = OutputCustody.of(tile);
+        assertTrue(custody.blocked());
+        assertFalse(custody.localOutputBlocked());
+        assertEquals(1, custody.amount());
+        var saved = custody.save(REGISTRIES);
+        var held = ItemStack.parse(REGISTRIES, saved.getCompound("item")).orElseThrow();
+        String heldKey = held.getItem().toString() + held.getComponentsPatch();
+        assertEquals(1L, expected.remove(heldKey));
+        var slots = List.of(tile.primaryOutputSlot(0), tile.secondaryOutputSlot(0), tile.tertiaryOutputSlot(0));
+        Map<String, Long> received = new java.util.HashMap<>();
+        for (var slot : slots) {
+            var stack = slot.getStack();
+            assertFalse(stack.isEmpty());
+            received.merge(stack.getItem().toString() + stack.getComponentsPatch(), (long) stack.getCount(), Long::sum);
+        }
+        assertEquals(expected, received);
+        assertEquals(3, received.values().stream().mapToLong(Long::longValue).sum());
+        assertFalse(owner.hasPendingOutputs());
+        assertNull(owner.saveCommittedPending(REGISTRIES));
+        var written = slots.stream().map(slot -> slot.getStack().copy()).toList();
+        assertTrue(owner.flushPendingPbOutputs(0));
+        assertEquals(saved, custody.save(REGISTRIES));
+        for (int index = 0; index < slots.size(); index++) {
+            assertTrue(ItemStack.matches(written.get(index), slots.get(index).getStack()));
+        }
         assertEquals(1, calls[0]);
     }
 
@@ -461,30 +510,308 @@ class PbCombinedOutputMinecraftTest {
         assertEquals(0, owner.pendingInputShrink());
     }
 
-    @Test void paymentFailureSurvivesReloadAndCannotReleaseOutputBeforeSettlement() {
+    @Test void transientFailureRemainsUntilActualPreparationRecovers() throws ReflectiveOperationException {
         var context = context();
-        var energy = mock(mekanism.common.capabilities.energy.MachineEnergyContainer.class);
+        var level = mock(Level.class);
+        var random = RandomSource.create(91);
+        var randomField = Level.class.getField("random");
+        randomField.setAccessible(true);
+        randomField.set(level, random);
+        when(level.registryAccess()).thenReturn(REGISTRIES);
+        long[] tick = {100};
+        when(level.getGameTime()).thenAnswer(call -> tick[0]);
+        when(context.level()).thenReturn(level);
+        when(context.processes()).thenReturn(1);
+        when(context.canFunction()).thenReturn(true);
+        when(context.productivityModifier()).thenReturn(1);
+        when(context.productivityParallelModifier()).thenReturn(1);
+        when(context.operationsPerTick()).thenReturn(1);
+        when(context.getTicksForBase(anyInt())).thenReturn(2);
+        var energy = mock(MachineEnergyContainer.class);
         when(context.energyContainer()).thenReturn(energy);
-        when(energy.extract(10, Action.EXECUTE, AutomationType.INTERNAL)).thenThrow(new IllegalStateException("paid callback failed"));
+        when(energy.getEnergy()).thenReturn(1_000L);
+        when(energy.getEnergyPerTick()).thenReturn(5L);
+        when(energy.extract(anyLong(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL)))
+                .thenAnswer(call -> call.getArgument(0));
+        context.inputSlot(0).setStack(new ItemStack(Items.HONEYCOMB, 2));
+        var recipe = new CentrifugeRecipe(Ingredient.of(Items.HONEYCOMB),
+                List.of(new ChancedOutput(Ingredient.of(Items.GOLD_INGOT), 1, 1, 1)), null, 20) {
+            @Override public FluidStack getFluidOutputs() { return FluidStack.EMPTY; }
+        };
+        RecipeHolder<CentrifugeRecipe> selected = new RecipeHolder<>(ResourceLocation.parse("test:lane_recovery"), recipe);
+        var processor = new PbRecipeProcessor(context, "lane-recovery-test");
+        processor.refreshEnergyAndOpsCache(context);
+        when(context.productivebeesgenesis$hasEssenceConversionUpgrade())
+                .thenThrow(new IllegalStateException("output preparation unavailable"));
+        processor.setTickMultiplier(2);
+        assertFalse(processor.tryProcessPbRecipe(0, selected, 1_000));
+        assertEquals(PbRecipeProcessor.LaneState.PROCESSING_FAILED, processor.getLaneState(0));
+        assertEquals(2, context.inputSlot(0).getCount());
+        assertTrue(context.primaryOutputSlot(0).isEmpty());
+
+        doReturn(false).when(context).productivebeesgenesis$hasEssenceConversionUpgrade();
+        when(context.canFunction()).thenReturn(false);
+        tick[0]++;
+        assertFalse(processor.tryProcessPbRecipe(0, selected, 1_000));
+        assertEquals(PbRecipeProcessor.LaneState.PROCESSING_FAILED, processor.getLaneState(0));
+        when(context.canFunction()).thenReturn(true);
+        tick[0]++;
+        assertFalse(processor.tryProcessPbRecipe(0, selected, 0));
+        assertEquals(PbRecipeProcessor.LaneState.PROCESSING_FAILED, processor.getLaneState(0));
+        tick[0]++;
+        processor.setTickMultiplier(1);
+        assertTrue(processor.tryProcessPbRecipe(0, selected, 1_000));
+        assertEquals(PbRecipeProcessor.LaneState.PROCESSING_FAILED, processor.getLaneState(0));
+        assertEquals(2, context.inputSlot(0).getCount());
+        tick[0]++;
+        assertTrue(processor.tryProcessPbRecipe(0, selected, 1_000));
+        assertEquals(PbRecipeProcessor.LaneState.READY, processor.getLaneState(0));
+        assertEquals(1, context.inputSlot(0).getCount());
+        assertEquals(Items.GOLD_INGOT, context.primaryOutputSlot(0).getStack().getItem());
+        assertEquals(1, context.primaryOutputSlot(0).getCount());
+    }
+
+    @Test void failedPreparationCannotOwnUnpaidOutputsAndRetryDoesNotAccumulateThem() {
+        var context = context();
+        context.inputSlot(0).setStack(new ItemStack(Items.HONEYCOMB, 2));
+        var owner = new PbRecipeCompleter(context);
+        var selected = recipe(1);
+        when(context.productivebeesgenesis$hasEssenceConversionUpgrade())
+                .thenThrow(new IllegalStateException("output conversion unavailable"));
+        assertThrows(IllegalStateException.class, () -> owner.prepareCompleted(selected, 1, 91));
+        assertFalse(owner.hasPaidPendingOutputs());
+        assertFalse(owner.hasPendingOutputs());
+        assertEquals(0, owner.pendingInputShrink());
+        assertEquals(2, context.inputSlot(0).getCount());
+
+        doReturn(false).when(context).productivebeesgenesis$hasEssenceConversionUpgrade();
+        var prepared = owner.prepareCompleted(selected, 1, 91);
+        assertEquals(8, prepared.pendingItemCount());
+        assertTrue(owner.payForPrepared(prepared, context.inputSlot(0).getStack(), 1,
+                new PbVirtualTickPlan(1, 0, 1, 0), () -> {}));
+        assertEquals(8, owner.pendingItemCount());
+        assertFalse(prepared.hasPendingOutputs());
+        assertTrue(owner.commitCompletedInput(0));
+        assertEquals(1, context.inputSlot(0).getCount());
+    }
+
+    @Test void paymentNotificationsKeepOriginalOutputAndDebitEnergyOnce() {
+        var context = context();
+        boolean[] failEnergy = {false};
+        PaymentEnergy[] reference = new PaymentEnergy[1];
+        var energy = new PaymentEnergy(() -> {
+            if (failEnergy[0]) {
+                failEnergy[0] = false;
+                reference[0].unreadable = true;
+                throw new IllegalStateException("balance changed before payment notification failed");
+            }
+        });
+        reference[0] = energy;
+        energy.setEnergy(100);
+        failEnergy[0] = true;
+        doReturn(energy).when(context).energyContainer();
+        context.inputSlot(0).setStack(new ItemStack(Items.HONEYCOMB, 2));
+        var owner = new PbRecipeCompleter(context);
+        var prepared = owner.prepareCompleted(recipe(1), 1, 91);
+        doThrow(new IllegalStateException("payment save callback failed"))
+                .when(context).productivebeesgenesis$markForSave();
+        int[] progress = {0};
+        assertTrue(owner.payForPrepared(prepared,
+                context.inputSlot(0).getStack(), 1, new PbVirtualTickPlan(1, 3, 1, 10),
+                () -> progress[0] = 3));
+        assertFalse(owner.paymentPending());
+        assertEquals(3, progress[0]);
+        assertEquals(90, energy.stored());
+        assertEquals(8, owner.pendingItemCount());
+        assertFalse(prepared.hasPendingOutputs());
+        assertEquals(2, context.inputSlot(0).getCount());
+
+        var saved = owner.saveCommittedPending(REGISTRIES);
+        doNothing().when(context).productivebeesgenesis$markForSave();
+        var restored = new PbRecipeCompleter(context);
+        restored.loadCommittedPending(saved, REGISTRIES);
+        assertEquals(counts(owner), counts(restored));
+        assertTrue(restored.commitCompletedInput(0));
+        assertEquals(1, context.inputSlot(0).getCount());
+        assertTrue(restored.commitCompletedInput(0));
+        assertEquals(1, context.inputSlot(0).getCount());
+        assertFalse(restored.recoverKnownPayment(0, ignored -> fail("Completed payment must not advance twice")));
+        assertEquals(90, energy.stored());
+    }
+
+    @Test void zeroEnergyPaymentReloadAutomaticallyKeepsProgressAndDeliversOriginalOutputOnce() {
+        var context = context();
+        var level = mock(Level.class);
+        when(level.registryAccess()).thenReturn(REGISTRIES);
+        when(context.level()).thenReturn(level);
+        when(context.processes()).thenReturn(1);
+        when(context.canFunction()).thenReturn(true);
+        var energy = mock(MachineEnergyContainer.class);
+        when(context.energyContainer()).thenReturn(energy);
+        context.inputSlot(0).setStack(new ItemStack(Items.HONEYCOMB, 1));
+        var original = new PbRecipeCompleter(context);
+        var output = new ChancedOutput(Ingredient.of(Items.GOLD_INGOT), 1, 1, 1);
+        var recipe = new CentrifugeRecipe(Ingredient.of(Items.HONEYCOMB), List.of(output), null, 20) {
+            @Override public FluidStack getFluidOutputs() { return FluidStack.EMPTY; }
+        };
+        var prepared = original.prepareCompleted(recipe, 1, 91);
+        assertTrue(original.payForPrepared(prepared, context.inputSlot(0).getStack(), 1,
+                new PbVirtualTickPlan(1, 3, 1, 0), () -> {}));
+        assertEquals(2, original.pendingItemCount());
+        assertEquals(1, context.inputSlot(0).getCount());
+        var savedPending = original.saveCommittedPending(REGISTRIES);
+        var request = java.util.UUID.randomUUID();
+        savedPending.putUUID("payment_request", request);
+        savedPending.putLong("payment_energy", 0);
+        savedPending.putInt("payment_progress", 3);
+        savedPending.putInt("process", 0);
+        var saved = new CompoundTag();
+        var entries = new net.minecraft.nbt.ListTag();
+        entries.add(savedPending);
+        saved.put("productivebeesgenesis_pb_committed_pending", entries);
+        doNothing().when(context).productivebeesgenesis$markForSave();
+        for (var slot : List.of(context.primaryOutputSlot(0), context.secondaryOutputSlot(0), context.tertiaryOutputSlot(0))) {
+            slot.setStack(new ItemStack(Items.STONE, 64));
+        }
+        var processor = new PbRecipeProcessor(context, "zero-energy-recovery-test");
+        processor.loadAdditional(saved, REGISTRIES);
+        assertEquals(request, processor.paymentStatus().getFirst().request());
+        assertFalse(processor.drainCommittedPendingOutputs(0));
+        assertTrue(processor.paymentStatus().isEmpty());
+        assertEquals(0, context.inputSlot(0).getCount());
+        var afterDebit = new CompoundTag();
+        processor.saveAdditional(afterDebit, REGISTRIES);
+        assertEquals(3, afterDebit.getIntArray("productivebeesgenesis_pb_progress")[0]);
+        var retained = afterDebit.getList("productivebeesgenesis_pb_committed_pending", 10).getCompound(0);
+        assertFalse(retained.contains("payment_request"));
+        assertFalse(retained.contains("input_count"));
+        assertEquals(2, retained.getList("items", 10).getCompound(0).getLong("productivebeesgenesis_count"));
+        var restored = new PbRecipeProcessor(context, "zero-energy-recovery-reload-test");
+        restored.loadAdditional(afterDebit, REGISTRIES);
+        context.primaryOutputSlot(0).setStack(ItemStack.EMPTY);
+        assertTrue(restored.drainCommittedPendingOutputs(0));
+        assertEquals(Items.GOLD_INGOT, context.primaryOutputSlot(0).getStack().getItem());
+        assertEquals(2, context.primaryOutputSlot(0).getCount());
+        assertFalse(restored.drainCommittedPendingOutputs(0));
+        assertEquals(2, context.primaryOutputSlot(0).getCount());
+        assertTrue(context.inputSlot(0).isEmpty());
+        assertTrue(restored.paymentStatus().isEmpty());
+        verifyNoInteractions(energy);
+    }
+
+    @Test void nativeInputNotificationSettlesActualDebitWhileUnknownWrapperStaysHeld() {
+        var nativeContext = context();
+        boolean[] failNative = {false};
+        boolean[] nativeUnreadable = {false};
+        var nativeSlot = spy(BasicInventorySlot.at(() -> {
+            if (failNative[0]) {
+                failNative[0] = false;
+                nativeUnreadable[0] = true;
+                throw new IllegalStateException("input changed before local notification failed");
+            }
+        }, 0, 0));
+        doAnswer(call -> {
+            if (nativeUnreadable[0]) throw new IllegalStateException("public input receipt unavailable");
+            return call.callRealMethod();
+        }).when(nativeSlot).getStack();
+        nativeSlot.setStack(new ItemStack(Items.HONEYCOMB, 2));
+        when(nativeContext.inputSlot(0)).thenReturn(nativeSlot);
+        var nativeOwner = new PbRecipeCompleter(nativeContext);
+        var nativePrepared = nativeOwner.prepareCompleted(recipe(1), 1, 91);
+        assertTrue(nativeOwner.payForPrepared(nativePrepared, nativeSlot.getStack(), 1,
+                new PbVirtualTickPlan(1, 0, 1, 0), () -> {}));
+        failNative[0] = true;
+        assertTrue(nativeOwner.commitCompletedInput(0));
+        assertEquals(1, ((BasicInventorySlotAccessor) (Object) nativeSlot).productivebeesgenesis$getCurrent().getCount());
+        assertFalse(nativeOwner.invalidPending());
+        assertEquals(8, nativeOwner.pendingItemCount());
+        nativeUnreadable[0] = false;
+        var nativeSaved = nativeOwner.saveCommittedPending(REGISTRIES);
+        assertFalse(nativeSaved.contains("input_failure"));
+        assertFalse(nativeSaved.contains("input_count"));
+        var nativeRestored = new PbRecipeCompleter(nativeContext);
+        nativeRestored.loadCommittedPending(nativeSaved, REGISTRIES);
+        assertTrue(nativeRestored.commitCompletedInput(0));
+        assertEquals(1, nativeSlot.getCount());
+        assertEquals(8, nativeRestored.pendingItemCount());
+
+        var context = context();
+        var source = BasicInventorySlot.at(null, 0, 0);
+        source.setStack(new ItemStack(Items.HONEYCOMB, 2));
+        var slot = mock(mekanism.api.inventory.IInventorySlot.class);
+        boolean[] unreadable = {false};
+        when(context.inputSlot(0)).thenReturn(slot);
+        when(slot.getStack()).thenAnswer(call -> {
+            if (unreadable[0]) throw new IllegalStateException("input receipt unavailable");
+            return source.getStack();
+        });
+        when(slot.shrinkStack(1, Action.EXECUTE)).thenAnswer(call -> {
+            int consumed = source.shrinkStack(1, Action.EXECUTE);
+            unreadable[0] = true;
+            return consumed;
+        });
+        var owner = new PbRecipeCompleter(context);
+        var prepared = owner.prepareCompleted(recipe(1), 1, 91);
+        assertTrue(owner.payForPrepared(prepared, source.getStack(), 1,
+                new PbVirtualTickPlan(1, 0, 1, 0), () -> {}));
+        assertThrows(IllegalStateException.class, () -> owner.commitCompletedInput(0));
+        assertEquals(1, source.getCount());
+        assertTrue(owner.invalidPending());
+        assertFalse(owner.outputUncertainPending());
+        assertFalse(owner.commitCompletedInput(0));
+        assertFalse(owner.flushPendingPbOutputs(0));
+        var saved = owner.saveCommittedPending(REGISTRIES);
+        assertEquals(2, saved.getCompound("input_failure").getInt("input_before"));
+        assertEquals(1, saved.getCompound("input_failure").getInt("requested"));
+
+        unreadable[0] = false;
+        var restored = new PbRecipeCompleter(context);
+        restored.loadCommittedPending(saved, REGISTRIES);
+        assertFalse(restored.commitCompletedInput(0));
+        assertFalse(restored.flushPendingPbOutputs(0));
+        assertEquals(saved, restored.saveCommittedPending(REGISTRIES));
+        assertEquals(1, source.getCount());
+        verify(slot, times(1)).shrinkStack(1, Action.EXECUTE);
+    }
+
+    @Test void knownPartialPaymentReloadChargesOnlyRemainderAndLegacyUnknownStaysHeld() {
+        var context = context();
+        var energy = new PaymentEnergy(null);
+        energy.setEnergy(4);
+        doReturn(energy).when(context).energyContainer();
         context.inputSlot(0).setStack(new ItemStack(Items.HONEYCOMB, 2));
         var owner = new PbRecipeCompleter(context);
         owner.accumulatePbRecipeOutputsBatch(recipe(1), 0, 2, 1);
         owner.freezeCompletedBatch(context.inputSlot(0).getStack());
-        assertThrows(IllegalStateException.class, () -> owner.payForPlan(new PbVirtualTickPlan(1, 3, 1, 10),
-                () -> fail("Unconfirmed payment must not advance progress")));
+        assertFalse(owner.payForPlan(new PbVirtualTickPlan(1, 3, 1, 10),
+                () -> fail("Partial payment must not advance progress")));
+        assertEquals(0, energy.stored());
+        assertTrue(owner.knownPaymentPending());
+        assertEquals(6, owner.paymentEnergy());
         assertFalse(owner.commitCompletedInput(0));
         assertFalse(owner.flushPendingPbOutputs(0));
         var saved = owner.saveCommittedPending(REGISTRIES);
         var request = owner.paymentRequest();
+        energy.setEnergy(100);
+        var legacy = new PbRecipeCompleter(context);
+        var withoutReceipt = saved.copy();
+        withoutReceipt.remove("payment_known");
+        legacy.loadCommittedPending(withoutReceipt, REGISTRIES);
+        assertFalse(legacy.recoverKnownPayment(0, ignored -> fail("Legacy unknown payment must stay held")));
+        assertEquals(100, energy.stored());
         var restored = new PbRecipeCompleter(context);
         restored.loadCommittedPending(saved, REGISTRIES);
         assertFalse(restored.commitCompletedInput(0));
         assertEquals(2, context.inputSlot(0).getCount());
-        assertEquals(3, restored.confirmPayment(request));
+        int[] progress = {0};
+        assertTrue(restored.recoverKnownPayment(0, paidProgress -> progress[0] = paidProgress));
+        assertEquals(3, progress[0]);
+        assertEquals(94, energy.stored());
         assertTrue(restored.commitCompletedInput(0));
         assertEquals(1, context.inputSlot(0).getCount());
         assertThrows(IllegalStateException.class, () -> restored.confirmPayment(request));
-        verify(energy).extract(10, Action.EXECUTE, AutomationType.INTERNAL);
+        assertFalse(restored.recoverKnownPayment(0, ignored -> fail("Payment must not advance twice")));
+        assertEquals(94, energy.stored());
     }
 
     @Test void frozenUncommittedBatchSurvivesReloadAndConsumesMatchingInputOnce() {

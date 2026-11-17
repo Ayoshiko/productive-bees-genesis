@@ -86,6 +86,9 @@ public class TileEntityMekCentrifugeFactory extends AbstractMekCentrifugeFactory
 			((TieredInputSlot) outputSlot).productivebeesgenesis$setInputStackMultiplier(outputMultiplier);
 			((TieredInputSlot) secondaryOutputSlot).productivebeesgenesis$setInputStackMultiplier(outputMultiplier);
 			((TieredInputSlot) tertiaryOutputSlot).productivebeesgenesis$setInputStackMultiplier(outputMultiplier);
+			MekCentrifugeFactoryHelper.bindOutputSettlement(this, i, 0, outputSlot);
+			MekCentrifugeFactoryHelper.bindOutputSettlement(this, i, 1, secondaryOutputSlot);
+			MekCentrifugeFactoryHelper.bindOutputSettlement(this, i, 2, tertiaryOutputSlot);
 			tertiaryOutputSlots[i] = tertiaryOutputSlot;
 
 			FactoryInputInventorySlot inputSlot = FactoryInputInventorySlot.create(this, i, outputSlot, secondaryOutputSlot,
@@ -95,6 +98,7 @@ public class TileEntityMekCentrifugeFactory extends AbstractMekCentrifugeFactory
 			((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(inputMultiplier);
 			// 性能：标记输入槽 → 退回保护在发配插入热路径上对本槽提前短路，省去每次插入的冗余配方校验。
 			((TieredInputSlot) inputSlot).productivebeesgenesis$markInputSlot();
+			MekCentrifugeFactoryHelper.bindInputSettlement(this, i, inputSlot);
 
 			int index = i;
 			builder.addSlot(inputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,

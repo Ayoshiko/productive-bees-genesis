@@ -120,6 +120,118 @@ class ResourceHostBindingMinecraftTest {
 		}
 	}
 
+	@Test
+	void removedUnregisteredHostKeepsAssetsAndAllowsExplicitDetachedRecovery() {
+		for (boolean outputPending : new boolean[]{false, true}) {
+			var fixture = new BindingFixture();
+			var legacy = mock(BlockEntity.class);
+			when(legacy.getLevel()).thenReturn(fixture.level);
+			when(legacy.getBlockPos()).thenReturn(BlockPos.ZERO);
+			doReturn(BlockEntityType.FURNACE).when(legacy).getType();
+			when(fixture.level.getBlockEntity(BlockPos.ZERO)).thenReturn(legacy);
+			var account = fixture.accounts.create(ResourceAccountsMinecraftTest.OWNER, ResourceHiveHost.binding(legacy));
+			ResourceAccountsMinecraftTest.produce(account, 100);
+			var work = new CompoundTag();
+			work.putInt("paid_ticks", 12);
+			work.putLong("seed", 17);
+			account.centrifugeWork.put(1, work.copy());
+			ResourceAccount.Ticket pending;
+			CompoundTag production = null;
+			if (outputPending) {
+				pending = account.beginTransfer(account.reference(), ResourceAccountsMinecraftTest.HYDROGEN, 40);
+			} else {
+				var context = new CompoundTag();
+				context.putString("host", "legacy_factory");
+				pending = account.reserve(account.reference(), 7, context,
+						java.util.Map.of(ResourceAccountsMinecraftTest.HYDROGEN, 20L));
+				account.start(pending);
+				account.freeze(pending, java.util.Map.of(ResourceAccountsMinecraftTest.HYDROGEN, 10L));
+				production = account.requestData(pending);
+			}
+			var state = fixture.state(account.reference());
+			when(legacy.getExistingDataOrNull(ResourceHiveHost.TYPE)).thenReturn(state);
+			var original = state.serializeNBT(fixture.registries);
+			try (var runtime = fixture.runtime()) {
+				runtime.when(() -> ResourceRuntime.hosts(fixture.server)).thenReturn(java.util.Map.of());
+				assertFalse(ResourceHiveHost.supports(legacy));
+				assertFalse(ResourceHiveHost.ready(legacy));
+				var before = fixture.accounts.save();
+				var stale = original.copy();
+				stale.putLong("generation", account.reference().generation() + 1);
+				state.deserializeNBT(fixture.registries, stale);
+				ResourceHiveHost.removed(legacy);
+				assertEquals(before, fixture.accounts.save());
+				state.deserializeNBT(fixture.registries, original);
+				doReturn(BlockEntityType.CHEST).when(legacy).getType();
+				ResourceHiveHost.removed(legacy);
+				assertEquals(before, fixture.accounts.save());
+				doReturn(BlockEntityType.FURNACE).when(legacy).getType();
+
+				ResourceHiveHost.removed(legacy);
+				assertNull(account.binding());
+				assertEquals(pending.source().generation() + 1, state.reference().generation());
+				assertEquals(account.reference(), state.reference());
+				assertEquals(work, account.centrifugeWork(1));
+				assertEquals(outputPending ? 60L : 100L,
+						account.available().get(ResourceAccountsMinecraftTest.HYDROGEN));
+				var detached = fixture.accounts.save();
+				ResourceHiveHost.removed(legacy);
+				assertEquals(detached, fixture.accounts.save());
+				var restoredStore = ResourceAccounts.load(detached, () -> {});
+				assertFalse(restoredStore.hasInvalidData());
+				var restored = restoredStore.find(pending.source().sourceId());
+				assertNull(restored.binding());
+				assertEquals(work, restored.centrifugeWork(1));
+				if (outputPending) {
+					var current = restored.transferTicket();
+					assertEquals(pending.sequence(), current.sequence());
+					assertThrows(IllegalStateException.class, () ->
+							restored.resolveTransfer(ResourceAccountsMinecraftTest.OWNER, pending, 15));
+					assertEquals(detached, restoredStore.save());
+					restored.resolveTransfer(ResourceAccountsMinecraftTest.OWNER, current, 15);
+					assertEquals(85L, restored.available().get(ResourceAccountsMinecraftTest.HYDROGEN));
+					assertThrows(IllegalStateException.class, () ->
+							restored.resolveTransfer(ResourceAccountsMinecraftTest.OWNER, current, 15));
+				} else {
+					var current = restored.productionTicket();
+					assertEquals(pending.sequence(), current.sequence());
+					assertEquals(production, restored.requestData(current));
+					assertThrows(IllegalStateException.class, () ->
+							restored.resolveProduction(ResourceAccountsMinecraftTest.OWNER, pending, true));
+					assertEquals(detached, restoredStore.save());
+					restored.resolveProduction(ResourceAccountsMinecraftTest.OWNER, current, true);
+					assertEquals(110L, restored.available().get(ResourceAccountsMinecraftTest.HYDROGEN));
+					assertThrows(IllegalStateException.class, () ->
+							restored.resolveProduction(ResourceAccountsMinecraftTest.OWNER, current, true));
+				}
+				assertEquals(work, restored.centrifugeWork(1));
+				var claimed = restored.claim(ResourceAccountsMinecraftTest.OWNER,
+						restored.reference(), ResourceHiveHost.binding(fixture.host));
+				assertEquals(state.reference().generation() + 1, claimed.generation());
+				assertEquals(1, restoredStore.size());
+			}
+		}
+	}
+
+	@Test
+	void canceledUpgradePreparationKeepsOriginalBindingAndAllowsEmptyRetirement() {
+		var fixture = new BindingFixture();
+		var account = fixture.accounts.create(ResourceAccountsMinecraftTest.OWNER, ResourceHiveHost.binding(fixture.host));
+		var state = fixture.state(account.reference());
+		try (var runtime = fixture.runtime()) {
+			var before = fixture.accounts.save();
+			var original = state.reference();
+			assertNotNull(ResourceHiveHost.prepareUpgrade(fixture.host));
+			assertEquals(before, fixture.accounts.save());
+			ResourceHiveHost.cancelUpgradePreparation(fixture.host);
+			assertEquals(original, state.reference());
+			assertEquals(before, fixture.accounts.save());
+			ResourceHiveHost.removed(fixture.host);
+			assertEquals(0, fixture.accounts.size());
+			assertNull(state.reference());
+		}
+	}
+
 	private static final class BindingFixture {
 
 		final ServerLevel level = mock(ServerLevel.class);

@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 
@@ -90,6 +92,32 @@ public final class ApiaryUpgradeRecovery {
 			throw new IllegalStateException("Upgrade source was not completely released");
 		}
 		complete();
+	}
+
+	/** 源端尚未交出升级数据且完整原状态已恢复时，只解除暂停，不补发任何资产。 */
+	boolean settleIntactSource(HolderLookup.Provider provider) {
+		if (!blocked() || !readable() || executing || !phase().equals("source_clear")
+				|| failure().isEmpty()) {
+			return false;
+		}
+		CompoundTag current = tile.saveWithFullMetadata(provider);
+		current.remove(NBT_KEY);
+		CompoundTag record = (CompoundTag) raw;
+		CompoundTag original = record.getCompound("source").copy();
+		if (original.get(ApiaryOutputBuffer.nbtKey()) instanceof CompoundTag buffer
+				&& buffer.get("production") instanceof CompoundTag savedProduction) {
+			ApiaryProductionState production = new ApiaryProductionState(tile.getBeeSlotCount(), () -> {});
+			production.load(provider, savedProduction);
+			buffer.put("production", production.save(provider));
+		}
+		if (!current.equals(original)) {
+			return false;
+		}
+		record.putBoolean("settled", true);
+		tile.setChanged();
+		ProductiveBeesGenesis.LOGGER.info("蜂箱升级源端已按完整原快照自动恢复，位置 {}，请求 {}，原故障 {}",
+				tile.getBlockPos(), request(), failure());
+		return true;
 	}
 
 	void fail(Throwable failure) {

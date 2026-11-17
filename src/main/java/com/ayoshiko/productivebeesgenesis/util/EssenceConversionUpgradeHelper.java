@@ -75,6 +75,34 @@ public final class EssenceConversionUpgradeHelper {
 		public List<ItemStack> maximum(List<ItemStack> items) {
 			return transform(snapshot, items, true);
 		}
+
+		/** 同一转换数量上界直接计数，不为生产预算展开 ItemStack。 */
+		public long maximumStackCount(ItemStack template, long amount) {
+			Conversion conversion = snapshot.find(template);
+			if (conversion == null || amount < conversion.inputCount()) {
+				return ItemStackMergeHelper.bulkStackCount(amount);
+			}
+			long firstAmount = Math.multiplyExact(amount / conversion.inputCount(), conversion.result().getCount());
+			long stacks = ItemStackMergeHelper.bulkStackCount(Math.min(amount, conversion.inputCount() - 1L));
+			Conversion next = conversion.continueChain() ? snapshot.find(conversion.resultKey()) : null;
+			if (next == null) return stacks + ItemStackMergeHelper.bulkStackCount(firstAmount);
+			long secondAmount = Math.multiplyExact(firstAmount / next.inputCount(), next.result().getCount());
+			return stacks + ItemStackMergeHelper.bulkStackCount(Math.min(firstAmount, next.inputCount() - 1L))
+					+ ItemStackMergeHelper.bulkStackCount(secondAmount);
+		}
+
+		/** 动态候选池只保存单位数量上界；逐级取 ceil 保留少量输入及余料的数量边界。 */
+		public long maximumUnitCount(ItemStack template, long amount) {
+			Conversion conversion = snapshot.find(template);
+			if (conversion == null) return amount;
+			long crafts = 1 + (amount - 1) / conversion.inputCount();
+			long firstAmount = Math.multiplyExact(crafts, conversion.result().getCount());
+			long maximum = Math.max(amount, firstAmount);
+			Conversion next = conversion.continueChain() ? snapshot.find(conversion.resultKey()) : null;
+			if (next == null) return maximum;
+			long nextCrafts = 1 + (firstAmount - 1) / next.inputCount();
+			return Math.max(maximum, Math.multiplyExact(nextCrafts, next.result().getCount()));
+		}
 	}
 
 	private static List<ItemStack> convert(ConversionSnapshot snapshot, List<ItemStack> drops) {

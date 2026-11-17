@@ -58,6 +58,40 @@ class BeeBatchJointDistributionTest {
         assertEquals(expected, actual);
     }
 
+    @Test
+    void floatProgressionsAtUlpBoundariesMatchIndependentPbPerStackMass() {
+        float[] coefficients = {1.3333334F, 1.75F, 2.2F};
+        int[] numerators = {4, 7, 11};
+        int[] denominators = {3, 4, 5};
+        int period = 30_720;
+        for (int gene = 1; gene <= 3; gene++) {
+            float coefficient = coefficients[gene - 1];
+            int[] boundaries = {(int) (0x1.0p22 / coefficient), (int) (0x1.0p23 / coefficient),
+                    1 << 24, Integer.MAX_VALUE - period};
+            for (int boundary : boundaries) {
+                for (int side : new int[]{-3, 1}) {
+                    long candidate = (long) boundary + (long) side * period;
+                    if (candidate <= 1 || candidate + period > Integer.MAX_VALUE) continue;
+                    int first = (int) candidate;
+                    int second = first + period;
+                    if (Math.getExponent((float) first) != Math.getExponent((float) second)
+                            || Math.getExponent(coefficient * first) != Math.getExponent(coefficient * second)) continue;
+                    long firstOutput = first + Math.round((double) (coefficient * first));
+                    long secondOutput = second + Math.round((double) (coefficient * second));
+                    Map<Long, Mass> expected = new LinkedHashMap<>();
+                    FiniteSamplingOracle.add(expected, 2 * firstOutput, Mass.of(1, 4));
+                    FiniteSamplingOracle.add(expected, firstOutput + secondOutput, Mass.of(1, 2));
+                    FiniteSamplingOracle.add(expected, 2 * secondOutput, Mass.of(1, 4));
+                    int level = gene;
+                    long step = period + (long) period * numerators[gene - 1] / denominators[gene - 1];
+                    var actual = FiniteSamplingOracle.enumerate(random ->
+                            BeeProduceBatchSampler.sampleProgression(random, first, period, step, 2, 2, level));
+                    assertEquals(expected, actual, "PB float rounding at gene " + gene + ", count " + first);
+                }
+            }
+        }
+    }
+
     private static Map<Totals, Mass> sourceMass(int lower, int upper) {
         Map<Totals, Mass> oneRound = new LinkedHashMap<>();
         long[] firstValues = {0, lower, upper};

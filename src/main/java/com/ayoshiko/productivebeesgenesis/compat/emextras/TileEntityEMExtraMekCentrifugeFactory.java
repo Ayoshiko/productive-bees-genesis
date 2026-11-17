@@ -221,6 +221,9 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 			((TieredInputSlot) outputSlot).productivebeesgenesis$setInputStackMultiplier(outputMultiplier);
 			((TieredInputSlot) secondaryOutputSlot).productivebeesgenesis$setInputStackMultiplier(outputMultiplier);
 			((TieredInputSlot) tertiaryOutputSlot).productivebeesgenesis$setInputStackMultiplier(outputMultiplier);
+			MekCentrifugeFactoryHelper.bindOutputSettlement(this, i, 0, outputSlot);
+			MekCentrifugeFactoryHelper.bindOutputSettlement(this, i, 1, secondaryOutputSlot);
+			MekCentrifugeFactoryHelper.bindOutputSettlement(this, i, 2, tertiaryOutputSlot);
 			tertiaryOutputSlots[i] = tertiaryOutputSlot;
 
 			EMExtraFactoryInputInventorySlot inputSlot = EMExtraFactoryInputInventorySlot.create(
@@ -230,6 +233,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 			((TieredInputSlot) inputSlot).productivebeesgenesis$setInputStackMultiplier(
 					CentrifugeInputStackMultipliers.forEMEFactory(tier.ordinal()));
 			((TieredInputSlot) inputSlot).productivebeesgenesis$markInputSlot();
+			MekCentrifugeFactoryHelper.bindInputSettlement(this, i, inputSlot);
 
 			int index = i;
 			builder.addSlot(inputSlot).tracksWarnings(slot -> slot.warning(WarningType.NO_MATCHING_RECIPE,
@@ -377,7 +381,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 						&& !pbProcessor.acceptsResourceInput(inputSlot(cacheIndex).getStack()),
 				this::setActiveState, () -> MekUpgradeSupport.hasCreativeUpgrade(this), energyContainer,
 				this::getTicksRequired, this::markForSave, this::getOperationsPerTick, progress,
-				productivebeesgenesis$zeroTickCoalesceStates[cacheIndex]);
+				productivebeesgenesis$zeroTickCoalesceStates[cacheIndex], pbProcessor, this);
 	}
 
 	/**
@@ -475,7 +479,7 @@ public class TileEntityEMExtraMekCentrifugeFactory extends TileEntityEMExtraItem
 	 */
 	public boolean productivebeesgenesis$runSmeltingBatch(int batchMultiplier) {
 		return MekCentrifugeFactoryHelper.runSmeltingBatch(recipeCacheLookupMonitors, batchMultiplier,
-				energyContainer, () -> super.onUpdateServer());
+				energyContainer, () -> super.onUpdateServer(), pbProcessor);
 	}
 
 	/** PB处理时返回PB进度 */

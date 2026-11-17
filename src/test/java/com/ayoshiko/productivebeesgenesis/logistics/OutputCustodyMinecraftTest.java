@@ -1,8 +1,12 @@
 package com.ayoshiko.productivebeesgenesis.logistics;
 
+import com.ayoshiko.productivebeesgenesis.inventory.OutputFluidTank;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.component.DataComponents;
@@ -14,6 +18,8 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.ItemStackHandler;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
@@ -24,6 +30,8 @@ import static org.mockito.ArgumentMatchers.*;
 
 @Tag("minecraft")
 class OutputCustodyMinecraftTest {
+    @BeforeAll static void configs() { net.neoforged.fml.config.ConfigTracker.INSTANCE.loadDefaultServerConfigs(); }
+    @AfterAll static void unload() { net.neoforged.fml.config.ConfigTracker.INSTANCE.unloadConfigs(net.neoforged.fml.config.ModConfig.Type.SERVER); }
     private static OutputCustody custody() { return new OutputCustody(() -> {}); }
 
     @Test
@@ -250,18 +258,21 @@ class OutputCustodyMinecraftTest {
         when(first.insertItem(any(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL)))
                 .thenAnswer(call -> ((ItemStack) call.getArgument(0)).copyWithCount(7));
         when(second.insertItem(any(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL)))
-                .thenReturn(new ItemStack(Items.GOLD_INGOT, 4));
+                .thenAnswer(call -> {
+                    when(second.getStack()).thenReturn(new ItemStack(Items.GOLD_INGOT, 4));
+                    return new ItemStack(Items.GOLD_INGOT, 4);
+                });
         var retained = custody();
         assertEquals(10, LocalOutputTransfer.insert(java.util.List.of(first, second), source, retained));
-        assertEquals(7, retained.amount());
+        assertEquals(7, retained.localItem(1).amount());
         assertEquals(10, source.getCount());
         assertTrue(retained.blocked());
         source.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
                 net.minecraft.network.chat.Component.literal("外部后续修改"));
-        retained.resolve(retained.sequence(), 0);
-        assertEquals("原始物品", retained.recoveredItem()
+        retained.localItem(1).resolve(retained.localItem(1).sequence(), 0);
+        assertEquals("原始物品", retained.localItem(1).recoveredItem()
                 .get(net.minecraft.core.component.DataComponents.CUSTOM_NAME).getString());
-        assertEquals(7, retained.recoveredItem().getCount());
+        assertEquals(7, retained.localItem(1).recoveredItem().getCount());
     }
 
     @Test void executionThrowBeforeObservableAcceptanceStillRequiresResolution() {
@@ -341,7 +352,7 @@ class OutputCustodyMinecraftTest {
                 if (throwsAfterWrite) throw new IllegalStateException("accepted 40 then failed");
                 return 40;
             });
-            assertEquals(throwsAfterWrite ? 100 : 40, FastFluidEjector.transfer(tank, target, custody));
+            assertEquals(throwsAfterWrite ? 100 : 40, FastFluidEjector.transfer(tank, target, custody, 0));
             assertEquals(throwsAfterWrite ? 100 : 60, custody.amount());
             if (throwsAfterWrite) {
                 verify(tank, never()).insert(any(), any(), any());
@@ -353,14 +364,291 @@ class OutputCustodyMinecraftTest {
     }
 
     @Test void simulationFailureDoesNotExtract() {
-        var tank = mock(IExtendedFluidTank.class);
-        when(tank.extract(anyInt(), eq(Action.SIMULATE), any())).thenReturn(new FluidStack(Fluids.WATER, 100));
+        for (boolean sourceFailure : new boolean[]{false, true}) {
+            var tank = mock(IExtendedFluidTank.class);
+            var target = mock(IFluidHandler.class);
+            boolean[] failed = {true};
+            when(tank.extract(anyInt(), eq(Action.SIMULATE), any())).thenAnswer(call -> {
+                if (sourceFailure && failed[0]) throw new IllegalStateException("source simulation failed");
+                return new FluidStack(Fluids.WATER, 100);
+            });
+            when(tank.extract(anyInt(), eq(Action.EXECUTE), any())).thenReturn(new FluidStack(Fluids.WATER, 100));
+            when(target.fill(any(), any())).thenAnswer(call -> {
+                if (!sourceFailure && failed[0]) throw new IllegalStateException("target simulation failed");
+                return 100;
+            });
+            var custody = custody();
+            assertEquals(0, FastFluidEjector.transfer(tank, target, custody, 0));
+            verify(tank, never()).extract(anyInt(), eq(Action.EXECUTE), any());
+            assertFalse(custody.blocked());
+            failed[0] = false;
+            assertEquals(100, FastFluidEjector.transfer(tank, target, custody, 0));
+            assertFalse(custody.blocked());
+        }
+    }
+
+    @Test
+    void localCallbackFailuresUseObservedZeroPartialAndFullReceipts() {
+        for (int accepted : new int[]{0, 3, 6}) {
+            var items = new ItemStack[]{new ItemStack(Items.DIAMOND, 5)};
+            var itemOwner = custody();
+            assertEquals(accepted, itemOwner.localItem(0).handoffLocalItem(
+                    new ItemStack(Items.DIAMOND), 6, items[0], "local-item", () -> items[0], () -> {
+                        items[0] = new ItemStack(Items.DIAMOND, 5 + accepted);
+                        throw new IllegalStateException("listener failed after local item write");
+                    }));
+            assertEquals(5 + accepted, items[0].getCount());
+            assertFalse(itemOwner.blocked());
+            var fluids = new FluidStack[]{new FluidStack(Fluids.WATER, 5)};
+            var fluidOwner = custody();
+            assertEquals(accepted, fluidOwner.localFluid(0).handoffLocalFluid(
+                    new FluidStack(Fluids.WATER, 1), 6, fluids[0], "local-fluid", () -> fluids[0], () -> {
+                        fluids[0] = new FluidStack(Fluids.WATER, 5 + accepted);
+                        throw new IllegalStateException("listener failed after local fluid write");
+                    }));
+            assertEquals(5 + accepted, fluids[0].getAmount());
+            assertFalse(fluidOwner.blocked());
+        }
+    }
+
+    @Test
+    void unreadableLocalReceiptsVerifyAndRefillThroughTheComponentTickAfterReload() {
+        var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        var state = BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse(
+                "productivebeesgenesis:elite_mek_apiary_factory")).defaultBlockState();
+        var tile = new com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiaryFactory(
+                net.minecraft.core.Holder.direct(state.getBlock()), net.minecraft.core.BlockPos.ZERO, state);
+        var level = mock(net.minecraft.server.level.ServerLevel.class);
+        when(level.registryAccess()).thenReturn(registries);
+        when(level.getBlockState(any())).thenReturn(net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+        tile.setLevel(level);
+        var owner = OutputCustody.of(tile);
+        var slot = tile.getOutputSlots().getFirst();
+        var tank = tile.getFluidTank();
+        assertEquals(256, slot.getLimit(new ItemStack(Items.DIAMOND)));
+        slot.setStack(new ItemStack(Items.DIAMOND, 128));
+        assertEquals(128, slot.getCount());
+        assertEquals(10, owner.localItem(0).handoffLocalItem(new ItemStack(Items.DIAMOND), 10,
+                slot.getStack(), "machine-slot:0", () -> { throw new IllegalStateException("cannot read receipt"); }, () -> {
+                    slot.growStack(3, Action.EXECUTE);
+                    throw new IllegalStateException("local item callback failed");
+                }));
+        assertEquals(10, owner.localFluid(0).handoffLocalFluid(new FluidStack(cy.jdkdigital.productivebees.init.ModFluids.HONEY.get(), 1), 10,
+                FluidStack.EMPTY, "apiary-tank", () -> { throw new IllegalStateException("cannot read receipt"); }, () -> {
+                    tank.setStack(new FluidStack(cy.jdkdigital.productivebees.init.ModFluids.HONEY.get(), 4));
+                    throw new IllegalStateException("local fluid callback failed");
+                }));
+        assertTrue(owner.localItemBlocked(0));
+        assertTrue(owner.localFluidBlocked(0));
+        assertTrue(owner.blocked());
+        assertFalse(owner.externalOutputBlocked());
+        assertTrue(slot.extractItem(131, Action.SIMULATE, AutomationType.EXTERNAL).isEmpty());
+        assertTrue(slot.extractItem(131, Action.EXECUTE, AutomationType.EXTERNAL).isEmpty());
+        assertTrue(tank.extract(4, Action.SIMULATE, AutomationType.EXTERNAL).isEmpty());
+        assertTrue(tank.extract(4, Action.EXECUTE, AutomationType.EXTERNAL).isEmpty());
+        assertEquals(2, owner.handoffItem(new ItemStack(Items.EMERALD, 2), "healthy-external", () -> 2));
+        var healthyTank = mock(IExtendedFluidTank.class);
+        when(healthyTank.extract(anyInt(), eq(Action.SIMULATE), any())).thenReturn(new FluidStack(Fluids.WATER, 6));
+        when(healthyTank.extract(anyInt(), eq(Action.EXECUTE), any())).thenReturn(new FluidStack(Fluids.WATER, 6));
+        var healthyTarget = mock(IFluidHandler.class);
+        when(healthyTarget.fill(any(), any())).thenReturn(6);
+        assertEquals(6, FastFluidEjector.transfer(healthyTank, healthyTarget, owner, 1));
+        assertFalse(owner.externalOutputBlocked());
+        var saved = owner.save(registries);
+        var itemEvidence = saved.getList("local", net.minecraft.nbt.Tag.TAG_COMPOUND).getCompound(0).getCompound("request");
+        assertEquals(128, itemEvidence.getInt("local_before_count"));
+        assertEquals(1, itemEvidence.getCompound("local_before").getInt("count"));
+        for (boolean wrongType : new boolean[]{false, true}) {
+            var invalidCount = saved.copy();
+            var invalidEvidence = invalidCount.getList("local", net.minecraft.nbt.Tag.TAG_COMPOUND)
+                    .getCompound(0).getCompound("request");
+            if (wrongType) invalidEvidence.putLong("local_before_count", 128);
+            else invalidEvidence.putInt("local_before_count", 0);
+            var invalidOwner = custody();
+            invalidOwner.load(registries, invalidCount);
+            assertTrue(invalidOwner.localItemBlocked(0));
+            assertEquals(invalidCount, invalidOwner.save(registries));
+        }
+        owner.load(registries, saved);
+        assertEquals(saved, owner.save(registries));
+        var component = tile.getComponents().stream()
+                .filter(GenesisTileComponentEjector.class::isInstance)
+                .map(GenesisTileComponentEjector.class::cast).findFirst().orElseThrow();
+        component.tickServer();
+        assertFalse(owner.blocked());
+        assertEquals(138, slot.getCount());
+        assertEquals(10, tank.getFluidAmount());
+        assertTrue(owner.save(registries).isEmpty());
+        component.tickServer();
+        assertEquals(138, slot.getCount());
+        assertEquals(10, tank.getFluidAmount());
+        var smallBefore = custody();
+        assertEquals(4, smallBefore.localItem(1).handoffLocalItem(new ItemStack(Items.EMERALD), 4,
+                new ItemStack(Items.EMERALD, 5), "old-v4-local",
+                () -> { throw new IllegalStateException("old v4 receipt unreadable"); },
+                () -> { throw new IllegalStateException("old v4 callback failed"); }));
+        var oldV4 = smallBefore.save(registries);
+        var oldEvidence = oldV4.getList("local", net.minecraft.nbt.Tag.TAG_COMPOUND).getCompound(0).getCompound("request");
+        oldEvidence.remove("local_before_count");
+        oldEvidence.getCompound("local_before").putInt("count", 5);
+        var oldRestored = custody();
+        oldRestored.load(registries, oldV4);
+        oldRestored.localItem(1).recoverLocalItem(() -> new ItemStack(Items.EMERALD, 9),
+                stack -> fail("legacy v4 receipt already accepted"));
+        assertFalse(oldRestored.blocked());
+        assertTrue(oldRestored.save(registries).isEmpty());
+        var legacy = owner.localItem(1);
+        assertEquals(5, legacy.handoffItem(new ItemStack(Items.EMERALD, 5), "old-local-unknown",
+                () -> { throw new IllegalStateException("old request has no inventory evidence"); }));
+        legacy.recoverLocalItem(() -> ItemStack.EMPTY, stack -> fail("old unknown cannot be retried"));
+        assertEquals(5, legacy.amount());
+        assertTrue(legacy.recoveredItem().isEmpty());
+    }
+
+    @Test
+    void notificationFailuresBeforeAndAfterReceiptDoNotLeaveMachineBlockedOrReplay() {
+        boolean[] extractNotificationFails = {false};
+        for (boolean bulk : new boolean[]{false, true}) {
+            BasicInventorySlot slot = bulk ? TieredOutputInventorySlot.at(() -> 4, () -> {
+                if (extractNotificationFails[0]) throw new IllegalStateException("bulk extraction listener failed");
+            }, 0, 0) : BasicInventorySlot.at(() -> {
+                if (extractNotificationFails[0]) throw new IllegalStateException("extraction listener failed");
+            }, 0, 0);
+            ((TieredInputSlot) slot).productivebeesgenesis$markOwnSlot();
+            int total = bulk ? 130 : 6;
+            extractNotificationFails[0] = false;
+            slot.setStack(new ItemStack(Items.DIAMOND, total));
+            extractNotificationFails[0] = true;
+            ItemStack extracted = slot.extractItem(total - 2, Action.EXECUTE, AutomationType.EXTERNAL);
+            assertEquals(total - 2, extracted.getCount());
+            assertEquals(2, slot.getCount());
+            assertEquals(2, slot.extractItem(2, Action.SIMULATE, AutomationType.EXTERNAL).getCount());
+            assertEquals(2, slot.getCount());
+            extractNotificationFails[0] = false;
+            assertEquals(2, slot.extractItem(2, Action.EXECUTE, AutomationType.EXTERNAL).getCount());
+            assertTrue(slot.isEmpty());
+        }
+
+        var outputTank = new OutputFluidTank(1000, (stack, automation) -> true,
+                (stack, automation) -> automation == AutomationType.INTERNAL, stack -> true, () -> {
+                    if (extractNotificationFails[0]) throw new IllegalStateException("fluid extraction listener failed");
+                });
+        outputTank.setStack(new FluidStack(Fluids.WATER, 100));
+        extractNotificationFails[0] = true;
+        assertEquals(40, outputTank.extract(40, Action.EXECUTE, AutomationType.EXTERNAL).getAmount());
+        assertEquals(60, outputTank.getFluidAmount());
+        assertEquals(20, outputTank.extractAmount(20));
+        assertEquals(40, outputTank.getFluidAmount());
         var target = mock(IFluidHandler.class);
-        when(target.fill(any(), any())).thenThrow(new IllegalStateException());
-        var custody = custody();
-        assertEquals(0, FastFluidEjector.transfer(tank, target, custody));
-        verify(tank, never()).extract(anyInt(), eq(Action.EXECUTE), any());
-        assertFalse(custody.blocked());
+        when(target.fill(any(), eq(IFluidHandler.FluidAction.SIMULATE))).thenReturn(40);
+        when(target.fill(any(), eq(IFluidHandler.FluidAction.EXECUTE))).thenReturn(40);
+        var sourceOwner = custody();
+        assertEquals(40, FastFluidEjector.transfer(outputTank, target, sourceOwner, 0));
+        assertTrue(outputTank.isEmpty());
+        assertFalse(sourceOwner.blocked());
+        verify(target, times(1)).fill(any(), eq(IFluidHandler.FluidAction.EXECUTE));
+        extractNotificationFails[0] = false;
+        outputTank.setStack(new FluidStack(Fluids.WATER, 10));
+        assertEquals(10, outputTank.extract(10, Action.EXECUTE, AutomationType.EXTERNAL).getAmount());
+        assertTrue(outputTank.isEmpty());
+
+        boolean[] preparationFails = {true};
+        var preparationOwner = new OutputCustody(() -> {
+            if (preparationFails[0]) throw new IllegalStateException("handoff preparation notification failed");
+        });
+        outputTank.setStack(new FluidStack(Fluids.WATER, 40));
+        assertEquals(0, FastFluidEjector.transfer(outputTank, target, preparationOwner, 0));
+        assertTrue(outputTank.isEmpty());
+        assertEquals(40, preparationOwner.recoveredFluid().getAmount());
+        verify(target, times(1)).fill(any(), eq(IFluidHandler.FluidAction.EXECUTE));
+        preparationFails[0] = false;
+        preparationOwner.recoverFluid(stack -> stack.getAmount()
+                - outputTank.insert(stack, Action.EXECUTE, AutomationType.INTERNAL).getAmount());
+        assertEquals(40, outputTank.getFluidAmount());
+        assertFalse(preparationOwner.blocked());
+        assertEquals(40, FastFluidEjector.transfer(outputTank, target, preparationOwner, 0));
+        assertTrue(outputTank.isEmpty());
+        assertFalse(preparationOwner.blocked());
+        verify(target, times(2)).fill(any(), eq(IFluidHandler.FluidAction.EXECUTE));
+
+        int[] preparationCalls = {0};
+        var prefixOwner = new OutputCustody(() -> {
+            if (++preparationCalls[0] == 3) throw new IllegalStateException("second handoff preparation failed");
+        });
+        var prefixTarget = mock(net.neoforged.neoforge.items.IItemHandler.class);
+        when(prefixTarget.getSlots()).thenReturn(2);
+        when(prefixTarget.getStackInSlot(anyInt())).thenReturn(ItemStack.EMPTY);
+        when(prefixTarget.insertItem(eq(0), any(), eq(false))).thenAnswer(call -> {
+            ItemStack offered = call.getArgument(1);
+            return offered.copyWithCount(offered.getCount() - 2);
+        });
+        assertEquals(4, ItemPushHelper.insert(prefixTarget, new ItemStack(Items.DIAMOND, 6), prefixOwner,
+                "prepared-prefix").getCount());
+        verify(prefixTarget, times(1)).insertItem(eq(0), any(), eq(false));
+        verify(prefixTarget, never()).insertItem(eq(1), any(), eq(false));
+        assertFalse(prefixOwner.blocked());
+
+        boolean[] failNotification = {true};
+        var owner = new OutputCustody(() -> {
+            if (failNotification[0]) throw new IllegalStateException("save notification failed");
+        });
+        assertThrows(IllegalStateException.class, () -> owner.handoffItem(
+                new ItemStack(Items.DIAMOND, 6), "before-insert", () -> fail("receiver must not execute")));
+        assertFalse(owner.blocked());
+        assertThrows(IllegalStateException.class, () -> owner.handoffFluidFromTank(
+                new FluidStack(Fluids.WATER, 1), 6, "before-fluid", () -> fail("fluid receiver must not execute")));
+        assertFalse(owner.blocked());
+        assertThrows(IllegalStateException.class, () -> owner.beginSharedItem(UUID.randomUUID(),
+                new ItemStack(Items.DIAMOND), 6, "before-shared"));
+        assertFalse(owner.blocked());
+        failNotification[0] = false;
+        assertEquals(0, owner.handoffFluidFromTank(new FluidStack(Fluids.WATER, 1), 6, "fluid-zero", () -> {
+            failNotification[0] = true;
+            return 0;
+        }));
+        assertFalse(owner.blocked());
+        assertEquals(0, owner.sourceDebitPending());
+        failNotification[0] = false;
+        assertEquals(6, owner.handoffItem(new ItemStack(Items.DIAMOND, 6), "accepted", () -> {
+            failNotification[0] = true;
+            return 6;
+        }));
+        assertFalse(owner.blocked());
+        failNotification[0] = false;
+        assertEquals(2, owner.handoffItem(new ItemStack(Items.IRON_INGOT, 2), "next", () -> 2));
+        assertFalse(owner.blocked());
+        assertEquals(3, owner.handoffItem(new ItemStack(Items.EMERALD, 3), "unknown", () -> {
+            failNotification[0] = true;
+            throw new IllegalStateException("receiver changed before failure");
+        }));
+        assertTrue(owner.blocked());
+        assertEquals(3, owner.amount());
+        assertEquals(0, owner.handoffItem(new ItemStack(Items.EMERALD, 3), "replay", () -> fail("no replay")));
+    }
+
+    @Test
+    void externalUnknownStillAllowsIndependentLocalItemsAndFluidAfterReload() {
+        var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        var owner = custody();
+        assertEquals(6, owner.handoffItem(new ItemStack(Items.DIAMOND, 6), "external", () -> {
+            throw new IllegalStateException("receiver result unknown");
+        }));
+        var request = owner.sequence();
+        var first = mock(mekanism.api.inventory.IInventorySlot.class);
+        when(first.getStack()).thenReturn(ItemStack.EMPTY);
+        when(first.insertItem(any(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL))).thenReturn(ItemStack.EMPTY);
+        assertEquals(4, LocalOutputTransfer.insert(java.util.List.of(first), new ItemStack(Items.IRON_INGOT, 4), owner));
+        assertEquals(8, owner.localFluid(0).handoffFluid(new FluidStack(Fluids.WATER, 8), 8, "local-tank", () -> 8));
+        assertEquals(6, owner.amount());
+        assertEquals(request, owner.sequence());
+        assertFalse(owner.localOutputBlocked());
+        var restored = custody();
+        restored.load(registries, owner.save(registries));
+        assertFalse(restored.localOutputBlocked());
+        assertEquals(2, LocalOutputTransfer.insert(java.util.List.of(first), new ItemStack(Items.IRON_INGOT, 2), restored));
+        assertEquals(0, restored.handoffItem(new ItemStack(Items.DIAMOND, 6), "retry", () -> fail("external replay")));
+        assertEquals(request, restored.sequence());
+        assertEquals(6, restored.amount());
     }
 
     @Test void corruptCustodyIsKeptVerbatim() {

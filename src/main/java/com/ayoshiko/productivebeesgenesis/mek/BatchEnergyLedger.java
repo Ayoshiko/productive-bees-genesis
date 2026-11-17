@@ -35,6 +35,10 @@ public final class BatchEnergyLedger {
 		return ACTIVE.get();
 	}
 
+	public long pendingEnergy() {
+		return pendingEnergy;
+	}
+
 	/** 清空当前批次的待扣能量。 */
 	public void reset() {
 		pendingEnergy = 0L;

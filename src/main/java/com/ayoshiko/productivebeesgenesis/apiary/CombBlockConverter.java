@@ -1,94 +1,66 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
-import cy.jdkdigital.productivebees.util.BeeHelper;
-import net.minecraft.world.item.HoneycombItem;
+import cy.jdkdigital.productivebees.common.item.Honeycomb;
+import cy.jdkdigital.productivebees.init.ModBlocks;
+import cy.jdkdigital.productivebees.init.ModDataComponents;
+import cy.jdkdigital.productivebees.init.ModItems;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/**
-	 * 蜜脾→蜜脾块转换器
-	 * <br/>
-	 * 从 {@link BeeProduceProcessor} 抽取的蜜脾块升级转换逻辑，负责将 {@link HoneycombItem}
-	 * 类型产出替换为对应的蜜脾块。
-	 * <p>
-	 * 复刻 PB 原版 {@code BeeHelper.getCombBlockFromHoneyComb} 的转换语义：
-	 * 将所有 {@link HoneycombItem} 类型的产出替换为对应的蜜脾块（1:1 替换，保持数量）。
-	 * <p>
-	 * 转换结果不写入静态缓存（不同蜂箱升级状态不同），每次调用动态转换。
-	 * 转换失败（PB 内部异常）时保留原始物品，避免产物丢失。
-	 */
+/** 蜜脾块升级使用 PB 的确定映射，1:1 替换普通采蜜产物并保留数量。 */
 public class CombBlockConverter {
 
-	/**
-	 * 将蜜脾转换为蜜脾块（Bug 5）
-	 * <br/>
-	 * 安装 Omega/Block 升级后，复刻 PB 原版 {@code BeeHelper.getCombBlockFromHoneyComb} 的转换逻辑：
-	 * 将所有 {@link HoneycombItem} 类型的产出替换为对应的蜜脾块（1:1 替换，保持数量）。
-	 * <p>
-	 * PB 原版在 {@code BeeHelper.getBeeProduce} 中对每个产出物品判断
-	 * {@code itemStack.getItem() instanceof HoneycombItem}，命中则调用
-	 * {@code getCombBlockFromHoneyComb} 替换，随后 {@code setCount(count)} 保持数量。
-	 * 此处采用相同语义：1:1 替换不改变数量。
-	 * <p>
-	 * 转换结果不写入静态缓存 {@code produceCache}（不同蜂箱升级状态不同），每次调用动态转换。
-	 * 转换失败（PB 内部异常）时保留原始物品，避免产物丢失。
-	 *
-	 * @param items 原始产出物品列表
-	 * @return 转换后的物品列表（蜜脾已替换为蜜脾块）
-	 */
+	/** 转换结果不写入共享配方缓存，不同蜂箱的升级状态分别生效。 */
 	public List<ItemStack> convertCombsToBlocks(List<ItemStack> items) {
 		List<ItemStack> result = new ArrayList<>(items.size());
 		for (ItemStack stack : items) {
-			if (stack.isEmpty()) continue;
-			if (stack.getItem() instanceof HoneycombItem) {
-				try {
-					ItemStack block = BeeHelper.getCombBlockFromHoneyComb(stack);
-					if (!block.isEmpty()) {
-						// 1:1 替换，保持原始数量
-						block.setCount(stack.getCount());
-						result.add(block);
-						continue;
-					}
-				} catch (Exception e) {
-					// 转换失败保留原始物品，避免产物丢失
-					// 节流：本方法在每次产出的逐栈循环内调用，异常若持续存在会每 tick 刷屏
-					LogThrottle.warn("comb_block_convert",
-							"蜜脾→蜜脾块转换失败，保留原始物品: {}", e.toString());
-				}
+			if (!stack.isEmpty()) {
+				result.add(convertStack(stack));
 			}
-			result.add(stack);
 		}
 		return result;
 	}
 
-	/** Converts a caller-owned mutable production buffer without allocating another list. */
+	/** 转换调用方独占的生产列表，不另分配列表。 */
 	List<ItemStack> convertCombsToBlocksInPlace(List<ItemStack> items) {
 		int writeIndex = 0;
 		for (int readIndex = 0; readIndex < items.size(); readIndex++) {
 			ItemStack stack = items.get(readIndex);
-			if (stack.isEmpty()) continue;
-			if (stack.getItem() instanceof HoneycombItem) {
-				try {
-					ItemStack block = BeeHelper.getCombBlockFromHoneyComb(stack);
-					if (!block.isEmpty()) {
-						block.setCount(stack.getCount());
-						stack = block;
-					}
-				} catch (Exception e) {
-					// 同上：原地转换同样位于逐栈热循环，改用时间维度节流
-					LogThrottle.warn("comb_block_convert_in_place",
-							"Failed to convert honeycomb output to a comb block; retaining the original stack: {}",
-							e.toString());
-				}
+			if (stack.isEmpty()) {
+				continue;
 			}
-			items.set(writeIndex++, stack);
+			items.set(writeIndex, convertStack(stack));
+			writeIndex++;
 		}
 		if (writeIndex < items.size()) {
 			items.subList(writeIndex, items.size()).clear();
 		}
 		return items;
+	}
+
+	private ItemStack convertStack(ItemStack stack) {
+		if (stack.getItem() instanceof Honeycomb) {
+			ItemStack block = new ItemStack(ModItems.CONFIGURABLE_COMB_BLOCK.get(), stack.getCount());
+			block.set(ModDataComponents.BEE_TYPE, stack.get(ModDataComponents.BEE_TYPE));
+			return block;
+		}
+		if (stack.is(Items.HONEYCOMB)) {
+			return new ItemStack(Blocks.HONEYCOMB_BLOCK, stack.getCount());
+		}
+		if (stack.is(ModItems.HONEYCOMB_GHOSTLY.get())) {
+			return new ItemStack(ModBlocks.COMB_GHOSTLY.get(), stack.getCount());
+		}
+		if (stack.is(ModItems.HONEYCOMB_MILKY.get())) {
+			return new ItemStack(ModBlocks.COMB_MILKY.get(), stack.getCount());
+		}
+		if (stack.is(ModItems.HONEYCOMB_POWDERY.get())) {
+			return new ItemStack(ModBlocks.COMB_POWDERY.get(), stack.getCount());
+		}
+		// 没有 PB 对应块的第三方物品保留原身份，不影响其他正常产物转换。
+		return stack;
 	}
 }

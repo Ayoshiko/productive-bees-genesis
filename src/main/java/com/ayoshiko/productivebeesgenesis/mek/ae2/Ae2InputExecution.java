@@ -78,9 +78,6 @@ final class Ae2InputExecution {
 		Ae2InputLaneSnapshot laneSnapshot = buffers.inputLaneSnapshot();
 		laneSnapshot.capture(inputSlots, processCount, host instanceof BlockEntity entity ? entity : null);
 		boolean boundedCapacityPlanning = laneSnapshot.canBoundCapacityPlanning();
-		// 公平轮先分配份额，补齐轮只在份额确实截断需求时借用余量。
-		int laneBudget = Ae2InputLaneFairness.emptyLaneBudget(processCount, typeCount);
-		long fairShare = Ae2InputLaneFairness.typeQuotaShare(normalQuota, typeCount);
 		int passes = typeCount > 1 ? 2 : 1;
 		boolean fairPassTruncated = false;
 		// 预算跨公平轮与补齐轮累计，未提取的类型留待后续拉取。
@@ -88,8 +85,21 @@ final class Ae2InputExecution {
 		boolean networkPermitExhausted = false;
 		try {
 			for (int pass = 0; pass < passes && totalPulled < inputCapacity && !holder.getPendingItemBuffer().isBlocked(); pass++) {
-				boolean fairPass = pass == 0 && typeCount > 1;
-				boolean protectLanes = typeCount > 1 && (fairPass
+				int competingTypes = 0;
+				for (PullEntry entry : pullList) {
+					if (entry.resourceDeferred) networkWorkDeferred = true;
+					if (entry.remaining <= 0 || entry.resourceDeferred || keyBackoff.shouldSkip(entry.key, nanoNow)) continue;
+					if (laneSnapshot.isIndexed() && laneSnapshot.candidateLanes(entry.key) == 0L) {
+						entry.remaining = 0;
+						continue;
+					}
+					competingTypes++;
+				}
+				// 等待出口的候选不占正常供料的份额；调用预算仍按本轮原类型上限累计。
+				int laneBudget = Ae2InputLaneFairness.emptyLaneBudget(processCount, competingTypes);
+				long fairShare = Ae2InputLaneFairness.typeQuotaShare(normalQuota, competingTypes);
+				boolean fairPass = pass == 0 && competingTypes > 1;
+				boolean protectLanes = competingTypes > 1 && (fairPass
 						|| hasUnassignedDemand(pullList, laneSnapshot, processCount));
 				// 补齐轮只在公平轮确实被上限截断时才跑：否则会为每个类型重复一遍
 				// 逐槽 SIMULATE 探测（processCount × typeCount 次），纯属浪费。
@@ -125,7 +135,10 @@ final class Ae2InputExecution {
 
 					boolean indexed = laneSnapshot.isIndexed();
 					long candidateLanes = laneSnapshot.candidateLanes(entry.key);
-					if (indexed && candidateLanes == 0L) continue;
+					if (indexed && candidateLanes == 0L) {
+						entry.remaining = 0;
+						continue;
+					}
 					if (!entry.componentMatchCacheActive) entry.beginComponentMatchCache(processCount);
 
 					// 每个候选只构造一个探针，并复用当前规划轮的完整组件匹配缓存。
@@ -212,7 +225,9 @@ final class Ae2InputExecution {
 						maxSlowExtractCost = Math.max(maxSlowExtractCost, batchResult.extractCostNanos());
 					} catch (LinkageError | RuntimeException e) {
 						handlePullException(e, entry.key);
-						if (holder.getPendingItemBuffer().isBlocked()) {
+						if (holder.getPendingItemBuffer().recoverKnownTransfer(currentTick)) {
+							host.productivebeesgenesis$markAe2StateChanged();
+						} else if (holder.getPendingItemBuffer().isBlocked()) {
 							var unresolved = holder.getPendingItemBuffer().transfer();
 							unresolved.fingerprint();
 							LogThrottle.error("ae2_input_transfer_unknown", "AE2 输入待核验 pos={} request={} target={} known={} offered={}: {}",
@@ -265,6 +280,16 @@ final class Ae2InputExecution {
 		if (entry == null || entry.key == null) return 0;
 		IInventorySlot slot = lanes.slot(slotIdx);
 		if (slot == null) return 0;
+		try {
+			return laneCapacityKnown(lanes, slotIdx, keyItem, entry, probe, slot);
+		} catch (RuntimeException | LinkageError failure) {
+			LogThrottle.error("ae2_input_lane_capacity", "AE2 输入车道容量准备失败，lane={} key={}；其它车道继续，下轮重试", slotIdx, entry.key, failure);
+			return 0;
+		}
+	}
+
+	private static long laneCapacityKnown(Ae2InputLaneSnapshot lanes, int slotIdx, Item keyItem,
+			PullEntry entry, ItemStack probe, IInventorySlot slot) {
 		if (!lanes.acceptsRequiredInput(slotIdx, probe)) return 0;
 		// 廉价身份剪枝（与 getSlotRemainingCapacity 首判等价，但这里是纯数组读取）
 		Item laneItem = lanes.item(slotIdx);
@@ -460,15 +485,15 @@ final class Ae2InputExecution {
 		if (e instanceof NullPointerException) {
 			// NPE 异常：ERROR 级别，M9 改用 LogThrottle 节流避免 256× 加速刷屏
 			LogThrottle.error("ae2_pull_npe",
-					"AE2 拉取 NPE 异常 (累计 {} 次,5秒内仅首条输出) key={}: {}", count, key, e.toString());
+					"AE2 拉取 NPE 异常 (累计 {} 次,5秒内仅首条输出) key={}: {}", count, key, e.toString(), e);
 		} else if (e instanceof LinkageError) {
 			// LinkageError：ERROR 级别，M9 改用 LogThrottle 节流避免刷屏
 			LogThrottle.error("ae2_pull_linkage",
-					"AE2 拉取 LinkageError 异常 (累计 {} 次,5秒内仅首条输出) key={}: {}", count, key, e.toString());
+					"AE2 拉取 LinkageError 异常 (累计 {} 次,5秒内仅首条输出) key={}: {}", count, key, e.toString(), e);
 		} else {
 			// 其他异常：LogThrottle 5 秒节流 WARN
 			LogThrottle.warn("ae2_input_pull",
-					"AE2 拉取异常 (第 {} 次) key={}", count, key);
+					"AE2 拉取异常 (第 {} 次) key={}", count, key, e);
 		}
 		// InterruptedException 恢复中断状态
 		if (e instanceof InterruptedException) {

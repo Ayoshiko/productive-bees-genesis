@@ -1,6 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.screen;
 
 import com.ayoshiko.productivebeesgenesis.client.jei.ProductiveBeesGenesisJEI;
+import com.ayoshiko.productivebeesgenesis.mek.IFactoryPbDelegateAccess;
+import com.ayoshiko.productivebeesgenesis.mek.PbRecipeProcessor.LaneState;
 import mekanism.api.energy.IEnergyContainer;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.client.gui.IGuiWrapper;
@@ -13,6 +15,9 @@ import mekanism.client.gui.element.tab.GuiEnergyTab;
 import mekanism.client.recipe_viewer.type.RecipeViewerRecipeType;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
 import mekanism.common.inventory.warning.WarningTracker.WarningType;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.ArrayList;
@@ -68,6 +73,7 @@ public final class GuiMekCentrifugeFactoryHelper {
 			IntFunction<BooleanSupplier> warningCheck,
 			int baseX, int baseXMult) {
 		List<GuiProgress> bars = new ArrayList<>(processes);
+		IFactoryPbDelegateAccess factory = (IFactoryPbDelegateAccess) tile;
 		for (int i = 0; i < processes; i++) {
 			int cacheIndex = i;
 			int xPos = baseX + (i * baseXMult);
@@ -75,7 +81,34 @@ public final class GuiMekCentrifugeFactoryHelper {
 			// 物品输出槽由dynamicSlots自动渲染蓝色边框，无需手动添加GuiSlot
 			GuiProgress progress = new GuiProgress(
 					() -> ProgressDisplaySmoother.smooth(tile, cacheIndex, scaledProgress.applyAsDouble(cacheIndex)),
-					ProgressType.DOWN, gui, 4 + xPos, 33);
+					ProgressType.DOWN, gui, 4 + xPos, 33) {
+				private LaneState displayedState = LaneState.READY;
+
+				@Override
+				public void drawBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
+					super.drawBackground(graphics, mouseX, mouseY, partialTicks);
+					LaneState state = factory.productivebeesgenesis$getPbProcessor().getLaneState(cacheIndex);
+					if (state == LaneState.READY) return;
+					int markerX = getRelativeX() + getWidth() / 2;
+					int markerY = getRelativeY() + 2;
+					int color = state == LaneState.PROCESSING_FAILED || state == LaneState.SMELTING_PENDING
+							|| state == LaneState.PAYMENT_PENDING
+							? 0xFFFFB84A : 0xFFFF6565;
+					graphics.fill(markerX - 1, markerY, markerX + 1, markerY + 6, color);
+					graphics.fill(markerX - 1, markerY + 8, markerX + 1, markerY + 10, color);
+				}
+
+				@Override
+				public void updateTooltip(int mouseX, int mouseY) {
+					super.updateTooltip(mouseX, mouseY);
+					LaneState state = factory.productivebeesgenesis$getPbProcessor().getLaneState(cacheIndex);
+					if (state == displayedState) return;
+					displayedState = state;
+					setTooltip(state == LaneState.READY ? null : Tooltip.create(
+							Component.translatable("gui.productivebeesgenesis.centrifuge_lane.lane", cacheIndex + 1)
+									.append("\n").append(Component.translatable(laneStateKey(state)))));
+				}
+			};
 			progress.recipeViewerCategories(RecipeViewerRecipeType.SMELTING, jeiViewerTypeOrNull())
 					.warning(WarningType.INPUT_DOESNT_PRODUCE_OUTPUT, warningCheck.apply(cacheIndex));
 			bars.add(progress);
@@ -83,6 +116,20 @@ public final class GuiMekCentrifugeFactoryHelper {
 		return bars;
 	}
 
+
+	private static String laneStateKey(LaneState state) {
+		return switch (state) {
+			case PROCESSING_FAILED -> "gui.productivebeesgenesis.centrifuge_lane.processing_failed";
+			case PAYMENT_PENDING -> "gui.productivebeesgenesis.centrifuge_lane.payment_pending";
+			case PAYMENT_UNCERTAIN -> "gui.productivebeesgenesis.centrifuge_lane.payment_uncertain";
+			case SMELTING_PENDING -> "gui.productivebeesgenesis.centrifuge_lane.smelting_pending";
+			case SHARED_PAYMENT_UNCERTAIN -> "gui.productivebeesgenesis.centrifuge_lane.shared_payment_uncertain";
+			case INPUT_UNCERTAIN -> "gui.productivebeesgenesis.centrifuge_lane.input_uncertain";
+			case OUTPUT_UNCERTAIN -> "gui.productivebeesgenesis.centrifuge_lane.output_uncertain";
+			case RESOURCE_UNCERTAIN -> "gui.productivebeesgenesis.centrifuge_lane.resource_uncertain";
+			case READY -> throw new IllegalArgumentException("Ready lane has no failure tooltip");
+		};
+	}
 
 	/**
 	 * 返回 JEI 的 PB 离心配方查看器类型；JEI 未安装时返回 null。

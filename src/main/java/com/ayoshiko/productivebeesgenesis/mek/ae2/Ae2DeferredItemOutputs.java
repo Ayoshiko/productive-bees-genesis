@@ -148,7 +148,7 @@ final class Ae2DeferredItemOutputs {
         if (host.productivebeesgenesis$getAe2StateHolder() != ticket.holder
                 || ticket.holder.getOutputRevision() != ticket.revision) return null;
         OutputCustody custody = OutputCustody.of(owner);
-        if (custody.blocked()) return null;
+        if (custody.externalOutputBlocked()) return null;
         Ae2DirectItemPushSession session = Ae2OutputPusher.prepareDirectItemPush(host);
         if (session == null || !output.available(ticket.epoch)
                 || ticket.holder.getOutputRevision() != ticket.revision) return null;
@@ -195,7 +195,7 @@ final class Ae2DeferredItemOutputs {
 
     private static boolean eligible(Endpoint endpoint, AEItemKey key) {
         try {
-            if (endpoint.current() && !endpoint.custody.blocked()) {
+            if (endpoint.current() && !endpoint.custody.externalOutputBlocked()) {
                 return endpoint.session.canReserve(key);
             }
         } catch (RuntimeException | LinkageError failure) {

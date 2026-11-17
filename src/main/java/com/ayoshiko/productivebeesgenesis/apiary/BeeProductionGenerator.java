@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
-import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.util.*;
 import com.ayoshiko.productivebeesgenesis.apiary.BeeProduceProcessor.Generated;
@@ -24,17 +23,160 @@ final class BeeProductionGenerator {
 	private final MyriadAggregatedStacksBuilder myriadAggregatedBuilder = new MyriadAggregatedStacksBuilder();
 	private final ArrayList<ItemStack> reusableProducedItems = new ArrayList<>();
 	private final long[] reusableProductivityCounts = new long[BeeProductivityGene.VERY_HIGH + 1];
+	private final ItemStack[] reusableSingleFlowerOutputs = new ItemStack[BeeProductivityGene.VERY_HIGH + 1];
+	private final long[] reusableSingleFlowerAmounts = new long[BeeProductivityGene.VERY_HIGH + 1];
+	private final long[] reusableSingleFlowerCycleCounts = new long[BeeProductivityGene.VERY_HIGH + 1];
+	private int[] reusablePaidCounts = new int[0];
+
+	int[] generatedPaidCounts() {
+		return reusablePaidCounts;
+	}
 
 	BeeProductionGenerator(Object cacheOwner, MultiFlowerProductionCache cache) {
 		this.cacheOwner = cacheOwner;
 		this.multiFlowerProductionCache = cache;
 	}
 
+	/** 利用生成阶段已有的四档汇总选择前段，不重复扫描蜜蜂槽。 */
+	private long maximumPaidCycles(long[] counts, Map<ItemStack, ChancedOutput> outputs,
+			ApiaryBatchUpgradeSnapshot upgrades, EssenceConversionUpgradeHelper.BatchPlan conversion,
+			WannaBeeAmberAdapter.BatchSnapshot wannaBatch, int myriadCount,
+			List<ItemStack> flowers, ItemStack[] singleFlowerOutputs) {
+		long requested = 0;
+		int gene = BeeProductivityGene.NORMAL;
+		for (int i = 0; i < counts.length; i++) {
+			requested += counts[i];
+			if (counts[i] > 0) gene = i;
+		}
+		if (requested == 0) return 0;
+		float multiplier = upgrades.productivityMultiplier();
+		if (!Float.isFinite(multiplier) || multiplier <= 0.0F) {
+			throw new ArithmeticException("Invalid bee productivity multiplier");
+		}
+		if ((flowers != null || singleFlowerOutputs != null) && multiplier >= Integer.MAX_VALUE) {
+			throw new ArithmeticException("Per-event bee multiplier exceeds int");
+		}
+		int myriadItems = myriadCount * (upgrades.hasCombBlockUpgrade() ? 4 : 1);
+		// 常规及随机回退最多九类 PB 蜜脾，每类按 64 个拆栈；跨身份最多增加八个尾栈。
+		int myriadStacks = myriadItems == 0 ? 0 : (myriadItems + 63) / 64 + Math.min(myriadItems, 9) - 1;
+		long low = 0;
+		long high = requested;
+		if (fitsPaidBudget(high, counts, gene, outputs, flowers, singleFlowerOutputs, upgrades, conversion, wannaBatch, myriadStacks)) return requested;
+		while (low < high) {
+			long middle = low + (high - low + 1) / 2;
+			if (fitsPaidBudget(middle, counts, gene, outputs, flowers, singleFlowerOutputs, upgrades, conversion, wannaBatch, myriadStacks)) low = middle;
+			else high = middle - 1;
+		}
+		if (low == 0) throw new ArithmeticException("Single bee cycle exceeds generated stack budget");
+		return low;
+	}
+
+	private boolean fitsPaidBudget(long cycles, long[] counts, int gene, Map<ItemStack, ChancedOutput> outputs,
+			List<ItemStack> flowers, ItemStack[] singleFlowerOutputs, ApiaryBatchUpgradeSnapshot upgrades,
+			EssenceConversionUpgradeHelper.BatchPlan conversion,
+			WannaBeeAmberAdapter.BatchSnapshot wannaBatch, int myriadStacks) {
+		if (cycles == 0) return true;
+		long stacks = upgrades.geneSamplerCount() > 0
+				? GeneSampler.maximumStackCount(cycles, upgrades.geneTypeOnly(), upgrades.geneFullPurity()) : 0;
+		stacks += myriadStacks;
+		long rolls = (long) Math.ceil(upgrades.productivityMultiplier());
+		long amountLimit = (long) ItemStackMergeHelper.MAX_GENERATED_STACKS * Integer.MAX_VALUE;
+		if (rolls <= 0 || cycles > amountLimit / rolls) return false;
+		long maximumRolls = cycles * rolls;
+		if (singleFlowerOutputs != null) {
+			Arrays.fill(reusableSingleFlowerAmounts, 0L);
+			long remaining = cycles;
+			long rawStacks = 0;
+			for (int level = 0; level < counts.length; level++) {
+				long selected = Math.min(remaining, counts[level]);
+				remaining -= selected;
+				ItemStack flower = singleFlowerOutputs[level];
+				if (selected == 0 || flower.isEmpty()) continue;
+				long count = BeeProductivityGene.adjustCount((int) rolls, level);
+				if (count > amountLimit / selected) return false;
+				long amount = count * selected;
+				rawStacks += ItemStackMergeHelper.bulkStackCount(amount);
+				if (rawStacks > ItemStackMergeHelper.MAX_GENERATED_STACKS - stacks) return false;
+				int identity = level;
+				for (int previous = 0; previous < level; previous++) {
+					if (reusableSingleFlowerAmounts[previous] > 0
+							&& ItemStack.isSameItemSameComponents(flower, singleFlowerOutputs[previous])) {
+						identity = previous;
+						break;
+					}
+				}
+				reusableSingleFlowerAmounts[identity] += amount;
+			}
+			long convertedStacks = 0;
+			if (conversion != null) {
+				for (int level = 0; level < counts.length; level++) {
+					if (reusableSingleFlowerAmounts[level] > 0) {
+						convertedStacks += outputStackBound(singleFlowerOutputs[level],
+								reusableSingleFlowerAmounts[level], conversion);
+					}
+				}
+			}
+			// 原始四档拆栈与同组件合计转换分别有界，预算与实际生成采用同一档位前段。
+			stacks += Math.max(rawStacks, convertedStacks);
+		} else if (flowers != null) {
+			for (ItemStack flower : flowers) {
+				long count = BeeProductivityGene.adjustCount((int) rolls, gene);
+				if (count > amountLimit / cycles) return false;
+				stacks += outputStackBound(flower, count * cycles, conversion) + Math.min(cycles, 4) - 1;
+				if (stacks > ItemStackMergeHelper.MAX_GENERATED_STACKS) return false;
+			}
+		} else {
+			for (var entry : outputs.entrySet()) {
+				ChancedOutput output = entry.getValue();
+				if (Float.isNaN(output.chance()) || output.chance() <= 0 || output.max() <= 0) continue;
+				long count = BeeProductivityGene.adjustCount(output.max(), gene);
+				if (count > amountLimit / maximumRolls) return false;
+				stacks += outputStackBound(entry.getKey(), count * maximumRolls, conversion) + Math.min(cycles, 4) - 1;
+				if (stacks > ItemStackMergeHelper.MAX_GENERATED_STACKS) return false;
+			}
+		}
+		if (stacks > ItemStackMergeHelper.MAX_GENERATED_STACKS) return false;
+		return wannaBatch == null ? true
+				: wannaBatch.fitsStackBudget(maximumRolls, (int) (ItemStackMergeHelper.MAX_GENERATED_STACKS - stacks));
+	}
+
+	private static long outputStackBound(ItemStack template, long amount,
+			EssenceConversionUpgradeHelper.BatchPlan conversion) {
+		long raw = ItemStackMergeHelper.bulkStackCount(amount);
+		if (conversion == null) return raw;
+		try {
+			return Math.max(raw, conversion.maximumStackCount(template, amount));
+		} catch (ArithmeticException countOverflow) {
+			// 数量已超过 long，更不适合当前有界列表；二分下一前段，无任何资产变更。
+			return ItemStackMergeHelper.MAX_GENERATED_STACKS + 1L;
+		}
+	}
+
+	private static int myriadCount(long[] productivityCounts, float multiplier) {
+		double scaled = 0;
+		for (int gene = 0; gene < productivityCounts.length; gene++) {
+			scaled += productivityCounts[gene] * (double) multiplier * BeeProductivityGene.adjustStackCount(1, gene);
+		}
+		return (int) Math.min(MYRIAD_RANDOM_CAP, Math.max(0, scaled));
+	}
+
 	Generated prepare(BeeSlot[] beeSlots, int[] pendingCounts, OrderedSlotIndex groupSlotIndices,
 			ResourceLocation beeTypeKey, Map<ItemStack, ChancedOutput> produceList, FeederSlotManager feederManager,
 			BlockPos origin, Level level, ApiaryBatchUpgradeSnapshot upgrades, boolean multiFlowerBee,
 			boolean nativeProduction, long forcedRolls, EssenceConversionUpgradeHelper.BatchPlan conversion,
-			GeneSampler.Snapshot sampling, long seed) {
+			GeneSampler.Snapshot sampling, long seed, boolean paidProduction, boolean includeMyriad) {
+		return prepare(beeSlots, pendingCounts, groupSlotIndices, beeTypeKey, produceList, feederManager,
+				origin, level, upgrades, multiFlowerBee, nativeProduction, forcedRolls, conversion, sampling,
+				seed, paidProduction, includeMyriad, -1, null, null);
+	}
+
+	private Generated prepare(BeeSlot[] beeSlots, int[] pendingCounts, OrderedSlotIndex groupSlotIndices,
+			ResourceLocation beeTypeKey, Map<ItemStack, ChancedOutput> produceList, FeederSlotManager feederManager,
+			BlockPos origin, Level level, ApiaryBatchUpgradeSnapshot upgrades, boolean multiFlowerBee,
+			boolean nativeProduction, long forcedRolls, EssenceConversionUpgradeHelper.BatchPlan conversion,
+			GeneSampler.Snapshot sampling, long seed, boolean paidProduction, boolean includeMyriad,
+			int plannedMyriadCount, WannaBeeAmberAdapter.BatchSnapshot wannaBatch,
+			ItemStack[] singleFlowerOutputs) {
 		if (beeSlots == null || pendingCounts == null || groupSlotIndices == null
 				|| produceList == null
 				|| (produceList.isEmpty() && !PBConstants.WANNA_TYPE.equals(beeTypeKey)
@@ -42,6 +184,9 @@ final class BeeProductionGenerator {
 			return Generated.EMPTY;
 		}
 
+		if (paidProduction && reusablePaidCounts.length != pendingCounts.length) {
+			reusablePaidCounts = new int[pendingCounts.length];
+		}
 		// 累积所有蜜蜂的产出物品，待批量合并插入
 		List<ItemStack> allItems = reusableProducedItems;
 		reusableProducedItems.clear();
@@ -76,6 +221,7 @@ final class BeeProductionGenerator {
 		for (int position = 0; position < groupSlotIndices.size(); position++) {
 			int idx = groupSlotIndices.get(position);
 			int count = pendingCounts[idx];
+			if (paidProduction) reusablePaidCounts[idx] = count;
 			if (count <= 0) continue;
 			BeeSlot slot = beeSlots[idx];
 			if (slot == null || slot.isEmpty()) continue;
@@ -98,9 +244,61 @@ final class BeeProductionGenerator {
 					productivityCounts[productivityLevel], count);
 		}
 
-		// 按四档生产力等级分别批量采样。PB 原版公式含逐栈取整，混养时不能用平均等级替代。
-		List<ItemStack> allFlowerOutputs = aggregatedCount > 0 && multiFlowerBee && BalanceConfig.apiaryProduceAllFlowers()
+		boolean produceAllFlowers = multiFlowerBee && BalanceConfig.apiaryProduceAllFlowers();
+		List<ItemStack> allFlowerOutputs = aggregatedCount > 0 && produceAllFlowers
 				? multiFlowerProductionCache.get(beeTypeKey, feederManager, level) : null;
+		if (aggregatedCount > 0 && multiFlowerBee && !produceAllFlowers && singleFlowerOutputs == null) {
+			singleFlowerOutputs = reusableSingleFlowerOutputs;
+			Arrays.fill(singleFlowerOutputs, ItemStack.EMPTY);
+			for (int gene = 0; gene < productivityCounts.length; gene++) {
+				if (productivityCounts[gene] > 0) {
+					singleFlowerOutputs[gene] = MultiFlowerBeeAdapter.sampleProduceStackFromFeeder(
+							beeTypeKey, feederManager, level);
+				}
+			}
+		}
+		if (wannaBeeLevel != null && aggregatedCount > 0 && wannaBatch == null) {
+			wannaBatch = WannaBeeAmberAdapter.prepareBatch(
+					wannaBeeLevel, origin, feederManager, productivityCounts, conversion);
+		}
+		int myriadCount = plannedMyriadCount;
+		if (myriadCount < 0) {
+			myriadCount = 0;
+			if (isMyriad && includeMyriad) myriadCount = myriadCount(productivityCounts, productivityMultiplier);
+		}
+		if (paidProduction && aggregatedCount > 0) {
+			long limit = maximumPaidCycles(productivityCounts, produceList, upgrades, conversion,
+					wannaBatch, myriadCount, allFlowerOutputs, singleFlowerOutputs);
+			if (limit < aggregatedCount) {
+				long remaining = limit;
+				if (singleFlowerOutputs != null) {
+					for (int gene = 0; gene < productivityCounts.length; gene++) {
+						long selected = Math.min(remaining, productivityCounts[gene]);
+						reusableSingleFlowerCycleCounts[gene] = selected;
+						remaining -= selected;
+					}
+				}
+				for (int position = 0; position < groupSlotIndices.size(); position++) {
+					int index = groupSlotIndices.get(position);
+					int selected;
+					if (singleFlowerOutputs == null) {
+						selected = (int) Math.min(remaining, pendingCounts[index]);
+						remaining -= selected;
+					} else {
+						int gene = beeSlots[index].getProductivityLevel();
+						selected = (int) Math.min(reusableSingleFlowerCycleCounts[gene], pendingCounts[index]);
+						reusableSingleFlowerCycleCounts[gene] -= selected;
+					}
+					reusablePaidCounts[index] = selected;
+				}
+				geneSampleBatch.clear();
+				return prepare(beeSlots, reusablePaidCounts, groupSlotIndices, beeTypeKey, produceList,
+						feederManager, origin, level, upgrades, multiFlowerBee, nativeProduction, forcedRolls,
+						conversion, sampling, seed, false, includeMyriad, myriadCount, wannaBatch, singleFlowerOutputs);
+			}
+		}
+
+		// 按四档生产力等级分别批量采样。PB 原版公式含逐栈取整，混养时不能用平均等级替代。
 		if (aggregatedCount > 0) {
 			for (int productivityLevel = BeeProductivityGene.NORMAL;
 					productivityLevel <= BeeProductivityGene.VERY_HIGH; productivityLevel++) {
@@ -113,8 +311,7 @@ final class BeeProductionGenerator {
 								sampledProductionCount, productivityMultiplier, productivityLevel);
 					}
 				} else if (multiFlowerBee) {
-					ItemStack feederProduce = MultiFlowerBeeAdapter.sampleProduceStackFromFeeder(
-							beeTypeKey, feederManager, level);
+					ItemStack feederProduce = singleFlowerOutputs[productivityLevel];
 					BeeProduceBatchSampler.sampleGuaranteedInto(allItems, feederProduce,
 							sampledProductionCount, productivityMultiplier, productivityLevel);
 				} else if (forcedRolls >= 0) {
@@ -126,32 +323,18 @@ final class BeeProductionGenerator {
 				}
 			}
 			if (wannaBeeLevel != null) {
-				allItems.addAll(WannaBeeAmberAdapter.sampleBatches(wannaBeeLevel, origin, feederManager,
-						productivityCounts, productivityMultiplier, forcedRolls >= 0));
+				allItems.addAll(wannaBatch.sample(wannaBeeLevel, productivityCounts, productivityMultiplier));
 			}
 		}
-		// 万象创世追加产物也按每只蜜蜂的生产力等级计算，避免与主产物倍率脱节。
-		double scaledMyriadCount = 0.0D;
-		if (isMyriad) {
-			for (int productivityLevel = BeeProductivityGene.NORMAL;
-					productivityLevel <= BeeProductivityGene.VERY_HIGH; productivityLevel++) {
-				scaledMyriadCount += productivityCounts[productivityLevel]
-						* (double) productivityMultiplier
-						* BeeProductivityGene.adjustStackCount(1, productivityLevel);
-			}
-		}
-		int effectiveMyriadCount = scaledMyriadCount >= Integer.MAX_VALUE
-				? Integer.MAX_VALUE : Math.max(0, (int) scaledMyriadCount);
-
 		// Bug 10: 万象创世蜜蜂追加随机蜜脾/蜜脾块
 		// 机械蜂箱绕过 BeeHelperMixin 注入（调用 BeeInfoHelper.getBeeProduce 而非 BeeHelper.getBeeProduce），
 		// 需在此动态追加。随机产物不进入静态缓存 BeeProduceCache，避免所有蜂箱共享同一份随机结果。
 		// Task 7: 改用 MyriadAggregatedStacksBuilder 预聚合，将原 576 ItemStack 降为 ≤9 个聚合 stack，
 		// 后续 distributeToOutput 迭代次数从 576 降为 9。
-		if (effectiveMyriadCount > 0 && level != null) {
+		if (myriadCount > 0 && level != null) {
 			try {
 				// cappedMyriadCount 作为 totalCount 上限保护输出槽总容量（9 槽 × 64 = 576，实际 ItemStack ≤9）
-				int cappedMyriadCount = Math.min(effectiveMyriadCount, MYRIAD_RANDOM_CAP);
+				int cappedMyriadCount = myriadCount;
 				List<ItemStack> randomItems;
 				if (upgrades.hasCombBlockUpgrade()) {
 					// 有 Block/Omega 升级：buildAggregatedCombBlocks 内部已 4× 缩放（与 Mixin 单次 4 个比例一致）
@@ -166,10 +349,7 @@ final class BeeProductionGenerator {
 					allItems.addAll(randomItems);
 				}
 			} catch (Exception e) {
-				if (forcedRolls >= 0) throw new IllegalStateException("Myriad resource batch generation failed", e);
-				// 随机产物追加失败不影响主产出，记录警告便于调试
-				// MyriadAggregatedStacksBuilder 内部已有降级路径，外层 try-catch 为最终兜底
-				ProductiveBeesGenesis.LOGGER.warn("万象创世随机蜜脾追加失败", e);
+				throw new IllegalStateException("Myriad batch generation failed", e);
 			}
 		}
 

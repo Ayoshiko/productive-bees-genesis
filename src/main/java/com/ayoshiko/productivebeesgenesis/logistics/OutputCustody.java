@@ -6,15 +6,22 @@ import mekanism.common.tile.interfaces.ISideConfiguration;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.UUID;
 import java.util.Set;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.LongSupplier;
+import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 
 /**
- * 普通输出的单请求保管。返回值是已交给目标或本保管器的数量，不是假定的目标接收量。
+ * 普通输出按外部请求和本地物理位置保管。返回值是已交给目标或本保管器的数量，不是假定的目标接收量。
  * 调用方必须扣除返回的交接量；未知量只存在本记录中，不能作为库存自动重试。
  * 服务器线程独占；组件负责保存与升级交接。跨文件断电原子性不在此类保证范围内。
  */
@@ -32,6 +39,11 @@ public final class OutputCustody {
     private long sourceDebitPending;
     private boolean sourceDebitUnknown;
     private boolean receiptKnown;
+    private boolean localEvidence;
+    private long localRequested;
+    private ItemStack localItemBefore = ItemStack.EMPTY;
+    private FluidStack localFluidBefore = FluidStack.EMPTY;
+    private final Map<Integer, OutputCustody> local = new LinkedHashMap<>();
 
     public OutputCustody(Runnable changed) { this.changed = changed; }
 
@@ -48,7 +60,65 @@ public final class OutputCustody {
         throw new IllegalStateException("Output owner has no custody component");
     }
 
-    public boolean blocked() { return executing || sequence != null || invalid != null; }
+    /** 玩家提示聚合全部未决请求；实际交接按根请求或本地物理位置隔离。 */
+    public boolean blocked() {
+        if (ownBlocked()) return true;
+        for (OutputCustody record : local.values()) if (record.localPositionBlocked()) return true;
+        return false;
+    }
+
+    /** 本地未决只冻结对应槽罐；根外部请求未结清时不得覆盖或重放。 */
+    public boolean externalOutputBlocked() {
+        return ownBlocked();
+    }
+
+    private boolean ownBlocked() {
+        return executing || sequence != null || invalid != null;
+    }
+
+    public boolean localOutputBlocked() {
+        return executing || invalid != null || sourceDebitPending > 0 || sourceDebitUnknown;
+    }
+
+    public boolean localItemBlocked(int physicalSlot) {
+        OutputCustody record = local.get(physicalSlot);
+        return record != null && record.localPositionBlocked();
+    }
+
+    public boolean localFluidBlocked(int tank) {
+        OutputCustody record = local.get(-tank - 1);
+        return record != null && record.localPositionBlocked();
+    }
+
+    private boolean localPositionBlocked() {
+        return executing || invalid != null || sourceDebitPending > 0 || sourceDebitUnknown || sequence != null && !resolved;
+    }
+
+    public OutputCustody localItem(int physicalSlot) {
+        return local.computeIfAbsent(physicalSlot, key -> new OutputCustody(changed));
+    }
+
+    public OutputCustody localFluid(int tank) {
+        return local.computeIfAbsent(-tank - 1, key -> new OutputCustody(changed));
+    }
+
+    Map<Integer, OutputCustody> localRecords() { return local; }
+
+    public List<OutputCustody> requests() {
+        List<OutputCustody> records = new ArrayList<>();
+        if (ownBlocked()) records.add(this);
+        for (OutputCustody entry : local.values()) {
+            if (entry.ownBlocked()) records.add(entry);
+        }
+        return records;
+    }
+
+    public OutputCustody request(UUID expected) {
+        for (OutputCustody entry : requests()) {
+            if (expected.equals(entry.sequence())) return entry;
+        }
+        throw new IllegalStateException("Stale output request");
+    }
     /** 成功交付通常不需恢复 ID；执行中保存／查询和异常保管仍得到同一个稳定身份。 */
     public UUID sequence() {
         if (sequence == null && executing && amount > 0) sequence = UUID.randomUUID();
@@ -60,13 +130,222 @@ public final class OutputCustody {
 
     /** stack 仍由调用方持有；只交接返回的数量，零表示完全没有执行。 */
     public int handoffItem(ItemStack stack, String target, LongSupplier insert) {
-        if (blocked() || stack.isEmpty()) return 0;
+        if (externalOutputBlocked() || stack.isEmpty()) return 0;
         return (int) handoff(stack.copyWithCount(1), FluidStack.EMPTY, stack.getCount(), target, insert);
     }
 
     public long handoffItem(ItemStack template, long requested, String target, LongSupplier insert) {
-        if (blocked() || template.isEmpty() || requested <= 0) return 0;
+        if (externalOutputBlocked() || template.isEmpty() || requested <= 0) return 0;
         return handoff(template.copyWithCount(1), FluidStack.EMPTY, requested, target, insert);
+    }
+
+    /** 本机位置可在回调失败后核对真实增量；无法回读时保管完整原请求和库存前值。 */
+    public long handoffLocalItem(ItemStack template, long requested, ItemStack before, String target,
+            Supplier<ItemStack> current, LongSupplier insert) {
+        if (blocked() || template.isEmpty() || requested <= 0) return 0;
+        localItemBefore = before.copy();
+        localFluidBefore = FluidStack.EMPTY;
+        localEvidence = true;
+        localRequested = requested;
+        return handoffLocal(template.copyWithCount(1), FluidStack.EMPTY, requested, target,
+                () -> observedItemAcceptance(current.get()), insert);
+    }
+
+    public long handoffLocalFluid(FluidStack template, long requested, FluidStack before, String target,
+            Supplier<FluidStack> current, LongSupplier insert) {
+        if (blocked() || template.isEmpty() || requested <= 0) return 0;
+        localFluidBefore = before.copy();
+        localItemBefore = ItemStack.EMPTY;
+        localEvidence = true;
+        localRequested = requested;
+        return handoffLocal(ItemStack.EMPTY, template.copyWithAmount(1), requested, target,
+                () -> observedFluidAcceptance(current.get()), insert);
+    }
+
+    private long handoffLocal(ItemStack template, FluidStack fluidTemplate, long requested, String target,
+            LongSupplier observe, LongSupplier insert) {
+        item = template;
+        fluid = fluidTemplate;
+        amount = requested;
+        destination = target;
+        failure = "";
+        resolved = false;
+        executing = true;
+        prepareHandoff();
+        try {
+            long accepted;
+            try {
+                accepted = insert.getAsLong();
+                validateLocalReceipt(accepted);
+            } catch (RuntimeException | LinkageError error) {
+                try {
+                    accepted = observe.getAsLong();
+                    validateLocalReceipt(accepted);
+                } catch (RuntimeException | LinkageError unreadable) {
+                    error.addSuppressed(unreadable);
+                    sequence();
+                    failure = error.getClass().getSimpleName() + ": " + String.valueOf(error.getMessage());
+                    if (failure.length() > 512) failure = failure.substring(0, 512);
+                    ProductiveBeesGenesis.LOGGER.error("Local output awaiting inventory verification: request={}, target={}, amount={}",
+                            sequence, destination, amount, error);
+                    notifyCommittedState();
+                    return requested;
+                }
+                ProductiveBeesGenesis.LOGGER.error("Local output callback failed; actual receipt verified: target={}, requested={}, accepted={}",
+                        target, requested, accepted, error);
+            }
+            reset();
+            notifyCommittedState();
+            return accepted;
+        } finally {
+            executing = false;
+        }
+    }
+
+    private void validateLocalReceipt(long accepted) {
+        if (accepted < 0 || accepted > localRequested) throw new IllegalStateException("Invalid local output receipt: " + accepted);
+    }
+
+    private long observedItemAcceptance(ItemStack current) {
+        if (ItemStack.matches(localItemBefore, current)) return 0;
+        if (!localItemBefore.isEmpty() && !ItemStack.isSameItemSameComponents(localItemBefore, item)
+                || !current.isEmpty() && !ItemStack.isSameItemSameComponents(current, item)) {
+            throw new IllegalStateException("Local output item identity changed");
+        }
+        long accepted = (long) current.getCount() - localItemBefore.getCount();
+        validateLocalReceipt(accepted);
+        return accepted;
+    }
+
+    private long observedFluidAcceptance(FluidStack current) {
+        if (localFluidBefore.getAmount() == current.getAmount()
+                && (localFluidBefore.isEmpty() && current.isEmpty()
+                || FluidStack.isSameFluidSameComponents(localFluidBefore, current))) return 0;
+        if (!localFluidBefore.isEmpty() && !FluidStack.isSameFluidSameComponents(localFluidBefore, fluid)
+                || !current.isEmpty() && !FluidStack.isSameFluidSameComponents(current, fluid)) {
+            throw new IllegalStateException("Local output fluid identity changed");
+        }
+        long accepted = (long) current.getAmount() - localFluidBefore.getAmount();
+        validateLocalReceipt(accepted);
+        return accepted;
+    }
+
+    /** 仅有本机库存前值的未决记录自动核验；旧未知请求仍保管，不猜接收量。 */
+    public void recoverLocalItem(Supplier<ItemStack> current, ToIntFunction<ItemStack> insert) {
+        if (executing || invalid != null || sourceDebitPending > 0 || sourceDebitUnknown || item.isEmpty()) return;
+        if (!resolved) {
+            if (!localEvidence) return;
+            long accepted;
+            try {
+                accepted = observedItemAcceptance(current.get());
+            } catch (RuntimeException | LinkageError unreadable) {
+                // 首次异常和库存前值已经保管；目标仍不可读时不执行或改动原请求。
+                return;
+            }
+            settleObservedLocal(accepted);
+        }
+        ItemStack offered = recoveredItem();
+        if (offered.isEmpty()) return;
+        ItemStack before;
+        try {
+            before = current.get().copy();
+        } catch (RuntimeException | LinkageError unreadable) {
+            // 读取发生在回填执行之前，已知余量仍留在原记录。
+            return;
+        }
+        localItemBefore = before;
+        localFluidBefore = FluidStack.EMPTY;
+        recoverLocal(offered.getCount(), () -> observedItemAcceptance(current.get()), () -> insert.applyAsInt(offered));
+    }
+
+    public void recoverLocalFluid(Supplier<FluidStack> current, ToIntFunction<FluidStack> insert) {
+        if (executing || invalid != null || sourceDebitPending > 0 || sourceDebitUnknown || fluid.isEmpty()) return;
+        if (!resolved) {
+            if (!localEvidence) return;
+            long accepted;
+            try {
+                accepted = observedFluidAcceptance(current.get());
+            } catch (RuntimeException | LinkageError unreadable) {
+                // 首次异常和库存前值已经保管；目标仍不可读时不执行或改动原请求。
+                return;
+            }
+            settleObservedLocal(accepted);
+        }
+        FluidStack offered = recoveredFluid();
+        if (offered.isEmpty()) return;
+        FluidStack before;
+        try {
+            before = current.get().copy();
+        } catch (RuntimeException | LinkageError unreadable) {
+            // 读取发生在回填执行之前，已知余量仍留在原记录。
+            return;
+        }
+        localFluidBefore = before;
+        localItemBefore = ItemStack.EMPTY;
+        recoverLocal(offered.getAmount(), () -> observedFluidAcceptance(current.get()), () -> insert.applyAsInt(offered));
+    }
+
+    private void settleObservedLocal(long accepted) {
+        UUID original = sequence;
+        amount -= accepted;
+        resolved = true;
+        failure = "";
+        clearLocalEvidence();
+        if (amount == 0) reset();
+        notifyCommittedState();
+        ProductiveBeesGenesis.LOGGER.info("Local output automatically verified: request={}, accepted={}, remaining={}", original, accepted, amount);
+    }
+
+    private void recoverLocal(long requested, LongSupplier observe, LongSupplier insert) {
+        localEvidence = true;
+        localRequested = requested;
+        resolved = false;
+        executing = true;
+        try {
+            try {
+                changed.run();
+            } catch (RuntimeException | LinkageError error) {
+                resolved = true;
+                clearLocalEvidence();
+                ProductiveBeesGenesis.LOGGER.error("Local recovery preparation failed; known remainder retained: request={}, target={}",
+                        sequence, destination, error);
+                return;
+            }
+            long accepted;
+            try {
+                accepted = insert.getAsLong();
+                validateLocalReceipt(accepted);
+            } catch (RuntimeException | LinkageError error) {
+                try {
+                    accepted = observe.getAsLong();
+                } catch (RuntimeException | LinkageError unreadable) {
+                    error.addSuppressed(unreadable);
+                    resolved = false;
+                    failure = error.getClass().getSimpleName() + ": " + String.valueOf(error.getMessage());
+                    if (failure.length() > 512) failure = failure.substring(0, 512);
+                    ProductiveBeesGenesis.LOGGER.error("Local recovery awaiting inventory verification: request={}, target={}, amount={}",
+                            sequence, destination, amount, error);
+                    notifyCommittedState();
+                    return;
+                }
+                ProductiveBeesGenesis.LOGGER.error("Local recovery callback failed; actual receipt verified: request={}, accepted={}",
+                        sequence, accepted, error);
+            }
+            amount -= accepted;
+            resolved = true;
+            clearLocalEvidence();
+            if (amount == 0) reset();
+            notifyCommittedState();
+        } finally {
+            executing = false;
+        }
+    }
+
+    private void clearLocalEvidence() {
+        localEvidence = false;
+        localRequested = 0;
+        localItemBefore = ItemStack.EMPTY;
+        localFluidBefore = FluidStack.EMPTY;
     }
 
     /** 合并交付先登记每台机器的贡献；外部调用前所有来源都必须处于可保存的执行状态。 */
@@ -74,7 +353,7 @@ public final class OutputCustody {
         if (request == null || template == null || template.isEmpty() || requested <= 0) {
             throw new IllegalArgumentException("Invalid shared item request");
         }
-        if (blocked()) return false;
+        if (externalOutputBlocked()) return false;
         ItemStack snapshot = template.copyWithCount(1);
         sequence = request;
         item = snapshot;
@@ -87,7 +366,7 @@ public final class OutputCustody {
         sourceDebitPending = requested;
         sourceDebitUnknown = false;
         executing = true;
-        changed.run();
+        prepareHandoff();
         return true;
     }
 
@@ -124,19 +403,19 @@ public final class OutputCustody {
             changed.run();
         } finally {
             executing = false;
+            ProductiveBeesGenesis.LOGGER.error("Shared item output suspended: request={}, target={}, amount={}",
+                    sequence, destination, amount, error);
         }
-        ProductiveBeesGenesis.LOGGER.error("Shared item output suspended: request={}, target={}, amount={}",
-                sequence, destination, amount, error);
     }
 
     public long handoffFluid(FluidStack template, long requested, String target, LongSupplier insert) {
-        if (blocked() || template.isEmpty() || requested <= 0) return 0;
+        if (externalOutputBlocked() || template.isEmpty() || requested <= 0) return 0;
         return handoff(ItemStack.EMPTY, template.copyWithAmount(1), requested, target, insert);
     }
 
     /** 已有源罐的交付必须等待本地扣源确认；已知接收量不能提前退役。 */
     public long handoffFluidFromTank(FluidStack template, long requested, String target, LongSupplier insert) {
-        if (blocked() || template.isEmpty() || requested <= 0) return 0;
+        if (externalOutputBlocked() || template.isEmpty() || requested <= 0) return 0;
         return handoff(template.copyWithAmount(1), requested, target, insert);
     }
 
@@ -151,14 +430,14 @@ public final class OutputCustody {
         sourceDebitPending = requested;
         sourceDebitUnknown = false;
         executing = true;
-        changed.run();
+        prepareHandoff();
         try {
             long accepted = insert.getAsLong();
             if (accepted < 0 || accepted > requested) {
                 throw new IllegalStateException("Invalid output receipt: " + accepted);
             }
             if (accepted == 0) {
-                clear();
+                reset();
             } else {
                 amount = accepted;
                 sourceDebitPending = accepted;
@@ -175,7 +454,7 @@ public final class OutputCustody {
         } finally {
             if (sourceDebitPending > 0) sequence();
             executing = false;
-            changed.run();
+            notifyCommittedState();
         }
     }
 
@@ -199,9 +478,12 @@ public final class OutputCustody {
         failure = "Source debit unknown: " + error.getClass().getSimpleName() + ": " + error.getMessage();
         if (failure.length() > 512) failure = failure.substring(0, 512);
         sequence();
-        changed.run();
-        ProductiveBeesGenesis.LOGGER.error("Fluid source debit suspended: request={}, target={}, remaining={}",
-                sequence, destination, sourceDebitPending, error);
+        try {
+            changed.run();
+        } finally {
+            ProductiveBeesGenesis.LOGGER.error("Fluid source debit suspended: request={}, target={}, remaining={}",
+                    sequence, destination, sourceDebitPending, error);
+        }
     }
 
     /** 管理员核验并完成源端实际扣量后确认；此方法不补扣或再次对外输出。 */
@@ -224,17 +506,18 @@ public final class OutputCustody {
         failure = "";
         resolved = false;
         executing = true;
-        changed.run();
+        prepareHandoff();
         try {
             long accepted = insert.getAsLong();
             if (accepted < 0 || accepted > requested) throw new IllegalStateException("Invalid output receipt: " + accepted);
-            clear();
+            reset();
+            notifyCommittedState();
             return accepted;
         } catch (RuntimeException | LinkageError exception) {
             sequence();
             failure = exception.getClass().getSimpleName() + ": " + String.valueOf(exception.getMessage());
             if (failure.length() > 512) failure = failure.substring(0, 512);
-            changed.run();
+            notifyCommittedState();
             ProductiveBeesGenesis.LOGGER.error("Output suspended: request={}, target={}, amount={}",
                     sequence, destination, amount, exception);
             // 外部可能已写入；把整份请求从原库存移到未决记录，不退回、不再次调用接收方。
@@ -251,7 +534,7 @@ public final class OutputCustody {
 
     public void retainItem(ItemStack stack, String reason) {
         if (stack.isEmpty()) return;
-        if (blocked()) throw new IllegalStateException("Output custody already occupied");
+        if (externalOutputBlocked()) throw new IllegalStateException("Output custody already occupied");
         sequence = UUID.randomUUID();
         item = stack.copyWithCount(1);
         fluid = FluidStack.EMPTY;
@@ -259,12 +542,12 @@ public final class OutputCustody {
         destination = reason;
         failure = "";
         resolved = true;
-        changed.run();
+        notifyCommittedState();
     }
 
     public void retainFluid(FluidStack template, long retained, String reason) {
         if (retained <= 0) return;
-        if (blocked()) throw new IllegalStateException("Output custody already occupied");
+        if (externalOutputBlocked()) throw new IllegalStateException("Output custody already occupied");
         sequence = UUID.randomUUID();
         item = ItemStack.EMPTY;
         fluid = template.copyWithAmount(1);
@@ -272,7 +555,7 @@ public final class OutputCustody {
         destination = reason;
         failure = "";
         resolved = true;
-        changed.run();
+        notifyCommittedState();
     }
 
     /** 管理员已在两端核验实际接收量；剩余仍留本机，不能由命令直接发给玩家或生成掉落。 */
@@ -302,29 +585,76 @@ public final class OutputCustody {
     public void recoverItem(java.util.function.ToIntFunction<ItemStack> insert) {
         ItemStack offered = recoveredItem();
         if (offered.isEmpty()) return;
-        try { consumeRecovered(insert.applyAsInt(offered)); }
-        catch (RuntimeException error) { resolved = false; failure = error.toString(); changed.run(); }
+        int accepted;
+        try {
+            accepted = insert.applyAsInt(offered);
+        } catch (RuntimeException | LinkageError error) {
+            resolved = false;
+            failure = error.toString();
+            notifyCommittedState();
+            ProductiveBeesGenesis.LOGGER.error("Local item recovery suspended: request={}, target={}, amount={}",
+                    sequence, destination, amount, error);
+            return;
+        }
+        consumeRecovered(accepted);
     }
 
     public void recoverFluid(java.util.function.ToIntFunction<FluidStack> insert) {
         FluidStack offered = recoveredFluid();
         if (offered.isEmpty()) return;
-        try { consumeRecovered(insert.applyAsInt(offered)); }
-        catch (RuntimeException error) { resolved = false; failure = error.toString(); changed.run(); }
+        int accepted;
+        try {
+            accepted = insert.applyAsInt(offered);
+        } catch (RuntimeException | LinkageError error) {
+            resolved = false;
+            failure = error.toString();
+            notifyCommittedState();
+            ProductiveBeesGenesis.LOGGER.error("Local fluid recovery suspended: request={}, target={}, amount={}",
+                    sequence, destination, amount, error);
+            return;
+        }
+        consumeRecovered(accepted);
     }
 
     public void retryDecode(HolderLookup.Provider provider) {
         if (invalid != null) load(provider, invalid.copy());
+        for (OutputCustody entry : local.values()) entry.retryDecode(provider);
     }
 
     public void consumeRecovered(long consumed) {
         if (!resolved || consumed < 0 || consumed > amount) throw new IllegalStateException("Invalid recovered debit");
         amount -= consumed;
         if (amount == 0) clear();
-        changed.run();
+        else notifyCommittedState();
+    }
+
+    private void prepareHandoff() {
+        try {
+            changed.run();
+        } catch (RuntimeException | LinkageError error) {
+            // 接收方尚未被调用，源资产仍由调用方持有。
+            executing = false;
+            reset();
+            throw error;
+        }
+    }
+
+    private void notifyCommittedState() {
+        try {
+            changed.run();
+        } catch (RuntimeException | LinkageError error) {
+            // 交接已经结束；保存通知失败不能改变真实回执或把请求重新交付。
+            ProductiveBeesGenesis.LOGGER.error("Output state notification failed: request={}, target={}",
+                    sequence, destination, error);
+        }
     }
 
     private void clear() {
+        reset();
+        notifyCommittedState();
+    }
+
+    private void reset() {
         sequence = null;
         item = ItemStack.EMPTY;
         fluid = FluidStack.EMPTY;
@@ -335,14 +665,36 @@ public final class OutputCustody {
         sourceDebitPending = 0;
         sourceDebitUnknown = false;
         receiptKnown = false;
-        changed.run();
+        clearLocalEvidence();
     }
 
     public CompoundTag save(HolderLookup.Provider provider) {
         if (invalid != null) return invalid.copy();
+        ListTag records = new ListTag();
+        for (var entry : local.entrySet()) {
+            CompoundTag saved = entry.getValue().save(provider);
+            if (saved.isEmpty()) continue;
+            CompoundTag record = new CompoundTag();
+            int key = entry.getKey();
+            record.putString("location", key >= 0 ? "item:" + key : "fluid:" + (-key - 1));
+            record.put("request", saved);
+            records.add(record);
+        }
+        CompoundTag external = saveRequest(provider);
+        if (records.isEmpty()) return external;
+        CompoundTag tag = new CompoundTag();
+        tag.putInt("version", 3);
+        tag.put("external", external);
+        tag.put("local", records);
+        return tag;
+    }
+
+    private CompoundTag saveRequest(HolderLookup.Provider provider) {
+        if (invalid != null) return invalid.copy();
         var tag = new CompoundTag();
         if (sequence() == null) return tag;
-        tag.putInt("version", sourceDebitPending > 0 || sourceDebitUnknown ? 2 : 1);
+        int version = localEvidence ? 4 : sourceDebitPending > 0 || sourceDebitUnknown ? 2 : 1;
+        tag.putInt("version", version);
         tag.putUUID("sequence", sequence);
         tag.putLong("amount", amount);
         tag.putString("destination", destination);
@@ -355,6 +707,16 @@ public final class OutputCustody {
         }
         if (!item.isEmpty()) tag.put("item", item.save(provider));
         if (!fluid.isEmpty()) tag.put("fluid", fluid.save(provider));
+        if (localEvidence) {
+            tag.putLong("local_requested", localRequested);
+            CompoundTag before = new CompoundTag();
+            if (!item.isEmpty()) {
+                if (!localItemBefore.isEmpty()) before = (CompoundTag) localItemBefore.copyWithCount(1).save(provider);
+                tag.putInt("local_before_count", localItemBefore.getCount());
+            }
+            if (!fluid.isEmpty() && !localFluidBefore.isEmpty()) before = (CompoundTag) localFluidBefore.save(provider);
+            tag.put("local_before", before);
+        }
         return tag;
     }
 
@@ -370,14 +732,61 @@ public final class OutputCustody {
     }
 
     public void load(HolderLookup.Provider provider, CompoundTag tag) {
+        if (executing || local.values().stream().anyMatch(entry -> entry.executing)) {
+            throw new IllegalStateException("Cannot replace custody during an output handoff");
+        }
+        local.clear();
+        if (tag.contains("version", Tag.TAG_INT) && tag.getInt("version") == 3) {
+            try {
+                if (!tag.getAllKeys().equals(Set.of("version", "external", "local"))
+                        || !tag.contains("external", Tag.TAG_COMPOUND)
+                        || !(tag.get("local") instanceof ListTag entries)
+                        || !entries.isEmpty() && entries.getElementType() != Tag.TAG_COMPOUND) {
+                    throw new IllegalArgumentException("Invalid local output custody");
+                }
+                loadRequest(provider, tag.getCompound("external"));
+                if (invalid != null) throw new IllegalArgumentException("Invalid external output request");
+                for (Tag value : entries) {
+                    CompoundTag entry = (CompoundTag) value;
+                    if (!entry.getAllKeys().equals(Set.of("location", "request"))
+                            || !entry.contains("location", Tag.TAG_STRING)
+                            || !entry.contains("request", Tag.TAG_COMPOUND)) {
+                        throw new IllegalArgumentException("Invalid local output request");
+                    }
+                    String location = entry.getString("location");
+                    String[] parts = location.split(":");
+                    if (parts.length != 2 || !Set.of("item", "fluid").contains(parts[0])
+                            || Integer.parseInt(parts[1]) < 0) {
+                        throw new IllegalArgumentException("Invalid local output location");
+                    }
+                    int index = Integer.parseInt(parts[1]);
+                    int key = parts[0].equals("item") ? index : -index - 1;
+                    if (local.containsKey(key)) throw new IllegalArgumentException("Duplicate local output position");
+                    OutputCustody record = new OutputCustody(changed);
+                    record.loadRequest(provider, entry.getCompound("request"));
+                    if (!record.ownBlocked()) throw new IllegalArgumentException("Empty local output request");
+                    local.put(key, record);
+                }
+            } catch (RuntimeException | LinkageError error) {
+                invalid = tag.copy();
+                failure = "Invalid output custody; original data preserved";
+                ProductiveBeesGenesis.LOGGER.error("Output custody data could not be restored", error);
+            }
+            return;
+        }
+        loadRequest(provider, tag);
+    }
+
+    private void loadRequest(HolderLookup.Provider provider, CompoundTag tag) {
         if (executing) throw new IllegalStateException("Cannot replace custody during an output handoff");
         invalid = null;
         clear();
         if (tag.isEmpty()) return;
         try {
             if (!Set.of("version", "sequence", "amount", "destination", "failure", "resolved", "item", "fluid",
-                    "source_debit_pending", "source_debit_unknown", "receipt_known")
-                    .containsAll(tag.getAllKeys()) || !tag.contains("version", Tag.TAG_INT) || (tag.getInt("version") != 1 && tag.getInt("version") != 2)
+                    "source_debit_pending", "source_debit_unknown", "receipt_known", "local_requested", "local_before", "local_before_count")
+                    .containsAll(tag.getAllKeys()) || !tag.contains("version", Tag.TAG_INT)
+                    || !Set.of(1, 2, 4).contains(tag.getInt("version"))
                     || !tag.hasUUID("sequence") || !tag.contains("amount", Tag.TAG_LONG) || tag.getLong("amount") <= 0
                     || !tag.contains("destination", Tag.TAG_STRING) || !tag.contains("failure", Tag.TAG_STRING)
                     || !tag.contains("resolved", Tag.TAG_BYTE) || tag.getByte("resolved") < 0 || tag.getByte("resolved") > 1
@@ -415,9 +824,39 @@ public final class OutputCustody {
                     || tag.contains("receipt_known")) {
                 throw new IllegalArgumentException("Unexpected source debit fields");
             }
-        } catch (RuntimeException exception) {
+            if (tag.getInt("version") == 4) {
+                if (!tag.contains("local_requested", Tag.TAG_LONG) || tag.getLong("local_requested") <= 0
+                        || tag.getLong("local_requested") > amount || !tag.contains("local_before", Tag.TAG_COMPOUND) || resolved) {
+                    throw new IllegalArgumentException("Invalid local inventory evidence");
+                }
+                localRequested = tag.getLong("local_requested");
+                CompoundTag before = tag.getCompound("local_before");
+                if (!item.isEmpty()) {
+                    if (tag.contains("local_before_count")) {
+                        if (!tag.contains("local_before_count", Tag.TAG_INT) || tag.getInt("local_before_count") < 0
+                                || (tag.getInt("local_before_count") == 0) != before.isEmpty()) {
+                            throw new IllegalArgumentException("Invalid local item inventory count");
+                        }
+                        if (!before.isEmpty()) {
+                            ItemStack identity = ItemStack.parse(provider, before).orElseThrow();
+                            if (identity.getCount() != 1) throw new IllegalArgumentException("Invalid local item inventory identity");
+                            localItemBefore = identity.copyWithCount(tag.getInt("local_before_count"));
+                        }
+                    } else if (!before.isEmpty()) {
+                        localItemBefore = ItemStack.parse(provider, before).orElseThrow();
+                    }
+                } else {
+                    if (tag.contains("local_before_count")) throw new IllegalArgumentException("Item inventory count in a fluid request");
+                    if (!before.isEmpty()) localFluidBefore = FluidStack.parse(provider, before).orElseThrow();
+                }
+                localEvidence = true;
+            } else if (tag.contains("local_requested") || tag.contains("local_before") || tag.contains("local_before_count")) {
+                throw new IllegalArgumentException("Local inventory evidence in an older request");
+            }
+        } catch (RuntimeException | LinkageError exception) {
             invalid = tag.copy();
             failure = "Invalid output custody; original data preserved";
+            ProductiveBeesGenesis.LOGGER.error("Output custody data could not be restored", exception);
         }
     }
 }

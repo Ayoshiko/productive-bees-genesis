@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.fluid.IExtendedFluidTank;
@@ -24,6 +25,7 @@ final class ApiaryFluidOutput {
     private int pressureDrains;
     private boolean pressureDrainStopped;
     private boolean flushing;
+    private boolean preparationFailed;
 
     ApiaryFluidOutput(TileEntityMekApiary tile) {
         this.tile = tile;
@@ -34,17 +36,24 @@ final class ApiaryFluidOutput {
             return Result.COMPLETE;
         }
         OutputCustody custody = OutputCustody.of(tile);
-        if (flushing || custody.blocked() || tile.hasInvalidFluidData()
+        if (flushing || custody.localOutputBlocked() || custody.localFluidBlocked(0) || tile.hasInvalidFluidData()
                 || template == null || template.isEmpty()) {
             return Result.BLOCKED;
         }
         flushing = true;
         try {
             long remaining = amount;
-            if (directAeOutputEnabled) {
-                long handed = tile.pushGeneratedFluidToAe(template, remaining);
-                if (handed < 0 || handed > remaining) {
-                    throw new IllegalStateException("Invalid generated-fluid receipt: " + handed);
+            preparationFailed = false;
+            if (directAeOutputEnabled && !custody.externalOutputBlocked()) {
+                long handed = 0;
+                try {
+                    handed = tile.pushGeneratedFluidToAe(template, remaining);
+                } catch (RuntimeException | LinkageError error) {
+                    // 执行交接由 OutputCustody 保管；准备失败时剩余流体仍由原批次持有。
+                    preparationFailed = true;
+                    LogThrottle.error("apiary_fluid_route",
+                            "Apiary fluid output preparation failed at {}; remaining fluid uses the local tank",
+                            tile.getBlockPos(), error);
                 }
                 if (handed > 0) {
                     debit.accept(handed);
@@ -52,12 +61,13 @@ final class ApiaryFluidOutput {
                 }
             }
             IExtendedFluidTank tank = tile.getFluidTank();
-            while (remaining > 0 && !custody.blocked()) {
+            while (remaining > 0 && !custody.localOutputBlocked() && !custody.localFluid(0).blocked()) {
                 int offeredAmount = (int) Math.min(remaining,
                         Math.max(0L, (long) tank.getCapacity() - tank.getFluidAmount()));
                 if (offeredAmount > 0) {
                     FluidStack offered = template.copyWithAmount(offeredAmount);
-                    long handed = custody.handoffFluid(offered, offeredAmount, "apiary-tank", () ->
+                    long handed = custody.localFluid(0).handoffLocalFluid(offered, offeredAmount,
+                            tank.getFluid().copy(), "apiary-tank", tank::getFluid, () ->
                             offeredAmount - tank.insert(offered.copy(), Action.EXECUTE,
                                     AutomationType.INTERNAL).getAmount());
                     if (handed > 0) {
@@ -66,7 +76,7 @@ final class ApiaryFluidOutput {
                         remaining -= handed;
                     }
                 }
-                if (remaining == 0 || custody.blocked() || directAeOutputEnabled) {
+                if (remaining == 0 || custody.localOutputBlocked() || custody.localFluid(0).blocked() || directAeOutputEnabled) {
                     break;
                 }
                 Result drain = drainLocalTank(tank, custody);
@@ -74,10 +84,15 @@ final class ApiaryFluidOutput {
                     return drain;
                 }
             }
-            return remaining == 0 && !custody.blocked() ? Result.COMPLETE : Result.BLOCKED;
+            if (remaining == 0) preparationFailed = false;
+            return remaining == 0 && !custody.localOutputBlocked() && !custody.localFluid(0).blocked() ? Result.COMPLETE : Result.BLOCKED;
         } finally {
             flushing = false;
         }
+    }
+
+    boolean preparationFailed() {
+        return preparationFailed;
     }
 
     private Result drainLocalTank(IExtendedFluidTank tank, OutputCustody custody) {
@@ -100,8 +115,15 @@ final class ApiaryFluidOutput {
         pressureDrains++;
         // 无进展、部分接收或异常均终止本刻续传；不能因调用方再次刷新而重领额度。
         pressureDrainStopped = true;
-        tile.productivebeesgenesis$onLocalFluidOutputCommitted();
-        if (custody.blocked() || !tank.isEmpty()) {
+        try {
+            tile.productivebeesgenesis$onLocalFluidOutputCommitted();
+        } catch (RuntimeException | LinkageError error) {
+            preparationFailed = true;
+            LogThrottle.error("apiary_local_fluid_route",
+                    "Apiary local fluid drain preparation failed at {}; original tank contents are retained",
+                    tile.getBlockPos(), error);
+        }
+        if (custody.externalOutputBlocked() || !tank.isEmpty()) {
             return Result.BLOCKED;
         }
         pressureDrainStopped = false;

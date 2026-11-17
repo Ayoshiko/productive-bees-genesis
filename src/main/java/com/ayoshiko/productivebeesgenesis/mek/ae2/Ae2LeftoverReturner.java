@@ -47,7 +47,7 @@ public final class Ae2LeftoverReturner {
             }
         } catch (LinkageError | RuntimeException error) {
             backoff.recordFailure(System.nanoTime());
-            LogThrottle.warn("ae2_leftover_simulation", "AE2 回送模拟失败，保留已知余量: {}", error.toString());
+            LogThrottle.warn("ae2_leftover_simulation", "AE2 回送模拟失败，保留已知余量: {}", error.toString(), error);
             return true;
         }
         if (simulated > 0) {
@@ -89,7 +89,12 @@ public final class Ae2LeftoverReturner {
     static boolean retryPendingItems(Level level, Ae2OutputStateHolder holder, MEStorage meStorage,
             List<IInventorySlot> inputSlots, long currentTick, BlockEntity host, IActionSource actionSource) {
         Ae2PendingItemBuffer pending = holder.getPendingItemBuffer();
-        if (pending.isBlocked()) return false;
+        boolean recovered = pending.recoverKnownTransfer(currentTick);
+        if (pending.hasRecoverableKnownTransfer()) {
+            recovered |= retryRetainedKnownTransfer(level, holder, meStorage, inputSlots, currentTick, host, actionSource);
+        }
+        if (recovered && host != null) host.setChanged();
+        if (pending.isBlocked()) return recovered;
         int attempts = 0;
         for (Ae2PendingItemBuffer.PendingItem entry : pending.snapshot(currentTick, 4, meStorage != null)) {
             if (pending.isBlocked() || attempts >= 4) break;
@@ -108,7 +113,43 @@ public final class Ae2LeftoverReturner {
                 retryKnownAmount(holder, meStorage, inputSlots, entry, key, entry.amount(), false, currentTick, host, actionSource);
             }
         }
-        return attempts > 0;
+        return recovered || attempts > 0;
+    }
+
+    /** 缓冲没有空位时复用原请求直接交付，已知拒收仍保留原数量，未知回执停止重试。 */
+    private static boolean retryRetainedKnownTransfer(Level level, Ae2OutputStateHolder holder, MEStorage storage,
+            List<IInventorySlot> slots, long tick, BlockEntity host, IActionSource source) {
+        var pending = holder.getPendingItemBuffer();
+        var transfer = pending.transfer();
+        try {
+            var key = Ae2FingerprintCache.decode(transfer.fingerprint(), level.registryAccess());
+            if (key == null) {
+                holder.getPushState().getReturnBackoff().recordFailure(System.nanoTime());
+                LogThrottle.error("ae2_known_input_decode", "AE2 已知输入指纹无法解析，保留原请求 request={}", transfer.request());
+                return false;
+            }
+            boolean attempted = false;
+            if (!transfer.isReturnToNetworkOnly()) {
+                for (int index = 0; index < slots.size() && transfer.knownAmount() > 0; index++) {
+                    IInventorySlot slot = slots.get(index);
+                    if (slot != null && (host == null || acceptsLaneInput(host, index, key.getReadOnlyStack()))) {
+                        attempted = true;
+                        insertIntoSlot(transfer, key, slot, (int) transfer.knownAmount(), index);
+                    }
+                }
+            }
+            if (!holder.getPushState().getReturnBackoff().shouldSkip(System.nanoTime())) {
+                attempted |= returnLeftoverToMe(holder, storage, key, source, tick);
+            }
+            boolean recovered = pending.recoverKnownTransfer(tick);
+            return attempted || recovered;
+        } catch (RuntimeException | LinkageError failure) {
+            holder.getPushState().getReturnBackoff().recordFailure(System.nanoTime());
+            LogThrottle.error("ae2_known_input_delivery",
+                    "AE2 已知输入恢复交付异常，保留原请求 request={} target={} known={} offered={}",
+                    transfer.request(), transfer.destination(), transfer.knownAmount(), transfer.offeredAmount(), failure);
+            return true;
+        }
     }
 
     private static void retryKnownAmount(Ae2OutputStateHolder holder, MEStorage storage,
@@ -117,7 +158,7 @@ public final class Ae2LeftoverReturner {
         var pending = holder.getPendingItemBuffer();
         var transfer = pending.transfer();
         long request = Math.min(amount, Integer.MAX_VALUE);
-        transfer.beginKnown(entry::fingerprint, request);
+        transfer.beginKnown(entry::fingerprint, request, networkOnly);
         if (networkOnly) pending.consumeReturnToNetwork(entry.fingerprint(), request, tick);
         else pending.consume(entry.fingerprint(), request, tick);
         try {
@@ -133,6 +174,8 @@ public final class Ae2LeftoverReturner {
                     holder, storage, key, actionSource, tick);
             transfer.finish(pending, tick, networkOnly, entry.retries(), returnAttempted);
         } catch (LinkageError | RuntimeException error) {
+            LogThrottle.error("ae2_input_transfer_failure", "AE2 输入余额交付失败，保留原数量和根因", error);
+            if (pending.recoverKnownTransfer(tick)) return;
             transfer.fingerprint();
             LogThrottle.error("ae2_input_transfer_unknown",
                     "AE2 输入交接待核验；停止自动重试 request={} target={} known={} offered={}: {}",

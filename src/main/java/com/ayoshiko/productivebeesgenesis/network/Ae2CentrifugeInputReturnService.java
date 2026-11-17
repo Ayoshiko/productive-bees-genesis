@@ -47,6 +47,7 @@ public final class Ae2CentrifugeInputReturnService {
 		if (key == null) return false;
 		String fingerprint = Ae2ItemFingerprint.encode(key, entity.getLevel().registryAccess());
 		var custody = holder.getPendingItemBuffer();
+		custody.recoverKnownTransfer(entity.getLevel().getGameTime());
 		if (custody.isBlocked() || !custody.canAcceptReturn(fingerprint, input.getCount())) return false;
 		var transfer = custody.transfer();
 		transfer.beginSlotWithdrawal(() -> fingerprint, input.getCount(), lane);
@@ -55,6 +56,7 @@ public final class Ae2CentrifugeInputReturnService {
 			transfer.extracted(withdrawn);
 			transfer.finish(custody, entity.getLevel().getGameTime(), true);
 		} finally {
+			custody.recoverKnownTransfer(entity.getLevel().getGameTime());
 			host.productivebeesgenesis$markAe2StateChanged();
 			holder.invalidateInputInventoryViewCache();
 		}
@@ -97,6 +99,10 @@ public final class Ae2CentrifugeInputReturnService {
 		}
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return false;
+		var recoveryLevel = host.productivebeesgenesis$getAe2Level();
+		if (recoveryLevel != null && holder.getPendingItemBuffer().recoverKnownTransfer(recoveryLevel.getGameTime())) {
+			host.productivebeesgenesis$markAe2StateChanged();
+		}
 		if (holder.getPendingItemBuffer().isBlocked()) return true;
 		if (MekCentrifugeFactoryHelper.isSmeltingCompatEnabled(outputHost)) {
 			holder.setUnprocessableInputReturnCheckPending(false);
@@ -241,8 +247,9 @@ public final class Ae2CentrifugeInputReturnService {
 			} catch (LinkageError | RuntimeException error) {
 				LogThrottle.error("centrifuge_input_return_unknown",
 						"离心机输入返还待核验；停止重试 request={} target={} known={} offered={}: {}",
-						transfer.request(), transfer.destination(), transfer.knownAmount(), transfer.offeredAmount(), error.toString());
+						transfer.request(), transfer.destination(), transfer.knownAmount(), transfer.offeredAmount(), error.toString(), error);
 				pending = SaturatingMath.saturatingAdd(pending, transfer.retainedAmount());
+				custody.recoverKnownTransfer(level.getGameTime());
 				retryFailed = true;
 			}
 			if (!slot.isEmpty()) retryFailed = true;

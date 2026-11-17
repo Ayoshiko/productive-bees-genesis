@@ -82,7 +82,16 @@ public enum BeeState {
 	WAITING_RESOURCE_RELOAD(0xD49A45),
 
 	/** 扩展配方或对应资源依赖不可用，等待成功重载。 */
-	WAITING_RESOURCE_RECIPE(0xD49A45);
+	WAITING_RESOURCE_RECIPE(0xD49A45),
+
+	/** 单槽准备失败；未提交资产，下一刻按当前输入自然重试。 */
+	RESOURCE_PREPARATION_FAILED(0xEF5350),
+
+	/** 当前蜂槽的资格或产物准备失败；未提交资产，恢复后继续推进。 */
+	PREPARATION_FAILED(0xEF5350),
+
+    /** 输出路线准备失败；已付产物保留并自动重试本地回退。 */
+    OUTPUT_PREPARATION_FAILED(0xEF5350);
 
 	/** 状态颜色 RGB int 值（供 GUI 状态灯渲染） */
 	private final int color;

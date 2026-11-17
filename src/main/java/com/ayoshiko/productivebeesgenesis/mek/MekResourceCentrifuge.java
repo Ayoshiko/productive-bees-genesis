@@ -103,7 +103,7 @@ final class MekResourceCentrifuge {
 		@Override public int productivity() { return Math.max(1, context.productivityModifier()); }
 		@Override public double stability() { return context.stabilityBonus(); }
 		@Override public boolean canOperate() { return context.canFunction()
-				&& !com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(entity()).blocked(); }
+				&& !PbRecipeFlusher.outputBlocked(context, lane); }
 		@Override public void progress(int paid, int required, boolean working) { display.set(paid, required, working); }
 		@Override public net.minecraft.nbt.CompoundTag ordinaryRecipe() {
 			return finder.frozenRecipe(input());

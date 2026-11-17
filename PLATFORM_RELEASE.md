@@ -8,8 +8,9 @@
 | --- | --- |
 | 项目名称 | Productive Bees Genesis / 资源蜜蜂：创世 |
 | 模组 ID | `productivebeesgenesis` |
-| 内部/构建版本 | 以 `gradle.properties` 的 `mod_version` 为准；当前版本为 `1.2.5` |
-| CurseForge 版本 | 以 `curseforge_release_version` 为准；当前版本为 `1.2.5` |
+| 内部/构建版本 | 以 `gradle.properties` 的 `mod_version` 为准；当前版本为 `1.2.6` |
+| CurseForge 版本 | 以 `curseforge_release_version` 为准；当前版本为 `1.2.6` |
+| 当前候选 | `1.2.6` 蜜脾块升级、生产故障隔离与旧机自动恢复的整包审查、受影响专项、真实客户端生产／双语菜单验证及候选打包已完成；尚未正式发布 |
 | 发布状态 | `1.2.5` 于 2026-11-14 补齐旧机自动恢复后[重新正式发布并设为 Latest](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.5)，标签提交 `e292753b98908f0cd5a3cc732dd3d1e22ec2fd32`。[维护 Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43594894813)、[标签 Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43594894882) 和 [CurseForge 上传](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43595158229) 均成功。新 JAR 5,692,806 字节，SHA-256 `8d3147150b7ccd1670665a1f21e02adc42f949519a2b213c227226a5e444f468`，与 GitHub 附件摘要和镜像日志核对一致；本机两次重新下载分别在 120 秒与 60 秒超时，未计为下载核验通过。CurseForge 新文件已通过审核（Approved），维护者于 2026-11-14 提供文件管理页截图确认；旧同名文件显示 Deleted。此前同名旧附件已撤回／归档，旧摘要 `d25d8959ea8c8e38b3ce13eb58113f158ac47934f1434f01964eddd31142178d` 已失效 |
 | CurseForge 渠道 | Release |
 | Minecraft | `1.21.1` |
@@ -23,7 +24,7 @@
 
 ## 版本映射
 
-版本由目标标签提交的 `gradle.properties` 决定，标签 `v<mod_version>`、文件名 `productivebeesgenesis-<mod_version>.jar`、NeoForge 的本模组版本与 Manifest `Implementation-Version` 必须一致。`CurseForge-Release-Version` 必须等于同一提交的 `curseforge_release_version`。当前两个属性为 `1.2.5`；后续发布不能按本文旧示例倒改版本。
+版本由目标标签提交的 `gradle.properties` 决定，标签 `v<mod_version>`、文件名 `productivebeesgenesis-<mod_version>.jar`、NeoForge 的本模组版本与 Manifest `Implementation-Version` 必须一致。`CurseForge-Release-Version` 必须等于同一提交的 `curseforge_release_version`。当前两个属性为 `1.2.6`；后续发布不能按本文旧示例倒改版本。
 
 Build 工作流使用 [固定开发依赖清单](gradle/development-dependencies.json)，运行普通 `build` 编译打包，随后记录并上传 JAR、版本、大小与 SHA-256 等附件信息。测试、示例检查和产物检查按实际需要显式选择，不再由普通构建隐式执行。
 

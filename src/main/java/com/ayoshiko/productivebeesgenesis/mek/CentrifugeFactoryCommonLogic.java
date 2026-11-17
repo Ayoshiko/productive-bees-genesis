@@ -22,7 +22,6 @@ import mekanism.api.energy.IEnergyContainer;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.api.recipes.ItemStackToItemStackRecipe;
 import mekanism.api.recipes.cache.CachedRecipe;
-import mekanism.api.recipes.cache.OneInputCachedRecipe;
 import mekanism.api.recipes.inputs.IInputHandler;
 import mekanism.api.recipes.outputs.IOutputHandler;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
@@ -473,19 +472,19 @@ public final class CentrifugeFactoryCommonLogic {
 			@NotNull Runnable markForSave,
 			@NotNull IntSupplier operationsPerTick,
 			int[] progress,
-			@Nullable ZeroTickCoalesceState coalesceState) {
+			@Nullable ZeroTickCoalesceState coalesceState, PbRecipeProcessor processor, PbRecipeContext context) {
 		// 零耗时合并窗口：CREATIVE 升级下 ticksRequired 为 0，每个配方 tick 就是一个完整周期，
 		// 逐刻推进只能每刻跑一次完整计算 + 一次输出槽 insert。把并行上限供应商换成合并窗口，
 		// 时间加速批量期间一次调用承担整批（裁剪仍由 Mekanism 原逻辑负责）。
 		// 每个 cacheIndex 独立一份，避免多 lane 串用同一窗口。
 		ZeroTickCoalesceState coalesce = coalesceState == null
 				? new ZeroTickCoalesceState(operationsPerTick) : coalesceState;
-		CachedRecipe<ItemStackToItemStackRecipe> configured = OneInputCachedRecipe.itemToItem(
-				recipe, recheckAllRecipeErrors[cacheIndex],
-				inputHandlers[cacheIndex], outputHandlers[cacheIndex])
+		CachedRecipe<ItemStackToItemStackRecipe> configured = new CentrifugeSmeltingCachedRecipe(
+				recipe, recheckAllRecipeErrors[cacheIndex], inputHandlers[cacheIndex], outputHandlers[cacheIndex],
+				processor, context, cacheIndex, ticks -> progress[cacheIndex] = ticks)
 				.setErrorsChanged(errors -> errorsChanged.accept((Set<CachedRecipe.OperationTracker.RecipeError>) errors,
 					cacheIndex))
-				.setCanHolderFunction(canFunction)
+				.setCanHolderFunction(() -> processor.canProcessSmeltingLane(cacheIndex) && canFunction.getAsBoolean())
 				.setActive(active -> setActiveState.accept(active, cacheIndex))
 				.setEnergyRequirements(() -> MekExtrasUpgradeSemantics.energyPerTick(
 						hasCreativeUpgrade.getAsBoolean(), MekCentrifugeEnergyScaling

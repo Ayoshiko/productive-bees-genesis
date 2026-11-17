@@ -38,6 +38,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
@@ -837,6 +838,19 @@ public class TileEntityMekApiary extends TileEntityElectricMachine implements IA
 	}
 
 	// ===== AE2 生命周期与 IAe2OutputHostBase 实现 — 委托给 ae2HostAdapter =====
+
+	@Override
+	public void onLoad() {
+		super.onLoad();
+		if (level instanceof ServerLevel) {
+			try {
+				upgradeRecovery().settleIntactSource(level.registryAccess());
+			} catch (RuntimeException | LinkageError failure) {
+				upgradeRecovery().fail(failure);
+				ProductiveBeesGenesis.LOGGER.error("蜂箱旧升级源端核对失败，原记录继续保管：{}", getBlockPos(), failure);
+			}
+		}
+	}
 
 	@Override public void clearRemoved() { super.clearRemoved(); ae2HostAdapter.prepareForLoad(); }
 	@Override public void setRemoved() {

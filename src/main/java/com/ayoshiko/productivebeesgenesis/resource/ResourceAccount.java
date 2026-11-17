@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
@@ -555,7 +556,9 @@ public final class ResourceAccount {
 			throw new IllegalArgumentException("Invalid production snapshot");
 		}
 		var checked = ResourceExactAmounts.copy(maximum);
-		if (checked.isEmpty()) throw new IllegalArgumentException("Empty production reservation");
+		if (checked.isEmpty() && !mechanicalLocalProduction(context)) {
+			throw new IllegalArgumentException("Empty production reservation");
+		}
 		for (var key : checked.keySet()) if (suspendedTransfers.containsKey(key)) throw new IllegalStateException("Resource output requires reconciliation");
 		ResourceExactAmounts.checkAddition(reservedCapacity(), checked);
 		long sequence = nextSequence;
@@ -641,6 +644,26 @@ public final class ResourceAccount {
 		} else {
 			suspension = checkedReason;
 		}
+	}
+
+	/** 零资源量只用于机械蜂槽已封闭记录的本地产物、付款或花源事务。 */
+	static boolean mechanicalLocalProduction(CompoundTag context) {
+		if (!"mek_apiary".equals(context.getString("host")) || productionLane(context) < 0
+				|| !context.contains("bee", Tag.TAG_STRING)
+				|| ResourceLocation.tryParse(context.getString("bee")) == null
+				|| !context.contains("bee_data", Tag.TAG_COMPOUND)
+				|| context.getCompound("bee_data").isEmpty()
+				|| !context.contains("previous_ticks", Tag.TAG_INT) || context.getInt("previous_ticks") < 0
+				|| !context.contains("next_ticks", Tag.TAG_INT) || context.getInt("next_ticks") < 0
+				|| !context.contains("cycles", Tag.TAG_LONG) || context.getLong("cycles") < 0
+				|| !context.contains("energy_before", Tag.TAG_LONG) || context.getLong("energy_before") < 0
+				|| !context.contains("energy_cost", Tag.TAG_LONG) || context.getLong("energy_cost") < 0
+				|| context.getLong("energy_cost") > context.getLong("energy_before")) {
+			return false;
+		}
+		return context.getLong("energy_cost") > 0
+				|| context.contains("mixed_local", Tag.TAG_COMPOUND)
+				|| context.contains("flower", Tag.TAG_COMPOUND);
 	}
 
 	static int productionLane(CompoundTag context) {

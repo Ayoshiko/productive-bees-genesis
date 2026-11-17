@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.config.ModConfig;
+import com.ayoshiko.productivebeesgenesis.inventory.OutputFluidTank;
 import com.ayoshiko.productivebeesgenesis.mek.fluid.MultiFluidTankHolder;
 import com.ayoshiko.productivebeesgenesis.logistics.GenesisTileComponentEjector;
 import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
@@ -17,7 +18,6 @@ import mekanism.api.RelativeSide;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.capabilities.energy.MachineEnergyContainer;
-import mekanism.common.capabilities.fluid.BasicFluidTank;
 import mekanism.common.capabilities.holder.fluid.FluidTankHelper;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import mekanism.common.config.MekanismConfig;
@@ -101,7 +101,8 @@ final class MekCentrifugeIoConfigHelper {
 			// 外部轮转视图需要游戏刻：ISideConfiguration 的实现类均为 BlockEntity，取其 level 即可；
 			// 保持本方法签名不变，避免四个调用点连锁修改（OCP）。
 			MultiFluidTankHolder multiHolder = new MultiFluidTankHolder(maxTanks, tankCapacity, listener,
-				maxTanksPerFluidConfig, gameTimeSupplier(factory), () -> !OutputCustody.of(factory).blocked());
+				maxTanksPerFluidConfig, gameTimeSupplier(factory), index -> !OutputCustody.of(factory).localOutputBlocked()
+                        && !OutputCustody.of(factory).localFluidBlocked(index));
 			// Task 2: 调用 tankSetter 设置主槽引用,修复 fluidOutputTank 字段为 null 的核心 bug
 			// Task 5: 构造时已预分配全部槽位,getTanks().get(0) 返回预分配的第 0 个槽
 			tankSetter.accept(multiHolder.getTanks().get(0));
@@ -115,8 +116,8 @@ final class MekCentrifugeIoConfigHelper {
 		long multiplier = fluidTankMultiplier.getAsInt();
 		int capacity = SaturatingMath.saturatingToInt(
 				SaturatingMath.saturatingMultiply(baseCapacity, processes, multiplier));
-		IExtendedFluidTank tank = BasicFluidTank.create(capacity,
-				(stack, automation) -> automation == AutomationType.INTERNAL || !OutputCustody.of(factory).blocked(),
+		IExtendedFluidTank tank = new OutputFluidTank(capacity,
+				(stack, automation) -> !OutputCustody.of(factory).localOutputBlocked() && !OutputCustody.of(factory).localFluidBlocked(0),
 				(stack, automation) -> automation == AutomationType.INTERNAL,
 				stack -> true, listener);
 		tankSetter.accept(tank);

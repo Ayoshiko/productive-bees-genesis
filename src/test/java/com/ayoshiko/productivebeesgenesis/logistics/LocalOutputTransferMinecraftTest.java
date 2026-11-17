@@ -88,6 +88,26 @@ class LocalOutputTransferMinecraftTest {
 		assertEquals(6, request.getCount());
 	}
 
+    @Test
+    void selectedCandidatePreparationFailuresKeepPrefixesAndContinueToHealthySlots() {
+        for (boolean getterFailure : new boolean[]{false, true}) {
+            var fixture = new Fixture(3);
+            fixture.slots.getFirst().setStack(new ItemStack(Items.DIAMOND, 61));
+            assertTrue(fixture.index.hasOutputItems());
+            var failed = fixture.slots.get(1);
+            if (getterFailure) doThrow(new IllegalStateException("selected candidate read failed")).when(failed).getStack();
+            else doThrow(new IllegalStateException("selected candidate limit failed")).when(failed).getLimit(any());
+            var request = new ItemStack(Items.DIAMOND, 10);
+            assertEquals(10, LocalOutputTransfer.insert(fixture.index, request, fixture.custody));
+            assertEquals(64, fixture.slots.getFirst().getCount());
+            assertTrue(failed.isEmpty());
+            assertEquals(7, fixture.slots.get(2).getCount());
+            assertFalse(fixture.custody.blocked());
+            assertEquals(10, request.getCount());
+            verify(failed, never()).insertItem(any(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL));
+        }
+    }
+
 	@Test
 	void insertionCallbackRefreshesLaterCandidatesWithoutRevisitingEarlierSlots() {
 		var fixture = new Fixture(4);
@@ -168,25 +188,72 @@ class LocalOutputTransferMinecraftTest {
 		}
 	}
 
-	@Test
-	void knownPrefixAndUnknownSuffixKeepOriginalCustodyBoundary() {
-		var fixture = new Fixture(3);
-		fixture.slots.getFirst().setStack(new ItemStack(Items.DIAMOND, 61));
-		doAnswer(call -> {
-			call.callRealMethod();
-			throw new IllegalStateException("after local acceptance");
-		}).when(fixture.slots.get(1)).insertItem(any(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL));
-		var request = new ItemStack(Items.DIAMOND, 10);
+    @Test
+    void knownPrefixAndUnknownSuffixKeepOriginalCustodyBoundary() {
+        for (boolean unreadableAfterWrite : new boolean[]{false, true}) {
+            var fixture = new Fixture(3);
+            fixture.slots.getFirst().setStack(new ItemStack(Items.DIAMOND, 61));
+            boolean[] unreadable = {false};
+            doAnswer(call -> {
+                if (unreadable[0]) throw new IllegalStateException("local inventory temporarily unreadable");
+                return call.callRealMethod();
+            }).when(fixture.slots.get(1)).getStack();
+            doAnswer(call -> {
+                call.callRealMethod();
+                unreadable[0] = unreadableAfterWrite;
+                throw new IllegalStateException("after local acceptance");
+            }).when(fixture.slots.get(1)).insertItem(any(), eq(Action.EXECUTE), eq(AutomationType.INTERNAL));
+            var request = new ItemStack(Items.DIAMOND, 10);
 
-		assertEquals(10, LocalOutputTransfer.insert(fixture.index, request, fixture.custody));
-		assertEquals(64, fixture.slots.getFirst().getCount());
-		assertEquals(7, fixture.slots.get(1).getCount());
-		assertTrue(fixture.slots.get(2).isEmpty());
-		assertTrue(fixture.custody.blocked());
-		assertEquals(7, fixture.custody.amount());
-		assertEquals(0, LocalOutputTransfer.insert(fixture.index, request, fixture.custody));
-		assertEquals(10, request.getCount());
-	}
+            assertEquals(10, LocalOutputTransfer.insert(fixture.index, request, fixture.custody));
+            assertEquals(64, fixture.slots.getFirst().getCount());
+            assertEquals(7, fixture.slots.get(1).getCount());
+            assertTrue(fixture.slots.get(2).isEmpty());
+            var registries = net.minecraft.core.RegistryAccess.fromRegistryOfRegistries(
+                    net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
+            if (unreadableAfterWrite) {
+                assertTrue(fixture.custody.localItemBlocked(1));
+                assertTrue(fixture.custody.blocked());
+                assertFalse(fixture.custody.externalOutputBlocked());
+                assertEquals(7, fixture.custody.localItem(1).amount());
+                var originalRequest = fixture.custody.localItem(1).sequence();
+                assertEquals(10, LocalOutputTransfer.insertExternal(fixture.index, request, fixture.custody));
+                assertEquals(10, fixture.slots.get(2).getCount());
+                var saved = fixture.custody.save(registries);
+                var restored = new OutputCustody(() -> {});
+                restored.load(registries, saved);
+                assertEquals(saved, restored.save(registries));
+                assertEquals(7, restored.request(originalRequest).amount());
+                assertTrue(restored.localItemBlocked(1));
+                assertFalse(restored.localItemBlocked(2));
+                assertFalse(restored.externalOutputBlocked());
+                assertEquals(2, restored.handoffItem(new ItemStack(Items.EMERALD, 2), "healthy-external", () -> 2));
+                assertEquals(7, restored.request(originalRequest).amount());
+                restored.localItem(1).recoverLocalItem(fixture.slots.get(1)::getStack, stack -> fail("cannot retry unreadable target"));
+                assertEquals(7, restored.localItem(1).amount());
+                unreadable[0] = false;
+                assertEquals(4, LocalOutputTransfer.insertExternal(fixture.index, new ItemStack(Items.DIAMOND, 4), restored));
+                assertEquals(7, fixture.slots.get(1).getCount());
+                assertEquals(14, fixture.slots.get(2).getCount());
+                restored.localItem(1).recoverLocalItem(fixture.slots.get(1)::getStack, stack -> fail("entire original request already accepted"));
+                assertFalse(restored.blocked());
+                assertTrue(restored.save(registries).isEmpty());
+                assertEquals(7, fixture.slots.get(1).getCount());
+                assertEquals(14, fixture.slots.get(2).getCount());
+                assertEquals(3, restored.handoffItem(new ItemStack(Items.EMERALD, 3), "unknown-external", () -> {
+                    throw new IllegalStateException("external acceptance unknown");
+                }));
+                assertTrue(restored.externalOutputBlocked());
+                assertEquals(0, LocalOutputTransfer.insertExternal(fixture.index, request, restored));
+                assertEquals(0, restored.handoffItem(request, "unknown-external", () -> fail("cannot replay external request")));
+                assertEquals(14, fixture.slots.get(2).getCount());
+            } else {
+                assertFalse(fixture.custody.blocked());
+                assertTrue(fixture.custody.save(registries).isEmpty());
+            }
+            assertEquals(10, request.getCount());
+        }
+    }
 
 	private static ItemStack named(Item item, int count, String name) {
 		var stack = new ItemStack(item, count);

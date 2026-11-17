@@ -30,6 +30,7 @@ final class PbFactoryOutputGroups<T> {
     private Object[] sourceTemplates = new Object[INITIAL_CAPACITY];
     private int[] sourceLanes = new int[INITIAL_CAPACITY];
     private long[] sourceAmounts = new long[INITIAL_CAPACITY];
+    private long[] sourceInitialAmounts = new long[INITIAL_CAPACITY];
     private int[] nextSources = new int[INITIAL_CAPACITY];
     private Group<T> firstKey;
     private Group<T> lastKey;
@@ -105,6 +106,7 @@ final class PbFactoryOutputGroups<T> {
         sourceTemplates[source] = template;
         sourceLanes[source] = lane;
         sourceAmounts[source] = amount;
+        sourceInitialAmounts[source] = amount;
         nextSources[source] = -1;
         if (part.lastSource < 0) part.firstSource = source;
         else nextSources[part.lastSource] = source;
@@ -146,6 +148,7 @@ final class PbFactoryOutputGroups<T> {
         sourceTemplates = Arrays.copyOf(sourceTemplates, capacity);
         sourceLanes = Arrays.copyOf(sourceLanes, capacity);
         sourceAmounts = Arrays.copyOf(sourceAmounts, capacity);
+        sourceInitialAmounts = Arrays.copyOf(sourceInitialAmounts, capacity);
         nextSources = Arrays.copyOf(nextSources, capacity);
     }
 
@@ -176,6 +179,10 @@ final class PbFactoryOutputGroups<T> {
 
     long sourceAmount(int source) {
         return sourceAmounts[source];
+    }
+
+    long sourceInitialAmount(int source) {
+        return sourceInitialAmounts[source];
     }
 
     void debitSource(int source, long amount) {
@@ -219,6 +226,7 @@ final class PbFactoryOutputGroups<T> {
         sourceTemplates = new Object[capacity];
         sourceLanes = new int[capacity];
         sourceAmounts = new long[capacity];
+        sourceInitialAmounts = new long[capacity];
         nextSources = new int[capacity];
     }
 

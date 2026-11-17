@@ -3,6 +3,7 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost;
+import mekanism.api.Upgrade;
 import mekanism.common.tile.component.ITileComponent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -102,6 +103,90 @@ class ApiaryRecoveryMinecraftTest {
         when(level.getServer()).thenReturn(server);
         when(level.registryAccess()).thenReturn(registries());
         return new Fixture(server, level, tick);
+    }
+
+    @Test
+    void restoredPbUpgradesApplyBeforeTheFirstProductionQuery() {
+        try (var fixture = fixture()) {
+            for (var combUpgrade : List.of(PbUpgradeType.BLOCK, PbUpgradeType.PRODUCTIVITY_4)) {
+                var source = tile(fixture.level());
+                source.getComponent().addUpgrades(Upgrade.SPEED, 1);
+                assertTrue(source.installPbUpgrade(combUpgrade), combUpgrade.getId());
+                if (combUpgrade == PbUpgradeType.BLOCK) {
+                    assertTrue(source.installPbUpgrade(PbUpgradeType.PRODUCTIVITY_3), "productivity_3");
+                }
+                assertTrue(source.installPbUpgrade(PbUpgradeType.TIME_2), "time_2");
+                assertTrue(source.installPbUpgrade(PbUpgradeType.GENE_SAMPLER), "gene_sampler");
+                var expected = ApiaryBatchUpgradeSnapshot.capture(source, source.upgradeHandler);
+                float expectedTime = source.upgradeHandler.getTimeMultiplier();
+
+                var restored = tile(null);
+                restored.loadAdditional(source.saveWithFullMetadata(registries()), registries());
+                var actual = ApiaryBatchUpgradeSnapshot.capture(restored, restored.upgradeHandler);
+                assertEquals(expected, actual);
+                assertTrue(actual.hasCombBlockUpgrade());
+                assertEquals(expectedTime, restored.upgradeHandler.getTimeMultiplier());
+                assertEquals(1, actual.geneSamplerCount());
+
+                var state = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(
+                        "productivebeesgenesis:ultimate_mek_apiary_factory")).defaultBlockState();
+                var factory = new TileEntityMekApiaryFactory(Holder.direct(state.getBlock()), BlockPos.ZERO, state);
+                var upgrade = source.getUpgradeData(registries());
+                assertNotNull(upgrade);
+                source.setRemoved();
+                assertEquals(ApiaryNbtSerializer.UpgradeResult.APPLIED,
+                        factory.nbtSerializer().applyUpgradeData(registries(), upgrade));
+                var upgraded = ApiaryBatchUpgradeSnapshot.capture(factory, factory.upgradeHandler);
+                assertEquals(expected, upgraded);
+                assertEquals(expectedTime, factory.upgradeHandler.getTimeMultiplier());
+            }
+        }
+    }
+
+    @Test
+    void legacyAndEmptyPbCountsReplaceThePreviouslyCachedUpgradeState() {
+        var counts = new CompoundTag();
+        counts.putInt(PbUpgradeType.PRODUCTIVITY_4.getId(), 8);
+        counts.putInt(PbUpgradeType.TIME_2.getId(), 12);
+        counts.putInt(PbUpgradeType.GENE_SAMPLER.getId(), 2);
+        var handler = new CompoundTag();
+        var entries = new ListTag();
+        for (var type : List.of(PbUpgradeType.PRODUCTIVITY_4, PbUpgradeType.TIME_2, PbUpgradeType.GENE_SAMPLER)) {
+            var entry = (CompoundTag) PbUpgradeInventorySlot.getRepresentativeStack(type)
+                    .copyWithCount(counts.getInt(type.getId())).save(registries());
+            entry.putInt("Slot", entries.size());
+            entries.add(entry);
+        }
+        handler.put("Items", entries);
+        handler.putInt("Size", entries.size());
+        var current = new CompoundTag();
+        current.put(ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS, counts.copy());
+        var legacyCounts = new CompoundTag();
+        legacyCounts.put(ApiaryPbUpgradeNbtMigrator.NBT_KEY_PB_UPGRADES_LEGACY, counts.copy());
+        var legacyHandler = new CompoundTag();
+        legacyHandler.put(ApiaryPbUpgradeNbtMigrator.NBT_KEY_PB_UPGRADE_HANDLER_LEGACY, handler);
+        var emptyCounts = new CompoundTag();
+        emptyCounts.put(ApiaryPbUpgradeHandler.NBT_KEY_PB_UPGRADE_COUNTS, new CompoundTag());
+
+        for (var saved : List.of(current, legacyCounts, legacyHandler)) {
+            var restored = tile(null);
+            assertFalse(restored.upgradeHandler.hasCombBlockUpgrade());
+            restored.pbUpgradeHandler.loadPbUpgradeCounts(saved.copy(), registries());
+            assertTrue(restored.upgradeHandler.hasCombBlockUpgrade());
+            assertEquals(1 + 8 * PbUpgradeType.PRODUCTIVITY_4.getProductivityFactor(),
+                    restored.upgradeHandler.getProductivityMultiplier(), 0.00001F);
+            assertEquals(2, restored.upgradeHandler.getGeneSamplerCount());
+            assertEquals(12, restored.getPbUpgradeCount(PbUpgradeType.TIME_2));
+
+            for (var empty : List.of(emptyCounts, new CompoundTag())) {
+                restored.pbUpgradeHandler.loadPbUpgradeCounts(empty, registries());
+                assertFalse(restored.upgradeHandler.hasCombBlockUpgrade());
+                assertEquals(1.0F, restored.upgradeHandler.getProductivityMultiplier());
+                assertEquals(0, restored.upgradeHandler.getGeneSamplerCount());
+                restored.pbUpgradeHandler.loadPbUpgradeCounts(saved.copy(), registries());
+                assertTrue(restored.upgradeHandler.hasCombBlockUpgrade());
+            }
+        }
     }
 
     @Test
@@ -291,6 +376,107 @@ class ApiaryRecoveryMinecraftTest {
         assertEquals(3, restored.getOutputSlots().getFirst().getCount());
         assertEquals(data.sourceSnapshot, ((CompoundTag) restored.upgradeRecovery().snapshot()).getCompound("source"));
         assertThrows(IllegalStateException.class, () -> restored.upgradeRecovery().acknowledgeSettled(request));
+    }
+
+    @Test
+    void failedSourceClearRestoresOriginalAssetsBeforeReturningToTheInstaller() {
+        boolean[] clearing = {false};
+        int[] callbacks = {0};
+        var block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse("productivebeesgenesis:mek_apiary"));
+        var source = new TileEntityMekApiary(Holder.direct(block), BlockPos.ZERO, block.defaultBlockState()) {
+            @Override
+            void onOutputSlotContentsChanged() {
+                super.onOutputSlotContentsChanged();
+                if (clearing[0]) {
+                    callbacks[0]++;
+                    if (callbacks[0] == 1) {
+                        throw new IllegalStateException("Source output callback failed while clearing");
+                    }
+                }
+            }
+        };
+        var bee = new CompoundTag();
+        bee.putString("entity", "productivebees:configurable_bee");
+        bee.putString("type", "productivebees:iron");
+        source.getBeeSlot(0).setBeeData(bee);
+        source.getBeeSlot(0).setTicksInHive(17);
+        source.getOutputSlots().getFirst().setStack(output(11, 37));
+        source.getOutputBuffer().accept(output(12, 23));
+        var original = source.saveWithFullMetadata(registries());
+        clearing[0] = true;
+
+        assertNull(source.getUpgradeData(registries()));
+        clearing[0] = false;
+        assertTrue(callbacks[0] > 1);
+        assertFalse(source.upgradeRecovery().blocked());
+        assertEquals(37, source.getOutputSlots().getFirst().getCount());
+        assertEquals(bee, source.getBeeSlot(0).getBeeData());
+        assertEquals(17, source.getBeeSlot(0).getTicksInHive());
+        var recovered = source.saveWithFullMetadata(registries());
+        recovered.remove(ApiaryUpgradeRecovery.NBT_KEY);
+        assertEquals(original, recovered);
+        var settled = source.upgradeRecovery().snapshot();
+
+        var restored = tile(null);
+        restored.loadAdditional(source.saveWithFullMetadata(registries()), registries());
+        assertFalse(restored.upgradeRecovery().blocked());
+        assertEquals(settled, restored.upgradeRecovery().snapshot());
+        assertEquals(37, restored.getOutputSlots().getFirst().getCount());
+        assertNotNull(restored.getUpgradeData(registries()));
+    }
+
+    @Test
+    void intactLegacySourceClearSettlesAutomaticallyButChangedInventoryStaysRetained() {
+        try (var fixture = fixture()) {
+            for (boolean factory : List.of(false, true)) {
+                var block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(factory
+                        ? "productivebeesgenesis:ultimate_mek_apiary_factory"
+                        : "productivebeesgenesis:mek_apiary"));
+                for (boolean changed : List.of(false, true)) {
+                    TileEntityMekApiary source = factory
+                            ? new TileEntityMekApiaryFactory(Holder.direct(block), BlockPos.ZERO, block.defaultBlockState())
+                            : tile(null);
+                    if (source instanceof TileEntityMekApiaryFactory sortingFactory) {
+                        sortingFactory.toggleSorting();
+                    }
+                    source.getOutputSlots().getFirst().setStack(output(13, 41));
+                    source.getOutputBuffer().accept(output(14, 29));
+                    var original = source.saveWithFullMetadata(registries());
+                    var oldProduction = original.getCompound(ApiaryOutputBuffer.nbtKey()).getCompound("production");
+                    oldProduction.putInt("version", 2);
+                    oldProduction.remove("held_groups");
+                    UUID request = UUID.randomUUID();
+                    source.upgradeRecovery().begin(request, original, "source_clear");
+                    source.upgradeRecovery().fail(new IllegalStateException("Legacy source clear failed"));
+                    if (changed) {
+                        source.getOutputSlots().getFirst().setStackSize(3, mekanism.api.Action.EXECUTE);
+                    }
+
+                    TileEntityMekApiary restored = factory
+                            ? new TileEntityMekApiaryFactory(Holder.direct(block), BlockPos.ZERO, block.defaultBlockState())
+                            : tile(null);
+                    restored.loadWithComponents(source.saveWithFullMetadata(registries()), registries());
+                    assertTrue(restored.upgradeRecovery().blocked());
+                    restored.setLevel(fixture.level());
+                    when(fixture.level().getBlockEntity(BlockPos.ZERO)).thenReturn(restored);
+                    restored.onLoad();
+                    assertEquals(changed, restored.upgradeRecovery().blocked());
+                    assertEquals(changed ? 3 : 41, restored.getOutputSlots().getFirst().getCount());
+                    assertEquals(request, restored.upgradeRecovery().request());
+                    assertEquals(original, ((CompoundTag) restored.upgradeRecovery().snapshot()).getCompound("source"));
+                    if (restored instanceof TileEntityMekApiaryFactory sortingFactory) {
+                        assertTrue(sortingFactory.isSorting());
+                    }
+                    var savedAgain = restored.saveWithFullMetadata(registries());
+                    TileEntityMekApiary reloaded = factory
+                            ? new TileEntityMekApiaryFactory(Holder.direct(block), BlockPos.ZERO, block.defaultBlockState())
+                            : tile(null);
+                    reloaded.loadWithComponents(savedAgain, registries());
+                    assertEquals(restored.upgradeRecovery().snapshot(), reloaded.upgradeRecovery().snapshot());
+                    assertEquals(changed ? 3 : 41, reloaded.getOutputSlots().getFirst().getCount());
+                }
+            }
+        }
     }
 
     @Test

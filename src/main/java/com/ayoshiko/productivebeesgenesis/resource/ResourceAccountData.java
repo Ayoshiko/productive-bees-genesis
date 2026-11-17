@@ -303,6 +303,20 @@ final class ResourceAccountData {
 		return account;
 	}
 
+	/** 只在整份存档校验完成后撤销未 start 的预约；原余额、已付工作和请求序号不变。 */
+	static int cancelUnstartedReservations(ResourceAccount account) {
+		int canceled = 0;
+		if (account.production != null && account.production.phase == ResourceAccount.Phase.RESERVED) {
+			account.production = null;
+			account.suspension = "";
+			canceled++;
+		}
+		int lanesBefore = account.suspendedLanes.size();
+		account.suspendedLanes.values().removeIf(
+				pending -> pending.production().phase == ResourceAccount.Phase.RESERVED);
+		return canceled + lanesBefore - account.suspendedLanes.size();
+	}
+
 	static CompoundTag saveProduction(ResourceAccount.Production pending) {
 		var production = new CompoundTag();
 		production.putLong("sequence", pending.sequence);
@@ -333,7 +347,8 @@ final class ResourceAccountData {
 		var maximum = ResourceExactAmounts.load(production.get("maximum"));
 		var result = ResourceExactAmounts.load(production.get("result"));
 		boolean waiting = phase == ResourceAccount.Phase.WAITING_OUTPUT;
-		if (sequence >= nextSequence || revision < 0 || maximum.isEmpty()
+		if (sequence >= nextSequence || revision < 0
+				|| maximum.isEmpty() && !ResourceAccount.mechanicalLocalProduction(context)
 				|| context.sizeInBytes() > ResourceAccount.MAX_CONTEXT_BYTES
 				|| phase != ResourceAccount.Phase.FROZEN && !waiting && !result.isEmpty()) throw invalid();
 		boolean captured = production.contains("next_work_captured");

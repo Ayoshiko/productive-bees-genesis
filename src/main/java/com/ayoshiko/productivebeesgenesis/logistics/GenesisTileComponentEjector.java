@@ -1,5 +1,9 @@
 package com.ayoshiko.productivebeesgenesis.logistics;
 
+import com.ayoshiko.productivebeesgenesis.apiary.TileEntityMekApiary;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
+import mekanism.api.fluid.IExtendedFluidTank;
+import mekanism.api.inventory.IInventorySlot;
 import com.ayoshiko.productivebeesgenesis.mek.IMekApiaryTile;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
 import com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext;
@@ -89,8 +93,9 @@ public final class GenesisTileComponentEjector extends TileComponentEjector impl
 
 	@Override
 	public void tickServer() {
-		recoverLocal();
-		if (custody.blocked()) return;
+        recoverLocalPositions();
+        recoverKnownExternalRemainder();
+		if (custody.externalOutputBlocked()) return;
 		if (vanillaTickRequired) {
 			super.tickServer();
 			return;
@@ -109,26 +114,116 @@ public final class GenesisTileComponentEjector extends TileComponentEjector impl
 
 	public OutputCustody outputCustody() { return custody; }
 
-    private void recoverLocal() {
-        if (itemConfig != null && !custody.recoveredItem().isEmpty()) {
-            for (var type : itemConfig.getSupportedDataTypes()) {
-                if (!type.canOutput()) continue;
-                if (itemConfig.getSlotInfo(type) instanceof mekanism.common.tile.component.config.slot.InventorySlotInfo info) {
-                    for (var slot : info.getSlots()) {
-                        custody.recoverItem(stack -> ItemPushHelper.accepted(stack,
-                                slot.insertItem(stack.copy(), mekanism.api.Action.EXECUTE, mekanism.api.AutomationType.INTERNAL)));
-                    }
-                }
+    private void recoverLocalPositions() {
+        for (var entry : custody.localRecords().entrySet()) {
+            if (entry.getValue().sequence() == null) continue;
+            try {
+                recoverPosition(entry.getKey(), entry.getValue());
+            } catch (RuntimeException | LinkageError error) {
+                LogThrottle.error("local_output_recovery_position", "本地输出恢复位置查询失败，位置={}，槽罐编号={}",
+                        tile.getBlockPos(), entry.getKey(), error);
             }
         }
-        if (fluidConfig != null && !custody.recoveredFluid().isEmpty()) {
-            for (var type : fluidConfig.getSupportedDataTypes()) {
-                if (!type.canOutput()) continue;
-                if (fluidConfig.getSlotInfo(type) instanceof mekanism.common.tile.component.config.slot.FluidSlotInfo info) {
-                    for (var tank : info.getTanks()) custody.recoverFluid(stack -> stack.getAmount()
-                            - tank.insert(stack.copy(), mekanism.api.Action.EXECUTE, mekanism.api.AutomationType.INTERNAL).getAmount());
+    }
+
+    private void recoverPosition(int key, OutputCustody record) {
+        if (key >= 0) {
+            IInventorySlot slot;
+            if (tile instanceof TileEntityMekApiary apiary) {
+                slot = apiary.getOutputSlots().get(key);
+            } else if (tile instanceof PbRecipeContext context) {
+                int lane = key / 3;
+                int index = key % 3;
+                slot = switch (index) {
+                    case 0 -> context.primaryOutputSlot(lane);
+                    case 1 -> context.secondaryOutputSlot(lane);
+                    default -> context.tertiaryOutputSlot(lane);
+                };
+            } else {
+                return;
+            }
+            if (slot != null) record.recoverLocalItem(slot::getStack, stack -> ItemPushHelper.accepted(stack,
+                    slot.insertItem(stack.copy(), mekanism.api.Action.EXECUTE, mekanism.api.AutomationType.INTERNAL)));
+        } else {
+            IExtendedFluidTank tank;
+            if (tile instanceof TileEntityMekApiary apiary) {
+                if (key != -1) throw new IllegalStateException("Apiary has no recorded local tank");
+                tank = apiary.getFluidTank();
+            } else if (tile instanceof PbRecipeContext context) {
+                tank = context.fluidOutputTank(-key - 1);
+            } else {
+                return;
+            }
+            if (tank != null) record.recoverLocalFluid(tank::getFluid, stack -> stack.getAmount()
+                    - tank.insert(stack.copy(), mekanism.api.Action.EXECUTE, mekanism.api.AutomationType.INTERNAL).getAmount());
+        }
+    }
+
+    private void recoverKnownExternalRemainder() {
+        if (custody.recoveredItem().isEmpty() && custody.recoveredFluid().isEmpty()) return;
+        if (tile instanceof TileEntityMekApiary apiary) {
+            for (int slot = 0; slot < apiary.getOutputSlots().size() && !custody.recoveredItem().isEmpty(); slot++) {
+                if (!custody.localItemBlocked(slot)) recoverKnownAtPosition(slot);
+            }
+            if (!custody.localFluidBlocked(0) && !custody.recoveredFluid().isEmpty()) recoverKnownAtPosition(-1);
+        } else if (tile instanceof PbRecipeContext context) {
+            for (int lane = 0; lane < context.processes() && !custody.recoveredItem().isEmpty(); lane++) {
+                for (int index = 0; index < 3 && !custody.recoveredItem().isEmpty(); index++) {
+                    int physicalSlot = lane * 3 + index;
+                    if (!custody.localItemBlocked(physicalSlot)) recoverKnownAtPosition(physicalSlot);
                 }
             }
+            for (int tank = 0; tank < context.fluidOutputTankCount() && !custody.recoveredFluid().isEmpty(); tank++) {
+                if (!custody.localFluidBlocked(tank)) recoverKnownAtPosition(-tank - 1);
+            }
+        }
+    }
+
+    private void recoverKnownAtPosition(int key) {
+        try {
+            if (key >= 0) {
+                IInventorySlot slot;
+                if (tile instanceof TileEntityMekApiary apiary) slot = apiary.getOutputSlots().get(key);
+                else if (tile instanceof PbRecipeContext context) {
+                    int lane = key / 3;
+                    slot = switch (key % 3) {
+                        case 0 -> context.primaryOutputSlot(lane);
+                        case 1 -> context.secondaryOutputSlot(lane);
+                        default -> context.tertiaryOutputSlot(lane);
+                    };
+                } else return;
+                if (slot == null) return;
+                ItemStack before = slot.getStack();
+                custody.recoverItem(stack -> {
+                    try {
+                        return (int) custody.localItem(key).handoffLocalItem(stack, stack.getCount(), before,
+                                "local-recovery-slot:" + key, slot::getStack, () -> ItemPushHelper.accepted(stack,
+                                        slot.insertItem(stack.copy(), mekanism.api.Action.EXECUTE, mekanism.api.AutomationType.INTERNAL)));
+                    } catch (RuntimeException | LinkageError error) {
+                        LogThrottle.error("local_output_recovery_prepare", "本地输出回填准备失败，位置={}，槽位={}", tile.getBlockPos(), key, error);
+                        return 0;
+                    }
+                });
+            } else {
+                IExtendedFluidTank tank;
+                if (tile instanceof TileEntityMekApiary apiary) tank = apiary.getFluidTank();
+                else if (tile instanceof PbRecipeContext context) tank = context.fluidOutputTank(-key - 1);
+                else return;
+                if (tank == null) return;
+                var before = tank.getFluid();
+                custody.recoverFluid(stack -> {
+                    try {
+                        return (int) custody.localFluid(-key - 1).handoffLocalFluid(stack, stack.getAmount(), before,
+                                "local-recovery-tank:" + (-key - 1), tank::getFluid, () -> stack.getAmount()
+                                        - tank.insert(stack.copy(), mekanism.api.Action.EXECUTE, mekanism.api.AutomationType.INTERNAL).getAmount());
+                    } catch (RuntimeException | LinkageError error) {
+                        LogThrottle.error("local_output_recovery_prepare", "本地输出回填准备失败，位置={}，罐位={}", tile.getBlockPos(), -key - 1, error);
+                        return 0;
+                    }
+                });
+            }
+        } catch (RuntimeException | LinkageError error) {
+            LogThrottle.error("local_output_recovery_query", "本地输出回填查询失败，位置={}，槽罐编号={}", tile.getBlockPos(), key, error);
         }
     }
 

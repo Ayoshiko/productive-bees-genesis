@@ -94,6 +94,7 @@ public class MyriadCreationsHandler {
 			pbProcessing[processIndex] = false;
 			return false;
 		}
+		PreparedOutputs prepared = null;
 		if (plan.completedOperations() > 0) {
 			int modifier = Math.max(1, context.productivityModifier());
 			FluidStack fluid = fluidOutputHandler.resolveFluidOutput(input, processIndex);
@@ -107,14 +108,17 @@ public class MyriadCreationsHandler {
 				plan = PbVirtualTickPlan.create(pbOperatingTicks[processIndex], Math.max(1, virtualTicks),
 						processingTime, Math.min(effectiveOps, limit), limit, energyPerTick, energy);
 			}
-			if (!freezeOutputs(input, processIndex, plan.completedOperations(), modifier, fluid)) return false;
+			prepared = prepareOutputs(input, processIndex, plan.completedOperations(), modifier, fluid);
+			if (prepared == null) return false;
 		}
 		int completed = plan.completedOperations();
 		int remainingProgress = plan.remainingProgress();
-		if (!completer.payForPlan(plan, () -> pbOperatingTicks[processIndex] = remainingProgress)) {
+		if (!completer.payForPrepared(prepared == null ? null : prepared.batch(), input, completed,
+				plan, () -> pbOperatingTicks[processIndex] = remainingProgress)) {
 			pbProcessing[processIndex] = false;
 			return false;
 		}
+		if (prepared != null) WeightedTypeSelector.getInstance().recordOutputs(prepared.allocation());
 		pbProcessing[processIndex] = true;
 		context.productivebeesgenesis$markForSave();
 		if (completed > 0) completer.flushCompletedBatch(processIndex);
@@ -122,7 +126,9 @@ public class MyriadCreationsHandler {
 		return true;
 	}
 
-	private boolean freezeOutputs(ItemStack input, int processIndex, int inputs, int modifier, FluidStack fluid) {
+	private record PreparedOutputs(PbRecipeCompleter batch, Map<ResourceLocation, Long> allocation) {}
+
+	private PreparedOutputs prepareOutputs(ItemStack input, int processIndex, int inputs, int modifier, FluidStack fluid) {
 		Level level = context.level();
 		boolean block = MyriadCreationsEventHandler.isMyriadCreationsCombBlock(input);
 		long total = Math.multiplyExact(Math.multiplyExact((long) inputs, block ? 4 : 1), modifier);
@@ -139,7 +145,7 @@ public class MyriadCreationsHandler {
 		}
 		if (selected.isEmpty()) {
 			logger.logEmptyCacheAndPreserve(processIndex);
-			return false;
+			return null;
 		}
 		selected = selected.subList(0, (int) Math.min(selected.size(), Math.min(OUTPUT_SLOT_COUNT, total)));
 		Map<ResourceLocation, Long> allocation = WeightedAllocation.allocateByWeight(
@@ -149,13 +155,13 @@ public class MyriadCreationsHandler {
 		Map<ItemStack, Long> outputs = new LinkedHashMap<>();
 		for (var entry : allocation.entrySet()) {
 			ItemStack template = templates.get(entry.getKey());
-			if (template == null || template.isEmpty()) return false;
+			if (template == null || template.isEmpty()) return null;
 			outputs.put(template.copyWithCount(1), entry.getValue());
 		}
 		long fluidAmount = Math.multiplyExact(Math.multiplyExact((long) fluid.getAmount(), inputs), modifier);
-		completers[processIndex].freezeMyriadBatch(outputs, fluid, fluidAmount, input, inputs);
-		WeightedTypeSelector.getInstance().recordOutputs(allocation);
-		return true;
+		PbRecipeCompleter batch = completers[processIndex].prepareMyriadCompleted(
+				outputs, fluid, fluidAmount, input, inputs);
+		return new PreparedOutputs(batch, allocation);
 	}
 
 	public boolean hasUnresolvedState() {

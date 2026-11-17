@@ -161,7 +161,7 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 
 	/** AEItemKey 不包含数量；请求量独立传递，绝不修改调用方的模板。 */
 	public long push(ItemStack stack, long amount) {
-		if (stack == null || stack.isEmpty() || amount <= 0 || custody == null || custody.blocked()) return 0;
+		if (stack == null || stack.isEmpty() || amount <= 0 || custody == null || custody.externalOutputBlocked()) return 0;
 		// 满存储/预算耗尽短路：不再发起 insert（即完整网络遍历），物品由调用方保留
 		if (budgetExhausted()) {
 			deferredCount++;
@@ -185,7 +185,7 @@ public final class Ae2DirectItemPushSession implements ToIntFunction<ItemStack> 
 			zeroAcceptStreak++;
 			if (keyBackoff != null) keyBackoff.recordFailure(key, System.nanoTime());
 			Ae2PushExceptionLog.handle(e, 0, 0, stack, amount);
-			return 0;
+            throw e;
 		}
 		long insertCost = measuredStorage.lastCostNanos();
 		recordInsertCost(insertCost);

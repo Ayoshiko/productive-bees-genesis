@@ -12,7 +12,7 @@ import mekanism.api.AutomationType;
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
 import mekanism.api.recipes.cache.CachedRecipe.OperationTracker.RecipeError;
-import mekanism.common.capabilities.fluid.BasicFluidTank;
+import com.ayoshiko.productivebeesgenesis.inventory.OutputFluidTank;
 import mekanism.common.capabilities.holder.fluid.FluidTankHelper;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import mekanism.common.capabilities.holder.slot.IInventorySlotHolder;
@@ -263,6 +263,8 @@ public class ApiarySlotManager {
 			TieredOutputInventorySlot outputSlot = TieredOutputInventorySlot.at(
 					stackMultiplier, outputListener,
 					outputX + col * SLOT_PITCH, outputY + row * SLOT_PITCH);
+			((TieredInputSlot) outputSlot).productivebeesgenesis$setOutputExtractionAllowed(() ->
+                    !OutputCustody.of(tile).localOutputBlocked() && !OutputCustody.of(tile).localItemBlocked(physicalSlot));
 			outputSlots.add(outputSlot);
 			builder.addSlot(outputSlot)
 					.tracksWarnings(slot -> slot.warning(WarningType.NO_SPACE_IN_OUTPUT,
@@ -304,9 +306,9 @@ public class ApiarySlotManager {
 			IContentsListener recipeCacheUnpauseListener) {
 		FluidTankHelper helper = FluidTankHelper.forSideWithConfig(tile);
 		// 验证器：仅接受 PB 蜂蜜流体，拒绝其他流体自动化注入
-		fluidTank = BasicFluidTank.create(fluidTankCapacity,
+		fluidTank = new OutputFluidTank(fluidTankCapacity,
 				(stack, automation) -> !tile.hasInvalidFluidData()
-						&& (automation == AutomationType.INTERNAL || !OutputCustody.of(tile).blocked()),
+						&& !OutputCustody.of(tile).localOutputBlocked() && !OutputCustody.of(tile).localFluidBlocked(0),
 				(stack, automation) -> !tile.hasInvalidFluidData(),
 				stack -> stack.getFluid() == ModFluids.HONEY.get(),
 				listener);

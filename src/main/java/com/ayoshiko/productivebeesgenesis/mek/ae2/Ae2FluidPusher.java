@@ -213,7 +213,7 @@ public final class Ae2FluidPusher {
 			LogThrottle.warnWithCooldown("ae2_direct_generated_fluid", 60_000L,
 					"AE2 direct generated-fluid insert failed: fluid={}, amount={}, error={}",
 					key, requested, e.toString());
-			return 0L;
+            throw e;
 		}
 	}
 
@@ -265,7 +265,7 @@ public final class Ae2FluidPusher {
 		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
 		if (holder == null) return;
 		OutputCustody custody = OutputCustody.of(host);
-		if (custody.blocked()) return;
+		if (custody.externalOutputBlocked()) return;
 		Ae2PushStateHolder pushState = holder.getPushState();
 		Level level = host.productivebeesgenesis$getAe2Level();
 		if (level == null) return;
@@ -302,20 +302,26 @@ public final class Ae2FluidPusher {
 		Object2LongOpenHashMap<AEFluidKey> tankTotals = batchBuffer.beginTankSample();
 		Object2LongOpenHashMap<AEFluidKey> tankCapacities = batchBuffer.tankSampleCapacities();
 		for (int i = 0; i < tankCount; i++) {
-			IExtendedFluidTank tank = outputTank(host, tankSnapshot, i);
-			if (tank == null || tank.isEmpty()) continue;
-			FluidStack stack = tank.getFluid();
-			if (stack.isEmpty()) continue;
-			long amount = stack.getAmount();
-			if (amount <= 0) continue;
-			// Task 24：复用按槽缓存的 AEFluidKey，避免每 tick 重建（AEFluidKey.of 会分配新对象）
-			AEFluidKey fluidKey = getCachedFluidKey(holder, i, stack);
-			if (fluidKey == null) continue;
-			tankTotals.put(fluidKey,
-					SaturatingMath.saturatingAdd(tankTotals.getLong(fluidKey), amount));
-			// 该流体所占槽位的容量之和：用于识别「已满槽」压力状态（见 needsPush）。
-			tankCapacities.put(fluidKey, SaturatingMath.saturatingAdd(
-					tankCapacities.getLong(fluidKey), Math.max(0, tank.getCapacity())));
+			if (custody.localFluidBlocked(i)) continue;
+			try {
+				IExtendedFluidTank tank = outputTank(host, tankSnapshot, i);
+				if (tank == null || tank.isEmpty()) continue;
+				FluidStack stack = tank.getFluid();
+				if (stack.isEmpty()) continue;
+				long amount = stack.getAmount();
+				if (amount <= 0) continue;
+				AEFluidKey fluidKey = getCachedFluidKey(holder, i, stack);
+				if (fluidKey == null) continue;
+				long capacity = Math.max(0, tank.getCapacity());
+				tankTotals.put(fluidKey,
+						SaturatingMath.saturatingAdd(tankTotals.getLong(fluidKey), amount));
+				// 只统计可交付罐的容量，避免未决库存污染满载与新增量判断。
+				tankCapacities.put(fluidKey, SaturatingMath.saturatingAdd(
+						tankCapacities.getLong(fluidKey), capacity));
+			} catch (RuntimeException | LinkageError failure) {
+				LogThrottle.error("ae2_output_tank_prepare",
+						"AE fluid output preparation failed; healthy tanks continue, tank={}", i, failure);
+			}
 		}
 		batchBuffer.commitTankSample();
 
@@ -377,7 +383,7 @@ public final class Ae2FluidPusher {
 		Ae2InsertCostTracker costTracker = Ae2OutputPusher.getReusableBuffers(holder, host).insertCostTracker;
 
 		for (Object2LongMap.Entry<AEFluidKey> entry : pendingMap.object2LongEntrySet()) {
-			if (custody.blocked()) break;
+			if (custody.externalOutputBlocked()) break;
 			costTracker.useNetwork(meStorage);
 			AEFluidKey fluidKey = entry.getKey();
 			long amount = entry.getLongValue();
@@ -549,7 +555,7 @@ public final class Ae2FluidPusher {
 		long remaining = Math.max(0L, amount);
 		long insertedTotal = 0L;
 		for (int call = 0; call < MAX_FLUID_BATCH_CALLS_PER_KEY && remaining > 0L; call++) {
-			if (custody.blocked() || costTracker.isExhausted(gameTick)) break;
+			if (custody.externalOutputBlocked() || costTracker.isExhausted(gameTick)) break;
 			long request = Math.min(remaining, MAX_FLUID_BATCH_REQUEST_MB);
 			var measured = Ae2OutputPusher.getReusableBuffers(holder, host).measuredStorage
 					.prepare(meStorage, gameTick, costTracker);
@@ -559,7 +565,7 @@ public final class Ae2FluidPusher {
 			insertedTotal = SaturatingMath.saturatingAdd(insertedTotal, inserted);
 			remaining -= inserted;
 			settleFluidSource(host, tankSnapshot, fluidKey, inserted, tankCount, custody);
-			if (custody.blocked() || inserted < request) break;
+			if (custody.externalOutputBlocked() || inserted < request) break;
 		}
 		return SaturatingMath.clampToRequest(insertedTotal, amount);
 	}
@@ -570,6 +576,7 @@ public final class Ae2FluidPusher {
 		long remaining = amount;
 		try {
 			for (int i = 0; i < tankCount && remaining > 0; i++) {
+				if (custody.localFluidBlocked(i)) continue;
 				IExtendedFluidTank tank = outputTank(host, tankSnapshot, i);
 				if (tank == null || tank.isEmpty() || !fluidKey.matches(tank.getFluid())) continue;
 				int requested = (int) Math.min(remaining, tank.getFluidAmount());

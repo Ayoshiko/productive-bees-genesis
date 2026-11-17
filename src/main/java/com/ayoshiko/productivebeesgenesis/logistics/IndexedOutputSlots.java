@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.logistics;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredOutputInventorySlot;
 import java.util.AbstractList;
 import java.util.BitSet;
@@ -18,6 +19,7 @@ public final class IndexedOutputSlots extends AbstractList<BasicInventorySlot> i
 	private final Map<Item, BitSet> slotsByItem = new IdentityHashMap<>();
 	private final BitSet emptySlots;
 	private final BitSet changedSlots;
+	private final BitSet unreadableSlots;
 	private final Item[] indexedItems;
 	private final int[] indexedCounts;
 	private int nonEmptySlots;
@@ -33,6 +35,7 @@ public final class IndexedOutputSlots extends AbstractList<BasicInventorySlot> i
 		}
 		emptySlots = new BitSet(slots.size());
 		changedSlots = new BitSet(slots.size());
+		unreadableSlots = new BitSet(slots.size());
 		changedSlots.set(0, slots.size());
 		indexedItems = new Item[slots.size()];
 		indexedCounts = new int[slots.size()];
@@ -66,17 +69,33 @@ public final class IndexedOutputSlots extends AbstractList<BasicInventorySlot> i
 	int nextMatchingSlot(Item item, int fromIndex) {
 		refreshChangedSlots();
 		BitSet matching = slotsByItem.get(item);
-		return matching == null ? -1 : matching.nextSetBit(fromIndex);
+		return matching == null ? -1 : nextReadableCandidate(matching, fromIndex);
 	}
 
 	int nextEmptySlot(int fromIndex) {
 		refreshChangedSlots();
-		return emptySlots.nextSetBit(fromIndex);
+		return nextReadableCandidate(emptySlots, fromIndex);
 	}
 
+    private int nextReadableCandidate(BitSet candidates, int fromIndex) {
+        int candidate = candidates.nextSetBit(fromIndex);
+        while (candidate >= 0 && unreadableSlots.get(candidate)) candidate = candidates.nextSetBit(candidate + 1);
+        return candidate;
+    }
+
 	private void refreshChangedSlots() {
-		for (int index = changedSlots.nextSetBit(0); index >= 0; index = changedSlots.nextSetBit(0)) {
-			ItemStack stack = slots.get(index).getStack();
+        for (int index = changedSlots.nextSetBit(0); index >= 0; index = changedSlots.nextSetBit(index + 1)) {
+            ItemStack stack;
+            try {
+                stack = slots.get(index).getStack();
+            } catch (RuntimeException | LinkageError error) {
+                if (!unreadableSlots.get(index)) {
+                    ProductiveBeesGenesis.LOGGER.error("Local output slot could not be indexed; other slots remain available: slot={}", index, error);
+                }
+                unreadableSlots.set(index);
+                // 保留原索引与脏标记；未知位置不作为空槽，后续查询继续恢复读取。
+                continue;
+            }
 			Item item = stack.isEmpty() ? null : stack.getItem();
 			Item previous = indexedItems[index];
 			if (item != previous) {
@@ -97,6 +116,10 @@ public final class IndexedOutputSlots extends AbstractList<BasicInventorySlot> i
 			itemCount += (long) count - indexedCounts[index];
 			indexedCounts[index] = count;
 			changedSlots.clear(index);
+            if (unreadableSlots.get(index)) {
+                unreadableSlots.clear(index);
+                ProductiveBeesGenesis.LOGGER.info("Local output slot became readable again: slot={}", index);
+            }
 		}
 	}
 }

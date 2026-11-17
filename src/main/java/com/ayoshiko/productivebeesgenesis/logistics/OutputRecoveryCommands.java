@@ -48,6 +48,9 @@ public final class OutputRecoveryCommands {
                         .then(Commands.literal("confirm-centrifuge-payment")
                                 .then(Commands.argument("request", UuidArgument.uuid())
                                         .executes(c -> execute(c, "centrifuge-payment"))))
+                        .then(Commands.literal("confirm-smelting-settled")
+                                .then(Commands.argument("request", UuidArgument.uuid())
+                                        .executes(c -> execute(c, "smelting-settled"))))
                         .then(Commands.literal("confirm-production-settled")
                                 .then(Commands.argument("request", UuidArgument.uuid())
                                         .executes(c -> execute(c, "settled"))))));
@@ -107,32 +110,50 @@ public final class OutputRecoveryCommands {
                 var processor = centrifuge(tile);
                 if (processor == null) throw new IllegalStateException("Not a centrifuge");
                 processor.confirmPaymentSettled(UuidArgument.getUuid(context, "request"));
+            } else if ("smelting-settled".equals(action)) {
+                var processor = centrifuge(tile);
+                if (processor == null) throw new IllegalStateException("Not a centrifuge");
+                processor.confirmSmeltingSettled(UuidArgument.getUuid(context, "request"));
             } else if ("source-settled".equals(action)) {
-                custody.confirmSourceSettled(UuidArgument.getUuid(context, "request"));
-            } else if ("resolve".equals(action)) custody.resolve(UuidArgument.getUuid(context, "request"), LongArgumentType.getLong(context, "accepted"));
+                custody.request(UuidArgument.getUuid(context, "request")).confirmSourceSettled(UuidArgument.getUuid(context, "request"));
+            } else if ("resolve".equals(action)) custody.request(UuidArgument.getUuid(context, "request")).resolve(UuidArgument.getUuid(context, "request"), LongArgumentType.getLong(context, "accepted"));
             else if ("settled".equals(action)) {
                 if (!(tile instanceof TileEntityMekApiary apiary)) throw new IllegalStateException("Not an apiary");
                 apiary.productionState().acknowledgeSettled(UuidArgument.getUuid(context, "request"));
             } else if ("retry".equals(action)) {
                 custody.retryDecode(source.registryAccess());
                 if (tile instanceof TileEntityMekApiary apiary) apiary.retryOutputData();
+                var processor = centrifuge(tile);
+                if (processor != null) processor.retrySmeltingData(source.registryAccess());
                 if (tile instanceof IAe2InputHost host) {
                     host.productivebeesgenesis$getAe2StateHolder().retryInputFilterData();
                     host.productivebeesgenesis$getAe2StateHolder().getOutputLedger().retryDecode();
                     tile.setChanged();
                 }
             }
-            source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.status",
-                    String.valueOf(custody.sequence()), custody.amount(), custody.destination(), custody.failure()), false);
-            if (custody.sourceDebitPending() > 0) {
-                source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.source_debit",
-                        custody.sourceDebitPending(), custody.sourceDebitUnknown()), false);
+            for (OutputCustody record : custody.requests()) {
+                source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.status",
+                        String.valueOf(record.sequence()), record.amount(), record.destination(), record.failure()), false);
+                if (record.sourceDebitPending() > 0) {
+                    source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.source_debit",
+                            record.sourceDebitPending(), record.sourceDebitUnknown()), false);
+                }
             }
             var processor = centrifuge(tile);
             if (processor != null) {
+                if (processor.hasInvalidSmeltingData()) {
+                    source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.invalid_smelting"), false);
+                }
                 for (var payment : processor.paymentStatus()) {
                     source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.centrifuge_payment",
                             payment.lane() + 1, payment.request().toString(), payment.energy()), false);
+                }
+                for (var work : processor.smeltingStatus()) {
+                    Component scope = work.lane() < 0
+                            ? Component.translatable("command.productivebeesgenesis.output.smelting_shared")
+                            : Component.translatable("gui.productivebeesgenesis.centrifuge_lane.lane", work.lane() + 1);
+                    source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.smelting",
+                            scope, work.request().toString(), work.phase(), work.energy(), work.failure()), false);
                 }
             }
             if (tile instanceof IAe2InputHost host) {
@@ -161,10 +182,11 @@ public final class OutputRecoveryCommands {
                             transfer.offeredAmount(), String.valueOf(transfer.fingerprint())), false);
                 }
             }
-            if (tile instanceof TileEntityMekApiary apiary && apiary.productionState().suspended())
-                source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.production",
-                        String.valueOf(apiary.productionState().request()), apiary.productionState().phase(), apiary.productionState().failure()), false);
             if (tile instanceof TileEntityMekApiary apiary) {
+                for (var request : apiary.productionState().requestStatus()) {
+                    source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.production",
+                            String.valueOf(request.request()), request.phase(), request.failure()), false);
+                }
                 if (apiary.upgradeRecovery().blocked()) {
                     var recovery = apiary.upgradeRecovery();
                     source.sendSuccess(() -> Component.translatable("command.productivebeesgenesis.output.upgrade",

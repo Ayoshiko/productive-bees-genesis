@@ -5,6 +5,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntSupplier;
+import java.util.function.BooleanSupplier;
 
 /**
 	 * 输入槽分等级堆叠倍率标记接口
@@ -66,6 +67,12 @@ public interface TieredInputSlot {
 	 * Mekanism 原版机器的槽位永远保持未标记状态。
 	 */
 	void productivebeesgenesis$markOwnSlot();
+
+    /** 本地未知交接仍可能位于此槽；宿主按真实物理位置限制再次提取。 */
+    void productivebeesgenesis$setOutputExtractionAllowed(BooleanSupplier allowed);
+
+    /** 未结清输出账本禁止同槽再追加，保留原数量与扣账后数量。 */
+    void productivebeesgenesis$setOutputInsertionAllowed(BooleanSupplier allowed);
 
 	/** 该槽位是否由本模组机器创建；原版机器槽位恒为 {@code false}。 */
 	boolean productivebeesgenesis$isOwnSlot();

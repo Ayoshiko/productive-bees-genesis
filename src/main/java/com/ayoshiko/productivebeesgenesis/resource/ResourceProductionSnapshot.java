@@ -11,7 +11,7 @@ import java.util.List;
 /** 只读生产监控；数量是窗口内实际结算量，不是可提取资产。 */
 public record ResourceProductionSnapshot(long windowMillis, List<Entry> entries) {
     public static final ResourceProductionSnapshot EMPTY = new ResourceProductionSnapshot(5000, List.of());
-    public enum State { PRODUCING, WAITING_OUTPUT, WAITING_WORK, RECENT }
+    public enum State { PRODUCING, WAITING_OUTPUT, WAITING_WORK, RECENT, WAITING_RESOURCE, PREPARATION_FAILED }
     public record Entry(ResourceKey key, BigInteger produced, State state) {
         public Entry {
             if (key == null || produced == null || produced.signum() < 0

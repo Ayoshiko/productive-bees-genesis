@@ -138,6 +138,11 @@ public final class MekAe2LifecycleHandler {
 	 * @param host 输出宿主
 	 */
 	public void tryConnectNode(IAe2OutputHostBase host) {
+		Ae2PendingItemBuffer pending = stateHolder.getPendingItemBuffer();
+		if (pending.needsRecoveredInputSave()) {
+			host.productivebeesgenesis$markAe2StateChanged();
+			pending.acknowledgeRecoveredInputSave();
+		}
 		// AE2 未安装守卫：方法体内 IManagedGridNode 模式匹配与 connectNode 调用均会触发 AE2 类解析
 		if (!Ae2IntegrationLoader.isAe2Loaded()) return;
 		// 快速路径：已连接则跳过 synchronized，避免 256× 加速下每 tick 256 次锁竞争

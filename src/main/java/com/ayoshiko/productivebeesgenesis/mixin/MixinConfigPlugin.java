@@ -83,7 +83,8 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"ExtraUpgradeStackMixin",
 			"GuiUpgradeWindowMixin",
 			"ExtraFactoryInputInventorySlotMixin",
-			"ExtraFactoryOutputInventorySlotMixin"
+			"ExtraFactoryOutputInventorySlotMixin",
+			"ExtraSmeltingInputSortingMixin"
 	);
 
 	/** 资源事务要求整组入口齐全；版本与字节码预检通过后使用严格注入。 */
@@ -125,7 +126,8 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 	private static final Set<String> EME_MIXINS = Set.of(
 			"TileEntityEMExtraFactoryAccessor",
 			"EMExtraFactoryInputInventorySlotMixin",
-			"EMExtraFactoryOutputInventorySlotMixin"
+			"EMExtraFactoryOutputInventorySlotMixin",
+			"EMExtraSmeltingInputSortingMixin"
 	);
 
 	/** AE2 接口注入 Mixin（目标类始终可加载，仅要求 AE2 已安装） */

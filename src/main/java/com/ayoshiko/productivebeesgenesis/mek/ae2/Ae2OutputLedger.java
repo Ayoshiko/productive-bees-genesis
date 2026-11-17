@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
+import com.ayoshiko.productivebeesgenesis.mek.PbRecipeContext;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -66,6 +67,13 @@ public final class Ae2OutputLedger {
 
 	public boolean hasSlot(int process, int slot) {
 		return invalid != null || find(process, slot) != null;
+	}
+
+	/** 账本只冻结原物理槽；健康槽的生产与物流仍可继续。 */
+	public static boolean blocks(PbRecipeContext context, int process, int slot) {
+		if (!(context instanceof IAe2OutputHostBase host)) return false;
+		Ae2OutputStateHolder holder = host.productivebeesgenesis$getAe2StateHolder();
+		return holder != null && holder.getOutputLedger().hasSlot(process, slot);
 	}
 
 	public List<Settlement> snapshot() {

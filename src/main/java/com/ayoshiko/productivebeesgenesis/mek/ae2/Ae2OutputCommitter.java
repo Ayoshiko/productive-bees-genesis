@@ -84,15 +84,18 @@ final class Ae2OutputCommitter {
 							settlement.process(), settlement.slot(), settlement.remaining());
 					continue;
 				}
-                int expectedAfter = settlement.originalCount() - settlement.remaining();
-                if (current.getCount() == expectedAfter) {
-                    ledger.confirm(settlement.process(), settlement.slot(), settlement.remaining());
-                    continue;
-                }
-                if (current.getCount() != settlement.originalCount()) {
-                    LogThrottle.error("ae2_output_ledger_count_conflict", "AE2 source count changed; settlement suspended");
-                    continue;
-                }
+				int expectedAfter = settlement.originalCount() - settlement.remaining();
+				if (current.getCount() == expectedAfter) {
+					ledger.confirm(settlement.process(), settlement.slot(), settlement.remaining());
+					confirmed += settlement.remaining();
+					continue;
+				}
+				if (current.getCount() != settlement.originalCount()) {
+					LogThrottle.error("ae2_output_ledger_count_conflict",
+							"AE2 输出账本源数量冲突，process={} slot={} before={} expectedAfter={} actual={}；保留原记录",
+							settlement.process(), settlement.slot(), settlement.originalCount(), expectedAfter, current.getCount());
+					continue;
+				}
 				int remaining = settlement.remaining();
 				if (remaining <= 0) continue;
 				ItemStack updated = current.copy();
@@ -100,10 +103,10 @@ final class Ae2OutputCommitter {
 				slot.setStack(updated);
 				ledger.confirm(settlement.process(), settlement.slot(), remaining);
 				confirmed += remaining;
-			} catch (RuntimeException e) {
+			} catch (RuntimeException | LinkageError e) {
 				LogThrottle.warn("ae2_output_ledger_settle",
 						"AE2 输出账本结算异常，保留记录等待重试 process={} slot={}: {}",
-						settlement.process(), settlement.slot(), e.toString());
+						settlement.process(), settlement.slot(), e.toString(), e);
 			}
 		}
 		return confirmed;
@@ -122,12 +125,13 @@ final class Ae2OutputCommitter {
 	/** 直接推送单个槽位（少量槽位场景，避免 Map 开销） */
 	static int tryPushSlotDirect(Ae2SlotEntry entry, MEStorage meStorage, IActionSource actionSource,
 			Ae2OutputLedger ledger, com.ayoshiko.productivebeesgenesis.logistics.OutputCustody custody) {
-		if (custody.blocked()) return 0;
+		if (custody.externalOutputBlocked()
+				|| custody.localItemBlocked(entry.process * AeItemKeyCache.SLOTS_PER_PROCESS + entry.slotIdx)) return 0;
 		IInventorySlot slot = entry.slot;
 		int originalCount = entry.count;
 		long inserted = 0;
-		if (!ledger.reserve(entry.process, entry.slotIdx, entry.fingerprint(), originalCount)) return 0;
 		try {
+			if (!ledger.reserve(entry.process, entry.slotIdx, entry.fingerprint(), originalCount)) return 0;
 			inserted = custody.handoffItem(entry.stack, originalCount, "ae2-output-slot", () ->
 					meStorage.insert(entry.key, originalCount, Actionable.MODULATE, actionSource));
 			if (inserted <= 0) {
@@ -151,7 +155,7 @@ final class Ae2OutputCommitter {
 			}
 			ledger.confirm(entry.process, entry.slotIdx, (int) inserted);
 			return (int) inserted;
-		} catch (Exception e) {
+		} catch (Exception | LinkageError e) {
 			if (inserted <= 0) ledger.cancel(entry.process, entry.slotIdx);
 			Ae2PushExceptionLog.handle(e, entry.process, entry.slotIdx, entry.stack, originalCount);
 			// v9-L4 修复：insert 已成功但 setStack 异常时，物品已进入 AE2 不可撤回。
@@ -169,19 +173,20 @@ final class Ae2OutputCommitter {
 	static int pushBatchKey(AEItemKey key, long totalCount, List<Ae2SlotEntry> slotEntries,
 			MEStorage meStorage, IActionSource actionSource, Ae2OutputLedger ledger,
             com.ayoshiko.productivebeesgenesis.logistics.OutputCustody custody) {
-        if (custody.blocked()) return 0;
-		int reserved = 0;
-		for (Ae2SlotEntry entry : slotEntries) {
-			if (!ledger.reserve(entry.process, entry.slotIdx, entry.fingerprint(), entry.count)) {
-				for (int i = 0; i < reserved; i++) {
-					Ae2SlotEntry reservedEntry = slotEntries.get(i);
-					ledger.cancel(reservedEntry.process, reservedEntry.slotIdx);
-				}
-				return 0;
-			}
-			reserved++;
-		}
+        if (custody.externalOutputBlocked()) return 0;
 		try {
+			int reserved = 0;
+			for (Ae2SlotEntry entry : slotEntries) {
+				if (custody.localItemBlocked(entry.process * AeItemKeyCache.SLOTS_PER_PROCESS + entry.slotIdx)
+						|| !ledger.reserve(entry.process, entry.slotIdx, entry.fingerprint(), entry.count)) {
+					for (int i = 0; i < reserved; i++) {
+						Ae2SlotEntry reservedEntry = slotEntries.get(i);
+						ledger.cancel(reservedEntry.process, reservedEntry.slotIdx);
+					}
+					return 0;
+				}
+				reserved++;
+			}
 			long inserted = custody.handoffItem(slotEntries.get(0).stack, totalCount, "ae2-output-merged", () ->
 					meStorage.insert(key, totalCount, Actionable.MODULATE, actionSource));
 			if (inserted <= 0) {
@@ -216,7 +221,12 @@ final class Ae2OutputCommitter {
 						confirmed += toRemove;
 						continue;
 					}
-					if (!key.matches(current) || current.getCount() < toRemove) break;
+					if (!key.matches(current) || current.getCount() < toRemove) {
+						LogThrottle.error("ae2_output_batch_source_conflict",
+								"AE2 批量回执源槽冲突，process={} slot={} accepted={} actual={}；保留该槽账本，其它槽继续",
+								entry.process, entry.slotIdx, toRemove, current.getCount());
+						continue;
+					}
 					if (toRemove >= current.getCount()) {
 						slot.setStack(ItemStack.EMPTY);
 					} else {
@@ -226,15 +236,13 @@ final class Ae2OutputCommitter {
 					}
 					ledger.confirm(entry.process, entry.slotIdx, toRemove);
 					confirmed += toRemove;
-				} catch (Exception e) {
+				} catch (Exception | LinkageError e) {
 					Ae2PushExceptionLog.handle(e, entry.process, entry.slotIdx, entry.stack, entry.count);
-					break;
 				}
 			}
 			return confirmed;
-		} catch (Exception e) {
-			// v9-L1 修复：外层 catch 仅在 insert 抛出时触发（内层循环异常已被内层 catch 处理），
-			// 此时槽位尚未被修改，无需回滚。移除死回滚代码避免误导。
+		} catch (Exception | LinkageError e) {
+			// 只撤销没有接收回执的预留；已分配接收量的记录仍留待源槽确认。
 			Ae2SlotEntry first = slotEntries.get(0);
 			for (Ae2SlotEntry entry : slotEntries) ledger.cancel(entry.process, entry.slotIdx);
 			Ae2PushExceptionLog.handle(e, first.process, first.slotIdx, first.stack, first.count);

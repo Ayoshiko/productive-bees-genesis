@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mixin.accessor;
 
 import mekanism.common.inventory.slot.BasicInventorySlot;
+import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
@@ -69,4 +70,8 @@ public interface BasicInventorySlotAccessor {
 	 */
 	@Accessor("limit")
 	int productivebeesgenesis$getLimit();
+
+	/** 本地执行抛错后核对真实库存，绕过可能失败的公开读取回调。 */
+	@Accessor("current")
+	ItemStack productivebeesgenesis$getCurrent();
 }

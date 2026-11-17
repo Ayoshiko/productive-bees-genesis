@@ -3,7 +3,7 @@ package com.ayoshiko.productivebeesgenesis.mek.fluid;
 import mekanism.api.AutomationType;
 import mekanism.api.IContentsListener;
 import mekanism.api.fluid.IExtendedFluidTank;
-import mekanism.common.capabilities.fluid.BasicFluidTank;
+import com.ayoshiko.productivebeesgenesis.inventory.OutputFluidTank;
 import mekanism.common.capabilities.holder.fluid.IFluidTankHolder;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -23,6 +23,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
+import java.util.function.IntPredicate;
 
 /**
 	 * 多流体槽管理器 — 构造时预分配全部 maxTanks 个空槽
@@ -137,6 +138,13 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 	public MultiFluidTankHolder(int maxTanks, int tankCapacity, IContentsListener listener,
 			int maxTanksPerFluidConfig, @Nullable LongSupplier gameTimeSupplier,
 			BooleanSupplier externalExtractionAllowed) {
+        this(maxTanks, tankCapacity, listener, maxTanksPerFluidConfig, gameTimeSupplier,
+                index -> externalExtractionAllowed.getAsBoolean());
+    }
+
+    public MultiFluidTankHolder(int maxTanks, int tankCapacity, IContentsListener listener,
+            int maxTanksPerFluidConfig, @Nullable LongSupplier gameTimeSupplier,
+            IntPredicate extractionAllowed) {
 		if (maxTanks < 1) {
 			throw new IllegalArgumentException("maxTanks 必须 >= 1，实际: " + maxTanks);
 		}
@@ -155,9 +163,10 @@ public class MultiFluidTankHolder implements IFluidTankHolder {
 		// 预分配 maxTanks 个空槽；监听器同时失效外部快照并转发原始 listener。
 		// output 模式:可提取不可外部插入,符合离心机输出槽语义
 		for (int i = 0; i < maxTanks; i++) {
-			tanksInOrder.add(BasicFluidTank.create(tankCapacity,
+            int tankIndex = i;
+			tanksInOrder.add(new OutputFluidTank(tankCapacity,
 					(stack, automation) -> unresolvedSavedData == null
-							&& (automation == AutomationType.INTERNAL || externalExtractionAllowed.getAsBoolean()),
+							&& extractionAllowed.test(tankIndex),
 					(stack, automation) -> unresolvedSavedData == null && automation == AutomationType.INTERNAL,
 					stack -> true, this::onTankContentsChanged));
 		}

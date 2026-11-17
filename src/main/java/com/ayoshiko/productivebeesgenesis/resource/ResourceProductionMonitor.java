@@ -204,7 +204,8 @@ public final class ResourceProductionMonitor {
             }
             var state = states.getOrDefault(entry.getKey(), value.waitingOutput
                     ? ResourceProductionSnapshot.State.WAITING_OUTPUT : ResourceProductionSnapshot.State.RECENT);
-            if (state != ResourceProductionSnapshot.State.PRODUCING && value.waitingOutput) {
+            if ((state == ResourceProductionSnapshot.State.WAITING_WORK
+                    || state == ResourceProductionSnapshot.State.RECENT) && value.waitingOutput) {
                 state = ResourceProductionSnapshot.State.WAITING_OUTPUT;
             }
             if (state == ResourceProductionSnapshot.State.WAITING_WORK && produced.signum() > 0) {

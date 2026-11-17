@@ -302,7 +302,7 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 				() -> canFunction() && !hasUnresolvedInput() && !pbProcessor.hasResourceWork(cacheIndex)
 						&& !pbProcessor.acceptsResourceInput(inputSlot(cacheIndex).getStack()),
 				this::setActiveState, () -> MekUpgradeSupport.hasCreativeUpgrade(this), energyContainer,
-				this::getTicksRequired, this::markForSave, this::getOperationsPerTick, progress, null);
+				this::getTicksRequired, this::markForSave, this::getOperationsPerTick, progress, null, pbProcessor, this);
 	}
 
 	/** JDTE 累计钩子（委托 AbstractMekCentrifugeFactoryJdteSupport） */
@@ -333,13 +333,13 @@ public abstract class AbstractMekCentrifugeFactory extends TileEntityItemToItemF
 	 */
 	public boolean productivebeesgenesis$runLightSmeltingTicks(int batchMultiplier) {
 		return MekCentrifugeFactoryHelper.runLightSmeltingTicks(recipeCacheLookupMonitors, batchMultiplier,
-				energyContainer);
+				energyContainer, pbProcessor);
 	}
 
 	/** Runs the full SMELTING batch with one shared deferred-energy ledger. */
 	public boolean productivebeesgenesis$runSmeltingBatch(int batchMultiplier, BooleanSupplier fullTick) {
 		return MekCentrifugeFactoryHelper.runSmeltingBatch(recipeCacheLookupMonitors, batchMultiplier,
-				energyContainer, fullTick);
+				energyContainer, fullTick, pbProcessor);
 	}
 
 	/** 按钮显示与 ME/EME 一致：返回 sorting 字段实际值（委托 StateSupport，绕过原版死锁） */

@@ -172,14 +172,14 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	boolean runLightSmeltingTicks(int batchMultiplier) {
 		return MekCentrifugeFactoryHelper.runLightSmeltingTicks(
 				new RecipeCacheLookupMonitor<?>[] {recipeCacheLookupMonitor}, batchMultiplier,
-				accessor().productivebeesgenesis$getEnergyContainer());
+				accessor().productivebeesgenesis$getEnergyContainer(), pbProcessor);
 	}
 
 	/** Runs the full SMELTING batch with one shared deferred-energy ledger. */
 	boolean runSmeltingBatch(int batchMultiplier, BooleanSupplier fullTick) {
 		return MekCentrifugeFactoryHelper.runSmeltingBatch(
 				new RecipeCacheLookupMonitor<?>[] {recipeCacheLookupMonitor}, batchMultiplier,
-				accessor().productivebeesgenesis$getEnergyContainer(), fullTick);
+				accessor().productivebeesgenesis$getEnergyContainer(), fullTick, pbProcessor);
 	}
 
 	/**
@@ -302,9 +302,17 @@ public class TileEntityMekCentrifuge extends TileEntityElectricMachine
 	@Override
 	public CachedRecipe<ItemStackToItemStackRecipe> createNewCachedRecipe(
 			@NotNull ItemStackToItemStackRecipe recipe, int cacheIndex) {
-		return MekCentrifugeUpgradeOps.configureCachedRecipe(this, super.createNewCachedRecipe(recipe, cacheIndex))
-				.setCanHolderFunction(() -> canFunction() && !hasUnresolvedInput() && !pbProcessor.hasResourceWork(cacheIndex)
-						&& !pbProcessor.acceptsResourceInput(inputSlot(cacheIndex).getStack()));
+		CachedRecipe<ItemStackToItemStackRecipe> cached = new CentrifugeSmeltingCachedRecipe(recipe,
+				recheckAllRecipeErrors, inputHandler, outputHandler, pbProcessor, this, cacheIndex, this::setOperatingTicks)
+				.setErrorsChanged(this::onErrorsChanged)
+				.setCanHolderFunction(() -> canFunction() && !hasUnresolvedInput()
+						&& pbProcessor.canProcessSmeltingLane(cacheIndex) && !pbProcessor.hasResourceWork(cacheIndex)
+						&& !pbProcessor.acceptsResourceInput(inputSlot(cacheIndex).getStack()))
+				.setActive(this::setActive)
+				.setRequiredTicks(this::getTicksRequired)
+				.setOnFinish(this::markForSave)
+				.setOperatingTicksChanged(this::setOperatingTicks);
+		return MekCentrifugeUpgradeOps.configureCachedRecipe(this, cached);
 	}
 
 	@Override

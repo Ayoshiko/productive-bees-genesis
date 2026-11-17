@@ -32,9 +32,28 @@ public final class Ae2PendingItemBuffer {
 	private long totalAmount;
 	private final Ae2InputTransfer transfer = new Ae2InputTransfer();
 	private Tag unreadable;
+	private boolean recoveredInputSavePending;
 
 	public Ae2InputTransfer transfer() { return transfer; }
 	public boolean isBlocked() { return unreadable != null || transfer.isPresent(); }
+
+	public boolean needsRecoveredInputSave() {
+		return recoveredInputSavePending;
+	}
+
+	public void acknowledgeRecoveredInputSave() {
+		recoveredInputSavePending = false;
+	}
+
+	/** 满缓冲时仍可沿原请求结清已知余额，不覆盖在途或损坏记录。 */
+	public boolean hasRecoverableKnownTransfer() {
+		return unreadable == null && transfer.hasRecoverableKnownAmount();
+	}
+
+	/** 已知余额没有在途副作用，恢复后其它正常生产可以继续。 */
+	public boolean recoverKnownTransfer(long tick) {
+		return unreadable == null && transfer.recoverKnown(this, tick);
+	}
 
 	public boolean canAcceptReturn(String fingerprint, long amount) {
 		PendingItem entry = find(fingerprint);
@@ -295,7 +314,10 @@ public final class Ae2PendingItemBuffer {
 		clear();
 		transfer.load(parent);
 		Tag raw = parent.get(Ae2NbtKeys.NBT_KEY_AE_PENDING_ITEMS);
-		if (raw == null) return;
+		if (raw == null) {
+			recoveredInputSavePending = recoverKnownTransfer(0L);
+			return;
+		}
 		if (!(raw instanceof ListTag list) || list.size() > MAX_ENTRIES
 				|| (!list.isEmpty() && list.getElementType() != Tag.TAG_COMPOUND)) {
 			unreadable = raw.copy();
@@ -329,6 +351,7 @@ public final class Ae2PendingItemBuffer {
 			totalAmount = 0;
 			unreadable = raw.copy();
 		}
+		recoveredInputSavePending = recoverKnownTransfer(0L);
 	}
 
 	/** 清空运行时缓冲。仅在方块真正移除时调用。 */
@@ -337,6 +360,7 @@ public final class Ae2PendingItemBuffer {
 		totalAmount = 0L;
 		transfer.clear();
 		unreadable = null;
+		recoveredInputSavePending = false;
 	}
 
 	public int size() { return entries.size(); }

@@ -53,7 +53,9 @@ public final class BeeProduceBatchSampler {
 			if (max == 0) continue;
 			ItemStackMergeHelper.checkBulkCount(output.size(),
 					Math.multiplyExact(BeeProductivityGene.adjustCount(max, productivityLevel), rollCount));
-			long successes = ExactBinomialSampler.sample(random, rollCount, adjustedChance);
+			// PB 的 nextFloat <= chance 在 24 位均匀网格上包含阈值对应的端点。
+			double probability = Math.min(1.0, (Math.floor((double) adjustedChance * 0x1.0p24) + 1) * 0x1.0p-24);
+			long successes = ExactBinomialSampler.sample(random, rollCount, probability);
 			long count = sampleGeneAdjustedSum(random, min, max, successes, productivityLevel);
 			ItemStackMergeHelper.appendBulkCount(output, entry.getKey(), count);
 		}
@@ -94,35 +96,170 @@ public final class BeeProduceBatchSampler {
 		return Math.addExact(totalRolls, ExactBinomialSampler.sample(random, batchCount, fraction));
 	}
 
-	/** 以二项分配递归拆分均匀区间，聚合结果只由实际可生成的逐栈数量组成。 */
+	/**
+	 * 同余类内保留 Java 两次 float 舍入，按精确等差分布聚合；工作量不随成功轮数线性增长。
+	 * float 倍率比 4/3、7/4、11/5 的理想斜率非小，因此扣除等差项后的修正单调不减。
+	 */
 	static long sampleGeneAdjustedSum(RandomGenerator random, int min, int max,
 			long sampleCount, int productivityLevel) {
 		if (sampleCount <= 0 || min < 0 || max < min) return 0;
 		int level = Math.max(BeeProductivityGene.NORMAL,
 				Math.min(BeeProductivityGene.VERY_HIGH, productivityLevel));
+		long maximum = BeeProductivityGene.adjustCount(max, level);
+		Math.multiplyExact(maximum, sampleCount);
 		if (min == max) {
-			return Math.multiplyExact(BeeProductivityGene.adjustCount(min, level), sampleCount);
+			return Math.multiplyExact(maximum, sampleCount);
+		}
+		if (sampleCount <= 32) {
+			return sampleSingleTotals(random, min, max, sampleCount, level);
 		}
 		if (level == BeeProductivityGene.NORMAL) {
-			Math.multiplyExact((long) max, sampleCount);
-			return SampleUniformSum.sample(random, min, max, sampleCount, 1);
+			return Math.addExact(Math.multiplyExact((long) min, sampleCount),
+					sampleUniformOffsets(random, (long) max - min + 1, sampleCount));
 		}
-		long lower = BeeProductivityGene.adjustCount(min, level);
-		long upper = BeeProductivityGene.adjustCount(max, level);
-		if (lower == upper) return Math.multiplyExact(lower, sampleCount);
-		if (sampleCount <= 32) {
-			long sum = 0;
-			for (long i = 0; i < sampleCount; i++) {
-				int sampled = SampleUniformSum.sampleSingle(random, min, max);
-				sum = Math.addExact(sum, BeeProductivityGene.adjustCount(sampled, level));
+		int numerator = switch (level) {
+			case 1 -> 4;
+			case 2 -> 7;
+			default -> 11;
+		};
+		int denominator = switch (level) {
+			case 1 -> 3;
+			case 2 -> 4;
+			default -> 5;
+		};
+		float coefficient = 1.0F / (level + 2.0F) + (level + 1.0F) / 2.0F;
+		long total = 0;
+		long remainingSamples = sampleCount;
+		long start = min;
+		while (start <= max && remainingSamples > 0) {
+			int first = (int) start;
+			int last = first < 2 ? first : quantizationEnd(first, max, coefficient);
+			long values = (long) last - first + 1;
+			long remainingValues = (long) max - first + 1;
+			long selected = values == remainingValues ? remainingSamples
+					: ExactBinomialSampler.sample(random, remainingSamples, (double) values / remainingValues);
+			if (selected > 0) {
+				long subtotal = first < 2
+						? Math.multiplyExact(BeeProductivityGene.adjustCount(first, level), selected)
+						: sampleQuantizedRange(random, first, last, selected, level, coefficient, numerator, denominator);
+				total = Math.addExact(total, subtotal);
 			}
-			return sum;
+			remainingSamples -= selected;
+			start = (long) last + 1;
 		}
-		int middle = min + (int) (((long) max - min) / 2);
-		double leftProbability = ((long) middle - min + 1.0) / ((long) max - min + 1.0);
-		long leftCount = ExactBinomialSampler.sample(random, sampleCount, leftProbability);
-		return Math.addExact(
-				sampleGeneAdjustedSum(random, min, middle, leftCount, level),
-				sampleGeneAdjustedSum(random, middle + 1, max, sampleCount - leftCount, level));
+		return total;
+	}
+
+	private static long sampleSingleTotals(RandomGenerator random, int min, int max, long samples, int level) {
+		long total = 0;
+		for (long i = 0; i < samples; i++) {
+			int sampled = SampleUniformSum.sampleSingle(random, min, max);
+			total = Math.addExact(total, BeeProductivityGene.adjustCount(sampled, level));
+		}
+		return total;
+	}
+
+	private static int quantizationEnd(int min, int max, float coefficient) {
+		long key = quantizationKey(min, coefficient);
+		int low = min;
+		int high = max;
+		while (low < high) {
+			int middle = low + (int) (((long) high - low + 1) / 2);
+			if (quantizationKey(middle, coefficient) == key) low = middle;
+			else high = middle - 1;
+		}
+		return low;
+	}
+
+	private static long quantizationKey(int count, float coefficient) {
+		float product = coefficient * count;
+		// ULP < 1 时输入整数精确，最终整数舍入的阈值随 ULP 增大单调降低。
+		if (Math.ulp(product) < 1.0F) return 0;
+		return ((long) Math.getExponent((float) count) << Integer.SIZE) | Math.getExponent(product);
+	}
+
+	private static long sampleQuantizedRange(RandomGenerator random, int min, int max, long samples,
+			int level, float coefficient, int numerator, int denominator) {
+		// 周期是输入、乘积两种量化网格的偶数倍，ties-to-even 在平移后保持相同方向。
+		int period = 2 * denominator * (int) Math.max(1.0F, Math.ulp(coefficient * min));
+		long values = (long) max - min + 1;
+		int families = (int) Math.min(period, values);
+		if (samples <= families) return sampleSingleTotals(random, min, max, samples, level);
+		long step = period + (long) period * numerator / denominator;
+		long total = 0;
+		long remainingSamples = samples;
+		long remainingValues = values;
+		for (int residue = 0; residue < families && remainingSamples > 0; residue++) {
+			int first = min + residue;
+			long familyValues = ((long) max - first) / period + 1;
+			long selected = familyValues == remainingValues ? remainingSamples
+					: ExactBinomialSampler.sample(random, remainingSamples, (double) familyValues / remainingValues);
+			total = Math.addExact(total,
+					sampleProgression(random, first, period, step, familyValues, selected, level));
+			remainingSamples -= selected;
+			remainingValues -= familyValues;
+		}
+		return total;
+	}
+
+	static long sampleProgression(RandomGenerator random, int first, int period, long step,
+			long values, long samples, int level) {
+		long total = 0;
+		long index = 0;
+		long remainingSamples = samples;
+		while (index < values && remainingSamples > 0) {
+			long correction = progressionCorrection(first, period, step, index, level);
+			long low = index;
+			long high = values - 1;
+			while (low < high) {
+				long middle = low + (high - low + 1) / 2;
+				if (progressionCorrection(first, period, step, middle, level) == correction) low = middle;
+				else high = middle - 1;
+			}
+			long plateauValues = low - index + 1;
+			long remainingValues = values - index;
+			long selected = plateauValues == remainingValues ? remainingSamples
+					: ExactBinomialSampler.sample(random, remainingSamples, (double) plateauValues / remainingValues);
+			long base = correction + step * index;
+			long subtotal = Math.addExact(Math.multiplyExact(base, selected),
+					Math.multiplyExact(step, sampleUniformOffsets(random, plateauValues, selected)));
+			total = Math.addExact(total, subtotal);
+			remainingSamples -= selected;
+			index = low + 1;
+		}
+		return total;
+	}
+
+	private static long progressionCorrection(int first, int period, long step, long index, int level) {
+		int count = (int) (first + period * index);
+		return BeeProductivityGene.adjustCount(count, level) - step * index;
+	}
+
+	/** 每个 dyadic 块内各二进制位独立，N 次索引之和等于各位 Binomial(N, 1/2) 的加权和。 */
+	private static long sampleUniformOffsets(RandomGenerator random, long values, long samples) {
+		if (samples == 0 || values == 1) return 0;
+		if (samples <= 32) {
+			long total = 0;
+			for (long i = 0; i < samples; i++) {
+				total = Math.addExact(total, random.nextLong(values));
+			}
+			return total;
+		}
+		long total = 0;
+		long remainingValues = values;
+		long remainingSamples = samples;
+		while (remainingValues > 0 && remainingSamples > 0) {
+			long block = Long.highestOneBit(remainingValues);
+			long selected = block == remainingValues ? remainingSamples
+					: ExactBinomialSampler.sample(random, remainingSamples, (double) block / remainingValues);
+			total = Math.addExact(total, Math.multiplyExact(values - remainingValues, selected));
+			for (long bit = 1; bit < block; bit <<= 1) {
+				long ones = ExactBinomialSampler.sample(random, selected, 0.5);
+				total = Math.addExact(total, Math.multiplyExact(bit, ones));
+			}
+			remainingSamples -= selected;
+			remainingValues -= block;
+		}
+		return total;
 	}
 }

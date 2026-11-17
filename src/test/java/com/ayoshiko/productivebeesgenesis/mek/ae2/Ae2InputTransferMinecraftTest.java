@@ -243,6 +243,221 @@ class Ae2InputTransferMinecraftTest {
     }
 
     @Test
+    void legacyKnownBalanceAutomaticallyReturnsToMeAndUnblocksNewProduction() {
+        var key = AEItemKey.of(Items.IRON_INGOT);
+        var registry = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        for (int version : new int[]{1, 2}) {
+            for (long amount : new long[]{0, 11}) {
+                var parent = new CompoundTag();
+                var record = new CompoundTag();
+                record.putInt("version", version);
+                record.putUUID("request", UUID.randomUUID());
+                record.putString("fingerprint", Ae2ItemFingerprint.encode(key, registry));
+                record.putString("phase", "known");
+                record.putInt("slot", -1);
+                record.putLong("known", amount);
+                record.putLong("offered", 0);
+                parent.put("productivebeesgenesis_ae_input_transfer", record);
+                var holder = new Ae2OutputStateHolder();
+                holder.loadPendingItems(parent);
+                assertFalse(holder.getPendingItemBuffer().isBlocked());
+                assertEquals(amount, holder.getPendingItemBuffer().getTotalAmount());
+                var source = BasicInventorySlot.at(null, 0, 0);
+                var storage = mock(MEStorage.class);
+                when(storage.insert(eq(key), anyLong(), any(), any())).thenAnswer(call -> call.getArgument(1));
+                var level = mock(Level.class);
+                when(level.registryAccess()).thenReturn(registry);
+                Ae2LeftoverReturner.retryPendingItems(level, holder, storage, List.of(source), 0, null, IActionSource.empty());
+                assertTrue(source.isEmpty());
+                assertEquals(0, holder.getPendingItemBuffer().getTotalAmount());
+                assertFalse(holder.getPendingItemBuffer().transfer().isPresent());
+                verify(storage, never()).extract(any(), anyLong(), any(), any());
+            }
+        }
+    }
+
+    @Test
+    void fullPendingBufferRetainsAllSixtyFiveIdentitiesAndAutomaticallySettlesKnownRequest() {
+        var registry = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        var keys = BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR)
+                .map(AEItemKey::of).limit(65).toList();
+        assertEquals(65, keys.size());
+        for (boolean unknown : new boolean[]{false, true}) {
+            var pending = new Ae2PendingItemBuffer();
+            for (int index = 0; index < 64; index++) {
+                assertEquals(1, pending.enqueueReturnToNetwork(
+                        Ae2ItemFingerprint.encode(keys.get(index), registry), 1, 0));
+            }
+            var parent = new CompoundTag();
+            pending.save(parent);
+            var record = new CompoundTag();
+            UUID request = UUID.randomUUID();
+            record.putInt("version", 1);
+            record.putUUID("request", request);
+            record.putString("fingerprint", Ae2ItemFingerprint.encode(keys.get(64), registry));
+            record.putString("phase", "known");
+            record.putInt("slot", -1);
+            record.putLong("known", 9);
+            record.putLong("offered", 0);
+            parent.put("productivebeesgenesis_ae_input_transfer", record);
+            var originalEntries = parent.getList(Ae2NbtKeys.NBT_KEY_AE_PENDING_ITEMS, net.minecraft.nbt.Tag.TAG_COMPOUND).copy();
+            var holder = new Ae2OutputStateHolder();
+            holder.loadPendingItems(parent);
+            assertTrue(holder.getPendingItemBuffer().isBlocked());
+            assertEquals(73, holder.getPendingItemBuffer().getTotalAmount());
+            var level = mock(Level.class);
+            when(level.registryAccess()).thenReturn(registry);
+            var storage = mock(MEStorage.class);
+            when(storage.insert(eq(keys.get(64)), anyLong(), eq(Actionable.SIMULATE), any()))
+                    .thenAnswer(call -> call.getArgument(1));
+            var calls = new AtomicInteger();
+            when(storage.insert(eq(keys.get(64)), anyLong(), eq(Actionable.MODULATE), any())).thenAnswer(call -> {
+                if (unknown) {
+                    calls.incrementAndGet();
+                    throw new IllegalStateException("received four before unknown response");
+                }
+                return calls.getAndIncrement() == 0 ? 4L : 5L;
+            });
+            assertTrue(Ae2LeftoverReturner.retryPendingItems(
+                    level, holder, storage, List.of(), 1, null, IActionSource.empty()));
+            var transfer = holder.getPendingItemBuffer().transfer();
+            assertEquals(request, transfer.request());
+            assertEquals(unknown ? 0 : 5, transfer.knownAmount());
+            assertEquals(unknown ? 9 : 0, transfer.offeredAmount());
+            var saved = new CompoundTag();
+            holder.savePendingItems(saved);
+            assertEquals(originalEntries, saved.getList(
+                    Ae2NbtKeys.NBT_KEY_AE_PENDING_ITEMS, net.minecraft.nbt.Tag.TAG_COMPOUND));
+            var restored = new Ae2OutputStateHolder();
+            restored.loadPendingItems(saved);
+            boolean retried = Ae2LeftoverReturner.retryPendingItems(
+                    level, restored, storage, List.of(), 2, null, IActionSource.empty());
+            assertEquals(!unknown, retried);
+            assertEquals(unknown, restored.getPendingItemBuffer().isBlocked());
+            assertEquals(unknown ? 1 : 2, calls.get());
+            assertEquals(unknown ? 73 : 64, restored.getPendingItemBuffer().getTotalAmount());
+            var after = new CompoundTag();
+            restored.savePendingItems(after);
+            var entries = after.getList(Ae2NbtKeys.NBT_KEY_AE_PENDING_ITEMS, net.minecraft.nbt.Tag.TAG_COMPOUND);
+            assertEquals(64, entries.size());
+            var fingerprints = new java.util.HashSet<String>();
+            for (int index = 0; index < 64; index++) {
+                assertTrue(fingerprints.add(entries.getCompound(index).getString("fingerprint")));
+                assertEquals(1, entries.getCompound(index).getLong("return_to_network_amount"));
+                assertEquals(0, entries.getCompound(index).getLong("amount"));
+                assertEquals(0, entries.getCompound(index).getLong("uncertain_amount"));
+            }
+            for (int index = 0; index < 64; index++) {
+                assertTrue(fingerprints.contains(originalEntries.getCompound(index).getString("fingerprint")));
+            }
+            if (unknown) assertEquals(saved, after);
+            verify(storage, never()).extract(any(), anyLong(), any(), any());
+        }
+    }
+
+    @Test
+    void loadedKnownRecoveryMarksItsHostOnceBeforeOptionalAeNodeWork() {
+        var handler = new MekAe2LifecycleHandler();
+        var pending = handler.getStateHolder().getPendingItemBuffer();
+        pending.transfer().beginKnown(() -> "saved-zero-known", 1);
+        pending.transfer().offer(1, -1);
+        pending.transfer().accepted(1);
+        var saved = new CompoundTag();
+        pending.save(saved);
+        handler.getStateHolder().loadPendingItems(saved);
+        assertTrue(pending.needsRecoveredInputSave());
+        var host = mock(IAe2OutputHostBase.class);
+        try (var dependency = mockStatic(Ae2IntegrationLoader.class)) {
+            dependency.when(Ae2IntegrationLoader::isAe2Loaded).thenReturn(false);
+            handler.tryConnectNode(host);
+            handler.tryConnectNode(host);
+        }
+        assertFalse(pending.needsRecoveredInputSave());
+        verify(host, times(1)).productivebeesgenesis$markAe2StateChanged();
+    }
+
+    @Test
+    void currentKnownBalanceKeepsLocalAndReturnOnlyOriginsAcrossReload() {
+        var key = AEItemKey.of(Items.IRON_INGOT);
+        var registry = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        String fingerprint = Ae2ItemFingerprint.encode(key, registry);
+        for (boolean networkOnly : new boolean[]{false, true}) {
+            var original = new Ae2PendingItemBuffer();
+            if (networkOnly) original.transfer().beginKnown(() -> fingerprint, 9, true);
+            else {
+                original.transfer().beginExtract(() -> fingerprint, 9);
+                original.transfer().extracted(9);
+            }
+            var saved = new CompoundTag();
+            original.save(saved);
+            var holder = new Ae2OutputStateHolder();
+            holder.loadPendingItems(saved);
+            var source = BasicInventorySlot.at(null, 0, 0);
+            var level = mock(Level.class);
+            when(level.registryAccess()).thenReturn(registry);
+            Ae2LeftoverReturner.retryPendingItems(level, holder, null, List.of(source), 0, null, IActionSource.empty());
+            assertFalse(holder.getPendingItemBuffer().isBlocked());
+            assertEquals(networkOnly ? 0 : 9, source.getCount());
+            assertEquals(networkOnly ? 9 : 0, holder.getPendingItemBuffer().getTotalAmount());
+            if (networkOnly) assertEquals(9, holder.getPendingItemBuffer().snapshot(0).getFirst().returnToNetworkAmount());
+        }
+    }
+
+    @Test
+    void playerKnownBalanceStillRequiresReconciliation() {
+        var pending = new Ae2PendingItemBuffer();
+        pending.transfer().beginKnown(() -> "player-cursor", 4);
+        pending.transfer().playerContext(UUID.randomUUID(), true);
+        var saved = new CompoundTag();
+        pending.save(saved);
+        var restored = new Ae2PendingItemBuffer();
+        restored.load(saved);
+        assertTrue(restored.isBlocked());
+        assertFalse(restored.recoverKnownTransfer(0));
+        assertEquals(4, restored.transfer().knownAmount());
+        var after = new CompoundTag();
+        restored.save(after);
+        assertEquals(saved, after);
+    }
+
+    @Test
+    void deferredCandidatesDoNotDivideHealthySupplyOrReserveEmptyLanes() {
+        for (boolean noCandidateLane : new boolean[]{false, true}) {
+            var level = mock(Level.class);
+            when(level.getGameTime()).thenReturn(70L);
+            var host = mock(IAe2InputHost.class);
+            when(host.productivebeesgenesis$getAe2Level()).thenReturn(level);
+            when(host.productivebeesgenesis$getAe2BlockPos()).thenReturn(BlockPos.ZERO);
+            var holder = new Ae2OutputStateHolder();
+            var buffers = new Ae2PushBuffers();
+            var healthy = AEItemKey.of(Items.IRON_INGOT);
+            var first = new Ae2InputExecution.PullEntry(healthy, 192);
+            var second = new Ae2InputExecution.PullEntry(AEItemKey.of(Items.GOLD_INGOT), 192);
+            var third = new Ae2InputExecution.PullEntry(AEItemKey.of(Items.COPPER_INGOT), 192);
+            second.resourceDeferred = !noCandidateLane;
+            third.resourceDeferred = !noCandidateLane;
+            var storage = mock(MEStorage.class);
+            when(storage.extract(eq(healthy), anyLong(), eq(Actionable.MODULATE), any())).thenAnswer(call -> call.getArgument(1));
+            List<IInventorySlot> slots = List.of(BasicInventorySlot.at(null, 0, 0),
+                    BasicInventorySlot.at(null, 0, 0), BasicInventorySlot.at(null, 0, 0));
+            if (noCandidateLane) {
+                for (var slot : slots) slot.setStack(new ItemStack(Items.IRON_INGOT));
+            }
+            var fairness = new Ae2InputFairnessScheduler();
+            fairness.roll(70);
+
+            var result = Ae2InputExecution.execute(host, holder, buffers, new ArrayList<>(List.of(first, second, third)),
+                    slots, storage, new Ae2KeyBackoffRegistry<>(), fairness, 192, 192, 64, IActionSource.empty());
+
+            long supplied = noCandidateLane ? 189 : 192;
+            assertEquals(supplied, result.totalPulled());
+            for (var slot : slots) assertEquals(64, slot.getCount());
+            assertEquals(!noCandidateLane, result.networkWorkDeferred());
+            verify(storage, times(1)).extract(eq(healthy), eq(supplied), eq(Actionable.MODULATE), any());
+        }
+    }
+
+    @Test
     void savedExtractionRequiresActualWithdrawnAmountBeforeAnyRetry() {
         var buffer = new Ae2PendingItemBuffer();
         var transfer = buffer.transfer();

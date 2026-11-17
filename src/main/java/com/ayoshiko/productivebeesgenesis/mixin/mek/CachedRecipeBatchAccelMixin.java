@@ -369,31 +369,31 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		// 快速推进期间 active 保持 true，只在进入时设置一次（Mekanism setActive 内部有状态比较）
 		setActive.accept(true);
 		int ran = 0;
-		while (ran < ticksToRun) {
-			productivebeesgenesis$chargeEnergy(perVirtualTick);
-			ran++;
-			operatingTicks++;
-			if (operatingTicks >= ticksRequired) {
-				operatingTicks = 0;
-				finishProcessing(ops);
-				onFinish.run();
-				resetCache();
-				if (ticksRequired > 1) {
-					operatingTicksChanged.accept(operatingTicks);
+		try {
+			while (ran < ticksToRun) {
+				productivebeesgenesis$chargeEnergy(perVirtualTick);
+				ran++;
+				operatingTicks++;
+				if (operatingTicks >= ticksRequired) {
+					operatingTicks = 0;
+					productivebeesgenesis$batchFastOps = 0;
+					try {
+						finishProcessing(ops);
+						onFinish.run();
+					} finally {
+						resetCache();
+					}
+					break;
 				}
-				// 周期完成：输入/输出槽已变化，退出快速路径，下次调用完整重算
-				productivebeesgenesis$batchFastOps = 0;
-				break;
+				useResources(ops);
 			}
-			useResources(ops);
+		} finally {
+			// 已执行的虚拟刻在完成或通知抛错时仍结算；未执行部分留给下一次完整计算。
+			productivebeesgenesis$batchTicksLeft = ticksLeft - ran;
+			if (ticksRequired > 1 && ran > 0) {
+				operatingTicksChanged.accept(operatingTicks);
+			}
 		}
-		// 这些额外 process 调用发生在同一服务端 tick 内，进度只需发布最终值一次；
-		// operatingTicksChanged 在本模组工厂中只写入同步数组，逐虚拟刻回调没有观察者。
-		if (ticksRequired > 1 && ran > 0) {
-			operatingTicksChanged.accept(operatingTicks);
-		}
-		// 周期完成不能丢弃尚可支付的虚拟刻；下一次完整计算继续检查输入、输出和电量。
-		productivebeesgenesis$batchTicksLeft = ticksLeft - ran;
 		ci.cancel();
 	}
 
@@ -436,6 +436,15 @@ public abstract class CachedRecipeBatchAccelMixin implements ICachedRecipeBatchA
 		productivebeesgenesis$batchFastOps = ops;
 		productivebeesgenesis$batchTicksLeft--;
 		return ops;
+	}
+
+	/** 完成回调可能抛错；在交接开始前清除旧快速操作数，不能再次复用上一周期。 */
+	@WrapOperation(method = "process", at = @At(value = "INVOKE",
+			target = "Lmekanism/api/recipes/cache/CachedRecipe;finishProcessing(I)V"))
+	private void productivebeesgenesis$leaveFastRecipeBeforeCompletion(CachedRecipe<?> recipe, int operations,
+			Operation<Void> original) {
+		productivebeesgenesis$batchFastOps = 0;
+		original.call(recipe, operations);
 	}
 
 	/** 原版完成配方周期后已改变输入/输出，下一虚拟 tick 必须重新计算操作数。 */

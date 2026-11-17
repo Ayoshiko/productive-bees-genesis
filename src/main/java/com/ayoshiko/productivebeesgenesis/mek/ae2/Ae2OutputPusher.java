@@ -4,6 +4,10 @@ import appeng.api.networking.IGrid;
 import appeng.api.networking.storage.IStorageService;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.storage.MEStorage;
+import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
+import com.ayoshiko.productivebeesgenesis.mek.IFactoryPbDelegateAccess;
+import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.RoundRobinSlotTraversal;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -115,13 +119,25 @@ public final class Ae2OutputPusher {
 		int flatSlotCount = Math.max(0, processes) * AeItemKeyCache.SLOTS_PER_PROCESS;
 		int scanStart = RoundRobinSlotTraversal.normalize(buffers.outputSlotScanCursor, flatSlotCount);
 		buffers.outputSlotScanCursor = RoundRobinSlotTraversal.advance(scanStart, flatSlotCount);
+		var custody = OutputCustody.of(host);
 		for (int offset = 0; offset < flatSlotCount; offset++) {
 			int flatIndex = RoundRobinSlotTraversal.index(scanStart, offset, flatSlotCount);
+			if (custody.localItemBlocked(flatIndex)) continue;
 			int process = flatIndex / AeItemKeyCache.SLOTS_PER_PROCESS;
 			int slotIdx = flatIndex % AeItemKeyCache.SLOTS_PER_PROCESS;
-			Ae2OutputCommitter.collectSlot(buffers, process, slotIdx,
-					Ae2OutputCommitter.outputSlot(host, process, slotIdx), keyCache,
-					level.registryAccess());
+			if (slotIdx == 0 && (host instanceof IFactoryPbDelegateAccess factory
+					&& factory.productivebeesgenesis$getPbProcessor().smeltingOutputLocked(process)
+					|| host instanceof TileEntityMekCentrifuge machine
+					&& machine.productivebeesgenesis$getPbProcessor().smeltingOutputLocked(process))) continue;
+			try {
+				Ae2OutputCommitter.collectSlot(buffers, process, slotIdx,
+						Ae2OutputCommitter.outputSlot(host, process, slotIdx), keyCache,
+						level.registryAccess());
+			} catch (RuntimeException | LinkageError failure) {
+				LogThrottle.error("ae2_output_slot_prepare",
+						"AE item output preparation failed; healthy slots continue, process={} slot={}",
+						process, slotIdx, failure);
+			}
 		}
 		// 账本中已预留的槽位本轮不得再次提交，否则会重复推送同一批物品
 		if (outputLedger.size() > 0) {

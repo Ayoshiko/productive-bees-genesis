@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
 import appeng.api.stacks.AEItemKey;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import mekanism.api.inventory.IInventorySlot;
 import mekanism.common.inventory.slot.BasicInventorySlot;
@@ -117,10 +118,19 @@ final class Ae2InputLaneSnapshot {
 			beeTypes[i] = null;
 		}
 		for (int i = 0; i < size; i++) {
-			requiredInputs[i] = host == null ? null
-					: com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.requiredLaneInput(host, i);
-			readLane(i, null);
-			indexLane(i);
+			try {
+				requiredInputs[i] = host == null ? null
+						: com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.requiredLaneInput(host, i);
+				readLane(i, null);
+				indexLane(i);
+			} catch (RuntimeException | LinkageError failure) {
+				slots[i] = null;
+				currentKeys[i] = null;
+				preferredKeys[i] = null;
+				items[i] = null;
+				stacks[i] = ItemStack.EMPTY;
+				LogThrottle.error("ae2_input_lane_snapshot", "AE2 输入车道读取失败，lane={}；其它车道继续，下轮重试", i, failure);
+			}
 		}
 	}
 
@@ -281,7 +291,8 @@ final class Ae2InputLaneSnapshot {
 	static long safeLimit(IInventorySlot slot, ItemStack probe) {
 		try {
 			return Math.max(0, slot.getLimit(probe));
-		} catch (RuntimeException e) {
+		} catch (RuntimeException | LinkageError failure) {
+			LogThrottle.error("ae2_input_slot_limit", "AE2 输入槽上限查询失败，slot={}；本轮不供料，下轮重试", slot, failure);
 			return 0L;
 		}
 	}

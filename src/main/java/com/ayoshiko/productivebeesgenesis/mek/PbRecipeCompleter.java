@@ -2,18 +2,26 @@ package com.ayoshiko.productivebeesgenesis.mek;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeProcessor.LocalBatch.Completion;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicEnergyContainerAccessor;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
 
 import com.ayoshiko.productivebeesgenesis.util.UselessByproductUpgradeHelper;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.EssenceConversionUpgradeHelper;
 import com.ayoshiko.productivebeesgenesis.util.RawOreSmeltingUpgradeHelper;
 import cy.jdkdigital.productivebees.common.recipe.CentrifugeRecipe;
 import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
+import mekanism.api.Action;
+import mekanism.api.AutomationType;
+import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -25,6 +33,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
+import java.util.function.IntConsumer;
 
 /**
 	 * PB配方输出聚合器 — 封装配方输出的批量聚合逻辑
@@ -79,7 +88,9 @@ public class PbRecipeCompleter {
 	 * 按引用识别模板并保留插入顺序；转换上界与实际产物必须以同一顺序认领空槽，
 	 * 否则较小产物抢槽会使已通过上界检查的批次被误拒收。
 	 */
-	private final Map<ItemStack, Long> pendingOutputs = new Reference2ObjectLinkedOpenHashMap<>(4);
+	private Map<ItemStack, Long> pendingOutputs = new Reference2ObjectLinkedOpenHashMap<>(4);
+	/** 普通与万象的未付生成结果独占此缓冲，成功提交后与正式 map 交换。 */
+	private PbRecipeCompleter completedBatch;
 
 	/** 当前聚合输出对应的 PB 配方(用于 flush 时按原顺序插入) */
 	@Nullable
@@ -104,6 +115,7 @@ public class PbRecipeCompleter {
 	private ItemStack pendingInputTemplate = ItemStack.EMPTY;
 	private java.util.UUID paymentRequest;
 	private boolean paymentPending;
+	private boolean paymentKnown;
 	private long paymentEnergy;
 	private int paymentProgress;
 	/** 已完成转换的组合批次重试时只排空，不再随升级或配方重载转换。 */
@@ -112,6 +124,7 @@ public class PbRecipeCompleter {
 	private int outputUpgradeMask;
 	private long outputUpgradeRevision;
 	private CompoundTag invalidPending;
+	private PendingFailure retainedPendingFailure;
 	/** 只缓存准备结果；每次准入仍复核当前槽位和外部路由状态。 */
 	private PbOutputCapacityCache capacityCache;
 
@@ -273,6 +286,28 @@ public class PbRecipeCompleter {
 		return batch;
 	}
 
+	/** 只有完整生成和升级后的结果才能进入正式车道；失败残留只存在临时缓冲。 */
+	PbRecipeCompleter prepareCompleted(CentrifugeRecipe recipe, int inputs, long seed) {
+		PbRecipeCompleter batch = completedBatch();
+		prepareInto(batch, recipe, inputs, seed, false);
+		return batch;
+	}
+
+	PbRecipeCompleter prepareMyriadCompleted(Map<ItemStack, Long> items, FluidStack fluid, long amount,
+			ItemStack input, int inputs) {
+		PbRecipeCompleter batch = completedBatch();
+		batch.clearPendingOutputs();
+		batch.freezeMyriadBatch(items, fluid, amount, input, inputs);
+		return batch;
+	}
+
+	private PbRecipeCompleter completedBatch() {
+		if (completedBatch == null) {
+			completedBatch = new PbRecipeCompleter(context, flusher, pendingTemplates);
+		}
+		return completedBatch;
+	}
+
 	int maximumRepresentableInputs(CentrifugeRecipe recipe) {
 		if (capacityCache == null) capacityCache = new PbOutputCapacityCache(this, context);
 		return capacityCache.maximumRepresentableInputs(recipe);
@@ -340,22 +375,49 @@ public class PbRecipeCompleter {
 
 	boolean fitsPrepared(int lane, int inputs) { return flusher.fitsPrepared(this, lane, inputs); }
 	boolean isPreparedOutput() { return preparedOutput; }
-	boolean invalidPending() { return invalidPending != null; }
+	boolean invalidPending() { return invalidPending != null || retainedPendingFailure != null; }
+	boolean outputUncertainPending() { return retainedPendingFailure != null && retainedPendingFailure.kind().equals("output_failure")
+			|| invalidPending != null && invalidPending.contains("output_failure", Tag.TAG_COMPOUND); }
 
 	/** 输入已由唯一协调者消费后转交一次；准备对象不再保留另一份可排空库存。 */
 	void acceptPrepared(PbRecipeCompleter batch) {
 		beforePendingMutation();
-		if (hasPendingOutputs() || pendingInputShrink != 0 || invalidPending != null)
+		if (hasPendingOutputs() || pendingInputShrink != 0 || invalidPending())
 			throw new IllegalStateException("Previous centrifuge output still owned");
+		takePrepared(batch);
+		context.productivebeesgenesis$markForSave();
+	}
+
+	/** 交换独占 map，不在正式所有者中逐项生成；原结果只保留一份。 */
+	private void takePrepared(PbRecipeCompleter batch) {
 		pendingRecipe = batch.pendingRecipe;
 		pendingRecipeOutputs = batch.pendingRecipeOutputs;
-		pendingOutputs.putAll(batch.pendingOutputs);
+		Map<ItemStack, Long> reusable = pendingOutputs;
+		pendingOutputs = batch.pendingOutputs;
+		batch.pendingOutputs = reusable;
 		pendingFluidTemplate = batch.pendingFluidTemplate;
 		pendingFluidAmount = batch.pendingFluidAmount;
 		pendingItemCount = batch.pendingItemCount;
 		preparedOutput = true;
 		batch.clearPendingOutputs();
-		context.productivebeesgenesis$markForSave();
+	}
+
+	/** 付款状态先于正式产物接管和保存；异常结果只锁定当前车道。 */
+	boolean payForPrepared(PbRecipeCompleter batch, ItemStack input, int inputs,
+			PbVirtualTickPlan plan, Runnable commitProgress) {
+		beforePendingMutation();
+		if (paymentPending) return false;
+		if (batch != null && (hasPendingOutputs() || pendingInputShrink != 0 || invalidPending())) {
+			throw new IllegalStateException("Previous centrifuge output still owned");
+		}
+		ItemStack inputTemplate = inputs == 0 ? ItemStack.EMPTY : input.copyWithCount(1);
+		beginPayment(plan);
+		if (batch != null) {
+			takePrepared(batch);
+			pendingInputTemplate = inputTemplate;
+			pendingInputShrink = inputs;
+		}
+		return finishPayment(commitProgress);
 	}
 
 
@@ -367,14 +429,13 @@ public class PbRecipeCompleter {
 				&& UselessByproductUpgradeHelper.isHoney(pendingFluidTemplate)) pendingFluidAmount = 0;
 		pendingInputTemplate = input.copyWithCount(1);
 		preparedOutput = true;
-		context.productivebeesgenesis$markForSave();
 	}
 
 	/** 万象的确定模板与数量使用同一个已付缓冲，不再通过输出容量重选产物。 */
 	void freezeMyriadBatch(Map<ItemStack, Long> items, FluidStack fluid, long fluidAmount,
 			ItemStack input, int inputs) {
 		beforePendingMutation();
-		if (hasPendingOutputs() || pendingInputShrink != 0 || invalidPending != null)
+		if (hasPendingOutputs() || pendingInputShrink != 0 || invalidPending())
 			throw new IllegalStateException("Previous centrifuge output still owned");
 		resetPendingRecipe();
 		for (var entry : items.entrySet()) {
@@ -390,23 +451,69 @@ public class PbRecipeCompleter {
 	/** 付款请求在扣能之前保存；异常或短扣保持请求，禁止排空及重新收费。 */
 	boolean payForPlan(PbVirtualTickPlan plan, Runnable commitProgress) {
 		if (paymentPending) return false;
+		beginPayment(plan);
+		return finishPayment(commitProgress);
+	}
+
+	private void beginPayment(PbVirtualTickPlan plan) {
 		paymentPending = true;
+		paymentKnown = true;
 		paymentEnergy = plan.energyUsed();
 		paymentProgress = plan.remainingProgress();
-		context.productivebeesgenesis$markForSave();
-		if (paymentEnergy > 0 && context.energyContainer().extract(paymentEnergy,
-				mekanism.api.Action.EXECUTE, mekanism.api.AutomationType.INTERNAL) != paymentEnergy) {
-			return false;
-		}
+	}
+
+	private boolean finishPayment(Runnable commitProgress) {
+		notifyPaymentChange();
+		if (paymentEnergy > 0 && !debitPaymentEnergy()) return false;
 		commitProgress.run();
 		paymentRequest = null;
 		paymentPending = false;
+		paymentKnown = false;
 		paymentEnergy = 0;
-		context.productivebeesgenesis$markForSave();
+		notifyPaymentChange();
 		return true;
 	}
 
+	/** 原生容器先提交余额再通知；同次调用按实际差量只保留尚未扣除的费用。 */
+	private boolean debitPaymentEnergy() {
+		var container = context.energyContainer();
+		long before = ((BasicEnergyContainerAccessor) container).productivebeesgenesis$getStored();
+		long requested = paymentEnergy;
+		long charged;
+		paymentKnown = false;
+		try {
+			charged = container.extract(requested, Action.EXECUTE, AutomationType.INTERNAL);
+		} catch (RuntimeException | LinkageError failure) {
+			charged = before - ((BasicEnergyContainerAccessor) container).productivebeesgenesis$getStored();
+			if (charged < 0 || charged > requested) {
+				reportPaymentFailure("本地扣费结果无法核对，原请求继续保管", failure);
+				notifyPaymentChange();
+				return false;
+			}
+			reportPaymentFailure("本地扣费通知失败，按已提交余额结清实际费用", failure);
+		}
+		paymentEnergy -= charged;
+		paymentKnown = true;
+		if (paymentEnergy > 0) notifyPaymentChange();
+		return paymentEnergy == 0;
+	}
+
+	/** 保存通知仅标记状态，不接收资产；失败不能把已知未扣费用变成未知扣取。 */
+	private void notifyPaymentChange() {
+		try {
+			context.productivebeesgenesis$markForSave();
+		} catch (RuntimeException | LinkageError failure) {
+			reportPaymentFailure("付款保存通知失败，保留原进度、输入与费用并继续结算", failure);
+		}
+	}
+
+	private void reportPaymentFailure(String phase, Throwable failure) {
+		LogThrottle.error("centrifuge_payment_notification", "离心机 {}，位置 {}，请求 {}",
+				phase, context instanceof BlockEntity entity ? entity.getBlockPos() : "unknown", paymentRequest(), failure);
+	}
+
 	boolean paymentPending() { return paymentPending; }
+	boolean knownPaymentPending() { return paymentPending && (paymentKnown || paymentEnergy == 0); }
 
 	java.util.UUID paymentRequest() {
 		if (paymentPending && paymentRequest == null) paymentRequest = java.util.UUID.randomUUID();
@@ -414,13 +521,30 @@ public class PbRecipeCompleter {
 	}
 	long paymentEnergy() { return paymentEnergy; }
 
+	/** 旧零费用及本地已知余费自动收尾；无凭据的旧正费用请求不能重新扣取。 */
+	boolean recoverKnownPayment(int lane, IntConsumer commitProgress) {
+		if (!knownPaymentPending() || invalidPending()) return false;
+		java.util.UUID request = paymentRequest();
+		if (paymentEnergy > 0 && !debitPaymentEnergy()) return false;
+		commitProgress.accept(paymentProgress);
+		paymentRequest = null;
+		paymentPending = false;
+		paymentKnown = false;
+		ProductiveBeesGenesis.LOGGER.info("离心机自动结清已知付款：请求 {}，车道 {}，位置 {}；仅扣尚未支付的费用，继续原进度与产物",
+				request, lane,
+				context instanceof net.minecraft.world.level.block.entity.BlockEntity entity ? entity.getBlockPos() : "unknown");
+		notifyPaymentChange();
+		return true;
+	}
+
 	int confirmPayment(java.util.UUID expected) {
-		if (paymentRequest == null || !paymentRequest.equals(expected) || invalidPending != null) {
+		if (paymentRequest == null || !paymentRequest.equals(expected) || invalidPending()) {
 			throw new IllegalStateException("Stale or invalid centrifuge payment request");
 		}
 		int progress = paymentProgress;
 		paymentRequest = null;
 		paymentPending = false;
+		paymentKnown = false;
 		paymentEnergy = 0;
 		context.productivebeesgenesis$markForSave();
 		return progress;
@@ -428,7 +552,7 @@ public class PbRecipeCompleter {
 
 	/** 源输入与冻结身份匹配时才转交所有权；输出交付由后续 flush 执行。 */
 	boolean commitCompletedInput(int processIndex) {
-		if (invalidPending != null || paymentPending) return false;
+		if (invalidPending() || paymentPending) return false;
 		if (pendingInputShrink <= 0) return true;
 		if (!preparedOutput || pendingInputTemplate.isEmpty()) return false;
 		var slot = context.inputSlot(processIndex);
@@ -437,23 +561,54 @@ public class PbRecipeCompleter {
 				|| input.getCount() < pendingInputShrink) return false;
 		int requested = pendingInputShrink;
 		int before = input.getCount();
+		Throwable debitFailure = null;
 		try {
 			slot.shrinkStack(requested, mekanism.api.Action.EXECUTE);
-		} finally {
-			ItemStack after = slot.getStack();
-			int consumed = -1;
-			if (after.isEmpty()) consumed = before;
-			else if (ItemStack.isSameItemSameComponents(after, pendingInputTemplate)) consumed = before - after.getCount();
-			if (consumed >= 0 && consumed <= requested) {
-				pendingInputShrink -= consumed;
-				if (pendingInputShrink == 0) pendingInputTemplate = ItemStack.EMPTY;
-			} else {
-				invalidPending = saveCommittedPending(context.level().registryAccess());
-				invalidPending.putInt("input_before", before);
-			}
-			context.productivebeesgenesis$markForSave();
+		} catch (RuntimeException | LinkageError failure) {
+			debitFailure = failure;
 		}
-		return invalidPending == null && pendingInputShrink == 0;
+		ItemStack after;
+		try {
+			after = slot.getStack();
+		} catch (RuntimeException | LinkageError readFailure) {
+			if (slot instanceof BasicInventorySlot) {
+				after = ((BasicInventorySlotAccessor) slot).productivebeesgenesis$getCurrent();
+				if (debitFailure == null) debitFailure = readFailure;
+				else debitFailure.addSuppressed(readFailure);
+			} else {
+				Throwable root = debitFailure == null ? readFailure : debitFailure;
+				if (debitFailure != null) debitFailure.addSuppressed(readFailure);
+				try {
+					retainInputFailure(before, requested, root);
+				} catch (RuntimeException | LinkageError saveFailure) {
+					root.addSuppressed(saveFailure);
+				}
+				if (root instanceof RuntimeException runtime) throw runtime;
+				throw (LinkageError) root;
+			}
+		}
+		int consumed = -1;
+		if (after.isEmpty()) consumed = before;
+		else if (ItemStack.isSameItemSameComponents(after, pendingInputTemplate)) consumed = before - after.getCount();
+		if (consumed >= 0 && consumed <= requested) {
+			pendingInputShrink -= consumed;
+			if (pendingInputShrink == 0) pendingInputTemplate = ItemStack.EMPTY;
+			if (debitFailure != null) {
+				LogThrottle.error("centrifuge_input_notification",
+						"离心机输入通知失败，车道 {}，位置 {}；按已提交的本地数量结清，不重复扣料",
+						processIndex, context instanceof BlockEntity entity ? entity.getBlockPos() : "unknown", debitFailure);
+			}
+		} else {
+			retainInputFailure(before, requested, new IllegalStateException("Input source changed during debit"));
+		}
+		try {
+			context.productivebeesgenesis$markForSave();
+		} catch (RuntimeException | LinkageError failure) {
+			LogThrottle.error("centrifuge_input_save_notification",
+					"离心机输入结算后的保存通知失败，车道 {}，位置 {}；保留已结清数量与原产物",
+					processIndex, context instanceof BlockEntity entity ? entity.getBlockPos() : "unknown", failure);
+		}
+		return !invalidPending() && pendingInputShrink == 0;
 	}
 
 	boolean hasPaidPendingOutputs() {
@@ -463,7 +618,7 @@ public class PbRecipeCompleter {
 	/** 原输入变为不可处理时交给已付物品缓冲；不经过采样、配方转换或能量扣费。 */
 	boolean returnInput(int lane) {
 		beforePendingMutation();
-		if (hasPendingOutputs() || pendingInputShrink != 0 || invalidPending != null) return false;
+		if (hasPendingOutputs() || pendingInputShrink != 0 || invalidPending()) return false;
 		var slot = context.inputSlot(lane);
 		var input = slot.getStack().copy();
 		if (input.isEmpty()) return true;
@@ -501,11 +656,13 @@ public class PbRecipeCompleter {
 
 	private void selectRecipe(CentrifugeRecipe recipe) {
 		if (pendingRecipe == recipe) return;
-		if (pendingRecipe != null) clearPendingOutputs();
-		pendingRecipe = recipe;
-		pendingRecipeOutputs = getRecipeOutputsCached(recipe);
+		Map<ItemStack, ChancedOutput> outputs = getRecipeOutputsCached(recipe);
 		FluidStack fluidOutput = recipe.getFluidOutputs();
-		pendingFluidTemplate = fluidOutput.isEmpty() ? null : fluidOutput.copy();
+		FluidStack fluidTemplate = fluidOutput.isEmpty() ? null : fluidOutput.copy();
+		if (pendingRecipe != null) clearPendingOutputs();
+		pendingRecipeOutputs = outputs;
+		pendingFluidTemplate = fluidTemplate;
+		pendingRecipe = recipe;
 	}
 
 	/**
@@ -608,6 +765,7 @@ public class PbRecipeCompleter {
 		pendingInputTemplate = ItemStack.EMPTY;
 		paymentRequest = null;
 		paymentPending = false;
+		paymentKnown = false;
 		paymentEnergy = 0;
 		paymentProgress = 0;
 		pendingItemCount = 0;
@@ -720,23 +878,46 @@ public class PbRecipeCompleter {
 	/** Direct-AE 路径按实际接收量减少 pending 物品总数。 */
 	void consumePendingItemCount(long accepted) {
 		if (accepted > 0) {
-			pendingItemCount = Math.max(0, pendingItemCount - accepted);
-			if (pendingInputShrink == 0) context.productivebeesgenesis$markForSave();
+			debitPendingItemCount(accepted);
+			notifyCommittedOutputChange();
 		}
+	}
+
+	/** 工厂先结清全部来源，再发送宿主的保存通知。 */
+	void debitPendingItemCount(long accepted) {
+		if (accepted > pendingItemCount) throw new IllegalStateException("Centrifuge item receipt exceeds pending output");
+		pendingItemCount -= accepted;
 	}
 
 	/** 本地槽已完整接收本轮 pending 物品。 */
 	void consumeAllPendingItems() {
 		if (!pendingOutputs.isEmpty()) pendingOutputs.clear();
 		pendingItemCount = 0;
-		if (pendingInputShrink == 0) context.productivebeesgenesis$markForSave();
+		notifyCommittedOutputChange();
 	}
 
 	/** Direct-AE 路径按实际接收量减少 pending 流体。 */
 	void consumePendingFluid(long accepted) {
 		if (accepted > 0) {
-			pendingFluidAmount = Math.max(0L, pendingFluidAmount - accepted);
-			if (pendingInputShrink == 0) context.productivebeesgenesis$markForSave();
+			debitPendingFluid(accepted);
+			notifyCommittedOutputChange();
+		}
+	}
+
+	void debitPendingFluid(long accepted) {
+		if (accepted > pendingFluidAmount) throw new IllegalStateException("Centrifuge fluid receipt exceeds pending output");
+		pendingFluidAmount -= accepted;
+	}
+
+	/** 保存通知没有接收副作用，失败不能改写确定回执或中断后续来源扣账。 */
+	void notifyCommittedOutputChange() {
+		if (pendingInputShrink != 0) return;
+		try {
+			context.productivebeesgenesis$markForSave();
+		} catch (RuntimeException | LinkageError failure) {
+			LogThrottle.error("centrifuge_output_save_notification",
+					"离心机产物扣账后的保存通知失败，位置 {}；确定回执已扣账，继续排空与其它车道生产",
+					context instanceof BlockEntity entity ? entity.getBlockPos() : "unknown", failure);
 		}
 	}
 
@@ -756,7 +937,7 @@ public class PbRecipeCompleter {
 	 * @return true 表示输入已经提交，但仍有产物等待输出；失败时必须保留 pending 状态重试。
 	 */
 	boolean hasCommittedPendingOutputs() {
-		return invalidPending != null || pendingInputShrink == 0 && hasPendingOutputs();
+		return invalidPending() || pendingInputShrink == 0 && hasPendingOutputs();
 	}
 
 	/** @return 本 tick 尚未扣除的输入数量 */
@@ -768,7 +949,14 @@ public class PbRecipeCompleter {
 	CompoundTag saveCommittedPending(HolderLookup.Provider provider) {
 		if (factoryOutputBatch != null) factoryOutputBatch.cancelDeferredOutput();
 		if (invalidPending != null) return invalidPending.copy();
+		if (retainedPendingFailure != null) encodeRetainedPendingFailure(provider);
+		if (invalidPending != null) return invalidPending.copy();
 		if (!hasPaidPendingOutputs()) return null;
+		return pendingSnapshot(provider, pendingOutputs, pendingFluidTemplate, pendingFluidAmount);
+	}
+
+	private CompoundTag pendingSnapshot(HolderLookup.Provider provider, Map<ItemStack, Long> outputs,
+			FluidStack fluidTemplate, long fluidAmount) {
 		CompoundTag root = new CompoundTag();
 		root.putInt("version", 2);
 		if (preparedOutput) root.putBoolean("prepared", true);
@@ -776,13 +964,14 @@ public class PbRecipeCompleter {
 			root.putUUID("payment_request", paymentRequest());
 			root.putLong("payment_energy", paymentEnergy);
 			root.putInt("payment_progress", paymentProgress);
+			if (paymentKnown) root.putBoolean("payment_known", true);
 		}
 		if (pendingInputShrink > 0) {
 			root.put("input", pendingInputTemplate.save(provider));
 			root.putInt("input_count", pendingInputShrink);
 		}
 		ListTag items = new ListTag();
-		for (Map.Entry<ItemStack, Long> entry : pendingOutputs.entrySet()) {
+		for (Map.Entry<ItemStack, Long> entry : outputs.entrySet()) {
 			long count = Math.max(0, entry.getValue());
 			if (count <= 0 || entry.getKey().isEmpty()) continue;
 			Tag encoded = pendingTemplates.item(entry.getKey(), provider);
@@ -792,12 +981,62 @@ public class PbRecipeCompleter {
 			}
 		}
 		if (!items.isEmpty()) root.put("items", items);
-		if (pendingFluidTemplate != null && !pendingFluidTemplate.isEmpty() && pendingFluidAmount > 0L) {
-			root.put("fluid", pendingFluidTemplate.copyWithAmount(1).save(provider));
-			root.putLong("fluid_amount", pendingFluidAmount);
+		if (fluidTemplate != null && !fluidTemplate.isEmpty() && fluidAmount > 0L) {
+			root.put("fluid", fluidTemplate.copyWithAmount(1).save(provider));
+			root.putLong("fluid_amount", fluidAmount);
 		}
-		return root.isEmpty() ? null : root;
+		return root;
 	}
+
+	/** 仅交付后未知结果冻结来源；完整前后产物、原贡献和首次根因一起保管。 */
+	void retainItemOutputFailure(Map<ItemStack, Long> originalSources, CompoundTag evidence) {
+		if (invalidPending()) return;
+		Map<ItemStack, Long> before = new Reference2ObjectLinkedOpenHashMap<>(pendingOutputs);
+		before.putAll(originalSources);
+		retainOutputFailure(before, pendingFluidTemplate, pendingFluidAmount, evidence);
+	}
+
+	void retainFluidOutputFailure(FluidStack originalTemplate, long originalAmount, CompoundTag evidence) {
+		if (invalidPending()) return;
+		retainOutputFailure(new Reference2ObjectLinkedOpenHashMap<>(pendingOutputs),
+				originalTemplate, originalAmount, evidence);
+	}
+
+	private void retainOutputFailure(Map<ItemStack, Long> originalOutputs, FluidStack originalFluid,
+			long originalAmount, CompoundTag evidence) {
+		retainedPendingFailure = new PendingFailure(originalOutputs,
+				originalFluid == null ? null : originalFluid.copyWithAmount(1), originalAmount, evidence.copy(), "output_failure");
+		Level level = context.level();
+		if (level != null) encodeRetainedPendingFailure(level.registryAccess());
+		context.productivebeesgenesis$markForSave();
+	}
+
+	private void encodeRetainedPendingFailure(HolderLookup.Provider registries) {
+		PendingFailure retained = retainedPendingFailure;
+		CompoundTag after = pendingSnapshot(registries, pendingOutputs, pendingFluidTemplate, pendingFluidAmount);
+		CompoundTag before = pendingSnapshot(registries, retained.items(), retained.fluid(), retained.amount());
+		CompoundTag failure = retained.evidence().copy();
+		failure.put("after", after);
+		before.put(retained.kind(), failure);
+		invalidPending = before;
+		retainedPendingFailure = null;
+	}
+
+	private void retainInputFailure(int before, int requested, Throwable error) {
+		CompoundTag evidence = new CompoundTag();
+		evidence.putInt("input_before", before);
+		evidence.putInt("requested", requested);
+		evidence.putString("error_type", error.getClass().getName());
+		evidence.putString("error", String.valueOf(error.getMessage()));
+		retainedPendingFailure = new PendingFailure(new Reference2ObjectLinkedOpenHashMap<>(pendingOutputs),
+				pendingFluidTemplate == null ? null : pendingFluidTemplate.copyWithAmount(1),
+				pendingFluidAmount, evidence, "input_failure");
+		Level level = context.level();
+		if (level != null) encodeRetainedPendingFailure(level.registryAccess());
+		context.productivebeesgenesis$markForSave();
+	}
+
+	private record PendingFailure(Map<ItemStack, Long> items, FluidStack fluid, long amount, CompoundTag evidence, String kind) {}
 
 
 	/** 仅同一机器的服务端线程复用；批次产物和返回 NBT 始终独立保管。 */
@@ -834,10 +1073,15 @@ public class PbRecipeCompleter {
 		pendingTemplates.items.clear();
 		pendingTemplates.provider = null;
 		invalidPending = null;
+		retainedPendingFailure = null;
 		clearPendingRecipe();
+		if (root.contains("output_failure", Tag.TAG_COMPOUND) || root.contains("input_failure", Tag.TAG_COMPOUND)) {
+			invalidPending = root.copy();
+			return;
+		}
 		try {
 			if (!java.util.Set.of("version", "items", "fluid", "fluid_amount", "prepared", "process",
-					"input", "input_count", "payment_request", "payment_energy", "payment_progress").containsAll(root.getAllKeys())
+					"input", "input_count", "payment_request", "payment_energy", "payment_progress", "payment_known").containsAll(root.getAllKeys())
 					|| root.contains("version") && (!root.contains("version", Tag.TAG_INT) || root.getInt("version") != 2)
 					|| root.contains("prepared") && !root.contains("prepared", Tag.TAG_BYTE)) {
 				throw new IllegalArgumentException("Unknown committed output structure");
@@ -865,12 +1109,17 @@ public class PbRecipeCompleter {
 				pendingFluidAmount = root.getLong("fluid_amount");
 			}
 			preparedOutput = root.getBoolean("prepared");
-			if (root.contains("payment_request") || root.contains("payment_energy") || root.contains("payment_progress")) {
+			if (root.contains("payment_request") || root.contains("payment_energy") || root.contains("payment_progress")
+					|| root.contains("payment_known")) {
 				if (!root.hasUUID("payment_request") || !root.contains("payment_energy", Tag.TAG_LONG)
 						|| root.getLong("payment_energy") < 0 || !root.contains("payment_progress", Tag.TAG_INT)
-						|| root.getInt("payment_progress") < 0) throw new IllegalArgumentException("Invalid payment request");
+						|| root.getInt("payment_progress") < 0
+						|| root.contains("payment_known") && (!root.contains("payment_known", Tag.TAG_BYTE)
+								|| root.getByte("payment_known") != 0 && root.getByte("payment_known") != 1))
+					throw new IllegalArgumentException("Invalid payment request");
 				paymentRequest = root.getUUID("payment_request");
 				paymentPending = true;
+				paymentKnown = root.getBoolean("payment_known");
 				paymentEnergy = root.getLong("payment_energy");
 				paymentProgress = root.getInt("payment_progress");
 			}

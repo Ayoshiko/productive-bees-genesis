@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.util.ExactBinomialSampler;
 import cy.jdkdigital.productivebees.ProductiveBeesConfig;
 import cy.jdkdigital.productivebees.common.item.Gene;
 import cy.jdkdigital.productivebees.util.GeneAttribute;
@@ -16,7 +17,7 @@ import java.util.List;
 /**
  * 机械蜂箱基因采样器。
  * <p>
- * 对齐 PB 13.13.5：成年蜂每次完成生产时按配置概率命中，再均匀选择 TYPE、PRODUCTIVITY、
+ * 对齐 PB 13.14.0：成年蜂每次完成生产时按配置概率命中，再均匀选择 TYPE、PRODUCTIVITY、
  * ENDURANCE、TEMPER、BEHAVIOR、WEATHER_TOLERANCE 之一，纯度为 1 到 4。
  * 小批次保留逐事件随机；高倍加速批次聚合命中与分布，避免主线程循环随倍率线性增长。
  * <p>
@@ -31,6 +32,12 @@ public class GeneSampler {
 	private static final GeneValue[] GENE_VALUES = GeneValue.values();
 	private static final int COUNTS_PER_ATTRIBUTE = GENE_VALUES.length * PURITY_COUNT;
 
+	static long maximumStackCount(long cycles, boolean typeOnly, boolean fullPurity) {
+		int attributes = typeOnly ? 1 : ATTRIBUTES.length * GENE_VALUES.length;
+		int identities = attributes * (fullPurity ? 1 : PURITY_COUNT);
+		return cycles / Integer.MAX_VALUE + Math.min(cycles, identities);
+	}
+
 	/** 固定域计数器替代每次命中新建 Map key；最大仅 6×19×4 个 long。 */
 	private final long[] sampledCounts = new long[ATTRIBUTES.length * COUNTS_PER_ATTRIBUTE];
 	private final int[] touchedIndices = new int[sampledCounts.length];
@@ -39,7 +46,7 @@ public class GeneSampler {
 	/** 同一游戏刻的多蜂种分组共享一次配置读取。 */
 	private long cachedChanceGameTime = Long.MIN_VALUE;
 	private int cachedChanceSamplerCount = -1;
-	private float cachedChance;
+	private double cachedChance;
 
 	/** 可复用的蜜蜂来源批次；只保存属性快照，不在 flush 之间持有 NBT。 */
 	static final class SampleBatch {
@@ -105,19 +112,18 @@ public class GeneSampler {
 		if (output == null || sources == null || sources.isEmpty() || beeTypeKey == null
 				|| samplerCount <= 0 || level == null) return;
 
-		float chance = resolveChance(samplerCount, level);
+		double chance = resolveChance(samplerCount, level);
 		generateGeneSamplesInto(output, sources, beeTypeKey, chance, level.getRandom(), typeOnly, fullPurity);
 	}
 
 	private void generateGeneSamplesInto(List<ItemStack> output, SampleBatch sources,
-			ResourceLocation beeTypeKey, float chance, RandomSource random, boolean typeOnly, boolean fullPurity) {
+			ResourceLocation beeTypeKey, double chance, RandomSource random, boolean typeOnly, boolean fullPurity) {
 		if (chance <= 0.0F) return;
 		try {
 			if (sources.totalProduceCount <= MAX_EXACT_EVENTS) {
 				generateExactSamples(sources, chance, random, typeOnly, fullPurity);
 			} else {
-				long hitCount = approximateHitCount(sources.totalProduceCount, chance, random);
-				generateAggregatedSamples(sources, hitCount, random, typeOnly, fullPurity);
+				generateAggregatedSamples(sources, chance, random, typeOnly, fullPurity);
 			}
 			emitSamples(output, beeTypeKey.toString(), fullPurity);
 		} finally {
@@ -128,21 +134,21 @@ public class GeneSampler {
 	/** 资源事务只捕获输入；抽样仍调用上面同一套已用算法，不另写基因概率与插件规则。 */
 	public static Snapshot snapshot(net.minecraft.nbt.CompoundTag beeData, ResourceLocation type,
 			int samplers, boolean typeOnly, boolean fullPurity) {
-		float chance = samplers <= 0 || (beeData != null && beeData.getInt("Age") < 0) ? 0
-				: (float) Math.max(0, Math.min(1, ProductiveBeesConfig.UPGRADES.samplerChance.get() * samplers));
+		double chance = samplers <= 0 || (beeData != null && beeData.getInt("Age") < 0) ? 0
+				: Math.max(0, Math.min(1, ProductiveBeesConfig.UPGRADES.samplerChance.get() * samplers));
 		return new Snapshot(GeneSampleProfile.fromBeeData(beeData), type, chance, typeOnly, fullPurity);
 	}
 
 	public static final class Snapshot {
 		private final GeneSampleProfile profile;
 		private final ResourceLocation type;
-		private final float chance;
+		private final double chance;
 		private final boolean typeOnly, fullPurity;
 		private final List<ItemStack> possible;
 		private final GeneSampler sampler = new GeneSampler();
 		private final SampleBatch batch = new SampleBatch();
 
-		private Snapshot(GeneSampleProfile profile, ResourceLocation type, float chance,
+		private Snapshot(GeneSampleProfile profile, ResourceLocation type, double chance,
 				boolean typeOnly, boolean fullPurity) {
 			this.profile = profile;
 			this.type = java.util.Objects.requireNonNull(type);
@@ -178,19 +184,19 @@ public class GeneSampler {
 		}
 	}
 
-	private float resolveChance(int samplerCount, Level level) {
+	private double resolveChance(int samplerCount, Level level) {
 		long gameTime = level.getGameTime();
 		if (cachedChanceGameTime == gameTime && cachedChanceSamplerCount == samplerCount) {
 			return cachedChance;
 		}
 		double configuredChance = ProductiveBeesConfig.UPGRADES.samplerChance.get();
-		cachedChance = (float) Math.max(0.0D, Math.min(1.0D, configuredChance * samplerCount));
+		cachedChance = Math.max(0.0D, Math.min(1.0D, configuredChance * samplerCount));
 		cachedChanceSamplerCount = samplerCount;
 		cachedChanceGameTime = gameTime;
 		return cachedChance;
 	}
 
-	private void generateExactSamples(SampleBatch sources, float chance, RandomSource random,
+	private void generateExactSamples(SampleBatch sources, double chance, RandomSource random,
 			boolean typeOnly, boolean fullPurity) {
 		for (int sourceIndex = 0; sourceIndex < sources.size; sourceIndex++) {
 			GeneSampleProfile profile = sources.profiles[sourceIndex];
@@ -205,22 +211,13 @@ public class GeneSampler {
 		}
 	}
 
-	private void generateAggregatedSamples(SampleBatch sources, long hitCount, RandomSource random,
+	private void generateAggregatedSamples(SampleBatch sources, double chance, RandomSource random,
 			boolean typeOnly, boolean fullPurity) {
-		if (hitCount <= 0) return;
-		double allocationOffset = random.nextDouble();
-		long cumulativeProduce = 0L;
-		long allocatedHits = 0L;
+		// PB 使用 nextFloat() <= chance；正概率的最小命中格点也是 2^-24。
+		double hitProbability = chance >= 1.0F ? 1.0D
+				: (Math.floor(Math.scalb(chance, 24)) + 1.0D) / (1L << 24);
 		for (int sourceIndex = 0; sourceIndex < sources.size; sourceIndex++) {
-			long produceCount = sources.produceCounts[sourceIndex];
-			cumulativeProduce = cumulativeProduce > Long.MAX_VALUE - produceCount
-					? Long.MAX_VALUE : cumulativeProduce + produceCount;
-			long cumulativeHits = sourceIndex == sources.size - 1
-					? hitCount
-					: GeneSamplerMath.cumulativeHitAllocation(hitCount, cumulativeProduce,
-							sources.totalProduceCount, allocationOffset);
-			long sourceHits = Math.max(0L, cumulativeHits - allocatedHits);
-			allocatedHits = cumulativeHits;
+			long sourceHits = ExactBinomialSampler.sample(random, sources.produceCounts[sourceIndex], hitProbability);
 			distributeSourceHits(sources.profiles[sourceIndex], sourceHits, random, typeOnly, fullPurity);
 		}
 	}
@@ -232,13 +229,13 @@ public class GeneSampler {
 			distributeTypeHits(profile, sourceHits, random, fullPurity);
 			return;
 		}
-		long perAttribute = sourceHits / ATTRIBUTES.length;
-		int attributeRemainder = (int) (sourceHits % ATTRIBUTES.length);
-		int attributeStart = random.nextInt(ATTRIBUTES.length);
-		for (int offset = 0; offset < ATTRIBUTES.length; offset++) {
-			long attributeHits = perAttribute + (offset < attributeRemainder ? 1L : 0L);
+		long remainingHits = sourceHits;
+		for (int index = 0; index < ATTRIBUTES.length && remainingHits > 0; index++) {
+			long attributeHits = index == ATTRIBUTES.length - 1 ? remainingHits
+					: ExactBinomialSampler.sample(random, remainingHits, 1.0D / (ATTRIBUTES.length - index));
+			remainingHits -= attributeHits;
 			if (attributeHits <= 0) continue;
-			GeneAttribute attribute = ATTRIBUTES[(attributeStart + offset) % ATTRIBUTES.length];
+			GeneAttribute attribute = ATTRIBUTES[index];
 			if (fullPurity) {
 				addSample(profile, attribute, PURITY_COUNT - 1, attributeHits);
 			} else {
@@ -258,12 +255,11 @@ public class GeneSampler {
 
 	private void distributePurityHits(GeneSampleProfile profile, GeneAttribute attribute,
 			long attributeHits, RandomSource random) {
-		long perPurity = attributeHits / PURITY_COUNT;
-		int purityRemainder = (int) (attributeHits % PURITY_COUNT);
-		int purityStart = random.nextInt(PURITY_COUNT);
-		for (int purityOffset = 0; purityOffset < PURITY_COUNT; purityOffset++) {
-			long count = perPurity + (purityOffset < purityRemainder ? 1L : 0L);
-			int purityIndex = (purityStart + purityOffset) % PURITY_COUNT;
+		long remainingHits = attributeHits;
+		for (int purityIndex = 0; purityIndex < PURITY_COUNT && remainingHits > 0; purityIndex++) {
+			long count = purityIndex == PURITY_COUNT - 1 ? remainingHits
+					: ExactBinomialSampler.sample(random, remainingHits, 1.0D / (PURITY_COUNT - purityIndex));
+			remainingHits -= count;
 			addSample(profile, attribute, purityIndex, count);
 		}
 	}
@@ -297,17 +293,6 @@ public class GeneSampler {
 				count -= stackCount;
 			}
 		}
-	}
-
-	private long approximateHitCount(long produceCount, float chance, RandomSource random) {
-		double expectedHits = produceCount * (double) chance;
-		double variance = expectedHits * (1.0D - chance);
-		if (variance <= 0.0D) return Math.min(produceCount, Math.max(0L, Math.round(expectedHits)));
-		double u1 = Math.max(1.0E-12D, random.nextDouble());
-		double u2 = random.nextDouble();
-		double z = Math.sqrt(-2.0D * Math.log(u1)) * Math.cos(2.0D * Math.PI * u2);
-		long rounded = Math.round(expectedHits + z * Math.sqrt(variance));
-		return Math.min(produceCount, Math.max(0L, rounded));
 	}
 
 	private void clearAccumulator() {

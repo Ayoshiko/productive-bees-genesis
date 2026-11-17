@@ -427,6 +427,8 @@ public class ApiaryPbUpgradeHandler {
 	 */
 	void loadPbUpgradeCounts(@NotNull CompoundTag nbt, @NotNull HolderLookup.Provider provider) {
 		pbUpgradeCounts.clear();
+		// Mek 组件可能已按恢复前的 PB 计数刷新缓存，计数重载必须使其失效。
+		tile.upgradeHandler.invalidateUpgradeCache();
 		if (nbt.contains(NBT_KEY_PB_UPGRADE_COUNTS, Tag.TAG_COMPOUND)) {
 			CompoundTag countsTag = nbt.getCompound(NBT_KEY_PB_UPGRADE_COUNTS);
 			for (String typeId : countsTag.getAllKeys()) {

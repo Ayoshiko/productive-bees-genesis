@@ -3,10 +3,13 @@ package com.ayoshiko.productivebeesgenesis.mixin.mek;
 import com.ayoshiko.productivebeesgenesis.inventory.ExternalInsertPolicy;
 import com.ayoshiko.productivebeesgenesis.inventory.BulkItemPullScope;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.ayoshiko.productivebeesgenesis.inventory.SlotLimitCache;
 import com.ayoshiko.productivebeesgenesis.inventory.SlotRollbackWindow;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
 import com.ayoshiko.productivebeesgenesis.util.ServerTickClock;
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
@@ -23,6 +26,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.function.BiPredicate;
 import java.util.function.IntSupplier;
+import java.util.function.BooleanSupplier;
 
 /**
 	 * BasicInventorySlot 输入槽分等级堆叠倍率 Mixin
@@ -80,6 +84,15 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 
 	@Unique
 	private ExternalInsertPolicy productivebeesgenesis$externalInsertPolicy;
+
+    @Unique
+    private BooleanSupplier productivebeesgenesis$outputExtractionAllowed;
+
+    @Unique
+    private BooleanSupplier productivebeesgenesis$outputInsertionAllowed;
+
+    @Unique
+    private boolean productivebeesgenesis$extractionNotificationFailed;
 
 	/**
 	 * 该槽位是否归本模组机器所有。
@@ -199,6 +212,48 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 		return this.productivebeesgenesis$ownSlot;
 	}
 
+    @Override
+    public void productivebeesgenesis$setOutputExtractionAllowed(BooleanSupplier allowed) {
+        productivebeesgenesis$outputExtractionAllowed = allowed;
+    }
+
+    @Override
+    public void productivebeesgenesis$setOutputInsertionAllowed(BooleanSupplier allowed) {
+        productivebeesgenesis$outputInsertionAllowed = allowed;
+    }
+
+    @Inject(method = "insertItem(Lnet/minecraft/world/item/ItemStack;Lmekanism/api/Action;"
+            + "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
+            at = @At("HEAD"), cancellable = true, order = 800)
+    private void productivebeesgenesis$protectOutputSettlementInsertion(ItemStack stack, Action action,
+            AutomationType automationType, CallbackInfoReturnable<ItemStack> cir) {
+        if (productivebeesgenesis$outputInsertionAllowed != null
+                && !productivebeesgenesis$outputInsertionAllowed.getAsBoolean()) {
+            cir.setReturnValue(stack);
+        }
+    }
+
+    @Inject(method = "isItemValidForInsertion(Lnet/minecraft/world/item/ItemStack;"
+            + "Lmekanism/api/AutomationType;)Z", at = @At("HEAD"), cancellable = true)
+    private void productivebeesgenesis$protectOutputSettlementValidity(ItemStack stack,
+            AutomationType automationType, CallbackInfoReturnable<Boolean> cir) {
+        if (productivebeesgenesis$outputInsertionAllowed != null
+                && !productivebeesgenesis$outputInsertionAllowed.getAsBoolean()) {
+            cir.setReturnValue(false);
+        }
+    }
+
+    @Inject(method = "extractItem(ILmekanism/api/Action;"
+            + "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
+            at = @At("HEAD"), cancellable = true, order = 900)
+    private void productivebeesgenesis$protectUnresolvedOutput(int amount, Action action,
+            AutomationType automationType, CallbackInfoReturnable<ItemStack> cir) {
+        if (productivebeesgenesis$outputExtractionAllowed != null
+                && !productivebeesgenesis$outputExtractionAllowed.getAsBoolean()) {
+            cir.setReturnValue(ItemStack.EMPTY);
+        }
+    }
+
 	@Override
 	public ExternalInsertPolicy productivebeesgenesis$getExternalInsertPolicy() {
 		return productivebeesgenesis$externalInsertPolicy;
@@ -218,10 +273,47 @@ public abstract class BasicInventorySlotMixin implements TieredInputSlot {
 		ItemStack extracted = current.copyWithCount(extractedAmount);
 		if (action.execute()) {
 			current.shrink(extractedAmount);
-			onContentsChanged();
+			try {
+				onContentsChanged();
+				productivebeesgenesis$extractionNotificationRecovered();
+			} catch (RuntimeException | LinkageError failure) {
+				productivebeesgenesis$reportCommittedExtractionNotification(failure);
+			}
 		}
 		cir.setReturnValue(extracted);
 	}
+
+    @WrapOperation(method = "extractItem(ILmekanism/api/Action;"
+            + "Lmekanism/api/AutomationType;)Lnet/minecraft/world/item/ItemStack;",
+            at = @At(value = "INVOKE", target = "Lmekanism/common/inventory/slot/BasicInventorySlot;onContentsChanged()V"))
+    private void productivebeesgenesis$retainCommittedExtraction(BasicInventorySlot slot, Operation<Void> original,
+            int amount, Action action, AutomationType automationType) {
+        if (!productivebeesgenesis$ownSlot || automationType != AutomationType.EXTERNAL) {
+            original.call(slot);
+            return;
+        }
+        try {
+            original.call(slot);
+            productivebeesgenesis$extractionNotificationRecovered();
+        } catch (RuntimeException | LinkageError failure) {
+            productivebeesgenesis$reportCommittedExtractionNotification(failure);
+        }
+    }
+
+    @Unique
+    private void productivebeesgenesis$reportCommittedExtractionNotification(Throwable failure) {
+        if (productivebeesgenesis$extractionNotificationFailed) return;
+        productivebeesgenesis$extractionNotificationFailed = true;
+        ProductiveBeesGenesis.LOGGER.error("物品外部扣量已提交，保留实际抽取回执；通知待恢复，slot={} remaining={}",
+                this, current.getCount(), failure);
+    }
+
+    @Unique
+    private void productivebeesgenesis$extractionNotificationRecovered() {
+        if (!productivebeesgenesis$extractionNotificationFailed) return;
+        productivebeesgenesis$extractionNotificationFailed = false;
+        ProductiveBeesGenesis.LOGGER.info("物品外部扣量通知已恢复，slot={}", this);
+    }
 
 	/**
 	 * 只放宽本模组拉取目标 Bin 的单次返回数量。原方法仍负责 canExtract、

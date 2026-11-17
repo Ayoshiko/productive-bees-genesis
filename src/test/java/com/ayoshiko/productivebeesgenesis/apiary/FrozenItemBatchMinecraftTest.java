@@ -6,6 +6,8 @@ import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2DirectItemPushSession;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2IntegrationLoader;
 import com.ayoshiko.productivebeesgenesis.mek.ae2.Ae2OutputPusher;
 import com.mojang.serialization.Codec;
+import mekanism.api.Action;
+import mekanism.api.AutomationType;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -66,6 +68,10 @@ class FrozenItemBatchMinecraftTest {
                 "productivebeesgenesis:mek_apiary")).defaultBlockState();
         var tile = spy(new TileEntityMekApiary(Holder.direct(state.getBlock()), BlockPos.ZERO, state));
         tile.setCentrifugePriorityEnabled(false);
+        var level = mock(ServerLevel.class);
+        when(level.getGameTime()).thenReturn(100L);
+        when(level.registryAccess()).thenReturn(registries());
+        tile.setLevel(level);
         var output = BasicInventorySlot.at(tile::onOutputSlotContentsChanged, 0, 0);
         doReturn(List.of(output)).when(tile).getOutputSlots();
         if (blockFallback) {
@@ -266,17 +272,26 @@ class FrozenItemBatchMinecraftTest {
     void laterRouteExceptionKeepsAllDebitedSourcesAndReleasesTheBatchForNextFlush() {
         var fixture = fixture(true);
         freeze(fixture, new ItemStack(Items.DIAMOND, 4), new ItemStack(Items.EMERALD, 3),
-                new ItemStack(Items.DIAMOND, 6));
+                new ItemStack(Items.DIAMOND, 6), new ItemStack(Items.GOLD_INGOT, 7));
         List<ItemStack> sources = List.copyOf(fixture.production().items());
-        doReturn(5L).when(fixture.tile()).pushGeneratedItemToAe(any(), anyLong());
+        var healthyOutput = BasicInventorySlot.at(null, 0, 0);
+        doAnswer(call -> {
+            ItemStack template = call.getArgument(0);
+            long amount = call.getArgument(1);
+            if (template.getItem() != Items.GOLD_INGOT) return 5L;
+            return amount - healthyOutput.insertItem(template.copyWithCount((int) amount),
+                    Action.EXECUTE, AutomationType.INTERNAL).getCount();
+        }).when(fixture.tile()).pushGeneratedItemToAe(any(), anyLong());
         doThrow(new IllegalStateException("later route unavailable")).when(fixture.tile())
                 .shouldHoldForCentrifuge(argThat(stack -> stack.getItem() == Items.EMERALD));
         clearInvocations(fixture.tile());
-        var failure = assertThrows(IllegalStateException.class, () -> fixture.processor().flushFrozen(AE));
-        assertEquals("later route unavailable", failure.getMessage());
+        assertFalse(fixture.processor().flushFrozen(AE));
+        assertTrue(fixture.processor().frozenRoutingFailed());
         assertTrue(sources.getFirst().isEmpty());
         assertEquals(5, sources.get(2).getCount());
         assertSame(sources.get(2), fixture.production().items().get(1));
+        assertEquals(Items.GOLD_INGOT, healthyOutput.getStack().getItem());
+        assertEquals(7, healthyOutput.getCount());
         verify(fixture.tile()).setChanged();
         var snapshot = fixture.production().save(registries());
         assertEquals(5, snapshot.getList("items", 10).getCompound(1).getInt("count"));
@@ -284,6 +299,8 @@ class FrozenItemBatchMinecraftTest {
         doAnswer(call -> call.<Long>getArgument(1)).when(fixture.tile()).pushGeneratedItemToAe(any(), anyLong());
         assertTrue(fixture.processor().flushFrozen(AE));
         assertFalse(fixture.production().hasFrozen());
+        assertFalse(fixture.processor().frozenRoutingFailed());
+        assertEquals(7, healthyOutput.getCount());
     }
 
     @Test
@@ -387,8 +404,8 @@ class FrozenItemBatchMinecraftTest {
             call.<LongConsumer>getArgument(2).accept(7);
             throw new IllegalStateException("next target unavailable");
         }).when(fixture.tile()).directTransferProducedToCentrifuges(any(), anyLong(), any());
-        assertEquals("next target unavailable", assertThrows(IllegalStateException.class,
-                () -> fixture.processor().flushFrozen(CENTRIFUGE)).getMessage());
+        assertFalse(fixture.processor().flushFrozen(CENTRIFUGE));
+        assertTrue(fixture.processor().frozenRoutingFailed());
         assertEquals(1, fixture.production().items().size());
         assertEquals(Integer.MAX_VALUE - 7, fixture.production().items().getFirst().getCount());
         var restored = restore(fixture);

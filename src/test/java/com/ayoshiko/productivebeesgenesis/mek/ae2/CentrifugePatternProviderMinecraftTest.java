@@ -17,7 +17,9 @@ import appeng.helpers.patternprovider.PatternProviderTarget;
 import com.ayoshiko.productivebeesgenesis.init.ModBlockEntities;
 import com.ayoshiko.productivebeesgenesis.init.ModBlocks;
 import com.ayoshiko.productivebeesgenesis.inventory.TieredInputSlot;
+import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
+import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +34,8 @@ import mekanism.common.tile.component.config.DataType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -264,6 +268,123 @@ class CentrifugePatternProviderMinecraftTest {
 		}
 	}
 
+	@Test
+	void localVerificationHidesItsSourceAndHealthyExternalOutputContinues() throws Exception {
+		var fixture = new Fixture();
+		fixture.config.setDataType(DataType.OUTPUT, RelativeSide.TOP);
+		fixture.output.setStack(new ItemStack(Items.DIAMOND, 3));
+		fixture.secondary.setStack(new ItemStack(Items.IRON_INGOT, 7));
+		var diamond = AEItemKey.of(Items.DIAMOND);
+		var iron = AEItemKey.of(Items.IRON_INGOT);
+		assertEquals(3, fixture.storage.getAvailableStacks().get(diamond));
+		assertEquals(7, fixture.storage.getAvailableStacks().get(iron));
+		var local = fixture.custody.localItem(0);
+		assertEquals(3, local.handoffLocalItem(new ItemStack(Items.DIAMOND), 3, ItemStack.EMPTY, "machine-slot:0",
+				() -> { throw new IllegalStateException("slot unreadable"); },
+				() -> { throw new IllegalStateException("listener failed"); }));
+		var registries = net.minecraft.core.RegistryAccess.fromRegistryOfRegistries(
+				net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
+		var original = local.save(registries);
+		assertTrue(fixture.custody.blocked());
+		assertFalse(fixture.custody.externalOutputBlocked());
+		assertEquals(0, fixture.storage.getAvailableStacks().get(diamond));
+		assertEquals(7, fixture.storage.getAvailableStacks().get(iron));
+		assertEquals(0, fixture.storage.extract(diamond, 3, Actionable.SIMULATE, IActionSource.empty()));
+		assertEquals(0, fixture.storage.extract(diamond, 3, Actionable.MODULATE, IActionSource.empty()));
+		assertEquals(7, fixture.storage.extract(iron, 7, Actionable.MODULATE, IActionSource.empty()));
+		assertTrue(fixture.secondary.isEmpty());
+		assertEquals(3, fixture.output.getCount());
+		assertEquals(original, local.save(registries));
+		local.recoverLocalItem(fixture.output::getStack, stack -> {
+			fail("the original three items are already in their source slot");
+			return 0;
+		});
+		assertFalse(fixture.custody.blocked());
+		assertEquals(3, fixture.storage.getAvailableStacks().get(diamond));
+		assertEquals(3, fixture.storage.extract(diamond, 3, Actionable.MODULATE, IActionSource.empty()));
+		assertTrue(fixture.output.isEmpty());
+		assertEquals(0, fixture.storage.getAvailableStacks().get(diamond));
+
+		fixture.output.setStack(new ItemStack(Items.DIAMOND, 3));
+		fixture.secondary.setStack(new ItemStack(Items.IRON_INGOT, 7));
+		assertEquals(3, fixture.storage.getAvailableStacks().get(diamond));
+		var smeltingRequest = java.util.UUID.randomUUID();
+		var smeltingEntry = new CompoundTag();
+		smeltingEntry.putInt("lane", 0);
+		smeltingEntry.putUUID("request", smeltingRequest);
+		smeltingEntry.putInt("input_pending", 0);
+		smeltingEntry.putLong("output_pending", 3);
+		smeltingEntry.putBoolean("unknown", true);
+		smeltingEntry.putString("phase", "output");
+		smeltingEntry.putString("failure", "output result unknown");
+		smeltingEntry.put("output", new ItemStack(Items.DIAMOND).save(registries));
+		var smeltingLanes = new ListTag();
+		smeltingLanes.add(smeltingEntry);
+		var smeltingRoot = new CompoundTag();
+		smeltingRoot.putInt("version", 1);
+		smeltingRoot.put("lanes", smeltingLanes);
+		var smeltingSaved = new CompoundTag();
+		smeltingSaved.put("productivebeesgenesis_smelting_work", smeltingRoot);
+		var processor = fixture.sideHost.productivebeesgenesis$getPbProcessor();
+		processor.loadAdditional(smeltingSaved, registries);
+		assertTrue(processor.hasSmeltingOutputLocks());
+		assertEquals(0, fixture.storage.getAvailableStacks().get(diamond));
+		assertEquals(7, fixture.storage.getAvailableStacks().get(iron));
+		assertEquals(0, fixture.storage.extract(diamond, 3, Actionable.SIMULATE, IActionSource.empty()));
+		assertEquals(0, fixture.storage.extract(diamond, 3, Actionable.MODULATE, IActionSource.empty()));
+		assertEquals(7, fixture.storage.extract(iron, 7, Actionable.MODULATE, IActionSource.empty()));
+		assertEquals(3, fixture.output.getCount());
+		var preserved = new CompoundTag();
+		processor.saveAdditional(preserved, registries);
+		assertEquals(smeltingRoot, preserved.getCompound("productivebeesgenesis_smelting_work"));
+		processor.confirmSmeltingSettled(smeltingRequest);
+		assertFalse(processor.hasSmeltingOutputLocks());
+		assertEquals(3, fixture.storage.getAvailableStacks().get(diamond));
+		assertEquals(3, fixture.storage.extract(diamond, 3, Actionable.MODULATE, IActionSource.empty()));
+		assertTrue(fixture.output.isEmpty());
+
+		fixture.output.setStack(new ItemStack(Items.DIAMOND, 130));
+		fixture.outputNotificationFails = true;
+		assertEquals(130, fixture.storage.extract(diamond, 130, Actionable.MODULATE, IActionSource.empty()));
+		assertTrue(fixture.output.isEmpty());
+		fixture.outputNotificationFails = false;
+		fixture.output.setStack(new ItemStack(Items.DIAMOND, 5));
+		assertEquals(5, fixture.storage.extract(diamond, 5, Actionable.MODULATE, IActionSource.empty()));
+		assertTrue(fixture.output.isEmpty());
+	}
+
+	@Test
+	void acceptedOutputLedgerHidesOnlyItsOriginalSlotUntilTheKnownDebitSettles() throws Exception {
+		var fixture = new Fixture();
+		fixture.config.setDataType(DataType.OUTPUT, RelativeSide.TOP);
+		fixture.output.setStack(new ItemStack(Items.DIAMOND, 20));
+		fixture.secondary.setStack(new ItemStack(Items.IRON_INGOT, 7));
+		var diamond = AEItemKey.of(Items.DIAMOND);
+		var iron = AEItemKey.of(Items.IRON_INGOT);
+		var registries = net.minecraft.core.RegistryAccess.fromRegistryOfRegistries(
+				net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
+		var ledger = fixture.holder.getOutputLedger();
+		assertEquals(20, fixture.storage.getAvailableStacks().get(diamond));
+		assertTrue(ledger.reserve(0, 0, Ae2ItemFingerprint.encode(diamond, registries), 20));
+		ledger.commitAccepted(0, 0, 10);
+
+		assertEquals(0, fixture.storage.getAvailableStacks().get(diamond));
+		assertEquals(7, fixture.storage.getAvailableStacks().get(iron));
+		assertEquals(0, fixture.storage.extract(diamond, 20, Actionable.SIMULATE, IActionSource.empty()));
+		assertEquals(0, fixture.storage.extract(diamond, 20, Actionable.MODULATE, IActionSource.empty()));
+		assertEquals(7, fixture.storage.extract(iron, 7, Actionable.MODULATE, IActionSource.empty()));
+		assertEquals(20, fixture.output.getCount());
+		assertTrue(fixture.secondary.isEmpty());
+		assertEquals(10, ledger.snapshot().getFirst().remaining());
+
+		fixture.output.setStack(new ItemStack(Items.DIAMOND, 10));
+		ledger.confirm(0, 0, 10);
+		assertEquals(10, fixture.storage.getAvailableStacks().get(diamond));
+		assertEquals(10, fixture.storage.extract(diamond, 20, Actionable.MODULATE, IActionSource.empty()));
+		assertTrue(fixture.output.isEmpty());
+		assertEquals(0, ledger.size());
+	}
+
 	private static IPatternDetails ecoScaledPattern(long copies) throws Exception {
 		var encoded = PatternDetailsHelper.encodeProcessingPattern(
 				List.of(new GenericStack(AEItemKey.of(Items.RAW_IRON), 1)),
@@ -281,7 +402,13 @@ class CentrifugePatternProviderMinecraftTest {
 
 	static final class Fixture {
 		final List<InputInventorySlot> inputs = new ArrayList<>();
-		final BasicInventorySlot output = BasicInventorySlot.at(null, 0, 0);
+		boolean outputNotificationFails;
+		final BasicInventorySlot output = BasicInventorySlot.at(() -> {
+			if (outputNotificationFails) throw new IllegalStateException("external source listener failed");
+		}, 0, 0);
+		final BasicInventorySlot secondary = BasicInventorySlot.at(null, 0, 0);
+		final TileEntityMekCentrifuge sideHost;
+		OutputCustody custody;
 		final ConfigInfo config;
 		final MEStorage storage;
 		final PatternProviderTarget target;
@@ -289,9 +416,10 @@ class CentrifugePatternProviderMinecraftTest {
 		final AeItemKeyCache keyCache = new AeItemKeyCache(3);
 
 		Fixture() throws Exception {
-			var sideHost = ModBlockEntities.MEK_CENTRIFUGE.get().create(
+			sideHost = ModBlockEntities.MEK_CENTRIFUGE.get().create(
 					BlockPos.ZERO, ModBlocks.MEK_CENTRIFUGE.get().defaultBlockState());
 			assertNotNull(sideHost);
+			custody = OutputCustody.of(sideHost);
 			config = sideHost.getConfig().getConfig(TransmissionType.ITEM);
 			config.setDataType(DataType.INPUT, RelativeSide.TOP);
 			for (int i = 0; i < 17; i++) {
@@ -310,9 +438,13 @@ class CentrifugePatternProviderMinecraftTest {
 							case "productivebeesgenesis$isValidInput" -> ((ItemStack) args[0]).is(Items.RAW_IRON);
 							case "processes" -> 1;
 							case "primaryOutputSlot" -> output;
-							case "secondaryOutputSlot", "tertiaryOutputSlot", "productivebeesgenesis$onAe2PushComplete",
-									"productivebeesgenesis$markInputSortingNeeded" -> null;
-							case "productivebeesgenesis$outputContentsVersion" -> (long) output.getCount();
+							case "secondaryOutputSlot" -> secondary;
+							case "productivebeesgenesis$onAe2PushComplete" -> {
+								if (outputNotificationFails) throw new IllegalStateException("external completion notification failed");
+								yield null;
+							}
+							case "tertiaryOutputSlot", "productivebeesgenesis$markInputSortingNeeded" -> null;
+							case "productivebeesgenesis$outputContentsVersion" -> (long) output.getCount() * 65 + secondary.getCount();
 							default -> throw new AssertionError("Unexpected call: " + method.getName());
 						});
 			storage = CentrifugeExternalAeStorage.getOrCreate(host, (IMekCentrifugeTile) host, sideHost, Direction.UP);

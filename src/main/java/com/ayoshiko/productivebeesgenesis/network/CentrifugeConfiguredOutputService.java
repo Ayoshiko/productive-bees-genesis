@@ -45,7 +45,7 @@ final class CentrifugeConfiguredOutputService {
 		for (IInventorySlot source : inputSlots) {
 			if (source == null || source.isEmpty()) continue;
 			for (IItemHandler target : targets.handlers()) {
-				if (source.isEmpty() || custody.blocked()) break;
+				if (source.isEmpty() || custody.externalOutputBlocked()) break;
 				transferred += transferToTarget(source, target, custody,
 						level.dimension().location() + ":" + sourcePos + ":input-return");
 			}
@@ -81,7 +81,7 @@ final class CentrifugeConfiguredOutputService {
 
 	static int transferToTarget(IInventorySlot source, IItemHandler target, OutputCustody custody,
 			String destination) {
-		if (custody.blocked()) return 0;
+		if (custody.externalOutputBlocked()) return 0;
 		ItemStack sourceSnapshot = source.getStack().copy();
 		int requested = sourceSnapshot.getCount();
 		if (requested <= 0) return 0;
@@ -117,7 +117,7 @@ final class CentrifugeConfiguredOutputService {
 				return restored;
 			});
 		}
-		return custody.blocked() && !custody.failure().isEmpty() ? 0 : (int) handed;
+		return custody.externalOutputBlocked() && !custody.failure().isEmpty() ? 0 : (int) handed;
 	}
 
 	private static int acceptedCount(ItemStack offered, ItemStack remainder) {

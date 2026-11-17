@@ -22,7 +22,7 @@ import snownee.jade.api.config.IPluginConfig;
 	 * 显示蜂箱运行关键信息：
 	 * <ul>
 	 *   <li>蜜蜂：活跃蜜蜂数 / 总蜜蜂槽位</li>
-	 *   <li>状态：各状态蜜蜂数量汇总（工作中 / 等待能量 / 等待花朵 / 等待输出）</li>
+	 *   <li>状态：生产与容量等待汇总，准备失败和交付保管分别显示原槽原因</li>
 	 *   <li>进度：所有非空蜜蜂槽的平均生产进度百分比</li>
 	 * </ul>
 	 * <p>
@@ -112,11 +112,14 @@ public final class JadeApiaryComponentProvider
 				case WAITING_ENERGY -> waitingEnergy++;
 				case WAITING_FLOWER -> waitingFlower++;
 				case WAITING_OUTPUT -> waitingOutput++;
-				case WAITING_FLUID, WAITING_FROZEN_OUTPUT, WAITING_PREVIOUS_BEE, WAITING_RESOURCE,
-						PRODUCTION_SUSPENDED, OUTPUT_SUSPENDED, OUTPUT_DATA_INVALID, WAITING_OUTPUT_BUFFER -> {
+				case WAITING_FLUID, WAITING_FROZEN_OUTPUT, WAITING_OUTPUT_BUFFER -> {
 					waitingOutput++;
 					outputReasons[slot.getState().ordinal()]++;
 				}
+				case WAITING_PREVIOUS_BEE, WAITING_RESOURCE, WAITING_RESOURCE_RELOAD, WAITING_RESOURCE_RECIPE,
+						PRODUCTION_SUSPENDED, OUTPUT_SUSPENDED, OUTPUT_DATA_INVALID,
+						RESOURCE_PREPARATION_FAILED, PREPARATION_FAILED, OUTPUT_PREPARATION_FAILED ->
+						outputReasons[slot.getState().ordinal()]++;
 				default -> { /* IDLE 不计入等待状态 */ }
 			}
 		}

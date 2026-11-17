@@ -34,11 +34,11 @@ final class ApiaryRoutedOutput {
 
     void commit() {
         var processor = tile.getProduceProcessor();
-        if (committed || processor.production.suspended() || processor.production.hasFrozen())
+        if (committed || processor.production.hasInvalidData() || processor.production.active() || processor.production.hasFrozen())
             throw new IllegalStateException("Previous apiary output still owned");
         committed = true;
         processor.production.freeze(generated);
         processor.flushFrozen(upgrades);
-        if (OutputCustody.of(tile).blocked()) throw new IllegalStateException("Resource apiary output outcome uncertain");
+        if (OutputCustody.of(tile).localOutputBlocked()) throw new IllegalStateException("Resource apiary output outcome uncertain");
     }
 }

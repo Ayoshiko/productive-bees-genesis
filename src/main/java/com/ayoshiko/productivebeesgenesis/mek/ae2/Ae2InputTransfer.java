@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.mek.ae2;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 
@@ -23,6 +25,7 @@ public final class Ae2InputTransfer {
     private Tag unreadable;
     private UUID player;
     private String playerDestination;
+    private boolean returnToNetworkOnly;
 
     public boolean isPresent() {
         return phase != null || unreadable != null;
@@ -62,19 +65,26 @@ public final class Ae2InputTransfer {
     public void beginExtract(Supplier<String> identity, long amount) {
         begin(identity, amount);
         phase = "extract";
+        returnToNetworkOnly = false;
         offered = amount;
     }
 
     public void beginSlotWithdrawal(Supplier<String> identity, long amount, int sourceSlot) {
         begin(identity, amount);
         phase = "withdraw-slot";
+        returnToNetworkOnly = true;
         slot = sourceSlot;
         offered = amount;
     }
 
     public void beginKnown(Supplier<String> identity, long amount) {
+        beginKnown(identity, amount, false);
+    }
+
+    public void beginKnown(Supplier<String> identity, long amount, boolean networkOnly) {
         begin(identity, amount);
         phase = "known";
+        returnToNetworkOnly = networkOnly;
         known = amount;
     }
 
@@ -157,6 +167,38 @@ public final class Ae2InputTransfer {
         clear();
     }
 
+    boolean hasRecoverableKnownAmount() {
+        return unreadable == null && "known".equals(phase) && offered == 0 && player == null;
+    }
+
+    boolean isReturnToNetworkOnly() {
+        return returnToNetworkOnly;
+    }
+
+    /** 无在途交付的已知余额可恢复；旧格式无来源类别时只回送 ME，不重新作为原料。 */
+    boolean recoverKnown(Ae2PendingItemBuffer pending, long tick) {
+        if (!hasRecoverableKnownAmount()) return false;
+        UUID recoveredRequest = request();
+        long amount = known;
+        if (amount > 0) {
+            String identity = fingerprint();
+            if (!pending.canAcceptReturn(identity, amount)) {
+                LogThrottle.error("ae2_known_input_recovery_capacity",
+                        "AE2 已知输入余额等待缓冲容量，request={} amount={}；原请求保留", recoveredRequest, amount);
+                return false;
+            }
+            long retained = returnToNetworkOnly ? pending.enqueueReturnToNetwork(identity, amount, tick)
+                    : pending.enqueue(identity, amount, tick);
+            known -= retained;
+            if (known != 0) throw new IllegalStateException("Known input recovery could not retain its complete amount");
+        }
+        boolean networkOnly = returnToNetworkOnly;
+        clear();
+        ProductiveBeesGenesis.LOGGER.info("AE2 自动恢复已知输入余额，request={} amount={} returnToNetworkOnly={}",
+                recoveredRequest, amount, networkOnly);
+        return true;
+    }
+
     /** transferred 是实际扣出的数量（extract）或接收方实际接收的数量（slot/return）。 */
     public void resolve(UUID expected, long transferred, Ae2PendingItemBuffer pending, long tick) {
         if (unreadable != null || expected == null || !expected.equals(request())) {
@@ -180,7 +222,8 @@ public final class Ae2InputTransfer {
             parent.put(NBT_KEY, unreadable.copy());
         } else if (phase != null) {
             CompoundTag tag = new CompoundTag();
-            tag.putInt("version", player == null ? 1 : 2);
+            tag.putInt("version", 3);
+            tag.putBoolean("return_to_network_only", returnToNetworkOnly);
             if (player != null) {
                 tag.putUUID("player", player);
                 tag.putString("player_destination", playerDestination);
@@ -202,7 +245,8 @@ public final class Ae2InputTransfer {
         Tag raw = parent.get(NBT_KEY);
         if (raw == null) return;
         if (!(raw instanceof CompoundTag tag) || !tag.contains("version", Tag.TAG_INT)
-                || (tag.getInt("version") != 1 && tag.getInt("version") != 2) || !tag.hasUUID("request")
+                || (tag.getInt("version") != 1 && tag.getInt("version") != 2 && tag.getInt("version") != 3)
+                || !tag.hasUUID("request")
                 || !tag.contains("fingerprint", Tag.TAG_STRING) || tag.getString("fingerprint").isBlank()
                 || !tag.contains("phase", Tag.TAG_STRING) || !tag.contains("slot", Tag.TAG_INT)
                 || !tag.contains("known", Tag.TAG_LONG) || !tag.contains("offered", Tag.TAG_LONG)) {
@@ -226,7 +270,16 @@ public final class Ae2InputTransfer {
             unreadable = raw.copy();
             return;
         }
-        if (tag.getInt("version") == 2) {
+        int version = tag.getInt("version");
+        if (version == 3 && !tag.contains("return_to_network_only", Tag.TAG_BYTE)) {
+            unreadable = raw.copy();
+            return;
+        }
+        boolean legacyKnownMachineRecord = version == 2 && "known".equals(savedPhase)
+                && !tag.contains("player") && !tag.contains("player_destination");
+        boolean playerRecord = version == 2 && !legacyKnownMachineRecord
+                || version == 3 && tag.contains("player");
+        if (playerRecord) {
             if (!tag.hasUUID("player") || !Set.of("cursor", "inventory").contains(tag.getString("player_destination"))) {
                 unreadable = raw.copy();
                 return;
@@ -237,6 +290,7 @@ public final class Ae2InputTransfer {
             unreadable = raw.copy();
             return;
         }
+        returnToNetworkOnly = version < 3 || tag.getBoolean("return_to_network_only");
         fingerprint = tag.getString("fingerprint");
         request = tag.getUUID("request");
         phase = savedPhase;
@@ -256,5 +310,6 @@ public final class Ae2InputTransfer {
         unreadable = null;
         player = null;
         playerDestination = null;
+        returnToNetworkOnly = false;
     }
 }

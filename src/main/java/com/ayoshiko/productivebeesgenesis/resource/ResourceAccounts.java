@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
+import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -207,6 +208,21 @@ public final class ResourceAccounts {
 				}
 				account.storageBudget = ResourceAccountData.storageBudget(account) + 4L;
 				result.reservedStorage += account.storageBudget;
+			}
+			var canceledSources = new LinkedHashMap<UUID, Integer>();
+			for (var account : result.accounts.values()) {
+				int canceled = ResourceAccountData.cancelUnstartedReservations(account);
+				if (canceled > 0) {
+					result.releaseStorage(account);
+					canceledSources.put(account.id, canceled);
+				}
+			}
+			if (!canceledSources.isEmpty()) {
+				result.revision = Math.incrementExact(result.revision);
+				result.changed.run();
+				int canceled = canceledSources.values().stream().mapToInt(Integer::intValue).sum();
+				ProductiveBeesGenesis.LOGGER.info("资源账户加载完成，撤销 {} 个未启动预约（source=数量）：{}；"
+						+ "预约未进入 STARTED，未消费输入或能量，原余额与已付工作保持不变", canceled, canceledSources);
 			}
 		} catch (RuntimeException failure) {
 			result.accounts.clear();

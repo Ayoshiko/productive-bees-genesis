@@ -212,7 +212,7 @@ public final class ApiaryOutputBuffer {
 	public synchronized void tickRedistribute(List<? extends IInventorySlot> outputSlots) {
 		if (outputSlots == null || outputSlots.isEmpty() || redistributeBackoffUntilNanos > System.nanoTime()) return;
 		var custody = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(tile);
-		var result = pushToSink(stack -> com.ayoshiko.productivebeesgenesis.logistics.LocalOutputTransfer.insert(outputSlots, stack, custody), null);
+		var result = pushToSink(stack -> com.ayoshiko.productivebeesgenesis.logistics.LocalOutputTransfer.insert(outputSlots, stack, custody), null, true);
 		if (result.pushed() == 0) enterBackoff(); else resetBackoff();
 	}
 
@@ -239,7 +239,7 @@ public final class ApiaryOutputBuffer {
 			Predicate<ItemStack> validator) {
 		if (externalSlots == null || externalSlots.isEmpty()) return 0;
 		var custody = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(tile);
-		return pushToSink(stack -> com.ayoshiko.productivebeesgenesis.logistics.LocalOutputTransfer.insert(externalSlots, stack, custody),
+		return pushToSink(stack -> com.ayoshiko.productivebeesgenesis.logistics.LocalOutputTransfer.insertExternal(externalSlots, stack, custody),
 				validator == null ? null : validator.negate()).pushed();
 	}
 
@@ -251,15 +251,20 @@ public final class ApiaryOutputBuffer {
 	/** 扫描和外部调用共用 32 组预算，队列原地轮转；拒收或 hold 不使队尾饥饿。 */
 	public synchronized AeBufferPushResult pushToSink(java.util.function.ToIntFunction<ItemStack> pushSingle,
 			Predicate<ItemStack> holdFilter) {
+        return pushToSink(pushSingle, holdFilter, false);
+    }
+
+    private AeBufferPushResult pushToSink(java.util.function.ToIntFunction<ItemStack> pushSingle,
+            Predicate<ItemStack> holdFilter, boolean local) {
 		if (bufferedStacks.isEmpty() || draining) return AeBufferPushResult.EMPTY;
         var custody = com.ayoshiko.productivebeesgenesis.logistics.OutputCustody.of(tile);
-        if (custody.blocked()) return AeBufferPushResult.EMPTY;
+        if (local ? custody.localOutputBlocked() : custody.blocked()) return AeBufferPushResult.EMPTY;
         draining = true;
         int pushedTotal = 0, held = 0;
         boolean changed = false;
         try {
             int budget = Math.min(bufferedStacks.size(), MAX_AE_BUFFER_GROUPS_PER_CALL);
-            for (int scanned = 0; scanned < budget && !custody.blocked(); scanned++) {
+            for (int scanned = 0; scanned < budget && !(local ? custody.localOutputBlocked() : custody.blocked()); scanned++) {
                 ItemStack stack = bufferedStacks.peekFirst();
                 if (stack == null) break;
                 if (holdFilter != null && holdFilter.test(stack)) {

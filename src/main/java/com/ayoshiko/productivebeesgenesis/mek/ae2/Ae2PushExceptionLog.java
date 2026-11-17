@@ -25,16 +25,16 @@ final class Ae2PushExceptionLog {
 	private Ae2PushExceptionLog() {
 	}
 
-	static void handle(Exception e, int process, int slotIdx, ItemStack stack, long originalCount) {
+	static void handle(Throwable e, int process, int slotIdx, ItemStack stack, long originalCount) {
 		long count = PUSH_EXCEPTION_COUNTER.incrementAndGet();
 		if (e instanceof NullPointerException) {
 			LogThrottle.error("ae2_push_npe_exception",
 					"AE2 推送 NPE 异常 (累计 {} 次,5秒内仅首条输出) - process={}, slotIdx={}, item={}: {}",
-					count, process, slotIdx, stack.getItem(), e.toString());
+					count, process, slotIdx, stack.getItem(), e.toString(), e);
 		} else {
 			LogThrottle.warn("ae2_push_exception",
 					"AE2 推送异常 (累计 {} 次,5秒内仅首条输出) - process={}, slotIdx={}, item={}, count={}: {}",
-					count, process, slotIdx, stack.getItem(), originalCount, e.toString());
+					count, process, slotIdx, stack.getItem(), originalCount, e.toString(), e);
 		}
 		if (e instanceof InterruptedException) Thread.currentThread().interrupt();
 	}

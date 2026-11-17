@@ -8,7 +8,13 @@ import appeng.api.stacks.AEKey;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
 import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
+import com.ayoshiko.productivebeesgenesis.mek.IFactoryPbDelegateAccess;
 import com.ayoshiko.productivebeesgenesis.mek.IMekCentrifugeTile;
+import com.ayoshiko.productivebeesgenesis.mek.PbRecipeProcessor;
+import com.ayoshiko.productivebeesgenesis.mek.TileEntityMekCentrifuge;
+import com.ayoshiko.productivebeesgenesis.inventory.OutputFluidTank;
+import com.ayoshiko.productivebeesgenesis.mixin.accessor.BasicInventorySlotAccessor;
+import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.SaturatingMath;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
@@ -140,13 +146,20 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 		}
 		if (allows(TransmissionType.FLUID, true)) {
 			int tankCount = Math.max(0, shared.host.fluidOutputTankCount());
+			var custody = OutputCustody.of(shared.sideConfiguration);
 			for (int i = 0; i < tankCount; i++) {
-				IExtendedFluidTank tank = shared.host.fluidOutputTank(i);
-				if (tank == null || tank.isEmpty()) continue;
-				FluidStack stack = tank.getFluid();
-				if (stack.isEmpty() || stack.getAmount() <= 0) continue;
-				AEFluidKey key = getCachedFluidKey(i, stack);
-				if (key != null) out.add(key, stack.getAmount());
+				if (custody.localFluidBlocked(i)) continue;
+				try {
+					IExtendedFluidTank tank = shared.host.fluidOutputTank(i);
+					if (tank == null || tank.isEmpty()) continue;
+					FluidStack stack = tank.getFluid();
+					if (stack.isEmpty() || stack.getAmount() <= 0) continue;
+					AEFluidKey key = getCachedFluidKey(i, stack);
+					if (key != null) out.add(key, stack.getAmount());
+				} catch (RuntimeException | LinkageError failure) {
+					LogThrottle.error("ae2_external_fluid_listing",
+							"外部库存桥读取流体失败，健康罐继续，罐位={}", i, failure);
+				}
 			}
 		}
 	}
@@ -174,17 +187,47 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 		int start = Math.floorMod(shared.itemExtractCursor, slotCount);
 		long extracted = 0L;
 		int lastUsed = -1;
+		var custody = OutputCustody.of(shared.sideConfiguration);
 		for (int offset = 0; offset < slotCount && extracted < amount; offset++) {
 			int index = (start + offset) % slotCount;
-			IInventorySlot slot = outputSlot(index);
-			if (slot == null || slot.isEmpty()) continue;
-			ItemStack stack = slot.getStack();
-			if (stack.isEmpty() || !key.matches(stack)) continue;
+			if (custody.localItemBlocked(index) || Ae2OutputLedger.blocks(shared.host, index / 3, index % 3)
+					|| index % 3 == 0 && shared.processor.smeltingOutputLocked(index / 3)) continue;
+			IInventorySlot slot;
+			ItemStack stack;
+			try {
+				slot = outputSlot(index);
+				if (slot == null || slot.isEmpty()) continue;
+				stack = slot.getStack();
+				if (stack.isEmpty() || !key.matches(stack)) continue;
+			} catch (RuntimeException | LinkageError failure) {
+				LogThrottle.error("ae2_external_item_prepare",
+						"外部库存桥物品提取准备失败，健康槽继续，槽位={}", index, failure);
+				continue;
+			}
 			int requested = Math.min(stack.getCount(), SaturatingMath.saturatingToInt(amount - extracted));
 			if (requested <= 0) break;
-			int extractedNow = mode.isSimulate()
-					? requested
-					: Math.max(0, Math.min(requested, slot.shrinkStack(requested, Action.EXECUTE)));
+			int extractedNow;
+			if (mode.isSimulate()) {
+				extractedNow = requested;
+			} else {
+				int before = stack.getCount();
+				try {
+					extractedNow = Math.max(0, Math.min(requested, slot.shrinkStack(requested, Action.EXECUTE)));
+				} catch (RuntimeException | LinkageError failure) {
+					ItemStack committed = ((BasicInventorySlotAccessor) slot).productivebeesgenesis$getCurrent();
+					if (committed.isEmpty()) {
+						extractedNow = before;
+					} else if (key.matches(committed)) {
+						extractedNow = before - committed.getCount();
+					} else {
+						extractedNow = -1;
+					}
+					if (extractedNow < 0 || extractedNow > requested) throw failure;
+					LogThrottle.error("ae2_external_item_debit_notification",
+							"外部库存桥物品扣量已核对，返回实际抽取数量；槽位={} requested={} removed={}",
+							index, requested, extractedNow, failure);
+				}
+			}
 			if (extractedNow > 0) {
 				extracted = SaturatingMath.saturatingAdd(extracted, extractedNow);
 				lastUsed = index;
@@ -193,8 +236,12 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 		if (!mode.isSimulate() && extracted > 0) {
 			shared.itemSnapshotVersion = Long.MIN_VALUE;
 			if (lastUsed >= 0) shared.itemExtractCursor = (lastUsed + 1) % slotCount;
-			shared.host.productivebeesgenesis$onAe2PushComplete(
-					SaturatingMath.saturatingToInt(extracted));
+			try {
+				shared.host.productivebeesgenesis$onAe2PushComplete(SaturatingMath.saturatingToInt(extracted));
+			} catch (RuntimeException | LinkageError failure) {
+				LogThrottle.error("ae2_external_item_completion_notification",
+						"外部库存桥物品扣量已提交，保留实际抽取回执；数量={}", extracted, failure);
+			}
 		}
 		return Math.min(extracted, amount);
 	}
@@ -205,21 +252,29 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 		int start = Math.floorMod(shared.fluidExtractCursor, tankCount);
 		long extracted = 0L;
 		int lastUsed = -1;
+		var custody = OutputCustody.of(shared.sideConfiguration);
 		for (int offset = 0; offset < tankCount && extracted < amount; offset++) {
 			int index = (start + offset) % tankCount;
-			IExtendedFluidTank tank = shared.host.fluidOutputTank(index);
-			if (tank == null || tank.isEmpty()) continue;
-			FluidStack stack = tank.getFluid();
-			if (stack.isEmpty() || !key.matches(stack)) continue;
+			if (custody.localFluidBlocked(index)) continue;
+			IExtendedFluidTank tank;
+			FluidStack stack;
+			try {
+				tank = shared.host.fluidOutputTank(index);
+				if (tank == null || tank.isEmpty()) continue;
+				stack = tank.getFluid();
+				if (stack.isEmpty() || !key.matches(stack)) continue;
+			} catch (RuntimeException | LinkageError failure) {
+				LogThrottle.error("ae2_external_fluid_prepare",
+						"外部库存桥流体提取准备失败，健康罐继续，罐位={}", index, failure);
+				continue;
+			}
 			int requested = Math.min(stack.getAmount(), SaturatingMath.saturatingToInt(amount - extracted));
 			if (requested <= 0) break;
 			int extractedNow;
 			if (mode.isSimulate()) {
 				extractedNow = requested;
 			} else {
-				int before = tank.getFluidAmount();
-				tank.shrinkStack(requested, Action.EXECUTE);
-				extractedNow = Math.max(0, Math.min(requested, before - tank.getFluidAmount()));
+				extractedNow = ((OutputFluidTank) tank).extractAmount(requested);
 			}
 			if (extractedNow > 0) {
 				extracted = SaturatingMath.saturatingAdd(extracted, extractedNow);
@@ -228,14 +283,23 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 		}
 		if (!mode.isSimulate() && extracted > 0) {
 			if (lastUsed >= 0) shared.fluidExtractCursor = (lastUsed + 1) % tankCount;
-			shared.host.productivebeesgenesis$onAe2FluidPushComplete();
+			try {
+				shared.host.productivebeesgenesis$onAe2FluidPushComplete();
+			} catch (RuntimeException | LinkageError failure) {
+				LogThrottle.error("ae2_external_fluid_completion_notification",
+						"外部库存桥流体扣量已提交，保留实际抽取回执；数量={}", extracted, failure);
+			}
 		}
 		return Math.min(extracted, amount);
 	}
 
 	private void refreshItemSnapshot() {
 		long version = shared.centrifuge.productivebeesgenesis$outputContentsVersion();
-		if (version == shared.itemSnapshotVersion) return;
+		var custody = OutputCustody.of(shared.sideConfiguration);
+		Ae2OutputLedger ledger = shared.host.productivebeesgenesis$getAe2StateHolder().getOutputLedger();
+		boolean blockedPositions = custody.blocked() || ledger.size() > 0 || ledger.hasInvalidData()
+				|| shared.processor.hasSmeltingOutputLocks();
+		if (version == shared.itemSnapshotVersion && !blockedPositions && !shared.itemSnapshotHadBlockedPositions) return;
 		int slotCount = Math.max(0, shared.host.processes()) * 3;
 		if (shared.itemSnapshotKeys.length < slotCount) {
 			shared.itemSnapshotKeys = new Object[slotCount];
@@ -244,16 +308,25 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 		Object keyCache = shared.host.productivebeesgenesis$getAeItemKeyCache();
 		AeItemKeyCache cache = keyCache instanceof AeItemKeyCache existing ? existing : null;
 		int count = 0;
+		boolean preparationFailed = false;
 		for (int i = 0; i < slotCount; i++) {
-			IInventorySlot slot = outputSlot(i);
-			if (slot == null || slot.isEmpty()) continue;
-			ItemStack stack = slot.getStack();
-			if (stack.isEmpty() || stack.getCount() <= 0) continue;
-			AEItemKey key = cache == null ? AEItemKey.of(stack) : cache.get(i, stack);
-			if (key == null) continue;
-			shared.itemSnapshotKeys[count] = key;
-			shared.itemSnapshotAmounts[count] = stack.getCount();
-			count++;
+			if (custody.localItemBlocked(i) || ledger.hasSlot(i / 3, i % 3)
+					|| i % 3 == 0 && shared.processor.smeltingOutputLocked(i / 3)) continue;
+			try {
+				IInventorySlot slot = outputSlot(i);
+				if (slot == null || slot.isEmpty()) continue;
+				ItemStack stack = slot.getStack();
+				if (stack.isEmpty() || stack.getCount() <= 0) continue;
+				AEItemKey key = cache == null ? AEItemKey.of(stack) : cache.get(i, stack);
+				if (key == null) continue;
+				shared.itemSnapshotKeys[count] = key;
+				shared.itemSnapshotAmounts[count] = stack.getCount();
+				count++;
+			} catch (RuntimeException | LinkageError failure) {
+				preparationFailed = true;
+				LogThrottle.error("ae2_external_item_listing",
+						"外部库存桥读取物品失败，健康槽继续，槽位={}", i, failure);
+			}
 		}
 		// 快照条数由输出槽位数量封顶（进程数×3），不会随「历史上出现过的物品种类」增长。
 		// 旧实现复用一只 KeyCounter 并每轮 clear()：AE2 的 KeyCounter.clear() 只清内层
@@ -263,6 +336,7 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 		// 既无累积，也省掉了 out.addAll 的整表复制。
 		shared.itemSnapshotCount = count;
 		shared.itemSnapshotVersion = version;
+		shared.itemSnapshotHadBlockedPositions = blockedPositions || preparationFailed;
 	}
 
 	private IInventorySlot outputSlot(int flatIndex) {
@@ -293,7 +367,7 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 	}
 
 	private boolean allows(TransmissionType transmission, boolean output) {
-		if (output && (OutputCustody.of(shared.sideConfiguration).blocked()
+		if (output && (OutputCustody.of(shared.sideConfiguration).externalOutputBlocked()
 				|| shared.host.productivebeesgenesis$getAe2StateHolder().getOutputLedger().hasInvalidData())) {
 			return false;
 		}
@@ -333,11 +407,13 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 		private final IAe2OutputHostBase host;
 		private final IMekCentrifugeTile centrifuge;
 		private final ISideConfiguration sideConfiguration;
+		private final PbRecipeProcessor processor;
 		/** 输出槽快照（复用定长数组，长度随进程数增长后被复用），仅服务端 tick 线程访问。 */
 		private Object[] itemSnapshotKeys = new Object[0];
 		private long[] itemSnapshotAmounts = new long[0];
 		private int itemSnapshotCount;
 		private long itemSnapshotVersion = Long.MIN_VALUE;
+		private boolean itemSnapshotHadBlockedPositions;
 		private int itemExtractCursor;
 		private int fluidExtractCursor;
 		private int inputCursor;
@@ -347,6 +423,9 @@ final class CentrifugeExternalAeStorage implements MEStorage {
 			this.host = host;
 			this.centrifuge = centrifuge;
 			this.sideConfiguration = sideConfiguration;
+			processor = sideConfiguration instanceof IFactoryPbDelegateAccess factory
+					? factory.productivebeesgenesis$getPbProcessor()
+					: ((TileEntityMekCentrifuge) sideConfiguration).productivebeesgenesis$getPbProcessor();
 		}
 	}
 }

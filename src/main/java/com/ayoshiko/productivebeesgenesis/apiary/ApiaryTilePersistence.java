@@ -80,6 +80,20 @@ final class ApiaryTilePersistence {
 		} catch (RuntimeException | LinkageError failure) {
 			tile.upgradeRecovery().fail(failure);
 			ProductiveBeesGenesis.LOGGER.error("蜂箱升级源端清空失败，完整快照已保管：{}", tile.getBlockPos(), failure);
+			// 数据尚未返回安装器，原端仍拥有全部资产；在同一调用中撤销已执行的本地清理。
+			try {
+				CompoundTag original = data.sourceSnapshot.copy();
+				tile.upgradeRecovery().save(original);
+				tile.loadWithComponents(original, provider);
+				if (tile.upgradeRecovery().settleIntactSource(provider)) {
+					com.ayoshiko.productivebeesgenesis.resource.ResourceHiveHost.cancelUpgradePreparation(tile);
+				}
+			} catch (RuntimeException | LinkageError recoveryFailure) {
+				failure.addSuppressed(recoveryFailure);
+				tile.upgradeRecovery().fail(recoveryFailure);
+				ProductiveBeesGenesis.LOGGER.error("蜂箱升级源端自动回退失败，完整原快照继续保管：{}",
+						tile.getBlockPos(), recoveryFailure);
+			}
 			return null;
 		}
 	}

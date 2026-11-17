@@ -24,4 +24,29 @@ class BeeProductivityGeneTest {
 		assertEquals(0, (total - 198) % 4);
 	}
 
+	@Test
+	void wideVariablePaidBatchAggregatesWithoutPerEventRandomWork() {
+		class CountingRandom extends java.util.Random {
+			int calls;
+
+			CountingRandom() {
+				super(6L);
+			}
+
+			@Override
+			public long nextLong(long bound) {
+				if (++calls > 10_000) throw new AssertionError("Wide batch reverted to per-event sampling");
+				return super.nextLong(bound);
+			}
+		}
+		var random = new CountingRandom();
+		long events = 500_000;
+		long total = BeeProduceBatchSampler.sampleGeneAdjustedSum(
+				random, 1_000, 100_000, events, BeeProductivityGene.VERY_HIGH);
+		long lower = 1_000 + Math.round((double) (2.2F * 1_000));
+		long upper = 100_000 + Math.round((double) (2.2F * 100_000));
+		assertTrue(total >= lower * events && total <= upper * events);
+		assertTrue(random.calls < 10_000);
+	}
+
 }
