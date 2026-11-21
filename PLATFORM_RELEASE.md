@@ -10,7 +10,7 @@
 | 模组 ID | `productivebeesgenesis` |
 | 内部/构建版本 | 以 `gradle.properties` 的 `mod_version` 为准；当前版本为 `1.2.6` |
 | CurseForge 版本 | 以 `curseforge_release_version` 为准；当前版本为 `1.2.6` |
-| 当前候选 | `1.2.6` 蜜脾块升级、生产故障隔离与旧机自动恢复的整包审查、受影响专项、真实客户端生产／双语菜单验证及候选打包已完成；尚未正式发布 |
+| 当前候选 | `1.2.6` 完成蜜脾块升级兼容、旧状态自动恢复、蜂箱与离心车道故障隔离、18 车道离心工厂混合供料优化及双语客户端检查；候选 JAR 5,789,894 字节，SHA-256 `e9e96009b84fcf9e7aa1beb1f334299a9cae39811861a778b5d394f32218199e`。本次 `build`、`verifyReleaseArtifact`、`verifyNoExampleBeesInJar` 和 `reportReleaseArtifact` 均退出 0；尚未正式发布。NOTICE 中 2 组未决分发来源继续如实保留 |
 | 发布状态 | `1.2.5` 于 2026-11-14 补齐旧机自动恢复后[重新正式发布并设为 Latest](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.5)，标签提交 `e292753b98908f0cd5a3cc732dd3d1e22ec2fd32`。[维护 Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43594894813)、[标签 Build](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43594894882) 和 [CurseForge 上传](https://github.com/Ayoshiko/productive-bees-genesis/actions/runs/43595158229) 均成功。新 JAR 5,692,806 字节，SHA-256 `8d3147150b7ccd1670665a1f21e02adc42f949519a2b213c227226a5e444f468`，与 GitHub 附件摘要和镜像日志核对一致；本机两次重新下载分别在 120 秒与 60 秒超时，未计为下载核验通过。CurseForge 新文件已通过审核（Approved），维护者于 2026-11-14 提供文件管理页截图确认；旧同名文件显示 Deleted。此前同名旧附件已撤回／归档，旧摘要 `d25d8959ea8c8e38b3ce13eb58113f158ac47934f1434f01964eddd31142178d` 已失效 |
 | CurseForge 渠道 | Release |
 | Minecraft | `1.21.1` |

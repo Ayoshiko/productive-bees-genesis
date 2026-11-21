@@ -6,7 +6,7 @@
 
 A **Productive Bees + Mekanism** addon for **Minecraft 1.21.1 / NeoForge**. Raise bees in powered apiaries, process their combs in factories, and design your own resource bees with an in-game editor.
 
-[![Version](https://img.shields.io/badge/version-1.2.5-blue?style=flat-square)](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.5)
+[![Version](https://img.shields.io/badge/version-1.2.6-blue?style=flat-square)](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.6)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 

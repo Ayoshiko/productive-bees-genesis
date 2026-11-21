@@ -6,7 +6,7 @@
 
 面向 **Minecraft 1.21.1 / NeoForge** 的 **Productive Bees（资源蜜蜂）+ Mekanism（通用机械）** 附属。用电力蜂箱养蜂、工厂离心处理蜜脾，也可以通过游戏内编辑器设计自己的资源蜜蜂。
 
-[![Version](https://img.shields.io/badge/version-1.2.5-blue?style=flat-square)](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.5)
+[![Version](https://img.shields.io/badge/version-1.2.6-blue?style=flat-square)](https://github.com/Ayoshiko/productive-bees-genesis/releases/tag/v1.2.6)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square)
 ![NeoForge](https://img.shields.io/badge/NeoForge-21.1.214+-orange?style=flat-square)
 

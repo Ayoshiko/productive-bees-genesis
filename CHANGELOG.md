@@ -31,7 +31,7 @@
 
 ## [Unreleased]
 
-## [1.2.6] - 未发布候选
+## [1.2.6] - 2026-11-21
 
 **蜜脾块升级、自动恢复与生产性能维护更新。** 客户端与服务端须一起更新。 / **Comb block upgrades, automatic recovery and production performance maintenance update.** Update clients and servers together.
 
