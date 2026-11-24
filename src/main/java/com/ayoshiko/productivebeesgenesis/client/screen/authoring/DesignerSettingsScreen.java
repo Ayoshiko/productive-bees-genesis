@@ -167,6 +167,8 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
 		preferenceToggle("settings_motion_menus", "motion_menus");
 		preferenceToggle("settings_motion_selection", "motion_selection");
         section("settings_behavior");
+        preferenceChoice("settings_inventory_visibility", "inventory_visibility", "inventory_auto", "inventory_always", "inventory_never");
+        note("", tr("settings_inventory_help"));
         settingSlider("preview_sensitivity", 0.15, 1.5);
         settingSlider("tooltip_ms", 0, 1500);
         preferenceToggle("settings_context_hints", "context_hints");
@@ -194,7 +196,7 @@ final class DesignerSettingsScreen extends DesignerFormScreen {
         section("settings_shortcuts");
 		rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("tutorial_reopen"), () ->
 				DesignerTutorialScreen.start(this))));
-        for (String key : List.of("search", "save", "undo", "redo", "theme", "layout", "settings", "pages", "selection", "drag", "number")) {
+        for (String key : List.of("search", "save", "undo", "redo", "theme", "layout", "inventory", "settings", "pages", "selection", "drag", "number")) {
             note("", tr("shortcut." + key));
         }
     }

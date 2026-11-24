@@ -37,35 +37,29 @@ final class BeeDesignerPublication {
 	private volatile boolean stopped;
 	private boolean busy = true;
 	private boolean uncertain;
+	private boolean initializing = true;
 	private String phase = "recovering";
 	private String operation = "";
 	private String message = "";
 	private BeeDesignerOperation current;
 	private int queryReads;
 
-	BeeDesignerPublication(MinecraftServer server) {
+	BeeDesignerPublication(MinecraftServer server, Runnable initialized) {
 		this.server = server;
 		this.world = server.getWorldPath(LevelResource.ROOT);
-		CompletableFuture.supplyAsync(() -> {
-			try {
-				return BeeDesignerStore.inspect(world);
-			} catch (IOException exception) {
-				throw new UncheckedIOException(exception);
-			}
-		}, io).whenComplete((journal, failure) -> onServer(() -> {
-			busy = false;
-			if (failure != null) {
-				uncertain = true;
-				phase = "uncertain";
-				message = BeeDesignerServer.safeMessage(failure);
-				ProductiveBeesGenesis.LOGGER.error("Cannot inspect bee designer publication journal", failure);
-				return;
-			}
-			phase = BeeDesignerDocument.text(journal, "phase", "uncertain");
-			operation = BeeDesignerDocument.text(journal, "token", BeeDesignerDocument.text(journal, "revision", ""));
-			message = BeeDesignerDocument.text(journal, "message", "");
-			uncertain = !List.of("idle", "committed", "rejected").contains(phase);
-		}));
+		busy = false;
+		reconcile(() -> !stopped, verified -> {
+			initializing = false;
+			ProductiveBeesGenesis.LOGGER.info("Bee designer startup verification completed in {}", phase);
+			initialized.run();
+		}, failure -> {
+			initializing = false;
+			initialized.run();
+		});
+	}
+
+	boolean initializing() {
+		return initializing;
 	}
 
 	boolean blocked() {
@@ -80,6 +74,8 @@ final class BeeDesignerPublication {
 		JsonObject data = new JsonObject();
 		data.addProperty("busy", busy);
 		data.addProperty("uncertain", uncertain);
+		data.addProperty("initializing", initializing);
+		data.addProperty("ready", !initializing && !uncertain && !stopped);
 		data.addProperty("phase", phase);
 		data.addProperty("operation", operation);
 		data.addProperty("message", message);
@@ -126,6 +122,24 @@ final class BeeDesignerPublication {
 		}));
 	}
 
+	void rejectPreparation(BeeDesignerOperation identity, String detail, Consumer<JsonObject> rejected, Consumer<String> failed) {
+		CompletableFuture.supplyAsync(() -> {
+			try {
+				return BeeDesignerStore.rejectPreparation(world, identity, detail);
+			} catch (IOException exception) {
+				throw new UncheckedIOException(exception);
+			}
+		}, io).whenComplete((record, failure) -> onServer(() -> {
+			if (failure != null) {
+				ProductiveBeesGenesis.LOGGER.error("Cannot retain cancelled bee designer preparation {} for {}",
+						identity.token(), identity.owner(), failure);
+				failed.accept(BeeDesignerServer.safeMessage(failure));
+			} else {
+				rejected.accept(record);
+			}
+		}));
+	}
+
 	void document(UUID token, UUID owner, String requestDigest, String id, int offset, BooleanSupplier authorized,
 			Consumer<JsonObject> found, Consumer<String> failed) {
 		if (stopped || queryReads >= 4) {
@@ -157,6 +171,11 @@ final class BeeDesignerPublication {
 
 	void start(JsonObject document, Map<String, String> files, boolean export, BeeDesignerOperation identity, BooleanSupplier authorized,
 			BooleanSupplier unchanged, Consumer<Path> exported, Consumer<JsonObject> applied, Consumer<String> failed) {
+		start(document, files, export, null, identity, authorized, unchanged, exported, applied, failed);
+	}
+
+	void start(JsonObject document, Map<String, String> files, boolean export, String exportName, BeeDesignerOperation identity,
+			BooleanSupplier authorized, BooleanSupplier unchanged, Consumer<Path> exported, Consumer<JsonObject> applied, Consumer<String> failed) {
 		if (blocked()) {
 			throw new IllegalStateException("designer.error.busy");
 		}
@@ -171,7 +190,7 @@ final class BeeDesignerPublication {
 		JsonObject snapshot = JsonParser.parseString(projects.get(document.get("id").getAsString())).getAsJsonObject();
 		CompletableFuture.supplyAsync(() -> {
 			try {
-				return BeeDesignerStore.write(world, closedFiles, export, identity);
+				return BeeDesignerStore.write(world, closedFiles, export, identity, exportName);
 			} catch (IOException exception) {
 				throw new UncheckedIOException(exception);
 			}
@@ -235,9 +254,7 @@ final class BeeDesignerPublication {
 						return;
 					}
 					try {
-						if (!authorized.getAsBoolean()) {
-							throw new IllegalStateException("designer.error.conflict_or_permission");
-						}
+						// 已授权重载的终态由真实资源决定，关闭界面不能撤销已发生的安装。
 						verifyAll(projects, revision.packId());
 					} catch (RuntimeException exception) {
 						reject(revision, true, exception, failed);
@@ -282,6 +299,8 @@ final class BeeDesignerPublication {
 				return;
 			}
 			try {
+				JsonObject journal = JsonParser.parseString(audit.journal()).getAsJsonObject();
+				operation = BeeDesignerDocument.text(journal, "token", BeeDesignerDocument.text(journal, "revision", ""));
 				if (!authorized.getAsBoolean() || generation != BeeDesignerSources.generation
 						|| !selected.equals(List.copyOf(server.getPackRepository().getSelectedIds()))) {
 					throw new IllegalStateException("designer.error.conflict_or_permission");
@@ -303,9 +322,14 @@ final class BeeDesignerPublication {
 					finishFailure(writeFailure, true, failed);
 					return;
 				}
+				String verifiedPhase = BeeDesignerDocument.text(journal, "phase", "unknown");
+				if (!List.of("idle", "committed", "rejected").contains(verifiedPhase)) {
+					finishFailure(new IllegalStateException("Publication journal remains unresolved after resource verification: " + verifiedPhase), true, failed);
+					return;
+				}
 				busy = false;
 				uncertain = false;
-				phase = BeeDesignerDocument.text(journal, "phase", "unknown");
+				phase = verifiedPhase;
 				operation = BeeDesignerDocument.text(journal, "token", BeeDesignerDocument.text(journal, "revision", ""));
 				current = null;
 				message = "designer.status.reconciled";

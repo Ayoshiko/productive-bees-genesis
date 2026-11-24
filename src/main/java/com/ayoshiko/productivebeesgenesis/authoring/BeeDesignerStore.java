@@ -73,13 +73,34 @@ final class BeeDesignerStore {
 	}
 
 	static Revision write(Path world, Map<String, String> files, boolean export, BeeDesignerOperation operation) throws IOException {
+		return write(world, files, export, operation, null);
+	}
+
+	static Revision writeRelease(Path directory, Map<String, String> files) throws IOException {
+		return writeExport(directory, files, BeeDesignerExportName.fromFiles(files, "runtime_datapack"));
+	}
+
+	static Revision writeExport(Path directory, Map<String, String> files, String name) throws IOException {
+		return write(directory, files, true, null, BeeDesignerExportName.validate(name));
+	}
+
+	static Revision write(Path world, Map<String, String> files, boolean export, BeeDesignerOperation operation, String exportName) throws IOException {
 		validateFiles(files);
 		world = world.toAbsolutePath().normalize();
-		String revision = PREFIX + (operation == null ? UUID.randomUUID() : operation.token());
+		String revision;
+		if (export) {
+			revision = exportName == null ? BeeDesignerExportName.fromFiles(files, "datapack") : exportName;
+		} else {
+			revision = PREFIX + (operation == null ? UUID.randomUUID() : operation.token());
+		}
 		Path directory = root(world).resolve(export ? "exports" : "revisions");
 		checkParents(world, directory);
 		Files.createDirectories(directory);
 		Path zip = directory.resolve(revision + ".zip");
+		if (export && (Files.exists(zip, LinkOption.NOFOLLOW_LINKS)
+				|| Files.exists(directory.resolve(revision + "-names.zip"), LinkOption.NOFOLLOW_LINKS))) {
+			throw new IOException("designer.error.export_exists");
+		}
 		if (operation != null) {
 			if (export || Files.exists(operationPath(world, operation.token()), LinkOption.NOFOLLOW_LINKS)
 					|| Files.exists(zip, LinkOption.NOFOLLOW_LINKS)) {
@@ -193,6 +214,29 @@ final class BeeDesignerStore {
 		if (!requestDigest.isEmpty() && !requestDigest.equals(BeeDesignerDocument.text(data, "request_digest", ""))) {
 			throw new IllegalArgumentException("designer.error.collection_changed");
 		}
+		return data;
+	}
+
+	static JsonObject rejectPreparation(Path world, BeeDesignerOperation identity, String message) throws IOException {
+		JsonObject retained = operation(world, identity.token(), identity.owner(), identity.requestDigest());
+		if (retained != null) {
+			return retained;
+		}
+		Path path = operationPath(world, identity.token());
+		String revision = PREFIX + identity.token() + ".zip";
+		Path source = path.resolveSibling(revision);
+		checkParents(world, source);
+		if (Files.exists(source, LinkOption.NOFOLLOW_LINKS)) {
+			throw new IOException("Cancelled preparation already has a retained revision");
+		}
+		Files.createDirectories(path.getParent());
+		JsonObject data = identity.json();
+		data.addProperty("revision", revision);
+		data.addProperty("sha256", "");
+		data.addProperty("phase", "rejected");
+		data.addProperty("message", message);
+		// 准备尚未写出修订，只保管查询旁车，不替换已安装内容的全局日志。
+		writeRecord(world, path, data);
 		return data;
 	}
 

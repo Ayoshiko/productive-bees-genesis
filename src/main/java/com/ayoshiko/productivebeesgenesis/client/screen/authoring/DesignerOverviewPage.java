@@ -26,6 +26,9 @@ final class DesignerOverviewPage {
 			screen.note("", DesignerFormScreen.tr("native_bee_help"));
 		} else {
 			heading(screen, "appearance", () -> locate.accept("definition/renderer"));
+			if (screen instanceof BeeDesignerScreen editor) {
+				editor.identityField();
+			}
 			screen.scope("names");
 			JsonObject names = BeeDesignerDocument.object(document, "names");
 			screen.field("name_zh", names, "zh_cn", "");

@@ -5,6 +5,7 @@ import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCollection;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCredits;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDrafts;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerExportName;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerProtocol;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineSources;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineRecipes;
@@ -164,15 +165,27 @@ final class DesignerProjectFiles {
 
 	static void exportCollection(Map<String, String> documents, JsonObject credits, String format,
 			Consumer<Path> exported, Consumer<String> failed) {
+		prepareExport(documents, credits, format, preview -> writeExport(preview,
+				BeeDesignerExportName.suggest(documents.keySet(), format), exported, failed), failed);
+	}
+
+	record PreparedExport(String format, Map<String, String> files, long bytes) {
+		PreparedExport(String format, Map<String, String> files) {
+			this(format, Map.copyOf(files), files.values().stream()
+					.mapToLong(value -> value.getBytes(StandardCharsets.UTF_8).length).sum());
+		}
+	}
+
+	static void prepareExport(Map<String, String> documents, JsonObject credits, String format,
+			Consumer<PreparedExport> prepared, Consumer<String> failed) {
 		Map<String, String> snapshot = Map.copyOf(documents);
 		JsonObject source = credits.deepCopy();
+		submit(() -> new PreparedExport(format, BeeDesignerArchive.exportFiles(snapshot, source, format)), prepared, failed);
+	}
+
+	static void writeExport(PreparedExport preview, String name, Consumer<Path> exported, Consumer<String> failed) {
 		Path directory = workspace();
-		submit(() -> switch (format) {
-			case "portable" -> BeeDesignerCollection.export(directory, snapshot, source);
-			case "datapack" -> BeeDesignerArchive.export(directory, snapshot, source);
-			case "kubejs" -> BeeDesignerArchive.exportKubeJs(directory, snapshot, source);
-			default -> throw new IllegalArgumentException("designer.error.collection_format");
-		}, path -> {
+		submit(() -> BeeDesignerArchive.writeExport(directory, preview.files(), preview.format(), name), path -> {
 			lastExport = path;
 			exported.accept(path);
 		}, failed);
@@ -370,6 +383,17 @@ final class DesignerProjectFiles {
 			BeeDesignerDrafts.discard(directory, id, modified);
 			return true;
 		}, unused -> discarded.run(), failed);
+	}
+
+	static void archiveRenamedDraft(String id, String expected, Runnable archived, Consumer<String> failed) {
+		Path directory = Minecraft.getInstance().gameDirectory.toPath().resolve("bee-designer");
+		submit(() -> {
+			JsonObject previous = BeeDesignerDrafts.read(directory, id);
+			if (!BeeDesignerDocument.fingerprint(previous).equals(BeeDesignerDocument.fingerprint(BeeDesignerProtocol.parse(expected)))) {
+				throw new IOException("designer.error.recycle_changed");
+			}
+			return BeeDesignerDrafts.archive(directory, id);
+		}, unused -> archived.run(), failed);
 	}
 
 	private static <T> void submit(FileAction<T> action, Consumer<T> completed, Consumer<String> failed) {

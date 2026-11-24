@@ -233,6 +233,7 @@ public final class BeeDesignerCompiler {
 			throw new IllegalArgumentException("Missing definition, recipes or names object");
 		}
 		validateNames(document.getAsJsonObject("names"));
+		BeeDesignerIdentity.validateAliases(document);
 		BeeDesignerCredits.validateDocument(document);
 		BeeDesignerLifecycle.validate(document);
 		if (document.has("disabled_recipes")) {
@@ -406,6 +407,7 @@ public final class BeeDesignerCompiler {
 		for (var entry : documents.entrySet()) {
 			JsonObject document = com.google.gson.JsonParser.parseString(entry.getValue()).getAsJsonObject();
 			document.remove("_editor_recovery");
+			document.remove(BeeDesignerIdentity.MIGRATION);
 			validateStructure(document);
 			if (BeeDesignerMyriad.recipesOnly(document)) {
 				BeeDesignerMyriad.validateRecipes(document, document);
@@ -424,6 +426,15 @@ public final class BeeDesignerCompiler {
 			if (!BeeDesignerMyriad.recipesOnly(document) && !BeeDesignerNativeBees.recipesOnly(document)) {
 				putFile(files, "data/" + definition.getNamespace() + "/productivebees/" + definition.getPath() + ".json",
 						document.get("definition").toString());
+				if (document.has(BeeDesignerIdentity.ALIASES)) {
+					for (String alias : document.getAsJsonObject(BeeDesignerIdentity.ALIASES).keySet()) {
+						ResourceLocation oldPath = ResourceLocation.parse(alias);
+						JsonObject compatible = document.getAsJsonObject("definition").deepCopy();
+						compatible.addProperty(BeeDesignerIdentity.TARGET, bee.toString());
+						putFile(files, "data/" + oldPath.getNamespace() + "/productivebees/" + oldPath.getPath() + ".json",
+								compatible.toString());
+					}
+				}
 			}
 			for (var recipe : document.getAsJsonObject("recipes").entrySet()) {
 				ResourceLocation id = ResourceLocation.parse(recipe.getKey());
@@ -439,7 +450,7 @@ public final class BeeDesignerCompiler {
                 }
                 JsonObject active = BeeDesignerLifecycle.activeRecipe(document, source, retired);
                 if (active != null) {
-                    active = active.deepCopy();
+                    active = BeeDesignerCraftingExport.compact(active);
                     active.addProperty("productivebeesgenesis:designer_recipe", true);
                 }
 				putFile(files, "data/" + id.getNamespace() + "/recipe/" + id.getPath() + ".json", active == null

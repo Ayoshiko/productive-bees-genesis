@@ -10,11 +10,21 @@ import com.mojang.serialization.JsonOps;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.RandomSource;
+import net.minecraft.util.profiling.InactiveProfiler;
+import net.minecraft.world.scores.Scoreboard;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.flag.FeatureFlags;
+import net.minecraft.world.level.Level;
+import cy.jdkdigital.productivebees.common.entity.bee.ConfigurableBee;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -47,6 +57,162 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("minecraft")
 class BeeDesignerMinecraftTest {
+	@Test
+	void identityRenameKeepsStableRecipesComponentsAndOriginalCompatibilityPath() {
+		JsonObject original = BeeDesignerDocument.create("test:old_bee");
+		String recipe = BeeDesignerDocument.addRecipe(original, "minecraft:crafting_shaped");
+		JsonArray custom = new JsonArray();
+		custom.add("test:old_bee");
+		original.add("custom_extension", custom);
+		original.addProperty("baseline", BeeDesignerDocument.fingerprint(original));
+		String before = original.toString();
+		JsonObject renamed = BeeDesignerIdentity.rename(original, "test:new_bee");
+		assertEquals(original.get("baseline"), renamed.get("baseline"));
+		assertEquals(custom, renamed.get("custom_extension"));
+		assertEquals(original.getAsJsonObject("recipes").keySet(), renamed.getAsJsonObject("recipes").keySet());
+		assertEquals("test:new_bee", BeeDesignerEggs.bee(renamed.getAsJsonObject("recipes").getAsJsonObject(recipe).getAsJsonObject("result")).toString());
+		JsonObject second = BeeDesignerIdentity.rename(renamed, "test:final_bee");
+		assertEquals(1, second.getAsJsonObject(BeeDesignerIdentity.ALIASES).size());
+		assertEquals("test:old_bee", second.getAsJsonObject(BeeDesignerIdentity.ALIASES).get("test:old_bee").getAsString());
+		Map<String, String> files = BeeDesignerCompiler.files(Map.of("test:final_bee", second.toString()));
+		assertEquals("test:final_bee", JsonParser.parseString(files.get("data/test/productivebees/old_bee.json"))
+				.getAsJsonObject().get(BeeDesignerIdentity.TARGET).getAsString());
+		assertFalse(JsonParser.parseString(files.get("data/productivebeesgenesis/bee_designer/index.json"))
+				.getAsJsonObject().getAsJsonObject("test:final_bee").has(BeeDesignerIdentity.MIGRATION));
+		assertEquals(before, original.toString());
+		assertFalse(BeeDesignerDocument.copyAs(second, "test:copy_bee").has(BeeDesignerIdentity.ALIASES));
+	}
+
+	@Test
+	void invalidIdentityOnlyIsolatesItsOwnBeeAndRetainsOriginalData() {
+		var previous = BeeReloadListener.INSTANCE.getData();
+		ResourceLocation healthy = ResourceLocation.parse("test:healthy");
+		ResourceLocation legacy = ResourceLocation.parse("test:legacy");
+		ResourceLocation missing = ResourceLocation.parse("test:missing");
+		ResourceLocation cycle = ResourceLocation.parse("test:cycle");
+		CompoundTag alias = new CompoundTag();
+		alias.putString(BeeDesignerIdentity.TARGET, healthy.toString());
+		CompoundTag broken = new CompoundTag();
+		broken.putString(BeeDesignerIdentity.TARGET, "test:unavailable");
+		CompoundTag cyclic = new CompoundTag();
+		cyclic.putString(BeeDesignerIdentity.TARGET, cycle.toString());
+		CompoundTag bee = new CompoundTag();
+		bee.putString("id", "productivebees:configurable_bee");
+		bee.putString("type", missing.toString());
+		CustomData original = CustomData.of(bee);
+		try {
+			BeeReloadListener.INSTANCE.setData(Map.of(healthy, new CompoundTag(), legacy, alias,
+					missing, broken, cycle, cyclic));
+			assertEquals(healthy, BeeDesignerIdentity.resolve(legacy));
+			assertEquals(healthy, BeeDesignerIdentity.resolve(healthy));
+			assertThrows(IllegalStateException.class, () -> BeeDesignerIdentity.resolve(missing));
+			assertThrows(IllegalStateException.class, () -> BeeDesignerIdentity.resolve(cycle));
+			assertTrue(BeeDesignerIdentity.isAlias(missing));
+			BeeReloadListener.INSTANCE.setData(Map.of(missing, broken));
+			assertTrue(BeeDesignerIdentity.hasMigrations());
+			assertSame(original, BeeDesignerIdentity.migrateCustomData(original));
+			assertEquals(bee, original.copyTag());
+			ItemStack stored = new ItemStack(Items.DIAMOND, 2);
+			stored.set(PbDataComponents.beeType(), missing);
+			stored.set(DataComponents.ENTITY_DATA, original);
+			CompoundTag encoded = (CompoundTag) stored.save(REGISTRIES);
+			ItemStack restored = ItemStack.parse(REGISTRIES, encoded).orElseThrow();
+			assertEquals(2, restored.getCount());
+			assertEquals(missing, restored.get(PbDataComponents.beeType()));
+			assertEquals(bee, restored.get(DataComponents.ENTITY_DATA).copyTag());
+			assertEquals(encoded, restored.save(REGISTRIES));
+			assertThrows(IllegalStateException.class, () -> BeeDesignerIdentity.resolve(restored.get(PbDataComponents.beeType())));
+		} finally {
+			BeeReloadListener.INSTANCE.setData(previous);
+		}
+	}
+
+	@Test
+	void invalidIdentityEntityKeepsMetadataAndSavedBeeWhileOnlyItsTickIsHeld() throws ReflectiveOperationException {
+		var previous = BeeReloadListener.INSTANCE.getData();
+		var old = ResourceLocation.parse("test:held_entity_old");
+		var next = ResourceLocation.parse("test:held_entity_new");
+		var healthy = ResourceLocation.parse("test:healthy_entity");
+		var definition = BeeDesignerDocument.create(old.toString()).getAsJsonObject("definition");
+		var retained = BeeCreator.create(old, definition);
+		retained.putString(BeeDesignerIdentity.TARGET, next.toString());
+		var healthyDefinition = BeeCreator.create(healthy, definition);
+		var level = mock(Level.class);
+		var random = RandomSource.create(20261124L);
+		var randomField = Level.class.getField("random");
+		randomField.setAccessible(true);
+		randomField.set(level, random);
+		when(level.getRandom()).thenReturn(random);
+		when(level.getProfilerSupplier()).thenReturn(() -> InactiveProfiler.INSTANCE);
+		when(level.getProfiler()).thenReturn(InactiveProfiler.INSTANCE);
+		when(level.getScoreboard()).thenReturn(new Scoreboard());
+		when(level.dimension()).thenReturn(Level.OVERWORLD);
+		when(level.registryAccess()).thenReturn(REGISTRIES);
+		when(level.enabledFeatures()).thenReturn(FeatureFlags.DEFAULT_FLAGS);
+		assertSame(random, level.random);
+		assertFalse(level.isClientSide);
+		EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse("productivebees:configurable_bee"));
+		try {
+			BeeReloadListener.INSTANCE.setData(Map.of(old, retained, healthy, healthyDefinition));
+			var bee = (ConfigurableBee) entityType.create(level);
+			bee.setBeeType(old.toString());
+			bee.setAge(-300);
+			bee.internalSetHasNectar(true);
+			bee.setHasConverted(true);
+			bee.breathCollectionCooldown = 37;
+			bee.setCustomName(Component.literal("保管中的原蜜蜂"));
+			var identity = bee.getUUID();
+			assertEquals(retained, bee.getNBTData());
+			assertEquals("held_entity_old", bee.getBeeName());
+			assertTrue(bee.getDimensions(Pose.STANDING).width() > 0);
+			assertThrows(IllegalStateException.class, bee::getBeeType);
+			var saved = new CompoundTag();
+			bee.saveWithoutId(saved);
+			assertEquals(old.toString(), saved.getString("type"));
+			var restored = (ConfigurableBee) entityType.create(level);
+			restored.load(saved.copy());
+			assertEquals(identity, restored.getUUID());
+			assertEquals(-300, restored.getAge());
+			assertTrue(restored.hasNectar());
+			assertTrue(restored.hasConverted());
+			assertEquals(37, restored.breathCollectionCooldown);
+			assertEquals("保管中的原蜜蜂", restored.getCustomName().getString());
+			assertEquals(retained, restored.getNBTData());
+			assertThrows(IllegalStateException.class, restored::getBeeType);
+			int ticks = restored.tickCount;
+			restored.tick();
+			assertEquals(ticks, restored.tickCount);
+			var held = new CompoundTag();
+			restored.saveWithoutId(held);
+			assertEquals(old.toString(), held.getString("type"));
+			assertEquals(saved.get("Age"), held.get("Age"));
+			assertEquals(saved.get("HasNectar"), held.get("HasNectar"));
+			assertEquals(saved.get("HasConverted"), held.get("HasConverted"));
+			var normal = (ConfigurableBee) entityType.create(level);
+			normal.setBeeType(healthy.toString());
+			assertEquals(healthy, normal.getBeeType());
+			assertEquals(healthyDefinition, normal.getNBTData());
+			var normalSaved = new CompoundTag();
+			normal.saveWithoutId(normalSaved);
+			assertEquals(healthy.toString(), normalSaved.getString("type"));
+			var available = BeeCreator.create(next, definition);
+			BeeReloadListener.INSTANCE.setData(Map.of(old, retained, next, available, healthy, healthyDefinition));
+			assertEquals(next, restored.getBeeType());
+			assertEquals(available, restored.getNBTData());
+			var migrated = new CompoundTag();
+			restored.saveWithoutId(migrated);
+			assertEquals(next.toString(), migrated.getString("type"));
+			assertEquals(identity, restored.getUUID());
+			assertEquals(-300, restored.getAge());
+			assertTrue(restored.hasNectar());
+			assertTrue(restored.hasConverted());
+			assertEquals(37, restored.breathCollectionCooldown);
+		} finally {
+			BeeReloadListener.INSTANCE.setData(previous);
+			BeeDesignerIdentity.generation();
+		}
+	}
+
 	@Test
 	void exportedNameMatchesPbForIdsContainingBeeSuffixAndRejectsCollisions() {
 		JsonObject document = BeeDesignerDocument.create("test:test_bee");

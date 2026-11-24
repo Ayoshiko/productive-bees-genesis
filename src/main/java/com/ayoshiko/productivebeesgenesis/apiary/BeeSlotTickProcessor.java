@@ -750,10 +750,10 @@ class BeeSlotTickProcessor {
 	 */
 	private ResourceLocation resolveBeeTypeKeyForSlot(BeeSlot slot, int index) {
 		CompoundTag beeData = slot.getBeeData();
-		if (beeData == lastCheckedBeeData[index] && cachedBeeTypeKeys[index] != null) {
-			return cachedBeeTypeKeys[index];
+		ResourceLocation key = slot.getBeeTypeKey();
+		if (beeData == lastCheckedBeeData[index] && key != null && key.equals(cachedBeeTypeKeys[index])) {
+			return key;
 		}
-		ResourceLocation key = BeeNbtHelper.resolveBeeTypeKey(beeData);
 		lastCheckedBeeData[index] = beeData;
 		cachedBeeTypeKeys[index] = key;
 		cachedBeeWorkTraits[index] = null;

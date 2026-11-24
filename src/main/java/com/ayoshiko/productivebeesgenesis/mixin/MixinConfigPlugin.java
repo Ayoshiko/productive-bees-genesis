@@ -173,9 +173,13 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 			"RenderBlockBeLoadFixMixin"
 	);
 
-	/** JEI 拖拽及 PB 配方布局修正，仅在 JEI 存在时加载。 */
+	/** JEI 拖拽、名称索引及 PB 配方布局修正，仅在 JEI 存在时加载。 */
 	private static final Set<String> JEI_MIXINS = Set.of(
 			"JeiGhostIngredientDragMixin",
+			"JeiLanguageIndexMixin",
+			"JeiBeeSearchNamesMixin",
+			"JeiDesignerAliasMixin",
+			"PbBeeIngredientNameMixin",
 			"PbContainerFlowerJeiMixin",
 			"PbCentrifugeJeiLayoutMixin",
 			"PbMyriadBeehiveJeiMixin"

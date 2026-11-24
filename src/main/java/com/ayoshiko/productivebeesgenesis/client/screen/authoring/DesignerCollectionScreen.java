@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCredits;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerExportName;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCollection;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerEggs;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerNativeBees;
@@ -41,6 +42,11 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 
 	DesignerCollectionScreen(DesignerFormScreen parent, List<String> ids, JsonObject editing) {
 		this(parent, ids, editing, false);
+	}
+
+	DesignerCollectionScreen(DesignerFormScreen parent, List<String> ids, JsonObject editing, String format) {
+		this(parent, ids, editing, false);
+		this.format = format;
 	}
 
 	DesignerCollectionScreen(DesignerFormScreen parent, List<String> ids, JsonObject editing, boolean localDrafts) {
@@ -99,7 +105,10 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 		}
 		note("", Component.translatable("designer.collection_progress", documents.size(), selected.size(), failures.size()));
 		rows.add(new Row("collection_format", (x, y, w) -> selection(x, y, w, format,
-				new String[]{"portable", "datapack", "kubejs"}, value -> format = value)));
+				new String[]{"portable", "datapack", "kubejs", "runtime_datapack", "runtime_kubejs"}, value -> {
+			format = value;
+			rebuild();
+		})));
 		note("", tr("collection_format_help." + format));
 		section("collection_source");
 		if (detectingCredits) {
@@ -129,6 +138,8 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 							rebuildIfVisible();
 						}, message -> status = message)))).active = !writing));
 		note("", tr("collection_license_help"));
+		rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("recipe_batch"), () ->
+				minecraft.setScreen(new DesignerRecipeBatchScreen(this, documents))).active = ready() && !writing));
 		section("collection_selected");
 		for (String id : selected) {
 			JsonObject document = documents.containsKey(id)
@@ -284,20 +295,25 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 			}
 			writing = true;
 			status = "designer.status.exporting";
-			DesignerProjectFiles.exportCollection(named, credits, format, path -> {
+			DesignerProjectFiles.prepareExport(named, credits, format, preview -> {
 				writing = false;
-				exported = path;
-				status = Component.translatable("designer.status.exported", path.toString()).getString();
-				rebuildIfVisible();
-				if (generation >= 0 && !localDrafts && minecraft.getSingleplayerServer() != null) {
-					List<String> registered = BeeDesignerEggs.bees();
-					if (named.keySet().equals(java.util.Set.copyOf(registered)) && editingSnapshots.isEmpty()
-							&& selected.stream().noneMatch(DesignerDraftIndex::pending)) {
-						DesignerProjectFiles.saveRegisteredCatalog(named, registered, generation, () -> {}, message -> {
-							status = message;
-							rebuildIfVisible();
-						});
-					}
+				if (!closed && minecraft.screen == this) {
+					String name = BeeDesignerExportName.suggest(named.keySet(), preview.format());
+					minecraft.setScreen(new DesignerExportPreviewScreen(this, preview, name, path -> {
+						exported = path;
+						status = Component.translatable("designer.status.exported", path.toString()).getString();
+						rebuildIfVisible();
+						if (generation >= 0 && !localDrafts && minecraft.getSingleplayerServer() != null) {
+							List<String> registered = BeeDesignerEggs.bees();
+							if (named.keySet().equals(java.util.Set.copyOf(registered)) && editingSnapshots.isEmpty()
+									&& selected.stream().noneMatch(DesignerDraftIndex::pending)) {
+								DesignerProjectFiles.saveRegisteredCatalog(named, registered, generation, () -> {}, message -> {
+									status = message;
+									rebuildIfVisible();
+								});
+							}
+						}
+					}));
 				}
 			}, message -> {
 				writing = false;

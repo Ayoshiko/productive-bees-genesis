@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerIdentity;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerNativeBees;
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMachineRecipes;
@@ -9,11 +10,14 @@ import com.ayoshiko.productivebeesgenesis.util.PBConstants;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.client.gui.screens.Screen;
+
+import java.util.List;
 
 
 /** 手持编辑会话的页面协调；配方、资源选择和预览分别拥有各自状态。 */
@@ -26,6 +30,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	private final DesignerMyriadPage myriadPage = new DesignerMyriadPage();
 	private final DesignerLibraryPage library = new DesignerLibraryPage();
 	private final DesignerReviewPage review = new DesignerReviewPage();
+	private final DesignerIdentityField identityField = new DesignerIdentityField();
 	private JsonObject document;
 	private JsonObject myriad;
 	private JsonObject diagnostics;
@@ -34,6 +39,9 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	private JsonObject observed;
 	private String observedFingerprint = "";
 	private String applied = "";
+	private JsonObject appliedDocument;
+	private JsonObject changesSnapshot;
+	private List<DesignerDraftHistory.Change> changedFields = List.of();
 	private int tab;
 	private long changedAt;
 	private long detailRequest = -1;
@@ -62,6 +70,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	private boolean restoreAfterLoad;
 	private boolean deletionConfirmed;
 	private JsonObject importAfterLoad;
+	private boolean localDraftAfterLoad;
 	private JsonArray recoveryAfterLoad;
 	private String activeRecovery;
 	private String submitted = "";
@@ -74,6 +83,53 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	public BeeDesignerScreen(boolean canPublish) {
 		super(tr("title"));
 		this.canPublish = canPublish;
+	}
+
+	void initialPublication(JsonObject data) {
+		updatePublication(0, data);
+	}
+
+	private void updatePublication(long sequence, JsonObject data) {
+		if (data.has("detail_pending") && (sequence != detailRequest
+				|| !detailTarget.equals(data.get("detail_pending").getAsString()))) {
+			return;
+		}
+		publication = data;
+		boolean reading = data.has("detail_loading") && data.get("detail_loading").getAsBoolean();
+		publishing = myriadSaveRequest >= 0 || data.get("busy").getAsBoolean() && !data.has("detail_pending") && !reading;
+		if (data.has("initializing") && data.get("initializing").getAsBoolean()) {
+			status = "designer.status.initializing";
+		} else if (data.has("detail_pending")) {
+			status = "designer.status.reading_pending";
+		} else if (data.get("uncertain").getAsBoolean()) {
+			status = BeeDesignerDocument.text(data, "message", "designer.batch_import_unknown");
+		} else if (status.equals("designer.status.initializing") || status.equals("designer.status.reading_pending")) {
+			status = detailRequest >= 0 ? "designer.status.loading" : "";
+		}
+	}
+
+	private void finishDetailRequest() {
+		detailRequest = -1;
+		detailIdentity = null;
+		detailTarget = "";
+		if (publication != null) {
+			publication.remove("detail_pending");
+			if (publication.has("detail_loading") && publication.get("detail_loading").getAsBoolean()) {
+				publication.addProperty("detail_loading", false);
+				publication.addProperty("busy", false);
+			}
+		}
+		if (submittedRequest < 0 && myriadSaveRequest < 0) {
+			publishing = false;
+		}
+		if (status.equals("designer.status.loading") || status.equals("designer.status.reading_pending")) {
+			status = "";
+		}
+	}
+
+	@Override
+	protected boolean showsInventory() {
+		return tab == 3 || tab == 4;
 	}
 
 	@Override
@@ -124,12 +180,13 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 			note("", tr("recovery_pending_help"));
 			rows.add(new Row("", (x, y, w) -> {
 				int actionWidth = (w - 4) / 2;
-				button(x, y, actionWidth, tr("recovered_json"), this::restoreRecovery);
+				button(x, y, actionWidth, tr("recovered_json"), () -> restoreRecovery(false));
 				button(x + actionWidth + 4, y, actionWidth, tr("discard_recovery"), () ->
 						minecraft.setScreen(new DesignerConfirmationScreen(confirmed -> resumeEditing(() -> {
 							if (confirmed) {
 								document.remove("_editor_recovery");
 								activeRecovery = null;
+									identityField.clear();
 								saveDraft();
 								rebuild();
 							}
@@ -452,6 +509,11 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	}
 
 	private void confirmApply() {
+		if (!pendingDraftState().isEmpty()) {
+			navigateLocation("id", true);
+			status = "designer.identity_input_pending";
+			return;
+		}
 		if (BeeDesignerLifecycle.deleted(document)) {
 			if (BeeDesignerLifecycle.purged(document) && !deletionConfirmed && dirty()) {
 				minecraft.setScreen(new DesignerDeleteScreen(this, this, document.get("id").getAsString(), true));
@@ -471,7 +533,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		}
 		if (document.has("_editor_recovery")) {
 			status = "designer.resolve_recovery_before_apply";
-			restoreRecovery();
+			restoreRecovery(false);
 			return;
 		}
 		minecraft.setScreen(new DesignerConfirmationScreen(confirmed -> {
@@ -515,6 +577,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		copyAfterLoad = false;
 		restoreAfterLoad = false;
 		importAfterLoad = null;
+		localDraftAfterLoad = false;
 		recoveryAfterLoad = null;
 		draftSaveSequence++;
 		draftSaving = false;
@@ -530,7 +593,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 			if (copy) {
 				minecraft.setScreen(new NewBeeScreen(this, loaded));
 			} else {
-				importDocument(loaded);
+				importDocument(loaded, true);
 			}
 		}, message -> {
 			if (currentEdit(identity)) {
@@ -546,9 +609,15 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		}
 		// 对比提交快照，只原位合入未被后续编辑改变的规范化字段。
 		mergeNormalized(document, submittedSnapshot, data);
+		if (!data.has(BeeDesignerIdentity.MIGRATION) && document.has(BeeDesignerIdentity.MIGRATION)
+				&& document.get(BeeDesignerIdentity.MIGRATION).equals(submittedSnapshot.get(BeeDesignerIdentity.MIGRATION))) {
+			document.remove(BeeDesignerIdentity.MIGRATION);
+		}
 		document.add("baseline", data.get("baseline").deepCopy());
 		document.add("definition_path", data.get("definition_path").deepCopy());
 		applied = BeeDesignerDocument.fingerprint(data);
+		appliedDocument = data.deepCopy();
+		changesSnapshot = null;
 		history.capture(document);
 		return true;
 	}
@@ -604,6 +673,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	public void setDocument(JsonObject document) {
 		advanceEditGeneration();
 		this.document = document;
+		identityField.clear();
 		deletionConfirmed = false;
 		activeRecovery = null;
 		history.reset(document);
@@ -615,6 +685,8 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		savedPending = "";
 		String baseline = BeeDesignerDocument.text(document, "baseline", "new");
 		applied = baseline.equals("new") ? "" : baseline;
+		appliedDocument = observedFingerprint.equals(applied) ? document.deepCopy() : null;
+		changesSnapshot = null;
 		diagnostics = null;
 		tab = com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMyriad.recipesOnly(document)
 				|| BeeDesignerNativeBees.recipesOnly(document) ? 3 : 1;
@@ -623,15 +695,71 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		minecraft.setScreen(this);
 	}
 
+	void renameIdentity(String id) {
+		renameIdentityInline(id);
+		identityField.clear();
+		saveDraft();
+	}
+
+	void identityField() {
+		identityField.add(this);
+	}
+
+	void renameIdentityInline(String id) {
+		JsonObject previous = document.deepCopy();
+		JsonObject renamed = BeeDesignerIdentity.rename(document, id);
+		if (renamed.has(BeeDesignerIdentity.MIGRATION)
+				&& renamed.getAsJsonObject(BeeDesignerIdentity.MIGRATION).get("from").getAsString().equals(id)) {
+			JsonObject migration = renamed.remove(BeeDesignerIdentity.MIGRATION).getAsJsonObject();
+			JsonObject aliases = renamed.getAsJsonObject(BeeDesignerIdentity.ALIASES);
+			aliases.remove(migration.get("definition_path").getAsString());
+			if (aliases.isEmpty()) {
+				renamed.remove(BeeDesignerIdentity.ALIASES);
+			}
+			renamed.add("definition_path", migration.get("definition_path").deepCopy());
+		}
+		advanceEditGeneration();
+		mergeNormalized(document, previous, renamed);
+		if (!renamed.has(BeeDesignerIdentity.MIGRATION)) {
+			document.remove(BeeDesignerIdentity.MIGRATION);
+			if (!renamed.has(BeeDesignerIdentity.ALIASES)) {
+				document.remove(BeeDesignerIdentity.ALIASES);
+			}
+		}
+		diagnostics = null;
+		changesSnapshot = null;
+		status = "designer.status.draft";
+	}
+
+	void identityInputAccepted() {
+		resolveRecovery("id-input");
+		if (status.equals("designer.error.id") || status.equals("designer.error.name_collision")
+				|| status.equals("designer.identity_input_pending")) {
+			status = "designer.status.draft";
+		}
+	}
+
+	@Override
+	protected String pendingDraftState() {
+		return document == null ? "" : identityField.pending(document);
+	}
+
+	@Override
+	protected void snapshotDraft(DesignerDraftSnapshot snapshot) {
+		identityField.snapshot(snapshot, document);
+	}
+
 	public void loadBee(String id) {
 		boolean copy = copyAfterLoad;
 		boolean restore = restoreAfterLoad;
 		JsonObject imported = importAfterLoad;
+		boolean localDraft = localDraftAfterLoad;
 		JsonArray recovery = recoveryAfterLoad;
 		advanceEditGeneration();
 		copyAfterLoad = copy;
 		restoreAfterLoad = restore;
 		importAfterLoad = imported;
+		localDraftAfterLoad = localDraft;
 		recoveryAfterLoad = recovery;
 		if (id.equals(PBConstants.MYRIADCREATIONS_TYPE_STRING) && !copyAfterLoad && !restoreAfterLoad && importAfterLoad == null) {
 			BeeDesignerClient.cancelRequest(detailRequest);
@@ -688,10 +816,16 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				}
 			}
 			case "detail" -> {
-				if (sequence != detailRequest || detailIdentity == null || !currentEdit(detailIdentity)
-						|| !detailTarget.equals(BeeDesignerDocument.text(data, "id", ""))) {
+				if (sequence != detailRequest) {
 					return;
 				}
+				if (detailIdentity == null || !currentEdit(detailIdentity)
+						|| !detailTarget.equals(BeeDesignerDocument.text(data, "id", ""))) {
+					finishDetailRequest();
+					refreshFromServer();
+					return;
+				}
+				finishDetailRequest();
 				if (copyAfterLoad) {
 					copyAfterLoad = false;
 					minecraft.setScreen(new NewBeeScreen(this, data));
@@ -701,16 +835,26 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 					restoreAfterLoad = false;
 					setDocument(BeeDesignerLifecycle.restore(data));
 					applied = BeeDesignerDocument.fingerprint(data);
+					appliedDocument = data.deepCopy();
+					changesSnapshot = null;
 					status = "designer.status.restore_pending";
 					saveDraft();
 					return;
 				}
 				if (importAfterLoad != null) {
 					JsonObject imported = importAfterLoad;
+					boolean localDraft = localDraftAfterLoad;
 					JsonArray recovery = recoveryAfterLoad;
+					// 原内容与原应用基准一致才可跟随世界规范化；作者改动和未完成输入继续保留。
+					if (localDraft && (recovery == null || recovery.isEmpty())
+							&& BeeDesignerDocument.fingerprint(imported).equals(BeeDesignerDocument.text(imported, "baseline", "new"))) {
+						imported = data.deepCopy();
+					}
 					importAfterLoad = null;
 					imported.add("baseline", data.get("baseline"));
-					imported.add("definition_path", data.get("definition_path"));
+					if (!imported.has(BeeDesignerIdentity.MIGRATION)) {
+						imported.add("definition_path", data.get("definition_path"));
+					}
 					if (com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerMyriad.recipesOnly(imported)) {
 						imported.add("definition", data.get("definition").deepCopy());
 						imported.add("names", data.get("names").deepCopy());
@@ -719,8 +863,10 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 					setDocument(imported);
 					recoveryAfterLoad = recovery;
 					applied = BeeDesignerDocument.fingerprint(data);
+					appliedDocument = data.deepCopy();
+					changesSnapshot = null;
 					status = "designer.status.imported";
-					restoreRecovery();
+					restoreRecovery(localDraft);
 					return;
 				}
 				setDocument(data);
@@ -764,10 +910,17 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				return;
 			}
 			case "status" -> {
-				publication = data;
-				publishing = myriadSaveRequest >= 0 || data.get("busy").getAsBoolean();
+				updatePublication(sequence, data);
 			}
 			case "myriad" -> {
+				if (sequence == detailRequest) {
+					if (detailIdentity == null || !currentEdit(detailIdentity)) {
+						finishDetailRequest();
+						refreshFromServer();
+						return;
+					}
+					finishDetailRequest();
+				}
 				if (myriadSaveRequest >= 0 && sequence != myriadSaveRequest) {
 					return;
 				}
@@ -785,6 +938,15 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 						data.get("path").getAsString()).getString();
 			}
 			case "result" -> {
+				if (!data.get("success").getAsBoolean() && sequence == detailRequest) {
+					finishDetailRequest();
+					copyAfterLoad = false;
+					restoreAfterLoad = false;
+					importAfterLoad = null;
+					status = data.get("message").getAsString();
+					refreshFromServer();
+					return;
+				}
 				if (!data.get("success").getAsBoolean() && library.failed(sequence, data.get("message").getAsString())) {
 					status = data.get("message").getAsString();
 					if (minecraft.screen == this) {
@@ -802,11 +964,6 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				if (!status.equals("designer.status.applying") && !status.equals("designer.status.exporting")) {
 					publishing = false;
 					if (!data.get("success").getAsBoolean()) {
-						if (sequence == detailRequest) {
-							copyAfterLoad = false;
-							restoreAfterLoad = false;
-							importAfterLoad = null;
-						}
 						afterMyriadSaved = null;
 						submittedMyriad = "";
 						myriadSaveRequest = -1;
@@ -965,6 +1122,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		var baseline = document.get("baseline");
 		advanceEditGeneration();
 		document = history.move(direction);
+		identityField.clear();
 		document.add("baseline", baseline);
 		diagnostics = null;
 		rebuild();
@@ -984,6 +1142,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		long generation = editGeneration;
 		String snapshot = document.toString();
 		DesignerFormScreen current = minecraft.screen instanceof DesignerFormScreen form ? form : this;
+		String previousSaved = savedDraft;
 		String pending = DesignerDraftSnapshot.pendingState(this, current);
 		JsonObject stored = DesignerDraftSnapshot.capture(this, current, document);
 		stored.add("baseline", document.get("baseline").deepCopy());
@@ -1008,6 +1167,13 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				if (sameSnapshot) {
 					savedDraft = snapshot;
 					savedPending = pending;
+					if (!previousSaved.isBlank()) {
+						String previousId = JsonParser.parseString(previousSaved).getAsJsonObject().get("id").getAsString();
+						if (!previousId.equals(target.get("id").getAsString())) {
+							DesignerProjectFiles.archiveRenamedDraft(previousId, previousSaved,
+									DesignerDraftIndex::refresh, failure -> status = failure);
+						}
+					}
 				}
 				if (completedToken != null) {
 					DesignerBatchImportScreen.completePublication(completedToken);
@@ -1027,12 +1193,13 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	}
 
 	private boolean unfinishedDraft() {
-		return document != null && (dirty() || document.has("_editor_recovery"));
+		return document != null && (dirty() || document.has("_editor_recovery") || !pendingDraftState().isEmpty());
 	}
 
 	void changeDocument(Runnable action) {
 		advanceEditGeneration();
-		if (document == null || document.toString().equals(savedDraft) || !unfinishedDraft()) {
+		if (document == null || (document.toString().equals(savedDraft)
+				&& DesignerDraftSnapshot.pendingState(this, this).equals(savedPending)) || !unfinishedDraft()) {
 			action.run();
 			return;
 		}
@@ -1085,7 +1252,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		if (document != null) {
 			if (activeRecovery != null && minecraft.screen == this) {
 				activeRecovery = null;
-				restoreRecovery();
+				restoreRecovery(false);
 			}
 			boolean changed = !document.equals(observed);
 			if (changed) {
@@ -1128,6 +1295,9 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				observed = null;
 				observedFingerprint = "";
 				applied = "";
+				appliedDocument = null;
+				changesSnapshot = null;
+				changedFields = List.of();
 				savedDraft = "";
 				savedPending = "";
 				activeRecovery = null;
@@ -1171,6 +1341,48 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	@Override
 	protected Component idleStatus() {
 		return document == null ? Component.empty() : tr(unfinishedDraft() ? "unapplied_changes" : "active_revision");
+	}
+
+	private List<DesignerDraftHistory.Change> currentChanges() {
+		if (!document.equals(changesSnapshot)) {
+			changesSnapshot = document.deepCopy();
+			changedFields = DesignerDraftHistory.changes(appliedDocument, document);
+		}
+		return changedFields;
+	}
+
+	@Override
+	protected Component statusTooltip(Component message) {
+		if (!unfinishedDraft()) {
+			return message;
+		}
+		var details = message.copy();
+		String pendingIdentity = pendingIdentityInput();
+		if (pendingIdentity != null) {
+			Component value = pendingIdentity.isEmpty() ? tr("identity_input_empty") : Component.literal(pendingIdentity);
+			details.append("\n").append(Component.translatable("designer.identity_input_change", document.get("id").getAsString(), value));
+		}
+		var changes = currentChanges();
+		for (var change : changes.stream().limit(6).toList()) {
+			details.append("\n" + DesignerEditHistoryScreen.fieldName(change.path()) + ": "
+					+ DesignerEditHistoryScreen.valueName(change.before()) + " → "
+					+ DesignerEditHistoryScreen.valueName(change.after()));
+		}
+		return details.append("\n").append(tr("changes_open"));
+	}
+
+	@Override
+	protected boolean statusClicked() {
+		if (!unfinishedDraft()) {
+			return false;
+		}
+		minecraft.setScreen(new DesignerChangesScreen(this, currentChanges(), pendingIdentityInput()));
+		return true;
+	}
+
+	private String pendingIdentityInput() {
+		String pending = pendingDraftState();
+		return pending.isEmpty() ? null : pending.substring(pending.indexOf('\n') + 1);
 	}
 
 	@Override
@@ -1230,6 +1442,9 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 			return true;
 		}
 		if (isLeaving()) {
+			return true;
+		}
+		if (!hasDropdown() && document != null && identityField.key(this, key)) {
 			return true;
 		}
 		if (tab == 0 && !hasDropdown() && !(getFocused() instanceof EditBox) && library.key(this, key)) {
@@ -1297,6 +1512,10 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	}
 
 	void importDocument(JsonObject imported) {
+		importDocument(imported, false);
+	}
+
+	private void importDocument(JsonObject imported, boolean localDraft) {
 		JsonObject clean = imported.deepCopy();
 		if (clean.has("_editor_recovery") && !clean.get("_editor_recovery").isJsonArray()) {
 			status = "designer.error.recovery_target";
@@ -1311,9 +1530,13 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 			}
 		}
 		String id = imported.get("id").getAsString();
+		if (clean.has(BeeDesignerIdentity.MIGRATION)) {
+			id = clean.getAsJsonObject(BeeDesignerIdentity.MIGRATION).get("from").getAsString();
+		}
 		if (cy.jdkdigital.productivebees.setup.BeeReloadListener.INSTANCE.getData(net.minecraft.resources.ResourceLocation.parse(id)) != null
 				|| BeeDesignerNativeBees.contains(net.minecraft.resources.ResourceLocation.parse(id))) {
 			importAfterLoad = clean;
+			localDraftAfterLoad = localDraft;
 			loadBee(id);
 			minecraft.setScreen(this);
 		} else {
@@ -1324,21 +1547,47 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 			setDocument(copy);
 			recoveryAfterLoad = recovery;
 			status = "designer.status.imported";
-			restoreRecovery();
+			restoreRecovery(localDraft);
 		}
 	}
 
-	private void restoreRecovery() {
+	private void restoreRecovery(boolean localDraft) {
 		if (recoveryAfterLoad != null && !recoveryAfterLoad.isEmpty()) {
 			document.add("_editor_recovery", recoveryAfterLoad);
 			recoveryAfterLoad = null;
 		}
+		JsonObject target = document;
+		String sourceSnapshot = target.toString();
+		long generation = editGeneration;
 		if (!document.has("_editor_recovery") || document.getAsJsonArray("_editor_recovery").isEmpty()) {
+			if (localDraft) {
+				rememberLoadedDraft(target, generation, sourceSnapshot);
+			}
 			return;
 		}
 		leaveTo(() -> {
 			minecraft.setScreen(this);
 			JsonArray recovery = document.getAsJsonArray("_editor_recovery");
+			boolean restoredIdentity = false;
+			boolean invalidIdentity = false;
+			for (var value : recovery) {
+				if (value.isJsonObject() && BeeDesignerDocument.text(value.getAsJsonObject(), "kind", "").equals("id_input")) {
+					JsonObject entry = value.getAsJsonObject();
+					try {
+						JsonElement text = entry.get("text");
+						if (text == null || !text.isJsonPrimitive() || !text.getAsJsonPrimitive().isString()) {
+							throw new IllegalArgumentException("designer.error.recovery_target");
+						}
+						identityField.restore(text.getAsString());
+						restoredIdentity = true;
+					} catch (RuntimeException failure) {
+						invalidIdentity = true;
+						status = "designer.error.recovery_target";
+						ProductiveBeesGenesis.LOGGER.warn("Could not restore bee {} identity input {}; original input retained",
+								document.get("id").getAsString(), BeeDesignerDocument.text(entry, "id", ""), failure);
+					}
+				}
+			}
 			for (var value : recovery) {
 				if (!value.isJsonObject()) {
 					continue;
@@ -1347,6 +1596,9 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				try {
 					String id = BeeDesignerDocument.text(entry, "id", "");
 					String kind = BeeDesignerDocument.text(entry, "kind", "");
+					if (kind.equals("id_input")) {
+						continue;
+					}
 					if (kind.equals("production")) {
 						DesignerProductionScreen production = new DesignerProductionScreen(this, document, entry.get("node").getAsString());
 						production.restoreDraft(entry);
@@ -1359,20 +1611,32 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 							}
 							JsonObject nested = nestedValue.getAsJsonObject();
 							if (id.equals(BeeDesignerDocument.text(nested, "parent", "")) && nested.has("path")) {
-								JsonObject target = production.recoveryTarget(nested.getAsJsonArray("path"));
-								if (target != null && BeeDesignerDocument.text(nested, "kind", "").equals("json")) {
-									openRecoveredJson(production, target, nested);
+								JsonObject nestedTarget = production.recoveryTarget(nested.getAsJsonArray("path"));
+								if (nestedTarget != null && BeeDesignerDocument.text(nested, "kind", "").equals("json")) {
+									openRecoveredJson(production, nestedTarget, nested);
 									break;
 								}
 							}
 						}
+						if (localDraft) {
+							rememberLoadedDraft(target, generation, sourceSnapshot);
+						}
+						if (invalidIdentity) {
+							((DesignerFormScreen) minecraft.screen).status = "designer.error.recovery_target";
+						}
 						return;
 					}
-					JsonObject target = entry.has("path") && !entry.has("parent")
+					JsonObject recoveryTarget = entry.has("path") && !entry.has("parent")
 							? DesignerDraftSnapshot.target(document, entry.getAsJsonArray("path")) : null;
-					if (target != null && kind.equals("json")) {
+					if (recoveryTarget != null && kind.equals("json")) {
 						activeRecovery = id;
-						openRecoveredJson(this, target, entry);
+						openRecoveredJson(this, recoveryTarget, entry);
+						if (localDraft) {
+							rememberLoadedDraft(target, generation, sourceSnapshot);
+						}
+						if (invalidIdentity) {
+							((DesignerFormScreen) minecraft.screen).status = "designer.error.recovery_target";
+						}
 						return;
 					}
 				} catch (RuntimeException failure) {
@@ -1382,7 +1646,24 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				}
 			}
 			status = "designer.error.recovery_target";
+			if (restoredIdentity && !invalidIdentity) {
+				status = "designer.identity_input_pending";
+			}
+			if (restoredIdentity) {
+				rebuild();
+			}
+			if (localDraft) {
+				rememberLoadedDraft(target, generation, sourceSnapshot);
+			}
 		});
+	}
+
+	private void rememberLoadedDraft(JsonObject target, long generation, String sourceSnapshot) {
+		if (document == target && editGeneration == generation && document.toString().equals(sourceSnapshot)) {
+			savedDraft = sourceSnapshot;
+			DesignerFormScreen current = minecraft.screen instanceof DesignerFormScreen form ? form : this;
+			savedPending = DesignerDraftSnapshot.pendingState(this, current);
+		}
 	}
 
 	private void openRecoveredJson(DesignerFormScreen parent, JsonObject target, JsonObject entry) {
@@ -1406,8 +1687,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	}
 
 	void exportLocal() {
-		DesignerProjectFiles.export(document, path -> status = Component.translatable("designer.status.exported", path.toString()).getString(),
-				message -> status = message);
+		minecraft.setScreen(new DesignerCollectionScreen(this, List.of(document.get("id").getAsString()), document, "datapack"));
 	}
 
 	JsonObject editingDocument() {

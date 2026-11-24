@@ -1,5 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerIdentity;
+import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -410,6 +412,67 @@ class ResourceAccountsMinecraftTest {
 		assertNull(restored.binding());
 	}
 
+
+	@Test void invalidBeeIdentityRetainsUncertainRequestWithoutLockingHealthyAccounts() {
+		var definitions = BeeReloadListener.INSTANCE.getData();
+		var old = ResourceLocation.parse("test:account_old_identity");
+		var next = ResourceLocation.parse("test:account_new_identity");
+		var broken = new CompoundTag();
+		broken.putString(BeeDesignerIdentity.TARGET, next.toString());
+		var store = new ResourceAccounts(() -> {});
+		var binding = new ResourceAccount.Binding(ResourceLocation.parse("minecraft:overworld"), 456,
+				ResourceLocation.parse("productivebeesgenesis:mek_apiary"));
+		var pending = store.create(OWNER, binding);
+		var context = new CompoundTag();
+		context.putString("host", "mek_apiary");
+		context.putString("bee", old.toString());
+		context.putInt("slot", 1);
+		var bee = new CompoundTag();
+		bee.putString("entity", "productivebees:configurable_bee");
+		bee.putString("type", old.toString());
+		bee.putInt("identity", 17);
+		context.put("bee_data", bee);
+		context.putLong("energy_cost", 5);
+		var ticket = pending.reserve(pending.reference(), 7, context, Map.of(HYDROGEN, 100L));
+		pending.start(ticket);
+		pending.freeze(ticket, Map.of(HYDROGEN, 70L));
+		pending.suspendProduction(ticket, "External payment outcome uncertain");
+		var healthy = account(store);
+		produce(healthy, 20);
+		try {
+			BeeReloadListener.INSTANCE.setData(Map.of(old, broken));
+			var saved = store.save();
+			var restored = ResourceAccounts.load(saved, () -> {});
+			assertFalse(restored.hasInvalidData());
+			assertEquals(2, restored.size());
+			assertEquals(saved, restored.save());
+			var request = restored.bound(pending.reference(), binding);
+			assertEquals(ticket, request.productionTicket());
+			assertEquals(context, request.productionContext(ticket));
+			assertEquals(Map.of(HYDROGEN, 70L), request.frozenProduction());
+			assertTrue(request.laneSuspended(1));
+			assertEquals("External payment outcome uncertain", request.suspension());
+			assertThrows(IllegalStateException.class,
+					() -> BeeDesignerIdentity.resolve(request.productionContext(ticket).getString("bee")));
+			var active = restored.bound(healthy.reference(), BINDING);
+			produce(active, 30);
+			assertEquals(50L, active.available().get(HYDROGEN));
+			assertEquals(context, request.productionContext(ticket));
+			assertEquals(ticket, request.productionTicket());
+			BeeReloadListener.INSTANCE.setData(Map.of(old, broken, next, new CompoundTag()));
+			var migrated = request.productionContext(ticket);
+			assertEquals(next.toString(), migrated.getString("bee"));
+			assertEquals(next.toString(), migrated.getCompound("bee_data").getString("type"));
+			assertEquals(17, migrated.getCompound("bee_data").getInt("identity"));
+			assertEquals(5, migrated.getLong("energy_cost"));
+			assertEquals(ticket, request.productionTicket());
+			assertEquals(Map.of(HYDROGEN, 70L), request.frozenProduction());
+			assertTrue(request.laneSuspended(1));
+		} finally {
+			BeeReloadListener.INSTANCE.setData(definitions);
+			BeeDesignerIdentity.generation();
+		}
+	}
 
 	@Test void mechanicalLocalEmptyReservationKeepsOnlyItsOriginalSlotAcrossReload() {
 		var store = new ResourceAccounts(() -> {});

@@ -70,15 +70,36 @@ final class DesignerDraftHistory {
 		return List.copyOf(changes);
 	}
 
+	static List<Change> changes(JsonObject before, JsonObject after) {
+		List<Change> changes = new ArrayList<>();
+		diff("", before == null ? new JsonObject() : before, after, changes, "/");
+		return List.copyOf(changes);
+	}
+
 	private static void diff(String path, JsonElement before, JsonElement after, List<Change> changes) {
+		diff(path, before, after, changes, ".");
+	}
+
+	private static void diff(String path, JsonElement before, JsonElement after, List<Change> changes, String separator) {
 		if (Objects.equals(before, after)) {
 			return;
 		}
-		if (before != null && after != null && before.isJsonObject() && after.isJsonObject()) {
-			var keys = new LinkedHashSet<>(before.getAsJsonObject().keySet());
+		if ((before == null || before.isJsonObject()) && after != null && after.isJsonObject()) {
+			JsonObject previous = before == null ? new JsonObject() : before.getAsJsonObject();
+			var keys = new LinkedHashSet<>(previous.keySet());
 			keys.addAll(after.getAsJsonObject().keySet());
 			for (String key : keys) {
-				diff(path.isEmpty() ? key : path + "." + key, before.getAsJsonObject().get(key), after.getAsJsonObject().get(key), changes);
+				if (separator.equals("/") && path.isEmpty() && (key.equals("baseline") || key.equals("schema_version")
+						|| key.equals("definition_path") || key.startsWith("_editor_"))) {
+					continue;
+				}
+				diff(path.isEmpty() ? key : path + separator + key, previous.get(key), after.getAsJsonObject().get(key), changes, separator);
+			}
+		} else if (before != null && after != null && before.isJsonArray() && after.isJsonArray()) {
+			int count = Math.max(before.getAsJsonArray().size(), after.getAsJsonArray().size());
+			for (int index = 0; index < count; index++) {
+				diff(path + separator + index, index < before.getAsJsonArray().size() ? before.getAsJsonArray().get(index) : null,
+						index < after.getAsJsonArray().size() ? after.getAsJsonArray().get(index) : null, changes, separator);
 			}
 		} else {
 			changes.add(new Change(path, display(before), display(after)));

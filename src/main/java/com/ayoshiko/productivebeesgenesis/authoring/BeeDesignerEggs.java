@@ -36,6 +36,7 @@ public final class BeeDesignerEggs {
 				ids.add(id.toString());
 			}
 		}
+		ids.removeIf(id -> BeeDesignerIdentity.isAlias(ResourceLocation.parse(id)));
 		return List.copyOf(ids);
 	}
 

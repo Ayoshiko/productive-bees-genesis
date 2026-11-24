@@ -123,6 +123,41 @@ class BeeDesignerOperationMinecraftTest {
 	}
 
 	@Test
+	void cancelledPreparationKeepsQueryableRejectionWithoutChangingPublishedOrUnknownRevisions(@TempDir Path world) throws IOException {
+		JsonObject document = BeeDesignerDocument.create("test:cancelled_preparation");
+		Map<String, String> files = BeeDesignerCompiler.files(Map.of("test:cancelled_preparation", document.toString()));
+		BeeDesignerOperation published = identity(document, TOKEN);
+		var revision = BeeDesignerStore.write(world, files, false, published);
+		BeeDesignerStore.install(revision);
+		BeeDesignerStore.complete(revision, List.of());
+		String journal = BeeDesignerStore.inspect(world).toString();
+		for (String kind : List.of("apply", "import")) {
+			UUID token = UUID.randomUUID();
+			BeeDesignerOperation cancelled = BeeDesignerOperation.create(token, OWNER, published.requestDigest(), kind,
+					published.baselines(), Map.of("test:cancelled_preparation", document.toString()));
+			JsonObject rejected = BeeDesignerStore.rejectPreparation(world, cancelled, "designer.error.designer_session");
+			assertEquals("rejected", rejected.get("phase").getAsString());
+			assertEquals(rejected, BeeDesignerStore.operation(world, token, OWNER, cancelled.requestDigest()));
+			assertEquals(rejected, BeeDesignerStore.rejectPreparation(world, cancelled, "second cancellation"));
+			assertEquals(journal, BeeDesignerStore.inspect(world).toString());
+			assertFalse(Files.exists(revision.source().resolveSibling(BeeDesignerStore.PREFIX + token + ".zip")));
+			JsonObject receipt = BeeDesignerOperation.receipt(rejected);
+			assertEquals(1, receipt.get("count").getAsInt());
+			assertFalse(receipt.get("uncertain").getAsBoolean());
+			assertFalse(receipt.get("done").getAsBoolean());
+		}
+		assertEquals("committed", BeeDesignerStore.rejectPreparation(world, published, "late cancellation").get("phase").getAsString());
+		assertEquals(journal, BeeDesignerStore.inspect(world).toString());
+		UUID unresolvedToken = UUID.randomUUID();
+		Path unresolved = revision.source().resolveSibling(BeeDesignerStore.PREFIX + unresolvedToken + ".zip");
+		Files.copy(revision.source(), unresolved);
+		BeeDesignerOperation unresolvedIdentity = identity(document, unresolvedToken);
+		assertThrows(IOException.class, () -> BeeDesignerStore.rejectPreparation(world, unresolvedIdentity, "uncertain cancellation"));
+		assertNull(BeeDesignerStore.operation(world, unresolvedToken, OWNER, unresolvedIdentity.requestDigest()));
+		assertTrue(Files.exists(unresolved));
+	}
+
+	@Test
 	void requestDigestKeepsReceivedSourceAndBaselineSeparateFromLaterNormalization() {
 		JsonObject begin = JsonParser.parseString("{\"token\":\"" + TOKEN + "\",\"count\":1}").getAsJsonObject();
 		BeeDesignerImportBatch batch = new BeeDesignerImportBatch(begin);

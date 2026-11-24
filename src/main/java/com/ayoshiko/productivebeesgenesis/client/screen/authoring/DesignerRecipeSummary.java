@@ -109,7 +109,7 @@ final class DesignerRecipeSummary {
 				chance(screen, recipe);
 			}
 			case "minecraft:crafting_shaped", "minecraft:crafting_shapeless" -> {
-				craftingGrid(screen, recipe, edit);
+				DesignerCraftingGrid.add(screen, recipe);
 				item(screen, "egg_output", recipe.get("result"), edit);
 				if (recipe.has("result") && recipe.get("result").isJsonObject()) {
 					inline(screen, new DesignerInlineNumber("quantity", recipe.getAsJsonObject("result"), "count", "1", DesignerNumberRange.of(1, 64, true)));
@@ -165,39 +165,6 @@ final class DesignerRecipeSummary {
 
 		if (recipe.has("neoforge:conditions")) {
 			screen.note("conditions", DesignerFormScreen.tr("overview_conditional"));
-		}
-	}
-
-	private static void craftingGrid(DesignerFormScreen screen, JsonObject recipe, Runnable edit) {
-		screen.anchor("crafting_grid");
-		JsonElement[] slots = new JsonElement[9];
-		if (recipe.has("pattern") && recipe.has("key")) {
-			var pattern = recipe.getAsJsonArray("pattern");
-			var keys = recipe.getAsJsonObject("key");
-			for (int row = 0; row < Math.min(3, pattern.size()); row++) {
-				String line = pattern.get(row).getAsString();
-				for (int column = 0; column < Math.min(3, line.length()); column++) {
-					slots[row * 3 + column] = keys.get(Character.toString(line.charAt(column)));
-				}
-			}
-		} else if (recipe.has("ingredients")) {
-			var ingredients = recipe.getAsJsonArray("ingredients");
-			for (int index = 0; index < Math.min(9, ingredients.size()); index++) {
-				slots[index] = ingredients.get(index);
-			}
-		}
-		int cell = Math.max(24, Math.min(32, (screen.editorBottom() - screen.contentTop - 40) / 3));
-		for (int row = 0; row < 3; row++) {
-			int selected = row;
-			screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> {
-				int size = Math.min(cell, (w - 8) / 3);
-				int gridX = x + (w - size * 3 - 8) / 2;
-				for (int column = 0; column < 3; column++) {
-					JsonElement ingredient = slots[selected * 3 + column];
-					screen.addRenderableWidget(new DesignerStackButton(gridX + column * (size + 4), y, size,
-							DesignerStackButton.decode(ingredient), DesignerFormScreen.tr("empty_slot").getString(), edit).square());
-				}
-			}, cell + 4));
 		}
 	}
 

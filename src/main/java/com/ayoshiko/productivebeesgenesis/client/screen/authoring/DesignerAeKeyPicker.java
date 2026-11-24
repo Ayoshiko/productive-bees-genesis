@@ -49,6 +49,11 @@ final class DesignerAeKeyPicker extends DesignerFormScreen {
 	}
 
 	@Override
+	protected boolean showsInventory() {
+		return true;
+	}
+
+	@Override
 	protected void init() {
 		begin();
 		if (cached == null || cached.language != Language.getInstance() || cached.version != BeeDesignerClient.ingredientVersion) {

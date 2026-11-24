@@ -83,6 +83,11 @@ final class DesignerIngredientScreen extends DesignerFormScreen {
 	}
 
 	@Override
+	protected boolean showsInventory() {
+		return true;
+	}
+
+	@Override
 	protected void init() {
 		begin();
 		rows.add(new Row("bee_material", (x, y, w) -> button(x, y, w, tr("choose_bee_egg"), () -> minecraft.setScreen(

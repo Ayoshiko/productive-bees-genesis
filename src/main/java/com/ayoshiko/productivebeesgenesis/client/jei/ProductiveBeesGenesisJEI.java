@@ -21,6 +21,7 @@ import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.constants.RecipeTypes;
 import mezz.jei.api.helpers.IGuiHelper;
 import mezz.jei.api.ingredients.IIngredientType;
+import mezz.jei.api.registration.IIngredientAliasRegistration;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
@@ -137,6 +138,22 @@ public class ProductiveBeesGenesisJEI implements IModPlugin {
 	@Override
 	public ResourceLocation getPluginUid() {
 		return PLUGIN_ID;
+	}
+
+	@Override
+	public void registerIngredientAliases(IIngredientAliasRegistration registration) {
+		registration.addAliases(com.ayoshiko.productivebeesgenesis.init.ModItems.BEE_DESIGNER.get(), List.of(
+				"item.productivebeesgenesis.bee_designer",
+				"蜂蜂应援手册",
+				"蜜蜂编辑器",
+				"BeeBee Support Handbook",
+				"Bee Designer",
+				"productivebeesgenesis:bee_designer",
+				"bee_designer",
+				"fengfengyingyuanshouce",
+				"feng feng ying yuan shou ce",
+				"mifengbianjiqi",
+				"mi feng bian ji qi"));
 	}
 
 	/**

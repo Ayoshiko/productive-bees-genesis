@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerIdentity;
 import com.ayoshiko.productivebeesgenesis.util.DevLog;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -86,7 +87,9 @@ public final class BeeNbtHelper {
 			String type = beeData.getString("type");
 			if (!type.isEmpty()) {
 				ResourceLocation rl = ResourceLocation.tryParse(type);
-				if (rl != null) return rl;
+				if (rl != null) {
+					return BeeDesignerIdentity.resolve(rl);
+				}
 			}
 		}
 		// 兜底1：蜂笼格式的 "entity" 字段

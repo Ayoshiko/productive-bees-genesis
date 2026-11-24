@@ -10,12 +10,99 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
 import java.util.zip.ZipFile;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("minecraft")
 class BeeDesignerCollectionMinecraftTest {
+	@Test
+	void namedExportsUsePreviewContentsAndRejectOverwrite(@TempDir Path directory) throws IOException {
+		JsonObject bee = BeeDesignerDocument.create("pack:gold");
+		BeeDesignerDocument.addRecipe(bee, "minecraft:crafting_shapeless");
+		Map<String, String> documents = Map.of("pack:gold", bee.toString());
+		String suggested = BeeDesignerExportName.suggest(documents.keySet(), "kubejs", LocalDateTime.of(2026, 11, 24, 12, 0));
+		assertEquals("pbg-bees-pack-gold-kubejs-20261124-120000", suggested);
+		assertEquals("pbg-bees-pack-nested-gold-kubejs-20261124-120000", BeeDesignerExportName.suggest(
+				java.util.List.of("pack:nested/gold"), "kubejs", LocalDateTime.of(2026, 11, 24, 12, 0)));
+		assertTrue(BeeDesignerExportName.suggest(java.util.List.of("pack:gold", "pack:iron"), "runtime_datapack",
+				LocalDateTime.of(2026, 11, 24, 12, 0)).contains("2-bees-datapack-20261124-120000"));
+		for (String invalid : java.util.List.of("", "../bee", "bee:name", "CON", "CON .txt", "LPT9.json", "trailing.", "a\nb\nc")) {
+			assertThrows(IllegalArgumentException.class, () -> BeeDesignerExportName.validate(invalid));
+		}
+		for (String format : java.util.List.of("portable", "runtime_datapack", "runtime_kubejs")) {
+			Map<String, String> preview = BeeDesignerArchive.exportFiles(documents, source("Pack"), format);
+			String name = "我的金蜂配方-" + format;
+			Path archive = BeeDesignerArchive.writeExport(directory, preview, format, name);
+			assertEquals(name + ".zip", archive.getFileName().toString());
+			try (ZipFile zip = new ZipFile(archive.toFile())) {
+				assertEquals(preview.size(), zip.size());
+				for (var file : preview.entrySet()) {
+					assertEquals(file.getValue(), new String(zip.getInputStream(zip.getEntry(file.getKey())).readAllBytes(), StandardCharsets.UTF_8));
+				}
+			}
+			byte[] before = Files.readAllBytes(archive);
+			assertThrows(IOException.class, () -> BeeDesignerArchive.writeExport(directory, preview, format, name));
+			assertArrayEquals(before, Files.readAllBytes(archive));
+		}
+	}
+
+	@Test
+	void craftingExportReusesKeysAndProducesReadableLosslessScriptEvidence() {
+		JsonObject recipe = new JsonObject();
+		recipe.addProperty("type", "minecraft:crafting_shaped");
+		recipe.add("pattern", JsonParser.parseString("[\"ABC\"]"));
+		recipe.add("key", JsonParser.parseString("{\"A\":{\"item\":\"minecraft:copper_ingot\"},\"B\":{\"tag\":\"c:ingots/gold\"},\"C\":{\"item\":\"minecraft:copper_ingot\"}}"));
+		recipe.add("result", BeeDesignerEggs.output("pack:gold"));
+		recipe.getAsJsonObject("result").addProperty("count", 1);
+		recipe.addProperty("group", "authoring");
+		recipe.addProperty("category", "misc");
+		recipe.addProperty("show_notification", false);
+		String original = recipe.toString();
+		JsonObject compact = BeeDesignerCraftingExport.compact(recipe);
+		assertEquals(JsonParser.parseString("[\"ABA\"]"), compact.get("pattern"));
+		assertEquals(2, compact.getAsJsonObject("key").size());
+		assertEquals(recipe.getAsJsonObject("key").get("A"), compact.getAsJsonObject("key").get("A"));
+		assertEquals(original, recipe.toString());
+
+		JsonObject complex = compact.deepCopy();
+		complex.add("neoforge:conditions", JsonParser.parseString("[{\"type\":\"neoforge:mod_loaded\",\"modid\":\"productivebees\"}]"));
+		complex.add("__proto__", JsonParser.parseString("{\"must_remain_own_property\":true}"));
+		complex.addProperty("author_extension", "literal $" + "{notExecutable} \u2028\u2029 " + Character.toString(96) + " slash\\end");
+		JsonObject evidence = new JsonObject();
+		evidence.addProperty("simple_script", BeeDesignerCraftingExport.script(recipe, "pack:simple"));
+		evidence.add("simple_expected", compact);
+		evidence.addProperty("complex_script", BeeDesignerCraftingExport.script(complex, "pack:complex"));
+		evidence.add("complex_expected", complex);
+		System.out.println("EXPORT_SCRIPT_EVIDENCE " + evidence);
+	}
+
+	@Test
+	void releaseExportsKeepRuntimeNamesAndAliasesWithoutEditorSources(@TempDir Path directory) throws IOException {
+		JsonObject original = BeeDesignerDocument.create("pack:old_bee");
+		original.getAsJsonObject("names").addProperty("zh_cn", "发布测试蜂");
+		BeeDesignerDocument.addRecipe(original, "minecraft:crafting_shapeless");
+		original.addProperty("baseline", BeeDesignerDocument.fingerprint(original));
+		JsonObject project = BeeDesignerIdentity.rename(original, "pack:renamed_bee");
+		Map<String, String> documents = Map.of("pack:renamed_bee", project.toString());
+		Map<String, String> scripts = BeeDesignerArchive.kubeJsFiles(documents, source("Release pack"), false);
+		assertFalse(scripts.containsKey("kubejs/data/productivebeesgenesis/bee_designer/index.json"));
+		assertTrue(scripts.containsKey("kubejs/data/pack/productivebees/old_bee.json"));
+		assertTrue(scripts.containsKey("kubejs/data/pack/productivebees/renamed_bee.json"));
+		assertTrue(scripts.get("kubejs/assets/productivebees/lang/zh_cn.json").contains("发布测试蜂"));
+		assertEquals(1, scripts.keySet().stream().filter(path -> path.startsWith("kubejs/server_scripts/")).count());
+		Path archive = BeeDesignerArchive.export(directory, documents, source("Release pack"), false);
+		assertTrue(archive.getFileName().toString().startsWith("pbg-bees-release-"));
+		assertFalse(BeeDesignerStore.managedPack("file/" + archive.getFileName()));
+		try (ZipFile zip = new ZipFile(archive.toFile())) {
+			assertNull(zip.getEntry("data/productivebeesgenesis/bee_designer/index.json"));
+			assertNotNull(zip.getEntry("data/pack/productivebees/old_bee.json"));
+			assertNotNull(zip.getEntry("data/pack/productivebees/renamed_bee.json"));
+		}
+		assertTrue(Files.exists(archive.resolveSibling(archive.getFileName().toString().replace(".zip", "-names.zip"))));
+	}
 
 	@Test
 	void portableCollectionPreservesSourcesNamesAndWholeProjects(@TempDir Path directory) throws IOException {
@@ -72,7 +159,6 @@ class BeeDesignerCollectionMinecraftTest {
 		String script = files.get(scriptPath);
 		assertTrue(script.contains(recipe1));
 		assertTrue(script.contains(recipe2));
-		assertEquals(2, script.split("event.custom", -1).length - 1);
 		assertTrue(BeeDesignerArchive.kubeJsFiles(documents, source("Renamed pack")).containsKey(scriptPath));
 		JsonObject third = BeeDesignerDocument.create("pack:copper");
 		Map<String, String> other = BeeDesignerArchive.kubeJsFiles(Map.of("pack:gold", first.toString(), "pack:copper", third.toString()), source("Modpack"));

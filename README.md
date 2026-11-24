@@ -66,7 +66,7 @@ Functional upgrades add **essence conversion** for supported crafting recipes, *
 
 ## Bee Designer
 
-In **Creative mode**, obtain the **BeeBee Support Handbook** (`productivebeesgenesis:bee_designer`) and right-click it. This opens the editor; the survival guide above is a separate book.
+In **Creative mode**, obtain the **BeeBee Support Handbook** (`productivebeesgenesis:bee_designer`) and right-click it. JEI accepts “蜂蜂”, “fengfeng”, “bee designer” or the full item ID. This opens the editor; the survival guide above is a separate book.
 
 **Choose or create a bee → edit → validate → apply to the world or export.**
 
@@ -74,6 +74,18 @@ In **Creative mode**, obtain the **BeeBee Support Handbook** (`productivebeesgen
 - Save local drafts, copy bees, review changes, and import/export multiple bees as portable collections. Browse another local modpack to select projects to bring across.
 - Export datapacks and names, or a **KubeJS author bundle** containing definitions, assets and recipe scripts.
 - Add bee-egg recipes to machines already defined in the pack. Supported hosts are **Modern Industrialization** (2.5.8 / 2.5.10), **Multiblocked2** (21.1.1.a / 21.1.2) and **Modular Machinery Reborn** (3.0.20 / 3.0.22).
+
+Drag materials from inventory or JEI directly into the acquisition page's crafting grid. Compact **Shaped / Shapeless** buttons share one row with a short rule; the selected mode is highlighted and full explanations appear on hover. Shaped recipes reuse repeated ingredients with an `ABA` pattern and `key`; shapeless recipes retain ingredient counts. Ordinary KubeJS crafting uses `event.shaped/shapeless`, while exact components, conditions and extension fields retain their full declarations. Select multiple bees, then open **Batch bee egg recipes** on their export page to generate drafts from one acquisition or machine template. Apply them together from Local drafts. Hover the status bar for a change summary, or click a changed field to edit it.
+
+Enter the **bee ID** directly in Appearance or the publication overview; partial or invalid input is kept with the draft. Existing configurable bees use an author migration: bees, eggs and combs move to the new identity during normal reads and saves while paid progress and outputs are retained. After applying, the catalog shows the new bee; compatibility mappings remain in release files. Myriad's configuration identity and native entity bees are outside this migration scope.
+
+After upgrading to **1.2.7**, Chinese pinyin search for previously registered bees is repaired on the first JEI load, with English name and full bee ID aliases. Opening the editor or applying bees again is unnecessary. The editor also verifies loaded content automatically on first opening and continues loading the selected bee.
+
+**Export pack release files** offers compact datapack and KubeJS bundles containing runtime content, names, required identity mappings and credits. Rename the export and preview its files before writing. Default names contain the bee ID or bee count, format and time; selected bees share one bundle, and existing files are never overwritten. Install data packs in world `datapacks` and enable the companion `-names.zip` in client `resourcepacks`; extract a KubeJS bundle into the pack root. Save a portable collection separately for editing or backup.
+
+Local drafts adapt to 1–3 columns of compact cards showing each bee egg, name and ID, with full status and time on hover. A normal click opens a draft; Ctrl-click toggles selection, Shift selects a range, and Ctrl+Shift adds a range. Drag to box-select and press Esc to restore the selection before the drag. Ctrl+A selects all valid filtered drafts, up to 100; focused text fields retain text selection. The catalog also supports clicking, ranges and box selection.
+
+Use the chest button in the title bar to show or hide the inventory for the current screen. **Settings → Interaction → Inventory visibility** offers Automatic, Always show and Always hide. The default Automatic mode shows inventory on material pages and hides it in local drafts, Appearance and read-only previews to leave more room for content.
 
 On a dedicated server, applying changes requires **Creative mode and OP level 2**. Creative players without OP can work with local drafts and exports. Saving a draft does not change the world.
 

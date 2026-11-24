@@ -64,6 +64,12 @@ final class DesignerReviewPage {
 					.active = !publishing && canPublish && !uncertain;
 		}, 20, false, 140));
 		if (screen instanceof BeeDesignerScreen editor) {
+			DesignerBatchImportScreen.addPending(editor);
+			screen.rows.add(new DesignerFormScreen.Row("review_runtime", (x, y, w) -> screen.button(x, y, w,
+					DesignerFormScreen.tr("runtime_export"), () -> mc.setScreen(new DesignerCollectionScreen(editor,
+							java.util.List.of(document.get("id").getAsString()), document, "runtime_datapack")))
+					.active = !publishing, 20, false, 140));
+			screen.note("", DesignerFormScreen.tr("runtime_export_help"));
 			screen.anchor("review_local_export");
 			screen.rows.add(new DesignerFormScreen.Row("review_local", (x, y, w) -> screen.button(x, y, w,
 					DesignerFormScreen.tr("local_export"), editor::exportLocal).active = !publishing, 20, false, 140));
@@ -72,9 +78,9 @@ final class DesignerReviewPage {
 					DesignerFormScreen.tr("collection_export"), () -> mc.setScreen(new DesignerCollectionScreen(editor,
 							java.util.List.of(document.get("id").getAsString()), document))).active = !publishing, 20, false, 140));
 			screen.rows.add(new DesignerFormScreen.Row("review_scripts", (x, y, w) -> screen.button(x, y, w,
-					DesignerFormScreen.tr("kubejs_export"), () -> DesignerProjectFiles.exportKubeJs(document,
-							path -> screen.status = Component.translatable("designer.status.exported", path.toString()).getString(),
-							message -> screen.status = message)).active = !publishing, 20, false, 140));
+					DesignerFormScreen.tr("kubejs_export"), () -> mc.setScreen(new DesignerCollectionScreen(editor,
+							java.util.List.of(document.get("id").getAsString()), document, "kubejs")))
+					.active = !publishing, 20, false, 140));
 		}
 		if (!canPublish) {
 			screen.note("permission", DesignerFormScreen.tr("error.permission"));

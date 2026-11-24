@@ -36,6 +36,7 @@ final class DesignerPreferences {
         result.addProperty("auto_save", true);
         result.addProperty("auto_save_ms", 60000);
         result.addProperty("context_hints", true);
+        result.addProperty("inventory_visibility", "inventory_auto");
         result.addProperty("alternating_rows", true);
 		result.addProperty("navigation_layout", "adaptive");
 		result.addProperty("field_layout", "adaptive");
@@ -66,6 +67,7 @@ final class DesignerPreferences {
         range(result, "version", 1, 1);
         choice(result, "theme", Set.of("dark", "light", "ae_light", "ae_dark", "custom_dark", "custom_light"));
         choice(result, "density", Set.of("compact", "comfortable", "spacious"));
+        choice(result, "inventory_visibility", Set.of("inventory_auto", "inventory_always", "inventory_never"));
 		choice(result, "navigation_layout", Set.of("adaptive", "menus", "expanded"));
 		choice(result, "field_layout", Set.of("adaptive", "single", "columns"));
 		choice(result, "gene_layout", Set.of("dropdown", "buttons"));

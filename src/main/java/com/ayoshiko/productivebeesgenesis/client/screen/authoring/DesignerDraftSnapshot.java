@@ -24,6 +24,7 @@ final class DesignerDraftSnapshot {
 
 	static JsonObject capture(BeeDesignerScreen editor, DesignerFormScreen current, JsonObject source) {
 		DesignerDraftSnapshot snapshot = new DesignerDraftSnapshot(source);
+		editor.snapshotDraft(snapshot);
 		List<DesignerFormScreen> pages = new ArrayList<>();
 		DesignerFormScreen page = current;
 		while (page != editor) {
@@ -56,10 +57,14 @@ final class DesignerDraftSnapshot {
 
 	static String pendingState(BeeDesignerScreen editor, DesignerFormScreen current) {
 		StringBuilder state = new StringBuilder();
+		String rootPending = editor.pendingDraftState();
+		if (!rootPending.isEmpty()) {
+			state.append(editor.getClass().getName()).append('\n').append(rootPending).append('\n');
+		}
 		DesignerFormScreen page = current;
 		while (page != editor) {
 			if (page instanceof DesignerSettingsScreen || page instanceof NewBeeScreen) {
-				return "";
+				return state.toString();
 			}
 			String pending = page.pendingDraftState();
 			if (!pending.isEmpty()) {

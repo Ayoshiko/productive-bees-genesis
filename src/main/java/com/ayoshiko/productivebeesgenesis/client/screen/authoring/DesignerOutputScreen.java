@@ -23,6 +23,11 @@ final class DesignerOutputScreen extends DesignerFormScreen {
 	}
 
 	@Override
+	protected boolean showsInventory() {
+		return true;
+	}
+
+	@Override
 	protected void init() {
 		begin();
 		addFields(this, output, resource);

@@ -16,11 +16,13 @@ import java.util.LinkedHashMap;
 import java.util.UUID;
 import java.util.Set;
 import java.util.Locale;
+import java.util.List;
 
 /** 整批冲突先预览；写入本机草稿后仍沿服务器原有检查与应用合同。 */
 final class DesignerBatchImportScreen extends DesignerFormScreen {
 	private static final Map<UUID, PendingPublication> PUBLICATIONS = new LinkedHashMap<>();
 	private static PublicationOwner publicationOwner;
+	private static RecentPublication recentPublication;
 	private final BeeDesignerScreen editor;
 	private final DesignerFormScreen parent;
 	private final Map<String, String> sources;
@@ -41,6 +43,7 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 	private Object connection;
 	private String requestDigest = "";
 	private boolean singlePublication;
+	private boolean queryOnOpen;
 	private final Map<String, String> completed = new LinkedHashMap<>();
 	private ArrayDeque<String> downloading;
 	private String downloadingId;
@@ -67,6 +70,8 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 	private record PendingPublication(UUID token, PublicationOwner owner, Map<String, String> sources, BeeDesignerMigration.Plan plan,
 			boolean drafts, boolean single, String requestDigest) {}
 
+	record RecentPublication(PublicationOwner owner, UUID token, List<String> ids, boolean single, String requestDigest) {}
+
 	static void connected() {
 		Minecraft minecraft = Minecraft.getInstance();
 		var server = minecraft.getSingleplayerServer();
@@ -91,7 +96,18 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 	}
 
 	static void completePublication(UUID token) {
-		PUBLICATIONS.remove(token);
+		PendingPublication completed = PUBLICATIONS.remove(token);
+		if (completed != null && completed.owner().equals(publicationOwner)) {
+			recentPublication = new RecentPublication(completed.owner(), token,
+					completed.plan().documents().keySet().stream().sorted().toList(), completed.single(), completed.requestDigest());
+			if (Minecraft.getInstance().screen instanceof BeeDesignerScreen current) {
+				current.rebuild();
+			}
+		}
+	}
+
+	static boolean currentOwner(RecentPublication recent) {
+		return recent.owner().equals(publicationOwner);
 	}
 
 	static void recordPublicationState(JsonObject data) {
@@ -114,6 +130,13 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 	}
 
 	static void addPending(BeeDesignerScreen editor) {
+		RecentPublication recent = recentPublication;
+		if (recent != null && currentOwner(recent)) {
+			editor.anchor("recent_application");
+			editor.rows.add(new Row("", (x, y, w) -> editor.button(x, y, w, tr("recent_application"),
+					() -> Minecraft.getInstance().setScreen(new DesignerRecentApplicationScreen(editor, recent)))
+					.active = editor.canPublish));
+		}
 		for (PendingPublication pending : java.util.List.copyOf(PUBLICATIONS.values())) {
 			if (!pending.owner().equals(publicationOwner)) {
 				continue;
@@ -128,8 +151,8 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 				screen.singlePublication = pending.single();
 				screen.uncertain = true;
 				screen.policy = "keep_identities";
-				net.minecraft.client.Minecraft.getInstance().setScreen(screen);
-				screen.queryResult();
+				screen.queryOnOpen = true;
+				Minecraft.getInstance().setScreen(screen);
 			})));
 		}
 	}
@@ -218,6 +241,10 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 			}
 		}).active = !writing && !transferring && plan != null && !plan.documents().isEmpty();
 		button(left + cell + 6, footerY(), cell, tr("back"), this::onClose).active = !writing && !committing;
+		if (queryOnOpen) {
+			queryOnOpen = false;
+			queryResult();
+		}
 	}
 
 	private void save() {
@@ -329,7 +356,7 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 			fail(BeeDesignerDocument.text(data, "message", "designer.check_failed"));
 			uncertain = unknown;
 			if (!unknown && token != null) {
-				completePublication(token);
+				PUBLICATIONS.remove(token);
 				BeeDesignerClient.request("import_cancel", message());
 			}
 		} else if (action.equals("import_ready") || action.equals("import_staged")) {
@@ -390,7 +417,7 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 			committing = false;
 			uncertain = !BeeDesignerDocument.text(data, "phase", "").equals("rejected");
 			if (!uncertain) {
-				completePublication(token);
+				PUBLICATIONS.remove(token);
 			}
 			status = uncertain ? "designer.batch_import_pending" : BeeDesignerDocument.text(data, "message", "designer.check_failed");
 		}

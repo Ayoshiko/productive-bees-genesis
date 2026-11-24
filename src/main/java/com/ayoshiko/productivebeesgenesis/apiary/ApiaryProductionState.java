@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerIdentity;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -290,7 +291,9 @@ public final class ApiaryProductionState {
         int slot = activeSlots[0];
         BeeSlot live = current[slot];
         int next = localContext.getInt("next_ticks");
-        if (!localContext.getCompound("bee_data").equals(live.getBeeData())
+        CompoundTag paidBee = localContext.getCompound("bee_data").copy();
+        BeeDesignerIdentity.migrateBeeData(paidBee);
+        if (!paidBee.equals(live.getBeeData())
                 || live.getTicksInHive() != localContext.getInt("previous_ticks") && live.getTicksInHive() != next) {
             return false;
         }
@@ -299,7 +302,7 @@ public final class ApiaryProductionState {
             CompoundTag mixed = localContext.getCompound("mixed_local");
             if (!Set.of("items_snbt", "fluid", "fluid_amount").containsAll(mixed.getAllKeys())
                     || !mixed.contains("items_snbt", Tag.TAG_STRING)
-                    || !mixed.getString("items_snbt").equals(new ApiaryOutputEvidenceCache().encode(items, provider))) {
+                    || !new ApiaryOutputEvidenceCache().matches(mixed.getString("items_snbt"), items, provider)) {
                 return false;
             }
             if (fluidAmount > 0) {

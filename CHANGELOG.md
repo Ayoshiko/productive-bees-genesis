@@ -31,6 +31,44 @@
 
 ## [Unreleased]
 
+## [1.2.7] - 2026-11-24
+
+**蜜蜂编辑器、旧版搜索与整合包制作维护更新。** 客户端与服务端须一起更新。 / **Bee editor, legacy search and modpack authoring maintenance update.** Update clients and servers together.
+
+### 修复
+
+- **旧注册蜂搜索**：升级后首次 JEI 加载自动修复中文拼音索引，同时支持英文名称和完整蜂种 ID，无需打开编辑器或重新应用。改名后的正式蜂种本体不会被旧兼容别名隐藏。
+- **名称与应用结果**：世界应用生成并同步中英文翻译键；修复查看最近成功应用时的页面崩溃，保留当前编辑内容。
+- **草稿与首次载入**：修复未修改草稿之间切换时的误报，状态栏可查看并跳转到实际改动。首次打开自动校验已加载内容并继续读取所选蜂种。
+- **紧凑说明文字**：有序／无序提示和导出蜂名摘要关闭文字阴影，避免平滑字体出现重影。
+- **手册搜索**：为蜂蜂应援手册补充 JEI 名称别名，可用“蜂蜂”“fengfeng”“蜜蜂编辑器”和完整物品 ID 搜索。
+- **身份故障与应用取消**：坏身份映射保留原蜂、实体元数据、已付周期和账户请求，只隔离实际故障范围，映射修复后自动续跑。应用准备期间关闭、断线或换会话，会保留原操作可查询的取消结果。
+
+### 改进
+
+- **蜂种身份迁移**：外观和发布总览支持直接编辑 ID，未完成输入随草稿恢复；已有可配置蜂种通过作者迁移保留旧身份兼容、数量、已付生产进度和产物。
+- **九宫格与批量蜂蛋配方**：可直接从背包或 JEI 拖入材料；有序／无序用高亮小按钮和简短规则同行展示。重复材料保存为 ABA／key，普通 KubeJS 合成使用 shaped／shapeless 简写，精确组件、条件及扩展字段保留完整声明。多选蜜蜂可用共享获得／机器模板生成蜂蛋配方草稿。
+- **密集草稿库与物品栏**：按窗口宽度显示 1–3 列，卡片展示对应蜂蛋。标题栏可临时显示／隐藏物品栏，设置可选择自动、始终显示或始终隐藏；自动模式在材料页显示、浏览页隐藏。支持 Ctrl 点选、Shift 范围、Ctrl+Shift 追加、框选／Esc 撤回，以及最多 100 项的筛选结果全选。
+- **导出与文件预览**：单蜂或多蜂共用一个可命名的导出包，默认名称含蜂种或蜂数、格式与时间，确认前可搜索并只读查看文件，同名拒绝覆盖。精简发布包保留运行内容、名称、必要身份映射及署名，可编辑收藏另存。
+
+### English
+
+#### Fixed
+
+- **Legacy bee search**: the first JEI load after updating repairs Chinese pinyin indexing and adds English name and full bee ID aliases without reopening the editor or reapplying projects. Old compatibility aliases no longer hide the renamed bee ingredient.
+- **Names and application results**: applying a project creates and synchronizes translated name keys. Viewing the last successful application no longer crashes or changes the current draft.
+- **Drafts and initial loading**: switching between unchanged drafts no longer reports false edits. The status bar shows real changes and links to their fields. Opening the editor automatically verifies loaded content and continues reading the selected bee.
+- **Compact text**: crafting mode hints and export bee summaries render without shadows, avoiding doubled glyphs with smooth fonts.
+- **Handbook search**: JEI aliases support “蜂蜂”, “fengfeng”, “bee designer” and the full item ID for the BeeBee Support Handbook.
+- **Identity failures and cancelled applications**: invalid identity mappings retain the original bee, entity metadata, paid cycles and account requests. Only the affected scope is held and resumes after the mapping is repaired. Closing, disconnecting or changing sessions during preparation leaves a queryable cancellation result for the original operation.
+
+#### Improved
+
+- **Bee identity migration**: edit IDs directly in Appearance and the publication overview, with unfinished input retained in drafts. Author migrations preserve old identity compatibility, quantities, paid progress and outputs for existing configurable bees.
+- **Crafting and batch egg recipes**: drag ingredients directly from inventory or JEI. Compact highlighted Shaped / Shapeless buttons share a row with their rules. Repeated ingredients use ABA/key; ordinary KubeJS crafting uses shaped/shapeless declarations while exact components, conditions and extension fields remain intact. Selected bees can receive egg recipe drafts from a shared acquisition or machine template.
+- **Dense local drafts and inventory**: adaptive 1–3 column cards show the corresponding bee eggs. Toggle inventory from the title bar, or choose Automatic, Always show or Always hide in settings; Automatic shows it on material pages and hides it while browsing. Ctrl-click, Shift ranges, Ctrl+Shift additions, box selection with Esc rollback and filtered selection of up to 100 drafts are supported.
+- **Export and file preview**: selected bees share a named bundle. Default names include the bee ID or count, format and timestamp; preview, search and read-only file browsing precede writing, and existing filenames are not overwritten. Compact release files retain runtime content, names, required identity mappings and credits; editable collections remain a separate export.
+
 ## [1.2.6] - 2026-11-21
 
 **蜜脾块升级、自动恢复与生产性能维护更新。** 客户端与服务端须一起更新。 / **Comb block upgrades, automatic recovery and production performance maintenance update.** Update clients and servers together.

@@ -1,8 +1,13 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerIdentity;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.nbt.TagParser;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
@@ -69,6 +74,46 @@ final class ApiaryOutputEvidenceCache {
             retainedCharacters += encoded.length();
         }
         return encoded;
+    }
+
+    boolean matches(String saved, List<ItemStack> items, HolderLookup.Provider currentProvider) {
+        String current = encode(items, currentProvider);
+        if (saved.equals(current)) {
+            return true;
+        }
+        try {
+            CompoundTag previous = TagParser.parseTag("{items:" + saved + "}");
+            CompoundTag next = TagParser.parseTag("{items:" + current + "}");
+            migrateEvidence(previous);
+            migrateEvidence(next);
+            return previous.equals(next);
+        } catch (CommandSyntaxException invalid) {
+            // 只读凭据无法解析时不能确认交付；原请求和文本继续保管。
+            return false;
+        }
+    }
+
+    private static void migrateEvidence(Tag value) {
+        if (value instanceof CompoundTag data) {
+            if (data.contains("productivebees:bee_type", Tag.TAG_STRING)) {
+                String previous = data.getString("productivebees:bee_type");
+                String next = BeeDesignerIdentity.resolve(previous);
+                if (!previous.equals(next)) {
+                    data.putString("productivebees:bee_type", next);
+                }
+            }
+            if (data.getString("id").equals("productivebees:configurable_bee")
+                    || data.getString("entity").equals("productivebees:configurable_bee")) {
+                BeeDesignerIdentity.migrateBeeData(data);
+            }
+            for (String key : data.getAllKeys()) {
+                migrateEvidence(data.get(key));
+            }
+        } else if (value instanceof ListTag list) {
+            for (Tag child : list) {
+                migrateEvidence(child);
+            }
+        }
     }
 
     private Template template(ItemStack stack, HolderLookup.Provider currentProvider) {

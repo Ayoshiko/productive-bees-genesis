@@ -2,7 +2,7 @@ package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import net.minecraft.client.renderer.Rect2i;
 
-/** 只保存界面几何偏好；可用区域始终排除独立背包和 JEI。 */
+/** 只保存界面几何偏好；可用区域排除当前页面所需的背包和 JEI。 */
 final class DesignerWindowLayout {
 	static final int WEST = 1;
 	static final int EAST = 2;
@@ -24,10 +24,10 @@ final class DesignerWindowLayout {
 	private double pressX;
 	private double pressY;
 
-	Bounds fit(int screenWidth, int screenHeight, int ingredientSpace) {
+	Bounds fit(int screenWidth, int screenHeight, int ingredientSpace, boolean inventory) {
 		minimumX = 8;
 		availableWidth = Math.max(1, screenWidth - 16);
-		availableHeight = Math.max(1, screenHeight - 108);
+		availableHeight = Math.max(1, screenHeight - (inventory ? 108 : 8));
 		int width = clamp(preferredWidth < 0 ? Math.min(820, Math.max(280, screenWidth - ingredientSpace * 2 - 16)) : preferredWidth, Math.min(280, availableWidth), availableWidth);
 		int height = clamp(preferredHeight < 0 ? 540 : preferredHeight, Math.min(132, availableHeight), availableHeight);
 		int x = positioned ? requestedX : minimumX + (availableWidth - width) / 2;
@@ -147,14 +147,14 @@ final class DesignerWindowLayout {
 		}
 	}
 
-    Viewport viewport(int width, int height, double gameScale, double preference, boolean jei) {
+    Viewport viewport(int width, int height, double gameScale, double preference, boolean jei, boolean inventory) {
         double pixels = Math.max(1, Math.min(3, Math.round(gameScale)));
         float geometryScale = (float) Math.max(0.55, Math.min(1.15, pixels / gameScale));
         float uiScale = (float) Math.max(0.55, Math.min(1.15, pixels / gameScale * preference));
         int windowWidth = (int) Math.floor(width / geometryScale);
         int windowHeight = (int) Math.floor(height / geometryScale);
         int ingredientSpace = jei && windowWidth >= 480 ? Math.min(112, Math.max(60, (windowWidth - 580) / 2)) : 0;
-        Bounds geometry = fit(windowWidth, windowHeight, ingredientSpace);
+        Bounds geometry = fit(windowWidth, windowHeight, ingredientSpace, inventory);
         float factor = geometryScale / uiScale;
         int left = Math.round(geometry.left() * factor);
         int top = Math.round(geometry.top() * factor);

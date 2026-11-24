@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
 import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerIdentity;
 import com.ayoshiko.productivebeesgenesis.util.PbCombItemRefs;
 import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import com.mojang.serialization.Codec;
@@ -77,7 +78,8 @@ public record ResourceCentrifugeRecipe(ResourceLocation bee, List<ResourceProduc
 
 	/** 输入中的真实单蜜脾份数；不按 Item 相同就忽略 bee_type。 */
 	public int units(ItemStack input) {
-		return bee.equals(input.get(PbDataComponents.beeType())) ? unitsForItem(input) : 0;
+		return BeeDesignerIdentity.resolve(bee).equals(BeeDesignerIdentity.resolve(input.get(PbDataComponents.beeType())))
+				? unitsForItem(input) : 0;
 	}
 
 	static int unitsForItem(ItemStack input) {
@@ -89,7 +91,7 @@ public record ResourceCentrifugeRecipe(ResourceLocation bee, List<ResourceProduc
 	/** 返回独立输入样本，供 JEI、数据生成和第三方配方转换使用。 */
 	public ItemStack input(boolean block) {
 		var stack = new ItemStack(block ? PbCombItemRefs.combBlock() : PbCombItemRefs.honeycomb());
-		stack.set(PbDataComponents.beeType(), bee);
+		stack.set(PbDataComponents.beeType(), BeeDesignerIdentity.resolve(bee));
 		return stack;
 	}
 

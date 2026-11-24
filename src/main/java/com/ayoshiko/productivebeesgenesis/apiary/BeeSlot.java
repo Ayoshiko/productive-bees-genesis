@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.apiary;
 
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerIdentity;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
@@ -86,6 +87,7 @@ public class BeeSlot {
 	private volatile int cachedProductivityLevel = -1;
 	private volatile @Nullable ResourceLocation cachedBeeTypeKey;
 	private volatile boolean cachedBeeTypeResolved;
+	private long identityGeneration = Long.MIN_VALUE;
 	private volatile int cachedContainerFlowerVersion = Integer.MIN_VALUE;
 	private volatile boolean cachedContainerFlower;
 
@@ -139,6 +141,21 @@ public class BeeSlot {
 
 	/** 获取蜜蜂完整 NBT 数据（可能为 null 表示空槽） */
 	public @Nullable CompoundTag getBeeData() {
+		if (beeData != null) {
+			long generation = BeeDesignerIdentity.generation();
+			if (identityGeneration != generation) {
+				String previous = beeData.getString("type");
+				BeeDesignerIdentity.migrateBeeData(beeData);
+				identityGeneration = generation;
+				cachedBeeTypeKey = null;
+				cachedBeeTypeResolved = false;
+				cachedFlowerValidVersion = Integer.MIN_VALUE;
+				cachedContainerFlowerVersion = Integer.MIN_VALUE;
+				if (!previous.equals(beeData.getString("type"))) {
+					dirty = true;
+				}
+			}
+		}
 		return beeData;
 	}
 
@@ -155,6 +172,7 @@ public class BeeSlot {
 		// 内容比较：若 NBT 数据实质相同则跳过（防止 copy() 产生的新引用误触发）
 		if (this.beeData != null && beeData != null && this.beeData.equals(beeData)) return;
 		this.beeData = beeData;
+		identityGeneration = Long.MIN_VALUE;
 		this.cachedProductivityLevel = -1;
 		this.cachedBeeTypeKey = null;
 		this.cachedBeeTypeResolved = false;
@@ -176,8 +194,9 @@ public class BeeSlot {
 	}
 
 	public @Nullable ResourceLocation getBeeTypeKey() {
+		CompoundTag data = getBeeData();
 		if (!cachedBeeTypeResolved) {
-			cachedBeeTypeKey = BeeNbtHelper.resolveBeeTypeKey(beeData);
+			cachedBeeTypeKey = BeeNbtHelper.resolveBeeTypeKey(data);
 			cachedBeeTypeResolved = true;
 		}
 		return cachedBeeTypeKey;

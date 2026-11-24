@@ -33,6 +33,11 @@ final class DesignerEggScreen extends DesignerFormScreen {
 	}
 
 	@Override
+	protected boolean showsInventory() {
+		return true;
+	}
+
+	@Override
 	protected void init() {
 		begin();
 		section("egg_identity");

@@ -23,7 +23,11 @@ final class DesignerBeeFields {
 	static void appearance(DesignerFormScreen screen, JsonObject document, boolean advanced) {
 		var mc = Minecraft.getInstance();
 		screen.section("identity");
-		screen.note("id", Component.literal(document.get("id").getAsString()));
+		if (screen instanceof BeeDesignerScreen editor) {
+			editor.identityField();
+		} else {
+			screen.note("id", Component.literal(document.get("id").getAsString()));
+		}
 		JsonObject names = BeeDesignerDocument.object(document, "names");
 		screen.scope("names");
 		screen.field("name_zh", names, "zh_cn", "");

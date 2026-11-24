@@ -274,7 +274,7 @@ public final class ResourceAccount {
 	/** 仅给当前恢复请求提供独立证据；旧票据不能触发宿主确认。 */
 	public CompoundTag productionContext(Ticket expected) {
 		accounts.checkThread();
-		return pendingProduction(expected).context.copy();
+		return ResourceAccountData.migratedContext(pendingProduction(expected).context);
 	}
 
 	/** 包内只读借用；调用者不得修改原始标签。工作本身保存在账户，接口不复制它。 */

@@ -51,6 +51,11 @@ final class DesignerStackButton extends Button {
 		beginOutputDrag = beginDrag;
 	}
 
+	DesignerStackButton clearable(Runnable clear) {
+		removeOutput = clear;
+		return this;
+	}
+
 	boolean outputPressed() {
 		return outputPressed;
 	}
@@ -62,7 +67,7 @@ final class DesignerStackButton extends Button {
 				removeOutput.run();
 				return true;
 			}
-			if (button == 0) {
+			if (button == 0 && beginOutputDrag != null) {
 				outputPressed = true;
 				pressedX = x;
 				pressedY = y;
@@ -131,7 +136,7 @@ final class DesignerStackButton extends Button {
 	}
 
 	void renderDetails(GuiGraphics graphics, int mouseX, int mouseY) {
-		if (!stack.isEmpty()) {
+		if (!stack.isEmpty() && getTooltip() == null) {
 			ItemStack display = stack.copy();
 			display.set(DataComponents.CUSTOM_NAME, name);
 			graphics.renderTooltip(DesignerFonts.body(), display, mouseX, mouseY);

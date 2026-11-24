@@ -4,6 +4,7 @@ import com.ayoshiko.productivebeesgenesis.ProductiveBeesGenesis;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerEggs;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerProtocol;
+import com.ayoshiko.productivebeesgenesis.mixin.client.DesignerLanguageAccess;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.client.Minecraft;
@@ -23,6 +24,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 import java.util.Set;
 
@@ -92,6 +94,23 @@ public final class BeeDesignerClient {
 
 	public static boolean retired(String id) {
 		return RETIRED.contains(id);
+	}
+
+	public static long registeredNamesGeneration() {
+		return namesGeneration;
+	}
+
+	public static long resourceNamesGeneration() {
+		return DesignerEnglishNames.generation();
+	}
+
+	public static List<String> registeredSearchNames(String id) {
+		JsonObject names = NAMES.get(id);
+		String english = names == null ? "" : BeeDesignerDocument.text(names, "en_us", "");
+		if (english.isBlank()) {
+			english = DesignerEnglishNames.name(BeeDesignerDocument.translationKey(id));
+		}
+		return english.isBlank() ? List.of(id) : List.of(id, english);
 	}
 
 	static Component itemName(ItemStack stack) {
@@ -191,11 +210,19 @@ public final class BeeDesignerClient {
 			CANCELLED.clear();
 			DesignerBatchImportScreen.connected();
 			screen = new BeeDesignerScreen(data.get("can_publish").getAsBoolean());
+			screen.initialPublication(data.getAsJsonObject("publication"));
 			Minecraft.getInstance().setScreen(screen);
 			DesignerDraftIndex.ensureLoaded();
 			return;
 		}
 		if (session != null && session.equals(response.session())) {
+			DesignerFormScreen recentForm = Minecraft.getInstance().screen instanceof DesignerFormScreen form ? form : null;
+			for (int depth = 0; recentForm != null && !(recentForm instanceof DesignerRecentApplicationScreen) && depth < 16; depth++) {
+				recentForm = recentForm.editorParent instanceof DesignerFormScreen form ? form : null;
+			}
+			if (recentForm instanceof DesignerRecentApplicationScreen recent && recent.receive(response.sequence(), response.action(), data)) {
+				return;
+			}
 			DesignerFormScreen importing = Minecraft.getInstance().screen instanceof DesignerFormScreen form ? form : null;
 			for (int depth = 0; importing != null && !(importing instanceof DesignerBatchImportScreen) && depth < 16; depth++) {
 				importing = importing.editorParent instanceof DesignerFormScreen form ? form : null;
@@ -332,7 +359,12 @@ public final class BeeDesignerClient {
 				translations.put(BeeDesignerDocument.translationKey(id), names.get(locale).getAsString());
 			}
 		});
-		Language.inject(new NamesLanguage(base, Map.copyOf(translations), language));
+		injectLanguage(new NamesLanguage(base, Map.copyOf(translations), language));
+	}
+
+	private static void injectLanguage(Language language) {
+		Language.inject(language);
+		DesignerLanguageAccess.productivebeesgenesis$setLanguage(language);
 	}
 
 	@SubscribeEvent
@@ -391,7 +423,7 @@ public final class BeeDesignerClient {
 		screen = null;
 		session = null;
 		if (Language.getInstance() instanceof NamesLanguage names) {
-			Language.inject(names.base);
+			injectLanguage(names.base);
 		}
 	}
 

@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.authoring;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import cy.jdkdigital.productivebees.setup.BeeReloadListener;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 
@@ -23,6 +24,7 @@ final class BeeDesignerImportBatch {
 	private final Map<String, JsonObject> originals = new LinkedHashMap<>();
 	private final Map<String, JsonObject> managedBaselines = new LinkedHashMap<>();
 	private final Map<String, String> managedSources = new LinkedHashMap<>();
+	private final Map<String, String> sourceIds = new LinkedHashMap<>();
 	private final Map<String, String> requestFingerprints = new LinkedHashMap<>();
 	private final Map<String, String> requestBaselines = new LinkedHashMap<>();
 	private int bytes;
@@ -50,18 +52,29 @@ final class BeeDesignerImportBatch {
 	void add(JsonObject source, JsonObject original) {
 		BeeDesignerCompiler.validateStructure(source);
 		String id = source.get("id").getAsString();
+		String sourceId = BeeDesignerIdentity.sourceId(source);
+		boolean migrating = source.has(BeeDesignerIdentity.MIGRATION);
+		if (migrating && (BeeReloadListener.INSTANCE.getData(ResourceLocation.parse(id)) != null
+				|| BeeDesignerNativeBees.contains(ResourceLocation.parse(id)) || BeeDesignerSources.managed.containsKey(id)
+				|| sourceIds.containsValue(sourceId))) {
+			throw new IllegalArgumentException("designer.error.migration_duplicate|" + id);
+		}
+		JsonObject migrationOriginal = original;
 		if (drafts) {
 			String baseline = BeeDesignerDocument.text(source, "baseline", "new");
-			String managed = BeeDesignerSources.managed.get(id);
+			String managed = BeeDesignerSources.managed.get(sourceId);
 			boolean matchesManaged = original != null && managed != null
 					&& baseline.equals(BeeDesignerDocument.fingerprint(BeeDesignerProtocol.parse(managed)));
 			if (!baseline.equals(original == null ? "new" : original.get("baseline").getAsString())) {
 				if (!matchesManaged) {
 					throw new IllegalArgumentException("designer.error.draft_conflict|" + id);
 				}
-				managedBaselines.put(id, BeeDesignerProtocol.parse(managed));
+				migrationOriginal = BeeDesignerProtocol.parse(managed);
+				migrationOriginal.addProperty("baseline", baseline);
+				managedBaselines.put(id, migrationOriginal);
 			}
 		}
+		BeeDesignerIdentity.prepareMigration(migrationOriginal, source);
 		if (BeeDesignerNativeBees.contains(ResourceLocation.parse(id)) || BeeDesignerNativeBees.recipesOnly(source)) {
 			BeeDesignerNativeBees.validate(source);
 		}
@@ -75,7 +88,13 @@ final class BeeDesignerImportBatch {
 			if (original.has("_editor_origin") && original.get("_editor_origin").isJsonObject()) {
 				document.add("_editor_origin", original.getAsJsonObject("_editor_origin").deepCopy());
 			}
-			document.add("definition_path", original.get("definition_path").deepCopy());
+			if (!migrating) {
+				document.add("definition_path", original.get("definition_path").deepCopy());
+			} else {
+				JsonObject migration = document.getAsJsonObject(BeeDesignerIdentity.MIGRATION);
+				migration.add("baseline", original.get("baseline").deepCopy());
+				migration.add("definition_path", original.get("definition_path").deepCopy());
+			}
 			document.add("baseline", original.get("baseline").deepCopy());
 			if (BeeDesignerMyriad.recipesOnly(document)) {
 				document.add("definition", original.get("definition").deepCopy());
@@ -110,21 +129,32 @@ final class BeeDesignerImportBatch {
 			throw new IllegalArgumentException("designer.error.export_budget");
 		}
 		documents.put(id, document);
-		managedSources.put(id, BeeDesignerSources.managed.get(id));
+		managedSources.put(id, BeeDesignerSources.managed.get(sourceId));
+		sourceIds.put(id, sourceId);
 		requestFingerprints.put(id, BeeDesignerDocument.fingerprint(source));
 		requestBaselines.put(id, BeeDesignerDocument.text(source, "baseline", "new"));
 	}
 
+	Map<String, BeeDesignerReader.Snapshot> sharedOwnerSnapshots(MinecraftServer server) {
+		return BeeDesignerIdentity.sharedOwnerSnapshots(server, documents, originals);
+	}
+
 	Map<String, String> validate(MinecraftServer server) {
+		return validate(server, Map.of());
+	}
+
+	Map<String, String> validate(MinecraftServer server, Map<String, JsonObject> related) {
 		if (generation != BeeDesignerSources.generation || documents.size() != expected) {
 			throw new IllegalArgumentException("designer.error.collection_changed");
 		}
 		Set<ResourceLocation> batchBees = documents.keySet().stream().map(ResourceLocation::parse).collect(Collectors.toSet());
+		Set<String> replacedSources = Set.copyOf(sourceIds.values());
+		var existingBees = BeeDesignerEggs.bees().stream().filter(bee -> !replacedSources.contains(bee)).toList();
 		for (var entry : documents.entrySet()) {
 			String id = entry.getKey();
 			JsonObject document = entry.getValue();
 			JsonObject original = originals.get(id);
-			if (!Objects.equals(managedSources.get(id), BeeDesignerSources.managed.get(id))) {
+			if (!Objects.equals(managedSources.get(id), BeeDesignerSources.managed.get(sourceIds.get(id)))) {
 				throw new IllegalArgumentException("designer.error.draft_conflict|" + id);
 			}
 			if (original != null && !BeeDesignerReader.unchanged(server, original)) {
@@ -135,7 +165,7 @@ final class BeeDesignerImportBatch {
 				throw new IllegalArgumentException("designer.error.draft_conflict|" + id);
 			}
 			var conflicts = BeeDesignerImportConflicts.inspect(id,
-					BeeDesignerEggs.bees(), documents.keySet());
+					existingBees, documents.keySet());
 			if (!conflicts.canKeepIdentity()) {
 				throw new IllegalArgumentException("designer.import_name_conflict|" + String.join(", ", conflicts.nameCollisions()));
 			}
@@ -149,7 +179,7 @@ final class BeeDesignerImportBatch {
 			if (BeeDesignerMyriad.recipesOnly(document)) {
 				BeeDesignerMyriad.validateRecipes(original, document);
 			}
-			BeeDesignerLifecycle.validateSharedChanges(original, document, documents);
+			BeeDesignerIdentity.prepareMigration(original, document);
 			for (var recipe : document.getAsJsonObject("recipes").entrySet()) {
 				boolean owned = original != null && original.getAsJsonObject("recipes").has(recipe.getKey());
 				if (!owned && server.getRecipeManager().byKey(ResourceLocation.parse(recipe.getKey())).isPresent()) {
@@ -162,13 +192,9 @@ final class BeeDesignerImportBatch {
 				throw new IllegalArgumentException("designer.error.migration_invalid|" + id + "|" + BeeDesignerServer.safeMessage(invalid), invalid);
 			}
 		}
-		Map<String, String> combined = new LinkedHashMap<>(BeeDesignerSources.managed);
-		documents.forEach((id, document) -> combined.put(id, document.toString()));
-		if (combined.size() > BeeDesignerCollection.MAX_BEES) {
-			throw new IllegalArgumentException("designer.error.collection_count");
-		}
+		Map<String, String> combined = BeeDesignerIdentity.coordinateMigration(server, documents, originals, related);
 		BeeDesignerCompiler.files(combined);
-		return Map.copyOf(combined);
+		return combined;
 	}
 
 	String requestDigest() {

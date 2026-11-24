@@ -76,10 +76,8 @@ final class DesignerRecipeFields {
 				screen.number("chance", recipe, "chance", "0.05");
 			}
 			case "minecraft:crafting_shapeless", "minecraft:crafting_shaped" -> {
-				screen.anchor("ingredients");
-				screen.anchor("pattern");
-				screen.anchor("key");
-				screen.rows.add(new DesignerFormScreen.Row("crafting_grid", (x, y, w) -> screen.button(x, y, w, DesignerFormScreen.tr("edit_crafting"),
+				DesignerCraftingGrid.add(screen, recipe);
+				screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> screen.button(x, y, w, DesignerFormScreen.tr("crafting_expand_grid"),
 						() -> minecraft.setScreen(new DesignerCraftingScreen(screen, recipe)))));
 				screen.anchor("result");
 				screen.rows.add(new DesignerFormScreen.Row("egg_output", (x, y, w) -> screen.stackButton(x, y, w,

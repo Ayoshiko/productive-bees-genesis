@@ -2,10 +2,17 @@ package com.ayoshiko.productivebeesgenesis.apiary;
 
 import com.ayoshiko.productivebeesgenesis.MyriadBeeTypeCache;
 import com.ayoshiko.productivebeesgenesis.MyriadCreationsEventHandler;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerIdentity;
 import com.ayoshiko.productivebeesgenesis.config.BalanceConfig;
 import com.ayoshiko.productivebeesgenesis.logistics.OutputCustody;
 import com.ayoshiko.productivebeesgenesis.resource.PbResourceCatalog;
 import com.ayoshiko.productivebeesgenesis.resource.ResourceRuntime;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceCentrifugeRecipe;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceProductionRecipe;
+import com.ayoshiko.productivebeesgenesis.resource.ResourceTypes;
+import com.ayoshiko.productivebeesgenesis.util.PbCombItemRefs;
+import com.ayoshiko.productivebeesgenesis.util.PbDataComponents;
 import com.ayoshiko.productivebeesgenesis.util.LogThrottle;
 import com.ayoshiko.productivebeesgenesis.util.MultiFlowerBeeAdapter;
 import com.ayoshiko.productivebeesgenesis.util.PBConstants;
@@ -14,6 +21,8 @@ import cy.jdkdigital.productivelib.common.recipe.TagOutputRecipe.ChancedOutput;
 import cy.jdkdigital.productivebees.init.ModFluids;
 import cy.jdkdigital.productivebees.init.ModItems;
 import cy.jdkdigital.productivebees.init.ModDataComponents;
+import cy.jdkdigital.productivebees.setup.BeeReloadListener;
+import cy.jdkdigital.productivebees.util.BeeCreator;
 import mekanism.api.IContentsListener;
 import mekanism.common.inventory.slot.BasicInventorySlot;
 import net.minecraft.core.BlockPos;
@@ -1148,6 +1157,222 @@ class ApiaryCustodyMinecraftTest {
             restored.getComponents().forEach(component -> component.read(components, registries()));
             assertFalse(OutputCustody.of(restored).blocked());
             assertTrue(OutputCustody.of(restored).requests().isEmpty());
+        }
+    }
+
+    @Test void invalidIdentityKeepsPaidCyclesAndHealthyTickerContinuesThenRecovers() {
+        var definitions = BeeReloadListener.INSTANCE.getData();
+        var failedType = ResourceLocation.parse("test:invalid_paid_identity");
+        var recoveredType = ResourceLocation.parse("test:recovered_paid_identity");
+        var healthyType = ResourceLocation.parse("productivebees:gold");
+        var broken = new CompoundTag();
+        broken.putString(BeeDesignerIdentity.TARGET, recoveredType.toString());
+        var source = tile();
+        var level = mock(Level.class);
+        when(level.registryAccess()).thenReturn(registries());
+        when(level.getRecipeManager()).thenReturn(mock(RecipeManager.class));
+        source.setLevel(level);
+        var tile = spy(source);
+        doReturn(true).when(tile).canFunction();
+        var manager = tile.getSlotManager();
+        var feeder = tile.getFeederSlotManager();
+        var processor = spy(tile.getProduceProcessor());
+        var state = tile.productionState();
+        var healthyOutput = new ItemStack(Items.GOLD_INGOT);
+        var recoveredOutput = new ItemStack(Items.IRON_INGOT);
+        doReturn(Map.of(healthyOutput, new ChancedOutput(Ingredient.of(healthyOutput), 1, 1, 1)))
+                .when(processor).getCachedProduce(healthyType, level, feeder);
+        doReturn(Map.of(recoveredOutput, new ChancedOutput(Ingredient.of(recoveredOutput), 1, 1, 1)))
+                .when(processor).getCachedProduce(recoveredType, level, feeder);
+        try {
+            BeeReloadListener.INSTANCE.setData(Map.of(failedType, new CompoundTag(), healthyType, new CompoundTag()));
+            for (int index = 0; index < 2; index++) {
+                var data = new CompoundTag();
+                data.putString("entity", "productivebees:configurable_bee");
+                data.putString("type", (index == 0 ? failedType : healthyType).toString());
+                data.putInt("identity", index + 7);
+                var bee = manager.getBeeSlots()[index];
+                bee.setBeeData(data);
+                bee.setTicksInHive(11);
+                state.counts[index] = 4;
+                state.capture(index, bee);
+            }
+            var originalBee = manager.getBeeSlots()[0].getBeeData().copy();
+            var saved = state.save(registries());
+            state.load(registries(), saved);
+            assertEquals(saved, state.save(registries()));
+            var conversion = spy(new ApiaryConversionProcessor(tile, manager, feeder));
+            var ticker = new BeeSlotTickProcessor(tile, manager, processor, tile.upgradeHandler, feeder,
+                    new ApiaryBeeActivationCounter(manager.getBeeSlotCount()), conversion);
+            long energy = tile.energyContainer().getEnergy();
+            var failurePosition = tile.getBlockPos();
+            try (var balance = mockStatic(BalanceConfig.class);
+                    var fluid = mockStatic(com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver.class);
+                    var logging = mockStatic(LogThrottle.class)) {
+                fluid.when(() -> com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver.resolveFluidOutput(healthyType, level))
+                        .thenReturn(FluidStack.EMPTY);
+                fluid.when(() -> com.ayoshiko.productivebeesgenesis.util.BeeFluidOutputResolver.resolveFluidOutput(recoveredType, level))
+                        .thenReturn(FluidStack.EMPTY);
+                ticker.tick();
+                BeeReloadListener.INSTANCE.setData(Map.of(failedType, broken, healthyType, new CompoundTag()));
+                for (int tick = 0; tick < 30; tick++) {
+                    ticker.tick();
+                }
+                assertEquals(BeeState.PREPARATION_FAILED, manager.getBeeSlots()[0].getState());
+                assertEquals(originalBee, manager.getBeeSlots()[0].getBeeData());
+                assertEquals(originalBee, state.bees[0].getBeeData());
+                assertEquals(4, state.counts[0]);
+                assertEquals(0, state.counts[1]);
+                assertFalse(state.suspended());
+                assertFalse(state.active());
+                assertEquals(energy, tile.energyContainer().getEnergy());
+                assertEquals(11, manager.getBeeSlots()[0].getTicksInHive());
+                assertEquals(4, tile.getOutputSlots().stream().map(slot -> slot.getStack())
+                        .filter(stack -> stack.is(Items.GOLD_INGOT)).mapToInt(ItemStack::getCount).sum());
+                logging.verify(() -> LogThrottle.errorWithCooldown(eq("apiary_failure_first"), eq(60_000L), anyString(),
+                        eq(failurePosition), eq("preparation"), eq(0), eq(originalBee), any(IllegalStateException.class)), times(1));
+                logging.verify(() -> LogThrottle.errorWithCooldown(eq("apiary_failure_first"), eq(60_000L), anyString(),
+                        eq(failurePosition), eq("paid-snapshot"), eq(0), eq(originalBee), any(IllegalStateException.class)), times(1));
+                var alias = broken.copy();
+                BeeReloadListener.INSTANCE.setData(Map.of(failedType, alias, recoveredType, new CompoundTag(),
+                        healthyType, new CompoundTag()));
+                for (int tick = 0; tick < 10; tick++) {
+                    ticker.tick();
+                }
+                assertEquals(0, state.total());
+                assertFalse(state.suspended());
+                assertEquals(recoveredType, manager.getBeeSlots()[0].getBeeTypeKey());
+                assertEquals(7, manager.getBeeSlots()[0].getBeeData().getInt("identity"));
+                assertEquals(11, manager.getBeeSlots()[0].getTicksInHive());
+                assertEquals(energy, tile.energyContainer().getEnergy());
+                assertEquals(4, tile.getOutputSlots().stream().map(slot -> slot.getStack())
+                        .filter(stack -> stack.is(Items.IRON_INGOT)).mapToInt(ItemStack::getCount).sum());
+                assertEquals(4, tile.getOutputSlots().stream().map(slot -> slot.getStack())
+                        .filter(stack -> stack.is(Items.GOLD_INGOT)).mapToInt(ItemStack::getCount).sum());
+            }
+        } finally {
+            BeeReloadListener.INSTANCE.setData(definitions);
+            BeeDesignerIdentity.generation();
+        }
+    }
+
+    @Test void identityMigrationKeepsLoadedPaidCyclesAndRecoversLocalOutputOnce() {
+        var previousDefinitions = BeeReloadListener.INSTANCE.getData();
+        var oldId = ResourceLocation.parse("test:paid_identity_old");
+        var newId = ResourceLocation.parse("test:paid_identity_new");
+        var definition = BeeDesignerDocument.create(oldId.toString()).getAsJsonObject("definition");
+        var oldDefinition = BeeCreator.create(oldId, definition);
+        try {
+            BeeReloadListener.INSTANCE.setData(Map.of(oldId, oldDefinition));
+            var source = tile();
+            var bee = new CompoundTag();
+            bee.putString("entity", "productivebees:configurable_bee");
+            bee.putString("type", oldId.toString());
+            bee.putInt("identity", 7);
+            source.getBeeSlots()[0].setBeeData(bee.copy());
+            source.productionState().counts[0] = 4;
+            source.productionState().capture(0, source.getBeeSlots()[0]);
+            var removedBee = bee.copy();
+            removedBee.putInt("identity", 8);
+            source.getBeeSlots()[1].setBeeData(removedBee);
+            source.productionState().counts[1] = 3;
+            source.productionState().capture(1, source.getBeeSlots()[1]);
+            source.getBeeSlots()[1].clear();
+            source.productionState().detachReplaced(source.getBeeSlots());
+            var output = new ItemStack(PbCombItemRefs.honeycomb(), 2);
+            output.set(PbDataComponents.beeType(), oldId);
+            output.set(DataComponents.CUSTOM_NAME, Component.literal("paid identity output"));
+            var generated = new BeeProduceProcessor.Generated(List.of(output), new FluidStack(ModFluids.HONEY.get(), 1), 250);
+            var context = new CompoundTag();
+            context.putString("host", "mek_apiary");
+            context.putString("bee", oldId.toString());
+            context.put("bee_data", bee.copy());
+            context.putInt("slot", 2);
+            context.putInt("previous_ticks", 11);
+            context.putInt("next_ticks", 3);
+            context.putLong("cycles", 1);
+            context.putLong("energy_before", 70);
+            context.putLong("energy_cost", 0);
+            context.put("mixed_local", new ApiaryRoutedOutput(source, generated,
+                    ApiaryBatchUpgradeSnapshot.capture(source, source.upgradeHandler)).context(registries()));
+            var request = source.productionState().beginLocal(2, context, generated);
+            var saved = source.productionState().save(registries());
+            String originalEvidence = saved.getCompound("local_context").getCompound("mixed_local").getString("items_snbt");
+            var restored = tile();
+            var level = mock(ServerLevel.class);
+            when(level.registryAccess()).thenReturn(registries());
+            restored.setLevel(level);
+            restored.getBeeSlots()[0].setBeeData(bee.copy());
+            restored.getBeeSlots()[0].setTicksInHive(37);
+            restored.getBeeSlots()[0].setBaseMinOccupationTicks(200);
+            restored.getBeeSlots()[0].setMinOccupationTicks(200);
+            restored.getBeeSlots()[0].setHasNectar(true);
+            restored.getBeeSlots()[2].setBeeData(bee.copy());
+            restored.getBeeSlots()[2].setTicksInHive(11);
+            restored.productionState().load(registries(), saved);
+            var paid = restored.productionState();
+            assertEquals(oldId, restored.getBeeSlots()[0].getBeeTypeKey());
+            assertEquals(oldId, paid.bees[0].getBeeTypeKey());
+            assertEquals(oldId, paid.retained().bees[0].getBeeTypeKey());
+            int[] counts = paid.counts.clone();
+            long energy = restored.energyContainer().getEnergy();
+            long generation = BeeDesignerIdentity.generation();
+            var alias = oldDefinition.copy();
+            alias.putString(BeeDesignerIdentity.TARGET, newId.toString());
+            var nextDefinition = BeeCreator.create(newId, definition);
+            var frozenRecipe = new ResourceCentrifugeRecipe(oldId,
+                    List.of(new ResourceProductionRecipe.Output(ResourceTypes.FE, 1, 1)), 20);
+            BeeReloadListener.INSTANCE.setData(Map.of(oldId, alias, newId, nextDefinition));
+            assertTrue(BeeDesignerIdentity.generation() > generation);
+            var migratedBee = bee.copy();
+            migratedBee.putString("type", newId.toString());
+            assertEquals(migratedBee, restored.getBeeSlots()[0].getBeeData());
+            assertEquals(migratedBee, paid.bees[0].getBeeData());
+            assertEquals(newId, paid.retained().bees[0].getBeeTypeKey());
+            assertEquals(8, paid.retained().bees[0].getBeeData().getInt("identity"));
+            assertArrayEquals(counts, paid.counts);
+            assertEquals(3, paid.retained().total());
+            assertEquals(37, restored.getBeeSlots()[0].getTicksInHive());
+            assertEquals(200, restored.getBeeSlots()[0].getBaseMinOccupationTicks());
+            assertTrue(restored.getBeeSlots()[0].hasNectar());
+            assertTrue(paid.canAdvance(0, restored.getBeeSlots()[0]));
+            assertEquals(request, paid.request());
+            assertEquals(saved.getCompound("local_context"), paid.save(registries()).getCompound("local_context"));
+            assertEquals(2, paid.items().getFirst().getCount());
+            assertEquals(250, paid.fluidAmount());
+            assertTrue(paid.recoverLocal(restored.getBeeSlots(), registries()));
+            assertEquals(3, restored.getBeeSlots()[2].getTicksInHive());
+            paid.detachReplaced(restored.getBeeSlots());
+            assertArrayEquals(counts, paid.counts);
+            assertEquals(3, paid.retained().total());
+            assertEquals(energy, restored.energyContainer().getEnergy());
+            var local = new ApiaryBatchUpgradeSnapshot(0, false, false, 1, false, false, false, false, false, false);
+            assertTrue(restored.getProduceProcessor().flushFrozen(local));
+            assertTrue(restored.getProduceProcessor().flushFrozen(local));
+            assertEquals(2, restored.getOutputSlots().stream().map(slot -> slot.getStack())
+                    .filter(stack -> stack.is(PbCombItemRefs.honeycomb())).mapToInt(ItemStack::getCount).sum());
+            assertEquals(250, restored.getFluidTank().getFluidAmount());
+            assertFalse(paid.recoverLocal(restored.getBeeSlots(), registries()));
+            assertEquals(originalEvidence, saved.getCompound("local_context").getCompound("mixed_local").getString("items_snbt"));
+            var unresolved = saved.copy();
+            unresolved.getCompound("local_context").putLong("energy_cost", 5);
+            var unknown = tile();
+            unknown.getBeeSlots()[2].setBeeData(bee.copy());
+            unknown.getBeeSlots()[2].setTicksInHive(11);
+            unknown.productionState().load(registries(), unresolved);
+            assertFalse(unknown.productionState().recoverLocal(unknown.getBeeSlots(), registries()));
+            assertEquals(request, unknown.productionState().request());
+            assertEquals(unresolved.getCompound("local_context"),
+                    unknown.productionState().save(registries()).getCompound("local_context"));
+            assertEquals(2, unknown.productionState().items().getFirst().getCount());
+            assertEquals(250, unknown.productionState().fluidAmount());
+            var newInput = new ItemStack(PbCombItemRefs.honeycomb());
+            newInput.set(PbDataComponents.beeType(), newId);
+            assertEquals(1, frozenRecipe.units(newInput));
+            assertEquals(oldId, frozenRecipe.bee());
+        } finally {
+            BeeReloadListener.INSTANCE.setData(previousDefinitions);
+            BeeDesignerIdentity.generation();
         }
     }
 

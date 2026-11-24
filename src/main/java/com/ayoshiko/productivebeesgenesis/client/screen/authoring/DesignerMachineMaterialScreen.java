@@ -21,6 +21,11 @@ final class DesignerMachineMaterialScreen extends DesignerFormScreen {
 	}
 
 	@Override
+	protected boolean showsInventory() {
+		return BeeDesignerMachineRecipes.supported(entry.host(), entry.kind()) && !entry.kind().equals("energy");
+	}
+
+	@Override
 	protected void init() {
 		begin();
 		section("machine_material");

@@ -1,5 +1,6 @@
 package com.ayoshiko.productivebeesgenesis.resource;
 
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerIdentity;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
@@ -341,6 +342,19 @@ final class ResourceAccountData {
 		return production;
 	}
 
+	static CompoundTag migratedContext(CompoundTag source) {
+		CompoundTag context = source.copy();
+		if ("mek_apiary".equals(context.getString("host"))) {
+			if (context.contains("bee", Tag.TAG_STRING)) {
+				context.putString("bee", BeeDesignerIdentity.migrate(context.getString("bee")));
+			}
+			if (context.contains("bee_data", Tag.TAG_COMPOUND)) {
+				BeeDesignerIdentity.migrateBeeData(context.getCompound("bee_data"));
+			}
+		}
+		return context;
+	}
+
 	static CompoundTag saveTransfer(ResourceAccount.Transfer pending) {
 		var tag = new CompoundTag();
 		tag.putLong("sequence", pending.sequence());
@@ -354,7 +368,7 @@ final class ResourceAccountData {
 		long sequence = positiveLong(production, "sequence");
 		long revision = number(production, "recipe_revision");
 		var phase = ResourceAccount.Phase.valueOf(string(production, "phase"));
-		var context = compound(production, "context");
+		var context = compound(production, "context").copy();
 		int contextBytes = context.sizeInBytes();
 		var maximum = ResourceExactAmounts.load(production.get("maximum"));
 		var result = ResourceExactAmounts.load(production.get("result"));
@@ -376,7 +390,7 @@ final class ResourceAccountData {
 		if (waiting && !captured || (waiting || captured) && !context.contains("next_ticks", Tag.TAG_INT)) throw invalid();
 		if (waiting || captured) ResourceAccount.validateDeferredProgress(context, nextWork);
 		ResourceExactAmounts.within(result, maximum);
-		return new ResourceAccount.Production(sequence, revision, context.copy(), contextBytes, maximum, result,
+		return new ResourceAccount.Production(sequence, revision, context, contextBytes, maximum, result,
 				phase, nextWork, nextWorkBytes, captured);
 	}
 

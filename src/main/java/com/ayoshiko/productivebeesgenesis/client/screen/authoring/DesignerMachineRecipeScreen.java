@@ -28,6 +28,11 @@ final class DesignerMachineRecipeScreen extends DesignerFormScreen {
 	}
 
 	@Override
+	protected boolean showsInventory() {
+		return true;
+	}
+
+	@Override
 	protected void init() {
 		begin();
 		scope("recipes/" + id);

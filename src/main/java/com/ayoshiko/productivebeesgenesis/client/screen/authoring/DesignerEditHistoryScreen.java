@@ -52,9 +52,9 @@ final class DesignerEditHistoryScreen extends DesignerFormScreen {
 		button(left, footerY(), 80, tr("back"), this::onClose);
 	}
 
-	private static String fieldName(String path) {
-		String key = path.substring(path.lastIndexOf('.') + 1);
-		if (path.startsWith("names.")) {
+	static String fieldName(String path) {
+		String key = path.substring(Math.max(path.lastIndexOf('.'), path.lastIndexOf('/')) + 1);
+		if (path.startsWith("names.") || path.startsWith("names/")) {
 			return tr("localized_name").getString() + " " + key;
 		}
 		key = Map.ofEntries(Map.entry("weather_tolerance", "weatherTolerance"), Map.entry("attributes", "genes_section"),
@@ -68,7 +68,7 @@ final class DesignerEditHistoryScreen extends DesignerFormScreen {
 		if (net.minecraft.locale.Language.getInstance().has(label)) {
 			return tr(key).getString();
 		}
-		String root = path.split("\\.", 2)[0];
+		String root = path.split("[./]", 2)[0];
 		String historyKey = "designer.history.field." + key.replaceAll("\\[\\d+\\]", "");
 		if (net.minecraft.locale.Language.getInstance().has(historyKey)) {
 			return tr(historyKey).getString();
@@ -77,7 +77,7 @@ final class DesignerEditHistoryScreen extends DesignerFormScreen {
 		return net.minecraft.locale.Language.getInstance().has(rootKey) ? tr(rootKey).getString() : path;
 	}
 
-	private static String valueName(String value) {
+	static String valueName(String value) {
 		if (value.equals("∅")) {
 			return tr("history_unset").getString();
 		}

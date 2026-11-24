@@ -63,6 +63,11 @@ final class BeeDesignerItemPicker extends DesignerFormScreen {
     }
 
     @Override
+    protected boolean showsInventory() {
+        return true;
+    }
+
+    @Override
     protected void init() {
         begin();
         source = DesignerIngredientCatalog.source(kind, nestsFirst);

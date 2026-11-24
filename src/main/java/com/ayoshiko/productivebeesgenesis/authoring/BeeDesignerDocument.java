@@ -108,6 +108,8 @@ public final class BeeDesignerDocument {
 		copy.addProperty("baseline", "new");
 		copy.remove("disabled_recipes");
 		copy.remove("_editor_recovery");
+		copy.remove(BeeDesignerIdentity.ALIASES);
+		copy.remove(BeeDesignerIdentity.MIGRATION);
 		copy.remove(BeeDesignerLifecycle.FIELD);
 		copy.remove(BeeDesignerMyriad.RECIPES_ONLY);
 		JsonObject origin = new JsonObject();
@@ -228,7 +230,7 @@ public final class BeeDesignerDocument {
 		throw new IllegalArgumentException("designer.error.copy_limit");
 	}
 
-	private static void rewriteSelfConditions(JsonElement value, String previous, String next) {
+	static void rewriteSelfConditions(JsonElement value, String previous, String next) {
 		if (value.isJsonArray()) {
 			value.getAsJsonArray().forEach(entry -> rewriteSelfConditions(entry, previous, next));
 		} else if (value.isJsonObject()) {

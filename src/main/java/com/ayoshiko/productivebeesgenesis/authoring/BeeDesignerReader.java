@@ -117,6 +117,19 @@ public final class BeeDesignerReader {
 		}
 		document.add("_editor_origin", BeeDesignerOrigins.describe(bee));
 		String managed = BeeDesignerSources.managed.get(bee.toString());
+		if (managed == null && !nativeBee && BeeDesignerIdentity.hasMigrations()) {
+			JsonObject compatibility = new JsonObject();
+			for (var entry : BeeDesignerSources.definitions.entrySet()) {
+				JsonObject definition = JsonParser.parseString(entry.getValue()).getAsJsonObject();
+				if (bee.toString().equals(BeeDesignerDocument.text(definition, BeeDesignerIdentity.TARGET, ""))) {
+					ResourceLocation old = entry.getKey().withPath(entry.getKey().getPath().substring(entry.getKey().getPath().lastIndexOf('/') + 1));
+					compatibility.addProperty(entry.getKey().toString(), old.toString());
+				}
+			}
+			if (!compatibility.isEmpty()) {
+				document.add(BeeDesignerIdentity.ALIASES, compatibility);
+			}
+		}
 		if (managed != null) {
 			JsonObject previous = JsonParser.parseString(managed).getAsJsonObject();
 			for (var entry : previous.entrySet()) {
@@ -201,9 +214,14 @@ public final class BeeDesignerReader {
 				if (ingredient.isEmpty()) {
 					symbols.append(' ');
 				} else {
-					char symbol = (char) ('A' + index);
+					JsonElement encoded = Ingredient.CODEC_NONEMPTY.encodeStart(ops, ingredient).getOrThrow();
+					String symbol = key.entrySet().stream().filter(entry -> entry.getValue().equals(encoded))
+							.map(entry -> entry.getKey()).findFirst().orElse(null);
+					if (symbol == null) {
+						symbol = Character.toString((char) ('A' + key.size()));
+						key.add(symbol, encoded);
+					}
 					symbols.append(symbol);
-					key.add(Character.toString(symbol), Ingredient.CODEC_NONEMPTY.encodeStart(ops, ingredient).getOrThrow());
 				}
 			}
 			pattern.add(symbols.toString());

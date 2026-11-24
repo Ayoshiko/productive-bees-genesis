@@ -57,6 +57,69 @@ class BeeDesignerMachineMinecraftTest {
 	}
 
 	@Test
+	void recipeTemplateKeepsInputsBaselineSharedRecipesAndDraftRecovery(@TempDir Path directory) throws Exception {
+		JsonObject source = BeeDesignerDocument.create("test:template");
+		String type = Host.MBD2.mod + ":bee_craft";
+		String recipeId = "test:template_recipe";
+		JsonObject template = BeeDesignerMachineRecipes.create(Host.MBD2, type, "test:machine", "test:template");
+		ItemStack material = new ItemStack(Items.HONEY_BOTTLE, 7);
+		material.set(DataComponents.CUSTOM_NAME, Component.literal("specific contents"));
+		BeeDesignerMachineRecipes.append(template, "item", true, BeeDesignerMachineRecipes.material(
+				BeeDesignerSelections.item(material, REGISTRIES), REGISTRIES));
+		source.getAsJsonObject("recipes").add(recipeId, template);
+		source = BeeDesignerProtocol.parse(source.toString());
+		template = source.getAsJsonObject("recipes").getAsJsonObject(recipeId);
+
+		JsonObject target = BeeDesignerDocument.create("test:target");
+		JsonObject old = BeeDesignerMachineRecipes.create(Host.MBD2, type, "test:machine", "test:target");
+		JsonObject shared = old.deepCopy();
+		BeeDesignerMachineRecipes.append(shared, "item", false, BeeDesignerMachineRecipes.itemMaterial(BeeDesignerEggs.output("test:other")));
+		JsonObject unrelated = BeeDesignerMachineRecipes.create(Host.MBD2, Host.MBD2.mod + ":another_bee_craft", "test:another_machine", "test:target");
+		target.getAsJsonObject("recipes").add("test:old", old);
+		target.getAsJsonObject("recipes").add("test:shared", shared);
+		target.getAsJsonObject("recipes").add("test:unrelated", unrelated);
+		target.add("disabled_recipes", JsonParser.parseString("[\"test:old\"]"));
+		target.addProperty("baseline", BeeDesignerDocument.fingerprint(target));
+		String original = target.toString();
+
+		var plan = BeeDesignerRecipeTemplates.plan(source, recipeId, Map.of("test:target", original), true);
+		JsonObject changed = BeeDesignerProtocol.parse(plan.drafts().documents().get("test:target"));
+		assertEquals(1, plan.replaced());
+		assertEquals(target.get("baseline"), changed.get("baseline"));
+		assertEquals(target.get("definition"), changed.get("definition"));
+		assertEquals(original, target.toString());
+		assertFalse(changed.getAsJsonObject("recipes").has("test:old"));
+		assertEquals(JsonParser.parseString("[\"test:old\"]"), changed.get("disabled_recipes"));
+		assertEquals(shared, changed.getAsJsonObject("recipes").get("test:shared"));
+		assertEquals(unrelated, changed.getAsJsonObject("recipes").get("test:unrelated"));
+		JsonObject copied = changed.getAsJsonObject("recipes").getAsJsonObject("test:bee_designer/target/template/test/template_recipe");
+		assertEquals(template.get("inputs"), copied.get("inputs"));
+		var copiedInput = BeeDesignerMachineRecipes.entries(copied).stream().filter(entry -> entry.input() && entry.kind().equals("item")).toList().getLast();
+		assertTrue(ItemStack.isSameItemSameComponents(material, BeeDesignerMachineRecipes.decodeItem(copiedInput, REGISTRIES)));
+		assertTrue(BeeDesignerMachineRecipes.belongs(copied, "test:target"));
+		assertFalse(BeeDesignerMachineRecipes.belongs(copied, "test:template"));
+		assertEquals(7, material.getCount());
+		assertFalse(BeeDesignerRecipeTemplates.supports(shared));
+
+		BeeDesignerDrafts.save(directory, target);
+		assertEquals(List.of("test:target"), BeeDesignerMigration.saveDrafts(directory, plan.drafts()));
+		assertEquals(changed, BeeDesignerDrafts.read(directory, "test:target"));
+		assertEquals(target, BeeDesignerDrafts.archived(directory, BeeDesignerDrafts.archives(directory).getFirst().token()));
+
+		JsonObject blocked = BeeDesignerDocument.create("zblocked:target");
+		Path blocker = directory.resolve("drafts/zblocked");
+		Files.writeString(blocker, "blocked namespace", StandardCharsets.UTF_8);
+		var failedPlan = BeeDesignerRecipeTemplates.plan(source, recipeId, Map.of("test:target", original,
+				"zblocked:target", blocked.toString()), true);
+		var failure = assertThrows(java.io.IOException.class, () -> BeeDesignerMigration.saveDrafts(directory, failedPlan.drafts()));
+		assertTrue(failure.getMessage().contains("zblocked:target|1"));
+		assertEquals(changed, BeeDesignerDrafts.read(directory, "test:target"));
+		assertEquals(1, BeeDesignerDrafts.archives(directory).size());
+		assertEquals(target, BeeDesignerDrafts.archived(directory, BeeDesignerDrafts.archives(directory).getFirst().token()));
+		assertEquals("blocked namespace", Files.readString(blocker, StandardCharsets.UTF_8));
+	}
+
+	@Test
 	void machineAmountBoundariesMatchNativeCapabilitiesWithoutTruncation() {
 		for (Host host : Host.values()) {
 			String type = host == Host.MMR ? host.mod + ":machine_recipe" : host.mod + ":bee_craft";

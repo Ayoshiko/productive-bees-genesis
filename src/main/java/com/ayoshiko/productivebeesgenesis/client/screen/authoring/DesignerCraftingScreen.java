@@ -1,6 +1,5 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
@@ -13,7 +12,7 @@ import net.minecraft.world.item.crafting.Recipe;
 final class DesignerCraftingScreen extends DesignerFormScreen {
 	private final Screen parent;
 	private final JsonObject recipe;
-	private final JsonElement[] slots = new JsonElement[9];
+	private final JsonElement[] slots;
 	private final JsonObject options = new JsonObject();
 	private final String initial;
 
@@ -22,31 +21,24 @@ final class DesignerCraftingScreen extends DesignerFormScreen {
 		this.parent = parent;
 		editorParent = parent;
 		this.recipe = recipe;
+		slots = DesignerCraftingGrid.read(recipe);
 		boolean shaped = recipe.get("type").getAsString().endsWith("shaped");
 		options.addProperty("mode", shaped ? "shaped" : "shapeless");
-		if (shaped) {
-			JsonArray pattern = recipe.getAsJsonArray("pattern");
-			JsonObject keys = recipe.getAsJsonObject("key");
-			for (int row = 0; row < pattern.size(); row++) {
-				String line = pattern.get(row).getAsString();
-				for (int column = 0; column < line.length(); column++) {
-					JsonElement ingredient = keys.get(Character.toString(line.charAt(column)));
-					slots[row * 3 + column] = ingredient == null ? null : ingredient.deepCopy();
-				}
-			}
-		} else {
-			JsonArray ingredients = recipe.getAsJsonArray("ingredients");
-			for (int index = 0; index < Math.min(9, ingredients.size()); index++) {
-				slots[index] = ingredients.get(index).deepCopy();
-			}
-		}
 		initial = draftState();
+	}
+
+	@Override
+	protected boolean showsInventory() {
+		return true;
 	}
 
 	@Override
 	protected void init() {
 		begin();
-		choice("crafting_type", options, "mode", "shaped", "shaped", "shapeless");
+		DesignerCraftingGrid.mode(this, options.get("mode").getAsString().equals("shaped"), shaped -> {
+			options.addProperty("mode", shaped ? "shaped" : "shapeless");
+			rebuild();
+		});
 		int cell = Math.max(24, Math.min(40, (editorBottom() - contentTop - 50) / 3));
 		for (int row = 0; row < 3; row++) {
 			int selectedRow = row;
@@ -81,6 +73,9 @@ final class DesignerCraftingScreen extends DesignerFormScreen {
 	}
 
 	private boolean commitChanges() {
+		if (initial.equals(draftState())) {
+			return true;
+		}
 		try {
 			JsonObject copy = draftRecipe();
 			Recipe.CODEC.parse(minecraft.level.registryAccess().createSerializationContext(JsonOps.INSTANCE), copy).getOrThrow();
@@ -94,39 +89,9 @@ final class DesignerCraftingScreen extends DesignerFormScreen {
 	}
 
 	private JsonObject draftRecipe() {
-			JsonObject copy = recipe.deepCopy();
-			copy.remove("ingredients");
-			copy.remove("key");
-			copy.remove("pattern");
-			if (options.get("mode").getAsString().equals("shaped")) {
-				JsonObject keys = new JsonObject();
-				JsonArray pattern = new JsonArray();
-				for (int row = 0; row < 3; row++) {
-					StringBuilder line = new StringBuilder();
-					for (int column = 0; column < 3; column++) {
-						int index = row * 3 + column;
-						char symbol = (char) ('A' + index);
-						line.append(slots[index] == null ? ' ' : symbol);
-						if (slots[index] != null) {
-							keys.add(Character.toString(symbol), slots[index].deepCopy());
-						}
-					}
-					pattern.add(line.toString());
-				}
-				copy.addProperty("type", "minecraft:crafting_shaped");
-				copy.add("pattern", pattern);
-				copy.add("key", keys);
-			} else {
-				JsonArray ingredients = new JsonArray();
-				for (JsonElement value : slots) {
-					if (value != null) {
-						ingredients.add(value.deepCopy());
-					}
-				}
-				copy.addProperty("type", "minecraft:crafting_shapeless");
-				copy.add("ingredients", ingredients);
-			}
-			return copy;
+		JsonObject copy = recipe.deepCopy();
+		DesignerCraftingGrid.write(copy, slots, options.get("mode").getAsString().equals("shaped"));
+		return copy;
 	}
 
 	private String draftState() {
@@ -141,6 +106,9 @@ final class DesignerCraftingScreen extends DesignerFormScreen {
 
 	@Override
 	protected void snapshotDraft(DesignerDraftSnapshot snapshot) {
+		if (initial.equals(draftState())) {
+			return;
+		}
 		JsonObject copy = draftRecipe();
 		snapshot.replace(recipe, copy);
 	}

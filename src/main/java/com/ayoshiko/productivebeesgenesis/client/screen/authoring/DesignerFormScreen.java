@@ -21,8 +21,10 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.lwjgl.glfw.GLFW;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -59,6 +61,8 @@ public abstract class DesignerFormScreen extends Screen {
 	protected int frameHeight;
 	private static final DesignerWindowLayout WINDOW = new DesignerWindowLayout();
 	private final DesignerInventoryTray inventory = new DesignerInventoryTray();
+	private Boolean inventoryOverride;
+	private String inventoryPolicy = "inventory_auto";
 	private DesignerDropdown popup;
 	private boolean jeiDragging;
 	private boolean scrollbarDragging;
@@ -98,6 +102,14 @@ public abstract class DesignerFormScreen extends Screen {
 		autoScroll.stop();
 		autoScrollStoppedButton = -1;
 		DesignerPreferences.load();
+		String policy = DesignerPreferences.text("inventory_visibility");
+		if (!inventoryPolicy.equals(policy)) {
+			inventoryOverride = null;
+			inventoryPolicy = policy;
+		}
+		if (!inventoryVisible()) {
+			inventory.release();
+		}
 		DesignerTheme.apply();
 		font = DesignerFonts.body();
 		if (!rebuilding) {
@@ -126,7 +138,7 @@ public abstract class DesignerFormScreen extends Screen {
 		ghosts.targets.clear();
 		popup = null;
 		viewport = WINDOW.viewport(width, height, minecraft.getWindow().getGuiScale(),
-				DesignerPreferences.number("ui_scale"), net.neoforged.fml.ModList.get().isLoaded("jei"));
+				DesignerPreferences.number("ui_scale"), net.neoforged.fml.ModList.get().isLoaded("jei"), inventoryVisible());
 		layoutWidth = viewport.layoutWidth();
 		layoutHeight = viewport.layoutHeight();
 		var bounds = viewport.contentBounds();
@@ -138,13 +150,21 @@ public abstract class DesignerFormScreen extends Screen {
 		left = frameLeft + 8;
 		contentWidth = frameWidth - 24;
 		contentTop = frameTop + 28;
-		titleWidth = frameWidth - 176;
-		inventory.layout(8, viewport.windowWidth() - 16, viewport.windowHeight());
+		titleWidth = frameWidth - 201;
+		if (inventoryVisible()) {
+			inventory.layout(8, viewport.windowWidth() - 16, viewport.windowHeight());
+		}
 		returnButton = !(this instanceof BeeDesignerScreen);
 		if (returnButton) {
 			addRenderableWidget(new DesignerTheme.Icon(frameLeft + 6, frameTop + 5, DesignerTheme.Symbol.BACK, this::onClose));
 			titleWidth -= 24;
 		}
+		Component inventoryAction = tr(inventoryVisible() ? "inventory_hide" : "inventory_show");
+		DesignerStackButton inventoryToggle = addRenderableWidget(new DesignerStackButton(frameLeft + frameWidth - 129, frameTop + 4,
+				22, new ItemStack(Items.CHEST), "", this::toggleInventory).square());
+		inventoryToggle.setMessage(inventoryAction);
+		inventoryToggle.setTooltip(Tooltip.create(inventoryAction.copy().append("\n").append(tr("inventory_toggle_help"))));
+		inventoryToggle.setTooltipDelay(Duration.ofMillis((long) DesignerPreferences.number("tooltip_ms")));
 		addRenderableWidget(new DesignerTheme.Icon(frameLeft + frameWidth - 104, frameTop + 5, DesignerTheme.Symbol.THEME, () -> {
 			DesignerTheme.toggle();
 			rebuild();
@@ -177,6 +197,28 @@ public abstract class DesignerFormScreen extends Screen {
 
 	protected boolean prepareWindowClose() {
 		return true;
+	}
+
+	protected boolean showsInventory() {
+		return false;
+	}
+
+	protected final boolean inventoryVisible() {
+		if (inventoryOverride != null) {
+			return inventoryOverride;
+		}
+		return switch (inventoryPolicy) {
+			case "inventory_auto" -> showsInventory();
+			case "inventory_always" -> true;
+			case "inventory_never" -> false;
+			default -> throw new IllegalStateException("Unknown inventory visibility policy: " + inventoryPolicy);
+		};
+	}
+
+	private void toggleInventory() {
+		inventoryOverride = !inventoryVisible();
+		setFocused(null);
+		rebuild();
 	}
 
 	protected void snapshotDraft(DesignerDraftSnapshot snapshot) {
@@ -884,6 +926,21 @@ public abstract class DesignerFormScreen extends Screen {
 		return Component.empty();
 	}
 
+	protected Component statusTooltip(Component message) {
+		return message;
+	}
+
+	protected boolean statusClicked() {
+		return false;
+	}
+
+	private boolean overStatus(double x, double y, Component message) {
+		int statusY = footerY() - statusHeight() - 3;
+		int width = status.isBlank() ? Math.min(frameWidth - 16, font.width(message) + 26) : frameWidth - 12;
+		int start = frameLeft + (status.isBlank() ? 8 : 6);
+		return !message.getString().isBlank() && x >= start && x < start + width && y >= statusY && y < statusY + statusHeight();
+	}
+
 	protected final int footerY() {
 		return frameTop + frameHeight - footerHeight() - 3;
 	}
@@ -1023,10 +1080,12 @@ public abstract class DesignerFormScreen extends Screen {
 			}
 		}
 		float inventoryScale = viewport.geometryScale() / viewport.uiScale();
-		graphics.pose().pushPose();
-		graphics.pose().scale(inventoryScale, inventoryScale, 1);
-		inventory.render(graphics, (int) (mouseX / inventoryScale), (int) (mouseY / inventoryScale));
-		graphics.pose().popPose();
+		if (inventoryVisible()) {
+			graphics.pose().pushPose();
+			graphics.pose().scale(inventoryScale, inventoryScale, 1);
+			inventory.render(graphics, (int) (mouseX / inventoryScale), (int) (mouseY / inventoryScale));
+			graphics.pose().popPose();
+		}
 		int maximum = maxScrollRow();
 		if (maximum > 0 && usesRowScrollbar()) {
 			Rect2i thumb = scrollThumb();
@@ -1054,8 +1113,8 @@ public abstract class DesignerFormScreen extends Screen {
 					graphics.drawString(font, lines.get(index), frameLeft + 28, statusY + 3 + index * 9, color, false);
 				}
 			}
-			if (mouseX >= frameLeft + 6 && mouseX < frameLeft + frameWidth - 6 && mouseY >= statusY && mouseY < statusY + statusHeight()) {
-				graphics.renderTooltip(font, font.split(message, Math.min(400, width - 20)), mouseX, mouseY);
+			if (overStatus(mouseX, mouseY, message)) {
+				graphics.renderTooltip(font, font.split(statusTooltip(message), Math.min(400, layoutWidth - 20)), mouseX, mouseY);
 			}
 		}
 		if (popup != null) {
@@ -1488,11 +1547,11 @@ public abstract class DesignerFormScreen extends Screen {
 	}
 
 	public Rect2i inventoryBounds() {
-		return viewport.geometryArea(inventory.bounds());
+		return inventoryVisible() ? viewport.geometryArea(inventory.bounds()) : new Rect2i(0, 0, 0, 0);
 	}
 
 	public Rect2i inventorySlotBounds(int index) {
-		return viewport.geometryArea(inventory.slotBounds(index));
+		return inventoryVisible() ? viewport.geometryArea(inventory.slotBounds(index)) : new Rect2i(0, 0, 0, 0);
 	}
 
 	final Rect2i screenArea(Rect2i area) {
@@ -1546,6 +1605,10 @@ public abstract class DesignerFormScreen extends Screen {
 			return true;
 		}
 		if (button == 0 && !inventory.isDragging()) {
+			Component message = status.isBlank() ? idleStatus() : statusMessage(status);
+			if (overStatus(x, y, message) && statusClicked()) {
+				return true;
+			}
 			float factor = viewport.geometryScale() / viewport.uiScale();
 			int edge = WINDOW.edgeAt(x / factor, y / factor);
 			if (edge != 0 && WINDOW.press(edge, x / factor, y / factor)) {
@@ -1565,7 +1628,7 @@ public abstract class DesignerFormScreen extends Screen {
 			scrollTo(y);
 			return true;
 		}
-		if (inventory.press(x * viewport.uiScale() / viewport.geometryScale(), y * viewport.uiScale() / viewport.geometryScale(), button)) {
+		if (inventoryVisible() && inventory.press(x * viewport.uiScale() / viewport.geometryScale(), y * viewport.uiScale() / viewport.geometryScale(), button)) {
 			return true;
 		}
 		var control = getChildAt(x, y);
