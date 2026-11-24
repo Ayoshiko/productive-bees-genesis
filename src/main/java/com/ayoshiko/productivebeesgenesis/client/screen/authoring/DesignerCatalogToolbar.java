@@ -17,7 +17,7 @@ import java.util.function.Predicate;
 /** 工程、搜索和选择按当前任务分组；空间不足时整行进入现有滚动区。 */
 final class DesignerCatalogToolbar {
 	private static final String[] PROJECT_ACTIONS = {"new", "import_project", "local_drafts", "browse_instances", "catalog_manage"};
-	private static final String[] SELECTION_ACTIONS = {"select_all", "quick_select", "clear_selection", "export_selection_action"};
+	private static final String[] SELECTION_ACTIONS = {"select_all", "quick_select", "clear_selection", "apply_selection_action", "export_selection_action"};
 	private static final String[] QUICK_CHOICES = {"select_pack_bees", "select_editor_bees", "select_editor_new", "select_editor_modified", "select_pending_bees", "select_visible"};
 	private final Map<String, AbstractWidget> controls = new LinkedHashMap<>();
 	private final Map<String, String> locations = new LinkedHashMap<>();
@@ -129,12 +129,13 @@ final class DesignerCatalogToolbar {
 				button = screen.primaryButton(x, y, width, display(value, label), () -> action.accept(value));
 			} else {
 				button = screen.addRenderableWidget(new DesignerTheme.Action(x, y, width, display(value, label), () -> action.accept(value)));
-				if (!value.equals("new") && !value.equals("import_project")) {
+				if (!value.equals("new") && !value.equals("import_project") && !value.equals("apply_selection_action")) {
 					((DesignerTheme.Action) button).subtle();
 				}
 			}
 			button.active = enabled.test(value);
 			Component help = switch (value) {
+				case "apply_selection_action" -> DesignerFormScreen.tr("collection_apply_world_help");
 				case "catalog_manage" -> DesignerFormScreen.tr("catalog_manage_help");
 				case "select_all" -> DesignerFormScreen.tr("catalog_select_all_help");
 				case "quick_select" -> DesignerFormScreen.tr("catalog_quick_help");

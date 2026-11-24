@@ -89,6 +89,10 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		updatePublication(0, data);
 	}
 
+	boolean isPublishing() {
+		return publishing;
+	}
+
 	private void updatePublication(long sequence, JsonObject data) {
 		if (data.has("detail_pending") && (sequence != detailRequest
 				|| !detailTarget.equals(data.get("detail_pending").getAsString()))) {

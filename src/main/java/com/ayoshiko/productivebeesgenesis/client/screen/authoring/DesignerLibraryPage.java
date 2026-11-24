@@ -167,6 +167,9 @@ final class DesignerLibraryPage {
 	}
 
 	private Component actionLabel(String action) {
+		if (action.equals("apply_selection_action")) {
+			return Component.translatable("designer.catalog_apply", selection.size());
+		}
 		if (action.equals("export_selection_action")) {
 			return Component.translatable("designer.catalog_export", selection.size());
 		}
@@ -178,7 +181,9 @@ final class DesignerLibraryPage {
 
 	private boolean enabled(BeeDesignerScreen screen, String action) {
 		return (!action.equals("history") || screen.canPublish)
-				&& (!action.equals("export_selection_action") || selection.size() > 0 && !selection.waiting() && quickSelection == null);
+				&& (!action.equals("apply_selection_action") || screen.canPublish && !screen.isPublishing())
+				&& (!action.equals("export_selection_action") && !action.equals("apply_selection_action")
+						|| selection.size() > 0 && !selection.waiting() && quickSelection == null);
 	}
 
 	private void selectVisible(BeeDesignerScreen screen) {
@@ -216,6 +221,7 @@ final class DesignerLibraryPage {
 				screen.rebuild();
 			}
 			case "export_selection_action" -> mc.setScreen(new DesignerCollectionScreen(screen, List.copyOf(selection.ids()), screen.editingDocument()));
+			case "apply_selection_action" -> mc.setScreen(new DesignerCollectionScreen(screen, List.copyOf(selection.ids()), screen.editingDocument(), false, true));
 			case "select_all", "select_pack_bees", "select_editor_bees", "select_editor_new", "select_editor_modified", "select_pending_bees" -> {
 				cancelQuickSelection();
 				quickSelection = new DesignerCatalogQuickSelection(value, query);
@@ -473,6 +479,7 @@ final class DesignerLibraryPage {
 			}
 		}
 		toolbar.update("export_selection_action", actionLabel("export_selection_action"), enabled(screen, "export_selection_action"));
+		toolbar.update("apply_selection_action", actionLabel("apply_selection_action"), enabled(screen, "apply_selection_action"));
 	}
 
 	boolean press(BeeDesignerScreen screen, double x, double y, int button) {

@@ -168,8 +168,11 @@ final class BeeDesignerStore {
 	}
 
 	static void reject(Revision revision, boolean uncertain, String message) throws IOException {
-		// 先写结果未知记录，即使文件被重载器占用、隔离失败，重连也不能误认为成功。
+		// 重载后的活动 ZIP 仍由资源管理器占用；未明修订留在原位供加载时核验。
 		record(revision, "uncertain", message);
+		if (uncertain) {
+			return;
+		}
 		Path installed = revision.installed();
 		if (Files.exists(installed, LinkOption.NOFOLLOW_LINKS)) {
 			verify(revision.world, installed, revision.digest);
@@ -178,7 +181,7 @@ final class BeeDesignerStore {
 			Files.createDirectories(quarantine);
 			Files.move(installed, quarantine.resolve(installed.getFileName()), StandardCopyOption.ATOMIC_MOVE);
 		}
-		record(revision, uncertain ? "uncertain" : "rejected", message);
+		record(revision, "rejected", message);
 	}
 
 	static JsonObject inspect(Path world) throws IOException {

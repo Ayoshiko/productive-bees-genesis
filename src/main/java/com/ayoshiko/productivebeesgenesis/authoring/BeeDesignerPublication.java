@@ -400,7 +400,17 @@ final class BeeDesignerPublication {
 			var ops = server.registryAccess().createSerializationContext(JsonOps.INSTANCE);
 			var expected = Recipe.CODEC.parse(ops, source).getOrThrow();
 			var actual = server.getRecipeManager().byKey(key).orElseThrow().value();
-			if (!Recipe.CODEC.encodeStart(ops, expected).getOrThrow().equals(Recipe.CODEC.encodeStart(ops, actual).getOrThrow())) {
+			var expectedData = Recipe.CODEC.encodeStart(ops, expected).getOrThrow().getAsJsonObject();
+			var actualData = Recipe.CODEC.encodeStart(ops, actual).getOrThrow().getAsJsonObject();
+			String expectedType = expectedData.get("type").getAsString();
+			String actualType = actualData.get("type").getAsString();
+			// KubeJS 的普通合成保留原版字段；额外动作与禁用镜像仍参与完整比较。
+			if (expectedType.equals("minecraft:crafting_shaped") && actualType.equals("kubejs:shaped")
+					|| expectedType.equals("minecraft:crafting_shapeless") && actualType.equals("kubejs:shapeless")) {
+				actualData.addProperty("type", expectedType);
+			}
+			if (!expectedData.equals(actualData)) {
+				ProductiveBeesGenesis.LOGGER.error("Bee designer recipe {} differs after reload; expected {}, actual type {}: {}", recipe, expectedData, actualType, actualData);
 				throw new IllegalStateException("Recipe contents were overridden: " + recipe);
 			}
 		}

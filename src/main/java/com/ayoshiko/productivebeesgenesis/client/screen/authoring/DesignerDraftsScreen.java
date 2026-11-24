@@ -67,6 +67,10 @@ final class DesignerDraftsScreen extends DesignerFormScreen {
 		selection.replace(ids);
 	}
 
+	BeeDesignerScreen parentEditor() {
+		return parent;
+	}
+
 	@Override
 	protected boolean showsInventory() {
 		return false;
@@ -283,7 +287,8 @@ final class DesignerDraftsScreen extends DesignerFormScreen {
 		countButton.setTooltip(Tooltip.create(Component.translatable("designer.drafts_selection_summary", selection.size(),
 				matching.size(), drafts == null ? 0 : drafts.size()).append("\n").append(tr("drafts_clear_selection"))
 				.append("\n").append(tr("drafts_selection_help"))));
-		applyButton.active = !busy && parent.canPublish && selection.size() > 0;
+		applyButton.active = !busy && parent.canPublish && !parent.isPublishing() && selection.size() > 0;
+		applyButton.setMessage(Component.translatable("designer.catalog_apply", selection.size()));
 		applyButton.setTooltip(Tooltip.create(Component.translatable("designer.drafts_apply_selection", selection.size())));
 		exportButton.active = !busy && selection.size() > 0;
 		exportButton.setTooltip(Tooltip.create(Component.translatable("designer.export_selection", selection.size())));

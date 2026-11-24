@@ -52,6 +52,8 @@
 - **密集草稿库与物品栏**：按窗口宽度显示 1–3 列，卡片展示对应蜂蛋。标题栏可临时显示／隐藏物品栏，设置可选择自动、始终显示或始终隐藏；自动模式在材料页显示、浏览页隐藏。支持 Ctrl 点选、Shift 范围、Ctrl+Shift 追加、框选／Esc 撤回，以及最多 100 项的筛选结果全选。
 - **导出与文件预览**：单蜂或多蜂共用一个可命名的导出包，默认名称含蜂种或蜂数、格式与时间，确认前可搜索并只读查看文件，同名拒绝覆盖。精简发布包保留运行内容、名称、必要身份映射及署名，可编辑收藏另存。
 - **KubeJS 实例安装与来源**：保留完整作者 ZIP；精简 KubeJS 改为直接安装到当前实例，预览文件操作、合并名称并备份替换文件；失败后保留恢复材料并要求重新预览。五种选项分别说明用途、位置、重启和分发要求，提醒排除草稿／测试工作目录。来源页显示已加载的数据包、ZIP 内文件和 KubeJS 定义／关联脚本位置。多选导出取消返回后保留选择，临时移除的结果也回交父页。
+- **批量应用与预览布局**：目录多选、草稿和导出页提供明确的批量应用入口，可在导出／安装成功后自动应用同一批蜜蜂并重载。文件保存和世界应用结果分别显示，拒绝应用仍保留已导出文件。修复滚动文件行被页脚误缩而出现重叠的大小标记，修正语言文件类型，安装说明改为更好理解的口语。
+- **KubeJS 即时应用核验**：普通有序／无序合成使用 KubeJS 对应类型时按完整内容核验，避免把相同配方误报为覆盖；额外材料动作和镜像限制仍严格检查。重载结果未明时保留活动 ZIP 和回执，避免 Windows 文件占用阻碍恢复。
 
 ### English
 
@@ -72,6 +74,8 @@
 - **Dense local drafts and inventory**: adaptive 1–3 column cards show the corresponding bee eggs. Toggle inventory from the title bar, or choose Automatic, Always show or Always hide in settings; Automatic shows it on material pages and hides it while browsing. Ctrl-click, Shift ranges, Ctrl+Shift additions, box selection with Esc rollback and filtered selection of up to 100 drafts are supported.
 - **Export and file preview**: selected bees share a named bundle. Default names include the bee ID or count, format and timestamp; preview, search and read-only file browsing precede writing, and existing filenames are not overwritten. Compact release files retain runtime content, names, required identity mappings and credits; editable collections remain a separate export.
 - **KubeJS installation and sources**: the complete author ZIP remains available; compact KubeJS installs directly into this instance, with a file operation preview, merged names and replacement backups. Failed plans retain recovery files and require a fresh preview. All five options explain purpose, location, restart and distribution requirements, including excluding draft and test work folders. The source page locates loaded datapack entries, files inside ZIPs and KubeJS definitions or related scripts. Cancelling a multi-bee export retains selection, including temporary removals made on that page.
+- **Batch application and preview layout**: catalog selections, drafts and exports provide clear batch application actions. Successful exports or installations can apply the same bees and reload resources automatically. File saving and world application results are separate; rejected applications retain saved exports. Scrolling file rows no longer shrink when mistaken for footer buttons, language files have the correct type, and installation guidance uses plain language.
+- **KubeJS application verification**: equivalent ordinary shaped and shapeless recipes using KubeJS serializers are checked by their complete contents instead of falsely reported as overrides. Extra ingredient actions and mirror restrictions remain strict. Uncertain reloads retain active ZIPs and receipts so Windows file locks do not obstruct recovery.
 
 ## [1.2.6] - 2026-11-21
 

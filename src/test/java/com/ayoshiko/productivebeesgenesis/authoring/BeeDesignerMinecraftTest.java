@@ -699,11 +699,14 @@ class BeeDesignerMinecraftTest {
 		BeeDesignerStore.complete(first, List.of());
 		var pending = BeeDesignerStore.write(world, files, false);
 		BeeDesignerStore.install(pending);
-		BeeDesignerStore.reject(pending, true, "verification interrupted after loading");
-		var audit = BeeDesignerStore.audit(world, List.of(pending.packId()));
-		assertEquals(document, JsonParser.parseString(audit.documents().get("test:recovery")));
-		assertFalse(Files.exists(pending.installed()));
-		BeeDesignerStore.reconcile(world, audit);
+		try (ZipFile active = new ZipFile(pending.installed().toFile())) {
+			BeeDesignerStore.reject(pending, true, "verification interrupted after loading");
+			var audit = BeeDesignerStore.audit(world, List.of(pending.packId()));
+			assertEquals(document, JsonParser.parseString(audit.documents().get("test:recovery")));
+			assertTrue(Files.exists(pending.installed()));
+			assertNotNull(active.getEntry("pack.mcmeta"));
+			BeeDesignerStore.reconcile(world, audit);
+		}
 		assertTrue(Files.exists(pending.installed()));
 		assertFalse(Files.exists(first.installed()));
 		assertTrue(Files.exists(first.source()));

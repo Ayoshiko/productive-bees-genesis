@@ -17,6 +17,7 @@ import java.util.UUID;
 import java.util.Set;
 import java.util.Locale;
 import java.util.List;
+import java.nio.file.Path;
 
 /** 整批冲突先预览；写入本机草稿后仍沿服务器原有检查与应用合同。 */
 final class DesignerBatchImportScreen extends DesignerFormScreen {
@@ -44,6 +45,8 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 	private String requestDigest = "";
 	private boolean singlePublication;
 	private boolean queryOnOpen;
+	private boolean applyAfterExport;
+	private Path exportedPath;
 	private final Map<String, String> completed = new LinkedHashMap<>();
 	private ArrayDeque<String> downloading;
 	private String downloadingId;
@@ -56,13 +59,18 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 	}
 
 	DesignerBatchImportScreen(BeeDesignerScreen editor, DesignerFormScreen parent, Map<String, String> sources, boolean drafts) {
-		super(tr(drafts ? "drafts_apply" : "batch_import"));
+		super(tr(drafts ? "batch_apply_world" : "batch_import"));
 		this.editor = editor;
 		this.parent = parent;
 		editorParent = parent;
 		this.sources = Map.copyOf(sources);
 		this.drafts = drafts;
 		saved = drafts;
+	}
+
+	void continueAfterExport(Path path) {
+		exportedPath = path;
+		applyAfterExport = true;
 	}
 
 	private record PublicationOwner(String server, UUID player) {}
@@ -177,8 +185,12 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 	@Override
 	protected void init() {
 		begin();
-		note("", tr(drafts ? "drafts_apply_help" : "batch_import_help"));
-		if (status.startsWith("designer.error.") || status.equals("designer.batch_import_unknown")) {
+		note("", tr(drafts ? "batch_apply_world_help" : "batch_import_help"));
+		if (exportedPath != null) {
+			note("", Component.translatable("designer.batch_export_saved", exportedPath.toString()));
+		}
+		if (status.startsWith("designer.error.") || status.equals("designer.batch_import_unknown")
+				|| status.equals("designer.apply_world_busy") || status.equals("designer.apply_world_requires_author")) {
 			note("error", statusMessage(status));
 		}
 		if (!drafts) {
@@ -225,7 +237,7 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 		if (saved && editor.canPublish && !applied) {
 			primary = uncertain ? "batch_import_query" : "batch_import_apply";
 		} else if (saved) {
-			primary = "local_drafts";
+			primary = drafts && !applied ? "batch_import_apply" : "local_drafts";
 		}
 		primaryButton(left, footerY(), cell, tr(primary), () -> {
 			if (!saved) {
@@ -239,7 +251,8 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 			} else {
 				minecraft.setScreen(new DesignerDraftsScreen(editor));
 			}
-		}).active = !writing && !transferring && plan != null && !plan.documents().isEmpty();
+		}).active = !writing && !transferring && plan != null && !plan.documents().isEmpty()
+				&& (!drafts || applied || editor.canPublish && (uncertain || !editor.isPublishing()));
 		button(left + cell + 6, footerY(), cell, tr("back"), this::onClose).active = !writing && !committing;
 		if (queryOnOpen) {
 			queryOnOpen = false;
@@ -281,6 +294,11 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 
 	private void apply() {
 		if (!saved || transferring || applied || uncertain || plan == null) {
+			return;
+		}
+		if (!editor.canPublish || editor.isPublishing()) {
+			status = editor.canPublish ? "designer.apply_world_busy" : "designer.apply_world_requires_author";
+			rebuild();
 			return;
 		}
 		try {
@@ -521,6 +539,10 @@ final class DesignerBatchImportScreen extends DesignerFormScreen {
 
 	@Override
 	public void tick() {
+		if (applyAfterExport) {
+			applyAfterExport = false;
+			apply();
+		}
 		if (transferring && minecraft.getConnection() != connection) {
 			fail("designer.error.designer_session");
 		}

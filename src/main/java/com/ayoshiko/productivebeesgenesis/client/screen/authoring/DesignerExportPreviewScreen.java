@@ -26,6 +26,7 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 	private final DesignerProjectFiles.PreparedExport preview;
 	private final Consumer<Path> exported;
 	private final boolean installation;
+	private final boolean applyToWorld;
 	private final JsonObject options = new JsonObject();
 	private final List<Map.Entry<String, String>> files;
 	private final List<PreviewFile> fileDetails;
@@ -38,11 +39,16 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 	private String displayedName = "";
 
 	DesignerExportPreviewScreen(DesignerFormScreen parent, DesignerProjectFiles.PreparedExport preview, String name, Consumer<Path> exported) {
+		this(parent, preview, name, exported, false);
+	}
+
+	DesignerExportPreviewScreen(DesignerFormScreen parent, DesignerProjectFiles.PreparedExport preview, String name, Consumer<Path> exported, boolean applyToWorld) {
 		super(tr(preview.installation() == null ? "export_preview" : "install_preview"));
 		this.parent = parent;
 		editorParent = parent;
 		this.preview = preview;
 		this.exported = exported;
+		this.applyToWorld = applyToWorld;
 		installation = preview.installation() != null;
 		if (!installation) {
 			options.addProperty("name", name);
@@ -67,7 +73,8 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 	@Override
 	protected void init() {
 		begin();
-		note("", tr(installation ? "install_preview_help" : "export_preview_help"));
+		String previewHelp = installation ? "install_preview_help" : "export_preview_help";
+		note("", tr(applyToWorld ? "export_apply_preview_help" : previewHelp));
 		if (installationFailed) {
 			note("", tr("install_retry_preview"));
 		}
@@ -142,9 +149,17 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 					.map(widget -> (EditBox) widget).forEach(widget -> widget.active = false);
 		}
 		int cell = (contentWidth - 6) / 2;
-		confirm = primaryButton(left, footerY(), cell, installation ? tr("install_confirm") : Component.empty(), this::write);
+		String installLabel = applyToWorld ? "install_and_apply_confirm" : "install_confirm";
+		confirm = primaryButton(left, footerY(), cell, installation ? tr(installLabel) : Component.empty(), this::write);
+		if (applyToWorld) {
+			confirm.setTooltip(Tooltip.create(tr("export_apply_preview_help")));
+		}
 		if (installation) {
-			confirm.setTooltip(Tooltip.create(tr(installationFailed ? "install_retry_preview" : "install_confirm_help")));
+			if (installationFailed) {
+				confirm.setTooltip(Tooltip.create(tr("install_retry_preview")));
+			} else if (!applyToWorld) {
+				confirm.setTooltip(Tooltip.create(tr("install_confirm_help")));
+			}
 			confirm.active = !writing && !installationFailed && result == null;
 		}
 		button(left + cell + 6, footerY(), cell, tr("back"), this::onClose).active = !writing;
@@ -202,7 +217,7 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 		String name = options.get("name").getAsString();
 		if (!displayedName.equals(name)) {
 			displayedName = name;
-			confirm.setMessage(Component.translatable("designer.export_named", name + ".zip"));
+			confirm.setMessage(Component.translatable(applyToWorld ? "designer.export_and_apply_named" : "designer.export_named", name + ".zip"));
 		}
 		confirm.active = !writing && result == null;
 	}
@@ -267,22 +282,26 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 		}
 
 		private static String type(String path) {
-			if (path.contains("/productivebees/")) {
-				return "bee";
-			}
-			if (path.contains("/recipe/")) {
-				return "recipe";
-			}
-			if (path.contains("/lang/")) {
+			String contentPath = path.startsWith("kubejs/") ? path.substring("kubejs/".length()) : path;
+			if (contentPath.startsWith("assets/") && contentPath.contains("/lang/") && contentPath.endsWith(".json")) {
 				return "names";
 			}
-			if (path.endsWith(".js")) {
+			if (contentPath.startsWith("server_scripts/") && contentPath.endsWith(".js")) {
 				return "script";
 			}
-			if (path.endsWith("/index.json")) {
+			if (contentPath.startsWith("data/")) {
+				String resourcePath = contentPath.substring(contentPath.indexOf('/', "data/".length()) + 1);
+				if (resourcePath.startsWith("productivebees/")) {
+					return "bee";
+				}
+				if (resourcePath.startsWith("recipe/")) {
+					return "recipe";
+				}
+			}
+			if (contentPath.endsWith("/index.json")) {
 				return "project";
 			}
-			if (path.endsWith(".txt")) {
+			if (contentPath.endsWith(".txt")) {
 				return "text";
 			}
 			return "metadata";

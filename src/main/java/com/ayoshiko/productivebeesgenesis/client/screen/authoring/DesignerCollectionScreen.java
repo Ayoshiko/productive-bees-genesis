@@ -22,6 +22,10 @@ import java.util.Map;
 final class DesignerCollectionScreen extends DesignerFormScreen {
 
 	private final DesignerFormScreen parent;
+	private final BeeDesignerScreen editor;
+	private final boolean applicationEntry;
+	private boolean applyOnReady;
+	private final JsonObject exportOptions = new JsonObject();
 	private final List<String> selected;
 	private final Map<String, String> documents = new LinkedHashMap<>();
 	private final Map<String, JsonObject> previews = new LinkedHashMap<>();
@@ -53,8 +57,21 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 	}
 
 	DesignerCollectionScreen(DesignerFormScreen parent, List<String> ids, JsonObject editing, boolean localDrafts) {
-		super(tr("collection_export"));
+		this(parent, ids, editing, localDrafts, false);
+	}
+
+	DesignerCollectionScreen(DesignerFormScreen parent, List<String> ids, JsonObject editing, boolean localDrafts, boolean applicationEntry) {
+		super(tr(applicationEntry ? "batch_apply_world" : "collection_export"));
 		this.parent = parent;
+		if (parent instanceof BeeDesignerScreen main) {
+			editor = main;
+		} else if (parent instanceof DesignerDraftsScreen drafts) {
+			editor = drafts.parentEditor();
+		} else {
+			editor = null;
+		}
+		this.applicationEntry = applicationEntry;
+		applyOnReady = applicationEntry;
 		editorParent = parent;
 		this.localDrafts = localDrafts;
 		selected = new ArrayList<>(ids.stream().distinct().toList());
@@ -81,6 +98,9 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 	@Override
 	protected void init() {
 		begin();
+		if (applicationEntry) {
+			started = true;
+		}
 		if (!started) {
 			started = true;
 			detectingCredits = true;
@@ -102,58 +122,73 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 				}
 			});
 		}
-		note("", tr("collection_help"));
+		note("", tr(applicationEntry ? "batch_apply_world_help" : "collection_help"));
 		if (minecraft.getSingleplayerServer() == null) {
 			note("", tr("collection_remote_source"));
 		}
 		note("", Component.translatable("designer.collection_progress", documents.size(), selected.size(), failures.size()));
-		rows.add(new Row("collection_format", (x, y, w) -> {
-			if (writing) {
-				fixedNote(tr("option." + format), x, y, w, 20);
-			} else {
-				selection(x, y, w, format, new String[]{"portable", "datapack", "kubejs", "runtime_datapack", "runtime_kubejs"}, value -> {
-					format = value;
-					status = "";
-					exported = null;
-					installedResult = false;
-					rebuild();
-				});
+		if (!applicationEntry) {
+			rows.add(new Row("collection_format", (x, y, w) -> {
+				if (writing) {
+					fixedNote(tr("option." + format), x, y, w, 20);
+				} else {
+					selection(x, y, w, format, new String[]{"portable", "datapack", "kubejs", "runtime_datapack", "runtime_kubejs"}, value -> {
+						format = value;
+						status = "";
+						exported = null;
+						installedResult = false;
+						rebuild();
+					});
+				}
+			}));
+			addFormatHelp(this, format);
+			if (editor != null) {
+				String applyLabel = format.equals("runtime_kubejs") ? "collection_apply_after_install" : "collection_apply_after_export";
+				anchor("apply_after_export");
+				rows.add(new Row(applyLabel, (x, y, w) -> {
+					boolean enabled = exportOptions.has("apply") && exportOptions.get("apply").getAsBoolean();
+					var toggle = addRenderableWidget(new DesignerTheme.Switch(x, y, Math.min(w, 74), enabled, () -> {
+						boolean current = exportOptions.has("apply") && exportOptions.get("apply").getAsBoolean();
+						exportOptions.addProperty("apply", !current);
+					}));
+					toggle.active = canApply() && !writing;
+					toggle.setTooltip(Tooltip.create(tr("collection_apply_after_help")));
+				}, 20, false, 74));
 			}
-		}));
-		addFormatHelp(this, format);
-		if (!format.equals("portable")) {
-			note("", tr("collection_identity_choice_help"));
-		}
-		section("collection_source");
-		if (detectingCredits) {
-			note("", tr("credits_detecting"));
-		} else if (!BeeDesignerDocument.text(credits, "manifest", "").isBlank()) {
-			note("", Component.translatable("designer.credits_detected", credits.get("manifest").getAsString()));
-		} else {
-			note("", tr("credits_not_detected"));
-		}
-		for (String key : List.of("pack", "version", "author")) {
-			field("credits." + key, credits, key, "");
-		}
-		group("credits_optional", true, () -> {
-			for (String key : List.of("url", "permission", "notes")) {
+			if (!format.equals("portable")) {
+				note("", tr("collection_identity_choice_help"));
+			}
+			section("collection_source");
+			if (detectingCredits) {
+				note("", tr("credits_detecting"));
+			} else if (!BeeDesignerDocument.text(credits, "manifest", "").isBlank()) {
+				note("", Component.translatable("designer.credits_detected", credits.get("manifest").getAsString()));
+			} else {
+				note("", tr("credits_not_detected"));
+			}
+			for (String key : List.of("pack", "version", "author")) {
 				field("credits." + key, credits, key, "");
 			}
-		});
-		rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("credits_read_manifest"), () ->
-				minecraft.setScreen(new DesignerFileBrowserScreen(this, "", false, path ->
-						DesignerProjectFiles.readCredits(path, value -> {
-							for (String key : List.of("permission", "notes")) {
-								if (credits.has(key) && !credits.get(key).getAsString().isBlank()) {
-									value.add(key, credits.get(key).deepCopy());
+			group("credits_optional", true, () -> {
+				for (String key : List.of("url", "permission", "notes")) {
+					field("credits." + key, credits, key, "");
+				}
+			});
+			rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("credits_read_manifest"), () ->
+					minecraft.setScreen(new DesignerFileBrowserScreen(this, "", false, path ->
+							DesignerProjectFiles.readCredits(path, value -> {
+								for (String key : List.of("permission", "notes")) {
+									if (credits.has(key) && !credits.get(key).getAsString().isBlank()) {
+										value.add(key, credits.get(key).deepCopy());
+									}
 								}
-							}
-							credits = value;
-							rebuildIfVisible();
-						}, message -> status = message)))).active = !writing));
-		note("", tr("collection_license_help"));
-		rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("recipe_batch"), () ->
-				minecraft.setScreen(new DesignerRecipeBatchScreen(this, documents))).active = ready() && !writing));
+								credits = value;
+								rebuildIfVisible();
+							}, message -> status = message)))).active = !writing));
+			note("", tr("collection_license_help"));
+			rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("recipe_batch"), () ->
+					minecraft.setScreen(new DesignerRecipeBatchScreen(this, documents))).active = ready() && !writing));
+		}
 		section("collection_selected");
 		note("", tr("collection_remove_selection_help"));
 		for (String id : selected) {
@@ -197,9 +232,24 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 					DesignerProjectFiles.openDirectory(exported.getParent(), false, message -> status = message))));
 		}
 		finishRows();
-		int cell = (contentWidth - 6) / 2;
-		primaryButton(left, footerY(), cell, tr(format.equals("runtime_kubejs") ? "install_preview" : "collection_preview_export"), this::export).active = ready() && !writing;
-		button(left + cell + 6, footerY(), cell, tr(writing ? "close_editor" : "back"), this::onClose);
+		int columns = editor != null && !applicationEntry ? 3 : 2;
+		int cell = (contentWidth - (columns - 1) * 6) / columns;
+		if (!applicationEntry) {
+			primaryButton(left, footerY(), cell, tr(format.equals("runtime_kubejs") ? "install_preview" : "collection_preview_export"), this::export).active = ready() && !writing;
+		}
+		if (editor != null) {
+			int x = applicationEntry ? left : left + cell + 6;
+			var apply = button(x, footerY(), cell, Component.translatable("designer.catalog_apply", selected.size()), this::applyToWorld);
+			apply.active = ready() && !writing && canApply();
+			String applyHelp = "collection_apply_world_help";
+			if (!editor.canPublish) {
+				applyHelp = "apply_world_requires_author";
+			} else if (editor.isPublishing()) {
+				applyHelp = "apply_world_busy";
+			}
+			apply.setTooltip(Tooltip.create(tr(applyHelp)));
+		}
+		button(left + (columns - 1) * (cell + 6), footerY(), cell, tr(writing ? "close_editor" : "back"), this::onClose);
 	}
 
 	static void addFormatHelp(DesignerFormScreen screen, String format) {
@@ -221,6 +271,11 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 	@Override
 	public void tick() {
 		if (closed || writing) {
+			return;
+		}
+		if (applyOnReady && ready()) {
+			applyOnReady = false;
+			applyToWorld();
 			return;
 		}
 		if (request >= 0 && System.currentTimeMillis() - requestedAt >= 15000) {
@@ -311,6 +366,35 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 		return !selected.isEmpty() && documents.size() == selected.size() && failures.isEmpty();
 	}
 
+	private boolean canApply() {
+		return editor != null && editor.canPublish && !editor.isPublishing();
+	}
+
+	private Map<String, String> namedDocuments() {
+		Map<String, String> named = new LinkedHashMap<>();
+		for (var entry : documents.entrySet()) {
+			JsonObject source = JsonParser.parseString(entry.getValue()).getAsJsonObject();
+			if (source.has("_editor_recovery")) {
+				throw new IllegalArgumentException("designer.error.collection_unfinished");
+			}
+			captureName(source);
+			named.put(entry.getKey(), source.toString());
+		}
+		return Map.copyOf(named);
+	}
+
+	private void applyToWorld() {
+		if (!ready() || writing || !canApply()) {
+			return;
+		}
+		try {
+			minecraft.setScreen(new DesignerBatchImportScreen(editor, applicationEntry ? parent : this, namedDocuments(), true));
+		} catch (RuntimeException failure) {
+			status = failure.getMessage();
+			rebuild();
+		}
+	}
+
 	private void captureName(JsonObject document) {
 		if (BeeDesignerNativeBees.recipesOnly(document)) {
 			return;
@@ -328,19 +412,15 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 			return;
 		}
 		try {
-			Map<String, String> named = new LinkedHashMap<>();
-			for (var entry : documents.entrySet()) {
-				JsonObject source = JsonParser.parseString(entry.getValue()).getAsJsonObject();
-				captureName(source);
-				named.put(entry.getKey(), source.toString());
+			Map<String, String> named = namedDocuments();
+			boolean alsoApply = exportOptions.has("apply") && exportOptions.get("apply").getAsBoolean();
+			if (alsoApply && !canApply()) {
+				throw new IllegalArgumentException(editor.canPublish ? "designer.apply_world_busy" : "designer.apply_world_requires_author");
 			}
+			var exportConnection = minecraft.getConnection();
 			BeeDesignerCredits.validate(credits);
 			if (BeeDesignerDocument.text(credits, "pack", "").isBlank()) {
 				throw new IllegalArgumentException("designer.error.credits_pack");
-			}
-			if (documents.values().stream().map(JsonParser::parseString).map(value -> value.getAsJsonObject())
-					.anyMatch(value -> value.has("_editor_recovery"))) {
-				throw new IllegalArgumentException("designer.error.collection_unfinished");
 			}
 			writing = true;
 			status = format.equals("runtime_kubejs") ? "designer.install_preparing" : "designer.status.exporting";
@@ -364,7 +444,17 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 								});
 							}
 						}
-					}));
+						if (alsoApply) {
+							if (minecraft.getConnection() != exportConnection
+									|| !(minecraft.screen instanceof DesignerExportPreviewScreen active) || active.editorParent != this) {
+								status = "designer.export_apply_context_changed";
+								return;
+							}
+							var application = new DesignerBatchImportScreen(editor, this, named, true);
+							application.continueAfterExport(path);
+							minecraft.setScreen(application);
+						}
+					}, alsoApply));
 				}
 			}, message -> {
 				writing = false;

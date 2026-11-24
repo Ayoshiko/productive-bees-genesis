@@ -274,6 +274,7 @@ public abstract class DesignerFormScreen extends Screen {
 		button.setHeight(footerHeight());
 		for (var child : children()) {
 			if (child instanceof Button other && other != button && other.getY() == footerY()
+					&& !formLayout.scrollingControls.contains(other)
 					&& button.getX() < other.getRight() + 6 && button.getRight() + 6 > other.getX()) {
 				if (button.getX() >= other.getX()) {
 					other.setWidth(Math.max(16, button.getX() - other.getX() - 6));

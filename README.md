@@ -83,6 +83,8 @@ After upgrading to **1.2.7**, Chinese pinyin search for previously registered be
 
 Choose an export by its purpose. ZIPs are saved locally, with editable names and a file preview; default names contain the bee ID or count, format and time. Existing ZIPs are never overwritten. Returning from a multi-bee export keeps the selection; removing a bee on that page only changes the current selection.
 
+To use selected bees in the current world, choose **Apply to world** from the catalog, drafts or export page. Enable **Apply to this world after exporting/installing** to save release files and test the same bees in one operation: confirmation saves the files first, then applies the batch and reloads game resources automatically. Each result is shown separately; saved files remain available if world application fails.
+
 | Option | Contents | How to use it |
 | --- | --- | --- |
 | **Portable project ZIP** | Complete bee projects, recipe declarations and credits | Import through the editor to continue editing or keep a backup. It does not activate when placed in a game folder. |
