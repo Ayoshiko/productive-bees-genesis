@@ -601,6 +601,16 @@ final class DesignerLibraryPage {
 		return false;
 	}
 
+	void rememberExportSelection(List<String> ids) {
+		cancelQuickSelection();
+		pressed = false;
+		boxing = false;
+		additiveBox = false;
+		pressedIndex = -1;
+		selection.replace(ids);
+		selecting = true;
+	}
+
 	void cancelQuickSelection() {
 		if (quickSelection != null) {
 			quickSelection.cancel();

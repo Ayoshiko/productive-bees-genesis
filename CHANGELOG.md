@@ -43,6 +43,7 @@
 - **紧凑说明文字**：有序／无序提示和导出蜂名摘要关闭文字阴影，避免平滑字体出现重影。
 - **手册搜索**：为蜂蜂应援手册补充 JEI 名称别名，可用“蜂蜂”“fengfeng”“蜜蜂编辑器”和完整物品 ID 搜索。
 - **身份故障与应用取消**：坏身份映射保留原蜂、实体元数据、已付周期和账户请求，只隔离实际故障范围，映射修复后自动续跑。应用准备期间关闭、断线或换会话，会保留原操作可查询的取消结果。
+- **批量导出冲突**：同一旧身份被多个迁移候选声明时，中文提示具体文件及两个蜂种 ID；可在导出页移除候选后继续，切换格式清除旧错误。便携工程可保管这些候选。
 
 ### 改进
 
@@ -50,6 +51,7 @@
 - **九宫格与批量蜂蛋配方**：可直接从背包或 JEI 拖入材料；有序／无序用高亮小按钮和简短规则同行展示。重复材料保存为 ABA／key，普通 KubeJS 合成使用 shaped／shapeless 简写，精确组件、条件及扩展字段保留完整声明。多选蜜蜂可用共享获得／机器模板生成蜂蛋配方草稿。
 - **密集草稿库与物品栏**：按窗口宽度显示 1–3 列，卡片展示对应蜂蛋。标题栏可临时显示／隐藏物品栏，设置可选择自动、始终显示或始终隐藏；自动模式在材料页显示、浏览页隐藏。支持 Ctrl 点选、Shift 范围、Ctrl+Shift 追加、框选／Esc 撤回，以及最多 100 项的筛选结果全选。
 - **导出与文件预览**：单蜂或多蜂共用一个可命名的导出包，默认名称含蜂种或蜂数、格式与时间，确认前可搜索并只读查看文件，同名拒绝覆盖。精简发布包保留运行内容、名称、必要身份映射及署名，可编辑收藏另存。
+- **KubeJS 实例安装与来源**：保留完整作者 ZIP；精简 KubeJS 改为直接安装到当前实例，预览文件操作、合并名称并备份替换文件；失败后保留恢复材料并要求重新预览。五种选项分别说明用途、位置、重启和分发要求，提醒排除草稿／测试工作目录。来源页显示已加载的数据包、ZIP 内文件和 KubeJS 定义／关联脚本位置。多选导出取消返回后保留选择，临时移除的结果也回交父页。
 
 ### English
 
@@ -61,6 +63,7 @@
 - **Compact text**: crafting mode hints and export bee summaries render without shadows, avoiding doubled glyphs with smooth fonts.
 - **Handbook search**: JEI aliases support “蜂蜂”, “fengfeng”, “bee designer” and the full item ID for the BeeBee Support Handbook.
 - **Identity failures and cancelled applications**: invalid identity mappings retain the original bee, entity metadata, paid cycles and account requests. Only the affected scope is held and resumes after the mapping is repaired. Closing, disconnecting or changing sessions during preparation leaves a queryable cancellation result for the original operation.
+- **Batch export conflicts**: when migration candidates claim the same old identity, localized errors name the file and both bee IDs. Remove a candidate on the export page to continue; switching formats clears the previous error. Portable projects can retain these candidates.
 
 #### Improved
 
@@ -68,6 +71,7 @@
 - **Crafting and batch egg recipes**: drag ingredients directly from inventory or JEI. Compact highlighted Shaped / Shapeless buttons share a row with their rules. Repeated ingredients use ABA/key; ordinary KubeJS crafting uses shaped/shapeless declarations while exact components, conditions and extension fields remain intact. Selected bees can receive egg recipe drafts from a shared acquisition or machine template.
 - **Dense local drafts and inventory**: adaptive 1–3 column cards show the corresponding bee eggs. Toggle inventory from the title bar, or choose Automatic, Always show or Always hide in settings; Automatic shows it on material pages and hides it while browsing. Ctrl-click, Shift ranges, Ctrl+Shift additions, box selection with Esc rollback and filtered selection of up to 100 drafts are supported.
 - **Export and file preview**: selected bees share a named bundle. Default names include the bee ID or count, format and timestamp; preview, search and read-only file browsing precede writing, and existing filenames are not overwritten. Compact release files retain runtime content, names, required identity mappings and credits; editable collections remain a separate export.
+- **KubeJS installation and sources**: the complete author ZIP remains available; compact KubeJS installs directly into this instance, with a file operation preview, merged names and replacement backups. Failed plans retain recovery files and require a fresh preview. All five options explain purpose, location, restart and distribution requirements, including excluding draft and test work folders. The source page locates loaded datapack entries, files inside ZIPs and KubeJS definitions or related scripts. Cancelling a multi-bee export retains selection, including temporary removals made on that page.
 
 ## [1.2.6] - 2026-11-21
 

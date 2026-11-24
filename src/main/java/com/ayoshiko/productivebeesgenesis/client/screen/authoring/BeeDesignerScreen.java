@@ -167,7 +167,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		if (editing && compactHeight()) {
 			titleWidth -= 26;
 			menu(frameLeft + frameWidth - 130, frameTop + 5, 24, "editor_tools",
-					new String[]{"undo", "redo", "preview", advanced ? "simple_fields" : "advanced", "edit_history", "collection_export"},
+					new String[]{"undo", "redo", "preview", advanced ? "simple_fields" : "advanced", "edit_history", "source_files", "collection_export"},
 					value -> true, this::editorTool);
 		} else if (editing) {
 			editorTools(contentTop);
@@ -306,7 +306,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 		int x = left + 50;
 		java.util.List<String> direct = new java.util.ArrayList<>();
 		String fields = advanced ? "simple_fields" : "advanced";
-		for (String value : new String[]{"preview", fields, "edit_history", "collection_export"}) {
+		for (String value : new String[]{"preview", fields, "edit_history", "source_files", "collection_export"}) {
 			int width = Math.max(40, font.width(tr(value)) + 14);
 			if (x + width <= left + contentWidth - 31) {
 				button(x, y, width, tr(value), () -> editorTool(value));
@@ -314,7 +314,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				x += width + 4;
 			}
 		}
-		String[] hidden = java.util.Arrays.stream(new String[]{"preview", fields, "edit_history", "collection_export"})
+		String[] hidden = java.util.Arrays.stream(new String[]{"preview", fields, "edit_history", "source_files", "collection_export"})
 				.filter(value -> !direct.contains(value)).toArray(String[]::new);
 		if (hidden.length > 0) {
 			menu(left + contentWidth - 26, y, 26, "editor_tools", hidden, value -> true, this::editorTool);
@@ -331,6 +331,8 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 				document.add("baseline", baseline);
 				diagnostics = null;
 			}));
+		} else if (action.equals("source_files")) {
+			minecraft.setScreen(new DesignerOriginsScreen(this, document));
 		} else if (action.equals("collection_export")) {
 			minecraft.setScreen(new DesignerCollectionScreen(this, java.util.List.of(document.get("id").getAsString()), document));
 		} else {
@@ -350,6 +352,10 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 					rebuild();
 				}
 			}
+	}
+
+	void rememberExportSelection(java.util.List<String> ids) {
+		library.rememberExportSelection(ids);
 	}
 
 	void navigate(int next) {

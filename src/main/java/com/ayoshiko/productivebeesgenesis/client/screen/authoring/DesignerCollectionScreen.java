@@ -9,9 +9,11 @@ import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerNativeBees;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.network.chat.Component;
+import net.minecraft.client.gui.components.Tooltip;
 
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +41,7 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 	private boolean closed;
 	private boolean detectingCredits;
 	private Path exported;
+	private boolean installedResult;
 
 	DesignerCollectionScreen(DesignerFormScreen parent, List<String> ids, JsonObject editing) {
 		this(parent, ids, editing, false);
@@ -54,7 +57,7 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 		this.parent = parent;
 		editorParent = parent;
 		this.localDrafts = localDrafts;
-		selected = ids.stream().distinct().toList();
+		selected = new ArrayList<>(ids.stream().distinct().toList());
 		if (selected.size() > BeeDesignerCollection.MAX_BEES) {
 			throw new IllegalArgumentException("designer.error.collection_count");
 		}
@@ -104,12 +107,23 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 			note("", tr("collection_remote_source"));
 		}
 		note("", Component.translatable("designer.collection_progress", documents.size(), selected.size(), failures.size()));
-		rows.add(new Row("collection_format", (x, y, w) -> selection(x, y, w, format,
-				new String[]{"portable", "datapack", "kubejs", "runtime_datapack", "runtime_kubejs"}, value -> {
-			format = value;
-			rebuild();
-		})));
-		note("", tr("collection_format_help." + format));
+		rows.add(new Row("collection_format", (x, y, w) -> {
+			if (writing) {
+				fixedNote(tr("option." + format), x, y, w, 20);
+			} else {
+				selection(x, y, w, format, new String[]{"portable", "datapack", "kubejs", "runtime_datapack", "runtime_kubejs"}, value -> {
+					format = value;
+					status = "";
+					exported = null;
+					installedResult = false;
+					rebuild();
+				});
+			}
+		}));
+		addFormatHelp(this, format);
+		if (!format.equals("portable")) {
+			note("", tr("collection_identity_choice_help"));
+		}
 		section("collection_source");
 		if (detectingCredits) {
 			note("", tr("credits_detecting"));
@@ -141,11 +155,19 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 		rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("recipe_batch"), () ->
 				minecraft.setScreen(new DesignerRecipeBatchScreen(this, documents))).active = ready() && !writing));
 		section("collection_selected");
+		note("", tr("collection_remove_selection_help"));
 		for (String id : selected) {
 			JsonObject document = documents.containsKey(id)
 					? previews.computeIfAbsent(id, key -> JsonParser.parseString(documents.get(key)).getAsJsonObject()) : null;
 			Component name = document == null ? BeeDesignerClient.beeName(id) : localizedName(document);
-			rows.add(new Row("", (x, y, w) -> addRenderableWidget(new DesignerBeeButton(x, y, w, id, name, false, () -> {}))));
+			rows.add(new Row("", (x, y, w) -> {
+				int removeWidth = Math.min(120, Math.max(60, font.width(tr("collection_remove_selection")) + 18));
+				addRenderableWidget(new DesignerBeeButton(x, y, w - removeWidth - 6, id, name, false, () -> {})
+						.detail(Component.literal(id)));
+				var remove = button(x + w - removeWidth, y + 7, removeWidth, tr("collection_remove_selection"), () -> removeSelection(id));
+				remove.active = document != null && !writing;
+				remove.setTooltip(Tooltip.create(tr("collection_remove_selection_help")));
+			}, 34, true));
 			if (document != null) {
 				addCredits(this, document);
 			} else if (failures.containsKey(id)) {
@@ -171,13 +193,29 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 		}
 		if (exported != null) {
 			note("", Component.literal(exported.toString()));
-			rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("open_exports_folder"), () ->
+			rows.add(new Row("", (x, y, w) -> button(x, y, w, tr(installedResult ? "open_instance_folder" : "open_exports_folder"), () ->
 					DesignerProjectFiles.openDirectory(exported.getParent(), false, message -> status = message))));
 		}
 		finishRows();
 		int cell = (contentWidth - 6) / 2;
-		primaryButton(left, footerY(), cell, tr("collection_export"), this::export).active = ready() && !writing;
+		primaryButton(left, footerY(), cell, tr(format.equals("runtime_kubejs") ? "install_preview" : "collection_preview_export"), this::export).active = ready() && !writing;
 		button(left + cell + 6, footerY(), cell, tr(writing ? "close_editor" : "back"), this::onClose);
+	}
+
+	static void addFormatHelp(DesignerFormScreen screen, String format) {
+		screen.note("", tr("collection_format_help." + format));
+		screen.group("collection_format_guide", true, () -> {
+			for (String part : List.of("contents", "install", "reload", "editing")) {
+				screen.note("", tr("collection_guide." + part).copy().append(": ")
+						.append(tr("collection_" + part + "." + format)));
+			}
+			screen.note("", tr("collection_guide_dependencies"));
+			screen.note("", tr("collection_guide_apply"));
+			screen.note("", tr("collection_guide_packaging"));
+			if (!format.equals("portable")) {
+				screen.note("", tr("collection_guide_one_install"));
+			}
+		});
 	}
 
 	@Override
@@ -258,6 +296,17 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 		return true;
 	}
 
+	private void removeSelection(String id) {
+		selected.remove(id);
+		documents.remove(id);
+		previews.remove(id);
+		editingSnapshots.remove(id);
+		status = "";
+		exported = null;
+		installedResult = false;
+		rebuild();
+	}
+
 	private boolean ready() {
 		return !selected.isEmpty() && documents.size() == selected.size() && failures.isEmpty();
 	}
@@ -294,14 +343,16 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 				throw new IllegalArgumentException("designer.error.collection_unfinished");
 			}
 			writing = true;
-			status = "designer.status.exporting";
+			status = format.equals("runtime_kubejs") ? "designer.install_preparing" : "designer.status.exporting";
 			DesignerProjectFiles.prepareExport(named, credits, format, preview -> {
 				writing = false;
 				if (!closed && minecraft.screen == this) {
-					String name = BeeDesignerExportName.suggest(named.keySet(), preview.format());
+					status = "";
+					String name = preview.installation() == null ? BeeDesignerExportName.suggest(named.keySet(), preview.format()) : "";
 					minecraft.setScreen(new DesignerExportPreviewScreen(this, preview, name, path -> {
 						exported = path;
-						status = Component.translatable("designer.status.exported", path.toString()).getString();
+						installedResult = preview.installation() != null;
+						status = Component.translatable(installedResult ? "designer.install_complete" : "designer.status.exported", path.toString()).getString();
 						rebuildIfVisible();
 						if (generation >= 0 && !localDrafts && minecraft.getSingleplayerServer() != null) {
 							List<String> registered = BeeDesignerEggs.bees();
@@ -368,6 +419,12 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 		pending.clear();
 		BeeDesignerClient.cancelRequest(request);
 		request = -1;
+		List<String> remaining = List.copyOf(selected);
+		if (parent instanceof BeeDesignerScreen editor) {
+			editor.rememberExportSelection(remaining);
+		} else if (parent instanceof DesignerDraftsScreen drafts) {
+			drafts.rememberExportSelection(remaining);
+		}
 		minecraft.setScreen(parent);
 	}
 }

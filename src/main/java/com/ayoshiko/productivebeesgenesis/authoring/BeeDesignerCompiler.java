@@ -401,6 +401,7 @@ public final class BeeDesignerCompiler {
 		languages.add("en_us", new JsonObject());
 		JsonObject index = new JsonObject();
 		Map<String, String> names = new LinkedHashMap<>();
+		Map<String, String> definitionOwners = new LinkedHashMap<>();
 		Map<String, Set<String>> disabledRecipes = new LinkedHashMap<>();
         Map<String, JsonObject> sharedRecipes = new LinkedHashMap<>();
         Set<String> retired = BeeDesignerLifecycle.retiredIds(documents);
@@ -417,22 +418,23 @@ public final class BeeDesignerCompiler {
 				BeeDesignerNativeBees.validate(document);
 			}
 			if (!entry.getKey().equals(bee.toString())) {
-				throw new IllegalArgumentException("Managed index identity mismatch");
+				throw new IllegalArgumentException("designer.error.collection_identity");
 			}
-			if (names.putIfAbsent(BeeDesignerDocument.translationKey(bee.toString()), bee.toString()) != null) {
-				throw new IllegalArgumentException("PB name key is shared by bees with the same path: " + bee.getPath());
+			String previousName = names.putIfAbsent(BeeDesignerDocument.translationKey(bee.toString()), bee.toString());
+			if (previousName != null) {
+				throw new IllegalArgumentException("designer.error.export_name_collision|" + bee.getPath() + "|" + previousName + "|" + bee);
 			}
 			ResourceLocation definition = ResourceLocation.parse(document.get("definition_path").getAsString());
 			if (!BeeDesignerMyriad.recipesOnly(document) && !BeeDesignerNativeBees.recipesOnly(document)) {
-				putFile(files, "data/" + definition.getNamespace() + "/productivebees/" + definition.getPath() + ".json",
-						document.get("definition").toString());
+				putDefinition(files, definitionOwners, "data/" + definition.getNamespace() + "/productivebees/" + definition.getPath() + ".json",
+						document.get("definition").toString(), bee.toString());
 				if (document.has(BeeDesignerIdentity.ALIASES)) {
 					for (String alias : document.getAsJsonObject(BeeDesignerIdentity.ALIASES).keySet()) {
 						ResourceLocation oldPath = ResourceLocation.parse(alias);
 						JsonObject compatible = document.getAsJsonObject("definition").deepCopy();
 						compatible.addProperty(BeeDesignerIdentity.TARGET, bee.toString());
-						putFile(files, "data/" + oldPath.getNamespace() + "/productivebees/" + oldPath.getPath() + ".json",
-								compatible.toString());
+						putDefinition(files, definitionOwners, "data/" + oldPath.getNamespace() + "/productivebees/" + oldPath.getPath() + ".json",
+								compatible.toString(), bee.toString());
 					}
 				}
 			}
@@ -492,8 +494,19 @@ public final class BeeDesignerCompiler {
 	}
 
 	private static void putFile(Map<String, String> files, String path, String content) {
-		if (path.contains("..") || path.startsWith("/") || path.contains("\\") || files.putIfAbsent(path, content) != null) {
-			throw new IllegalArgumentException("Duplicate or unsafe generated path: " + path);
+		if (path.contains("..") || path.startsWith("/") || path.contains("\\")) {
+			throw new IllegalArgumentException("designer.error.generated_path_unsafe|" + path);
 		}
+		if (files.putIfAbsent(path, content) != null) {
+			throw new IllegalArgumentException("designer.error.generated_path_duplicate|" + path);
+		}
+	}
+
+	private static void putDefinition(Map<String, String> files, Map<String, String> owners, String path, String content, String bee) {
+		String previous = owners.putIfAbsent(path, bee);
+		if (previous != null) {
+			throw new IllegalArgumentException("designer.error.definition_collision|" + path + "|" + previous + "|" + bee);
+		}
+		putFile(files, path, content);
 	}
 }

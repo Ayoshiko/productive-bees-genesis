@@ -62,6 +62,11 @@ final class DesignerDraftsScreen extends DesignerFormScreen {
 		editorParent = parent;
 	}
 
+	void rememberExportSelection(List<String> ids) {
+		cancelSelectionDrag();
+		selection.replace(ids);
+	}
+
 	@Override
 	protected boolean showsInventory() {
 		return false;

@@ -2,6 +2,7 @@ package com.ayoshiko.productivebeesgenesis.authoring;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -18,6 +19,88 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("minecraft")
 class BeeDesignerCollectionMinecraftTest {
+	@Test
+	void runtimeKubeJsInstallKeepsTranslationsAndRefusesChangedPreview(@TempDir Path directory) throws IOException {
+		JsonObject bee = BeeDesignerDocument.create("installcheck:kube_gold");
+		bee.getAsJsonObject("names").addProperty("zh_cn", "直接安装蜜蜂");
+		bee.getAsJsonObject("names").addProperty("en_us", "Kube Install Bee");
+		String recipe = BeeDesignerDocument.addRecipe(bee, "minecraft:crafting_shaped");
+		Map<String, String> generated = BeeDesignerArchive.exportFiles(Map.of("installcheck:kube_gold", bee.toString()),
+				source("Install Fixture"), "runtime_kubejs");
+		String languagePath = "kubejs/assets/productivebees/lang/zh_cn.json";
+		Path language = directory.resolve(languagePath);
+		Files.createDirectories(language.getParent());
+		String original = "{\"entity.thirdparty.keep\":\"外部蜜蜂译名\",\"" + BeeDesignerDocument.translationKey("installcheck:kube_gold") + "\":\"旧译名\"}\n";
+		Files.writeString(language, original, StandardCharsets.UTF_8);
+		var plan = BeeDesignerKubeJsInstall.prepare(directory, generated);
+		assertEquals(directory.toAbsolutePath().normalize(), plan.instance());
+		assertEquals(directory.resolve("kubejs"), plan.target());
+		assertFalse(Files.exists(plan.backupDirectory()));
+		assertEquals(original, Files.readString(language, StandardCharsets.UTF_8));
+		assertEquals(generated.keySet(), plan.files().keySet());
+		assertEquals(plan.files().size(), plan.changes().size());
+		assertEquals(1, plan.replaceCount());
+		assertEquals(plan.files().size() - 1, plan.createCount());
+		JsonObject merged = JsonParser.parseString(plan.files().get(languagePath)).getAsJsonObject();
+		assertEquals("外部蜜蜂译名", merged.get("entity.thirdparty.keep").getAsString());
+		assertEquals("直接安装蜜蜂", merged.get(BeeDesignerDocument.translationKey("installcheck:kube_gold")).getAsString());
+		assertEquals(plan.target(), BeeDesignerKubeJsInstall.install(plan));
+		for (var file : plan.files().entrySet()) {
+			assertEquals(file.getValue(), Files.readString(directory.resolve(file.getKey()), StandardCharsets.UTF_8));
+		}
+		assertEquals(original, Files.readString(plan.backupDirectory().resolve("original").resolve(languagePath), StandardCharsets.UTF_8));
+		assertEquals("installed", JsonParser.parseString(Files.readString(plan.backupDirectory().resolve("installation.json"),
+				StandardCharsets.UTF_8)).getAsJsonObject().get("phase").getAsString());
+		var repeat = BeeDesignerKubeJsInstall.prepare(directory, generated);
+		assertEquals(0, repeat.createCount());
+		assertEquals(0, repeat.replaceCount());
+		assertEquals(plan.files().size(), repeat.unchangedCount());
+		assertEquals(plan.target(), BeeDesignerKubeJsInstall.install(repeat));
+		assertFalse(Files.exists(repeat.backupDirectory()));
+		var changed = new java.util.LinkedHashMap<>(generated);
+		String script = generated.keySet().stream().filter(path -> path.startsWith("kubejs/server_scripts/")).findFirst().orElseThrow();
+		changed.put(script, generated.get(script) + "\n// Next reviewed version\n");
+		var stale = BeeDesignerKubeJsInstall.prepare(directory, changed);
+		JsonObject external = merged.deepCopy();
+		external.addProperty("entity.thirdparty.latest", "较新的外部译名");
+		String latest = external.toString();
+		Files.writeString(language, latest, StandardCharsets.UTF_8);
+		var conflict = assertThrows(IOException.class, () -> BeeDesignerKubeJsInstall.install(stale));
+		assertTrue(conflict.getMessage().startsWith("designer.error.kubejs_install_changed"));
+		assertFalse(Files.exists(stale.backupDirectory()));
+		assertEquals(latest, Files.readString(language, StandardCharsets.UTF_8));
+		assertEquals(plan.files().get(script), Files.readString(directory.resolve(script), StandardCharsets.UTF_8));
+		assertThrows(IOException.class, () -> BeeDesignerKubeJsInstall.prepare(directory, Map.of("kubejs/data/../../outside.json", "{}")));
+		Path linkedInstance = Files.createDirectory(directory.resolve("linked-instance"));
+		Path linkedLanguage = linkedInstance.resolve(languagePath);
+		Files.createDirectories(linkedLanguage.getParent());
+		Path externalFile = directory.resolve("external-language.json");
+		Files.writeString(externalFile, original, StandardCharsets.UTF_8);
+		Files.createLink(linkedLanguage, externalFile);
+		assertThrows(IOException.class, () -> BeeDesignerKubeJsInstall.prepare(linkedInstance, generated));
+		assertEquals(original, Files.readString(externalFile, StandardCharsets.UTF_8));
+		Path malformedInstance = Files.createDirectory(directory.resolve("malformed-instance"));
+		Path malformedLanguage = malformedInstance.resolve(languagePath);
+		Files.createDirectories(malformedLanguage.getParent());
+		Files.writeString(malformedLanguage, "{", StandardCharsets.UTF_8);
+		assertThrows(IOException.class, () -> BeeDesignerKubeJsInstall.prepare(malformedInstance, generated));
+		assertEquals("{", Files.readString(malformedLanguage, StandardCharsets.UTF_8));
+		JsonObject datapack = BeeDesignerDocument.create("installcheck:datapack_gold");
+		datapack.getAsJsonObject("names").addProperty("zh_cn", "数据包安装蜜蜂");
+		datapack.getAsJsonObject("names").addProperty("en_us", "Datapack Install Bee");
+		String datapackRecipe = BeeDesignerDocument.addRecipe(datapack, "minecraft:crafting_shaped");
+		Map<String, String> datapackFiles = BeeDesignerArchive.exportFiles(Map.of("installcheck:datapack_gold", datapack.toString()),
+				source("Install Fixture Datapack"), "runtime_datapack");
+		JsonObject evidence = new JsonObject();
+		evidence.addProperty("id", "installcheck:kube_gold");
+		evidence.addProperty("recipe_id", recipe);
+		evidence.add("files", new com.google.gson.Gson().toJsonTree(plan.files()));
+		evidence.addProperty("datapack_id", "installcheck:datapack_gold");
+		evidence.addProperty("datapack_recipe_id", datapackRecipe);
+		evidence.add("datapack_files", new com.google.gson.Gson().toJsonTree(datapackFiles));
+		System.out.println("KUBEJS_INSTALL_FIXTURE_EVIDENCE " + evidence);
+	}
+
 	@Test
 	void namedExportsUsePreviewContentsAndRejectOverwrite(@TempDir Path directory) throws IOException {
 		JsonObject bee = BeeDesignerDocument.create("pack:gold");
@@ -177,6 +260,46 @@ class BeeDesignerCollectionMinecraftTest {
 		assertThrows(IllegalArgumentException.class, () -> BeeDesignerCollection.sources(Map.of(), source("Modpack")));
 		JsonObject myriad = BeeDesignerDocument.create(com.ayoshiko.productivebeesgenesis.util.PBConstants.MYRIADCREATIONS_TYPE_STRING);
 		assertThrows(IllegalArgumentException.class, () -> BeeDesignerCollection.sources(Map.of(myriad.get("id").getAsString(), myriad.toString()), source("Modpack")));
+	}
+
+	@Test
+	void oldIdentityConflictNamesBothCandidatesWhilePortableAndRemainingBeeStillExport() {
+		JsonObject original = BeeDesignerDocument.create("custombees:resource_bee_copy");
+		BeeDesignerDocument.addRecipe(original, "minecraft:crafting_shapeless");
+		original.addProperty("baseline", BeeDesignerDocument.fingerprint(original));
+		JsonObject first = BeeDesignerIdentity.rename(original, "custombees:i18nbee");
+		JsonObject second = BeeDesignerIdentity.rename(original, "custombees:testi18bee");
+		Map<String, String> conflicting = Map.of("custombees:i18nbee", first.toString(), "custombees:testi18bee", second.toString());
+		assertNotNull(BeeDesignerArchive.exportFiles(conflicting, source("Pack"), "portable"));
+		for (String format : java.util.List.of("datapack", "runtime_datapack", "kubejs", "runtime_kubejs")) {
+			var failure = assertThrows(IllegalArgumentException.class, () -> BeeDesignerArchive.exportFiles(conflicting, source("Pack"), format));
+			assertTrue(failure.getMessage().startsWith("designer.error.definition_collision|data/custombees/productivebees/resource_bee_copy.json|"));
+			assertTrue(failure.getMessage().contains("custombees:i18nbee"));
+			assertTrue(failure.getMessage().contains("custombees:testi18bee"));
+			assertNotNull(BeeDesignerArchive.exportFiles(Map.of("custombees:i18nbee", first.toString()), source("Pack"), format));
+		}
+		assertTrue(first.has(BeeDesignerIdentity.ALIASES));
+		assertTrue(second.has(BeeDesignerIdentity.ALIASES));
+	}
+
+	@Test
+	void directInstallRecipesKeepStablePathsAcrossSelectionBatches() {
+		JsonObject first = BeeDesignerDocument.create("pack:gold");
+		JsonObject second = BeeDesignerDocument.create("pack:iron");
+		String recipe = BeeDesignerDocument.addRecipe(first, "minecraft:crafting_shapeless");
+		BeeDesignerDocument.addRecipe(second, "minecraft:crafting_shapeless");
+		Map<String, String> alone = BeeDesignerArchive.exportFiles(Map.of("pack:gold", first.toString()), source("Pack"), "runtime_kubejs");
+		Map<String, String> batch = BeeDesignerArchive.exportFiles(Map.of("pack:gold", first.toString(), "pack:iron", second.toString()), source("Pack"), "runtime_kubejs");
+		ResourceLocation id = ResourceLocation.parse(recipe);
+		String path = "kubejs/server_scripts/bee_designer/recipes/" + id.getNamespace() + "/" + id.getPath() + ".js";
+		assertEquals(alone.get(path), batch.get(path));
+		assertNotNull(alone.get(path));
+		assertTrue(alone.get(path).contains(recipe));
+		assertEquals(2, batch.keySet().stream().filter(value -> value.startsWith("kubejs/server_scripts/")).count());
+		String credits = "kubejs/data/productivebeesgenesis/bee_designer/credits/pack/gold.json";
+		assertTrue(alone.containsKey(credits));
+		assertEquals(JsonParser.parseString(alone.get(credits)).getAsJsonObject().getAsJsonArray("bees"),
+				JsonParser.parseString(batch.get(credits)).getAsJsonObject().getAsJsonArray("bees"));
 	}
 
 	@Test

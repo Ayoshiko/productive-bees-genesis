@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerArchive;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerKubeJsInstall;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCollection;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCredits;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDrafts;
@@ -169,10 +170,14 @@ final class DesignerProjectFiles {
 				BeeDesignerExportName.suggest(documents.keySet(), format), exported, failed), failed);
 	}
 
-	record PreparedExport(String format, Map<String, String> files, long bytes) {
+	record PreparedExport(String format, Map<String, String> files, long bytes, BeeDesignerKubeJsInstall.Plan installation) {
 		PreparedExport(String format, Map<String, String> files) {
 			this(format, Map.copyOf(files), files.values().stream()
-					.mapToLong(value -> value.getBytes(StandardCharsets.UTF_8).length).sum());
+					.mapToLong(value -> value.getBytes(StandardCharsets.UTF_8).length).sum(), null);
+		}
+
+		PreparedExport(String format, Map<String, String> files, long bytes) {
+			this(format, Map.copyOf(files), bytes, null);
 		}
 	}
 
@@ -180,12 +185,29 @@ final class DesignerProjectFiles {
 			Consumer<PreparedExport> prepared, Consumer<String> failed) {
 		Map<String, String> snapshot = Map.copyOf(documents);
 		JsonObject source = credits.deepCopy();
-		submit(() -> new PreparedExport(format, BeeDesignerArchive.exportFiles(snapshot, source, format)), prepared, failed);
+		Path instance = Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath().normalize();
+		submit(() -> {
+			Map<String, String> files = BeeDesignerArchive.exportFiles(snapshot, source, format);
+			if (format.equals("runtime_kubejs")) {
+				BeeDesignerKubeJsInstall.Plan installation = BeeDesignerKubeJsInstall.prepare(instance, files);
+				long bytes = installation.files().values().stream().mapToLong(value -> value.getBytes(StandardCharsets.UTF_8).length).sum();
+				return new PreparedExport(format, installation.files(), bytes, installation);
+			}
+			return new PreparedExport(format, files);
+		}, prepared, failed);
 	}
 
 	static void writeExport(PreparedExport preview, String name, Consumer<Path> exported, Consumer<String> failed) {
 		Path directory = workspace();
-		submit(() -> BeeDesignerArchive.writeExport(directory, preview.files(), preview.format(), name), path -> {
+		submit(() -> {
+			if (preview.format().equals("runtime_kubejs")) {
+				if (preview.installation() == null) {
+					throw new IOException("designer.error.kubejs_install_plan");
+				}
+				return BeeDesignerKubeJsInstall.install(preview.installation());
+			}
+			return BeeDesignerArchive.writeExport(directory, preview.files(), preview.format(), name);
+		}, path -> {
 			lastExport = path;
 			exported.accept(path);
 		}, failed);

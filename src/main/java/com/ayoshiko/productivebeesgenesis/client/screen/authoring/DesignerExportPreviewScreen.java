@@ -25,25 +25,37 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 	private final DesignerFormScreen parent;
 	private final DesignerProjectFiles.PreparedExport preview;
 	private final Consumer<Path> exported;
+	private final boolean installation;
 	private final JsonObject options = new JsonObject();
 	private final List<Map.Entry<String, String>> files;
 	private final List<PreviewFile> fileDetails;
 	private final List<PreviewBee> bees;
 	private String query = "";
 	private boolean writing;
+	private boolean installationFailed;
 	private Path result;
 	private Button confirm;
 	private String displayedName = "";
 
 	DesignerExportPreviewScreen(DesignerFormScreen parent, DesignerProjectFiles.PreparedExport preview, String name, Consumer<Path> exported) {
-		super(tr("export_preview"));
+		super(tr(preview.installation() == null ? "export_preview" : "install_preview"));
 		this.parent = parent;
 		editorParent = parent;
 		this.preview = preview;
 		this.exported = exported;
-		options.addProperty("name", name);
+		installation = preview.installation() != null;
+		if (!installation) {
+			options.addProperty("name", name);
+		}
 		files = preview.files().entrySet().stream().sorted(Map.Entry.comparingByKey()).toList();
-		fileDetails = files.stream().map(file -> new PreviewFile(file.getKey(), file.getValue())).toList();
+		Map<String, String> operations = new HashMap<>();
+		if (installation) {
+			for (var change : preview.installation().changes()) {
+				operations.put(change.path(), change.operation().toString().toLowerCase(Locale.ROOT));
+			}
+		}
+		fileDetails = files.stream().map(file -> new PreviewFile(file.getKey(), file.getValue(),
+				installation ? operations.get(file.getKey()) : "")).toList();
 		bees = readBees(preview);
 	}
 
@@ -55,9 +67,23 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 	@Override
 	protected void init() {
 		begin();
-		note("", tr("export_preview_help"));
-		field("export_file_name", options, "name", "");
-		note("", tr("export_file_name_help"));
+		note("", tr(installation ? "install_preview_help" : "export_preview_help"));
+		if (installationFailed) {
+			note("", tr("install_retry_preview"));
+		}
+		note("collection_format", tr("option." + preview.format()));
+		DesignerCollectionScreen.addFormatHelp(this, preview.format());
+		if (installation) {
+			var plan = preview.installation();
+			note("", Component.translatable("designer.install_target", plan.target().toString()));
+			note("", Component.translatable("designer.install_plan_counts", plan.createCount(), plan.replaceCount(), plan.unchangedCount()));
+			if (plan.replaceCount() > 0) {
+				note("", Component.translatable("designer.install_backup_plan", plan.backupDirectory().toString()));
+			}
+		} else {
+			field("export_file_name", options, "name", "");
+			note("", tr("export_file_name_help"));
+		}
 		if (preview.format().endsWith("datapack")) {
 			note("", tr("export_names_companion"));
 		}
@@ -82,10 +108,10 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 		}
 		if (result != null) {
 			note("", Component.literal(result.toString()));
-			rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("open_exports_folder"), () ->
+			rows.add(new Row("", (x, y, w) -> button(x, y, w, tr(installation ? "open_instance_folder" : "open_exports_folder"), () ->
 					DesignerProjectFiles.openDirectory(result.getParent(), false, message -> status = message))));
 		}
-		section("export_contents");
+		section(installation ? "install_contents" : "export_contents");
 		if (files.size() > 12) {
 			rows.add(new Row("", (x, y, w) -> {
 				EditBox search = searchField(y, w, query, value -> {
@@ -116,10 +142,16 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 					.map(widget -> (EditBox) widget).forEach(widget -> widget.active = false);
 		}
 		int cell = (contentWidth - 6) / 2;
-		confirm = primaryButton(left, footerY(), cell, Component.empty(), this::write);
+		confirm = primaryButton(left, footerY(), cell, installation ? tr("install_confirm") : Component.empty(), this::write);
+		if (installation) {
+			confirm.setTooltip(Tooltip.create(tr(installationFailed ? "install_retry_preview" : "install_confirm_help")));
+			confirm.active = !writing && !installationFailed && result == null;
+		}
 		button(left + cell + 6, footerY(), cell, tr("back"), this::onClose).active = !writing;
 		displayedName = "";
-		updateName();
+		if (!installation) {
+			updateName();
+		}
 	}
 
 	private void openFile(String path) {
@@ -177,24 +209,27 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 
 	@Override
 	public void tick() {
-		updateName();
+		if (!installation) {
+			updateName();
+		}
 	}
 
 	private void write() {
 		try {
-			String name = BeeDesignerExportName.validate(options.get("name").getAsString());
+			String name = installation ? "" : BeeDesignerExportName.validate(options.get("name").getAsString());
 			writing = true;
-			status = "designer.status.exporting";
+			status = installation ? "designer.installing_client" : "designer.status.exporting";
 			DesignerProjectFiles.writeExport(preview, name, path -> {
 				writing = false;
 				result = path;
 				exported.accept(path);
-				status = Component.translatable("designer.status.exported", path.toString()).getString();
+				status = Component.translatable(installation ? "designer.install_complete" : "designer.status.exported", path.toString()).getString();
 				if (minecraft.screen == this) {
 					rebuild();
 				}
 			}, message -> {
 				writing = false;
+				installationFailed = installation;
 				status = message;
 				if (minecraft.screen == this) {
 					rebuild();
@@ -220,10 +255,10 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 		}
 	}
 
-	private record PreviewFile(String path, String name, String directory, String type, String glyph, long bytes, String search) {
-		PreviewFile(String path, String source) {
+	private record PreviewFile(String path, String name, String directory, String type, String glyph, long bytes, String search, String operation) {
+		PreviewFile(String path, String source, String operation) {
 			this(path, path.substring(path.lastIndexOf('/') + 1), directory(path), type(path), glyph(path),
-					source.getBytes(StandardCharsets.UTF_8).length, path.toLowerCase(Locale.ROOT));
+					source.getBytes(StandardCharsets.UTF_8).length, path.toLowerCase(Locale.ROOT), operation);
 		}
 
 		private static String directory(String path) {
@@ -280,6 +315,9 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 			sizeWidth = font.width(size);
 			filename = shorten(file.name(), width - sizeWidth - 48);
 			String type = tr("export_list_type_" + file.type()).getString();
+			if (!file.operation().isEmpty()) {
+				type = tr("install_operation." + file.operation()).getString() + " · " + type;
+			}
 			String directory = file.directory();
 			if (font.width(type + " · " + directory) > width - 40 && directory.contains("/")) {
 				directory = directory.substring(0, directory.indexOf('/') + 1) + "…/" + directory.substring(directory.lastIndexOf('/') + 1);

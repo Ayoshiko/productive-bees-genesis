@@ -81,7 +81,19 @@ Enter the **bee ID** directly in Appearance or the publication overview; partial
 
 After upgrading to **1.2.7**, Chinese pinyin search for previously registered bees is repaired on the first JEI load, with English name and full bee ID aliases. Opening the editor or applying bees again is unnecessary. The editor also verifies loaded content automatically on first opening and continues loading the selected bee.
 
-**Export pack release files** offers compact datapack and KubeJS bundles containing runtime content, names, required identity mappings and credits. Rename the export and preview its files before writing. Default names contain the bee ID or bee count, format and time; selected bees share one bundle, and existing files are never overwritten. Install data packs in world `datapacks` and enable the companion `-names.zip` in client `resourcepacks`; extract a KubeJS bundle into the pack root. Save a portable collection separately for editing or backup.
+Choose an export by its purpose. ZIPs are saved locally, with editable names and a file preview; default names contain the bee ID or count, format and time. Existing ZIPs are never overwritten. Returning from a multi-bee export keeps the selection; removing a bee on that page only changes the current selection.
+
+| Option | Contents | How to use it |
+| --- | --- | --- |
+| **Portable project ZIP** | Complete bee projects, recipe declarations and credits | Import through the editor to continue editing or keep a backup. It does not activate when placed in a game folder. |
+| **Data pack ZIP · Complete author** | Runtime definitions, recipes, names and importable projects | Put the main ZIP in a world's `datapacks`; enable its companion `-names.zip` in client `resourcepacks`. |
+| **KubeJS ZIP · Complete author** | `kubejs/data`, `assets`, `server_scripts` and complete projects | Extract into the instance root. Install KubeJS and required mods, then restart both client and server for the first installation. |
+| **Data pack ZIP · Runtime only** | Runtime definitions, recipes, names, required old identity mappings and credits | Install like the complete data pack; editing projects are excluded. This belongs to one world. New worlds need another installation or the pack's global data pack distribution setup. |
+| **Install into this instance (KubeJS)** | Runtime files, without a ZIP | Confirm the preview to write directly into this local instance's `kubejs/data`, `kubejs/assets` and `kubejs/server_scripts`. Existing names are merged and replaced files are backed up. Restart, then distribute these installed files with the pack. |
+
+Local KubeJS installation does not change a remote server. Multiplayer servers need matching data, scripts and dependencies; clients need names and textures. Use one runtime installation method per bee set to avoid duplicate definitions. The source files page shows loaded bee definitions, related recipes and their actual locatable files, distinguishing entries inside ZIPs and built-in mod resources.
+
+When distributing a modpack, exclude the instance's **`bee-designer`** folder and the world's **`productivebeesgenesis/bee_designer`** working folder, which may contain unused drafts, test bees, history and installation backups. Keep runtime **`kubejs/server_scripts/bee_designer`** and credits under `kubejs/data/productivebeesgenesis/bee_designer`. Saving a draft or applying to a test world does not prepare the pack's runtime files.
 
 Local drafts adapt to 1–3 columns of compact cards showing each bee egg, name and ID, with full status and time on hover. A normal click opens a draft; Ctrl-click toggles selection, Shift selects a range, and Ctrl+Shift adds a range. Drag to box-select and press Esc to restore the selection before the drag. Ctrl+A selects all valid filtered drafts, up to 100; focused text fields retain text selection. The catalog also supports clicking, ranges and box selection.
 
