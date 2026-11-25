@@ -41,6 +41,7 @@ final class DesignerOutputScreen extends DesignerFormScreen {
 
 	static void addFields(DesignerFormScreen screen, JsonObject output, boolean resource, JsonArray outputs) {
 		if (resource) {
+			screen.note("", DesignerFormScreen.tr("compat.resource_help"));
 			DesignerResourceFields.add(screen, output, false);
 		} else {
 			var mc = net.minecraft.client.Minecraft.getInstance();

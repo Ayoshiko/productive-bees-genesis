@@ -34,6 +34,7 @@ final class DesignerFileLocationsScreen extends DesignerFormScreen {
 		folder(screen, "files_datapack", root.resolve("productivebeesgenesis/bee_designer/exports"), "files_datapack_help", true);
 		folder(screen, "files_kubejs", root.resolve("kubejs-exports"), "files_kubejs_help", true);
 		folder(screen, "files_collections", root.resolve("collections"), "files_collections_help", true);
+		folder(screen, "files_installed_datapacks", Minecraft.getInstance().gameDirectory.toPath().resolve("datapacks/bee-designer"), "files_installed_datapacks_help", true);
 		folder(screen, "files_machines", root.resolve("machine-exports"), "files_machines_help", true);
 		folder(screen, "files_themes", root.resolve("themes"), "files_themes_help", true);
 		folder(screen, "files_sources", root.resolve("machine-sources"), "files_sources_help", true);

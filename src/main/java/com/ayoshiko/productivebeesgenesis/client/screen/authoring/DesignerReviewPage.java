@@ -1,6 +1,7 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCompiler;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCompatibility;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDocument;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -15,6 +16,7 @@ final class DesignerReviewPage {
 	private JsonObject generatedSource;
 	private Map<String, String> generated = Map.of();
 	private String generatedProblem = "";
+	private BeeDesignerCompatibility.Report compatibility;
 
 	void add(DesignerFormScreen screen, JsonObject document, JsonObject diagnostics, JsonObject publication,
 			boolean canPublish, boolean publishing, Consumer<String> action, Consumer<String> locate) {
@@ -49,6 +51,12 @@ final class DesignerReviewPage {
 			}
 		}
 		screen.section("review_deliver_step");
+		refreshGenerated(document);
+		if (compatibility != null) {
+			DesignerCompatibilityNotes.add(screen, compatibility);
+		} else {
+			screen.note("", DesignerFormScreen.tr("compat.check_first"));
+		}
 		screen.note("", DesignerFormScreen.tr("review_delivery_help"));
 		if (publication != null && (publishing || uncertain)) {
 			screen.note("publish_phase", DesignerFormScreen.tr("phase." + BeeDesignerDocument.text(publication, "phase", "idle")));
@@ -65,22 +73,12 @@ final class DesignerReviewPage {
 		}, 20, false, 140));
 		if (screen instanceof BeeDesignerScreen editor) {
 			DesignerBatchImportScreen.addPending(editor);
-			screen.rows.add(new DesignerFormScreen.Row("review_runtime", (x, y, w) -> screen.button(x, y, w,
-					DesignerFormScreen.tr("runtime_export"), () -> mc.setScreen(new DesignerCollectionScreen(editor,
-							java.util.List.of(document.get("id").getAsString()), document, "runtime_datapack")))
-					.active = !publishing, 20, false, 140));
-			screen.note("", DesignerFormScreen.tr("runtime_export_help"));
 			screen.anchor("review_local_export");
-			screen.rows.add(new DesignerFormScreen.Row("review_local", (x, y, w) -> screen.button(x, y, w,
-					DesignerFormScreen.tr("local_export"), editor::exportLocal).active = !publishing, 20, false, 140));
 			screen.anchor("review_portable");
 			screen.rows.add(new DesignerFormScreen.Row("review_portable", (x, y, w) -> screen.button(x, y, w,
 					DesignerFormScreen.tr("collection_export"), () -> mc.setScreen(new DesignerCollectionScreen(editor,
 							java.util.List.of(document.get("id").getAsString()), document))).active = !publishing, 20, false, 140));
-			screen.rows.add(new DesignerFormScreen.Row("review_scripts", (x, y, w) -> screen.button(x, y, w,
-					DesignerFormScreen.tr("kubejs_export"), () -> mc.setScreen(new DesignerCollectionScreen(editor,
-							java.util.List.of(document.get("id").getAsString()), document, "kubejs")))
-					.active = !publishing, 20, false, 140));
+			screen.note("", DesignerFormScreen.tr("runtime_export_help"));
 		}
 		if (!canPublish) {
 			screen.note("permission", DesignerFormScreen.tr("error.permission"));
@@ -92,9 +90,6 @@ final class DesignerReviewPage {
 			}
 			actions(screen, "open_exports_folder", () -> DesignerProjectFiles.openFolder(true, message -> screen.status = message),
 					"file_locations", () -> mc.setScreen(new DesignerFileLocationsScreen(screen)));
-			screen.rows.add(new DesignerFormScreen.Row("", (x, y, w) -> screen.button(x, y, w, DesignerFormScreen.tr("export"),
-					() -> action.accept("export")).active = canPublish && !publishing));
-			screen.note("", DesignerFormScreen.tr("kubejs_export_help"));
 		});
 		screen.group("generated_files", true, () -> {
 			refreshGenerated(document);
@@ -121,12 +116,14 @@ final class DesignerReviewPage {
 		generatedSource = document.deepCopy();
 		generated = Map.of();
 		generatedProblem = "";
+		compatibility = null;
 		try {
 			JsonObject source = document.deepCopy();
 			if (!source.has("definition_path")) {
 				source.add("definition_path", source.get("id"));
 			}
 			generated = Map.copyOf(BeeDesignerCompiler.files(Map.of(source.get("id").getAsString(), source.toString())));
+			compatibility = BeeDesignerCompatibility.describe(Map.of(source.get("id").getAsString(), source.toString()));
 		} catch (RuntimeException exception) {
 			generatedProblem = exception.getMessage() == null ? "designer.error.invalid_project" : exception.getMessage();
 		}

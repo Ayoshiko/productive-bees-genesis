@@ -133,6 +133,7 @@ final class DesignerBeeFields {
 		} else if (flower.equals("flowerTag")) {
 			flowerTag(screen, definition);
 		} else if (!screen.invalidField("flower", definition, "flowerResource", "object")) {
+			screen.note("", DesignerFormScreen.tr("compat.container_help"));
 			DesignerResourceFields.add(screen, definition.getAsJsonObject("flowerResource"), true);
 		}
 		screen.section("breeding_section");

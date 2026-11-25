@@ -31,51 +31,55 @@
 
 ## [Unreleased]
 
-## [1.2.7] - 2026-11-24
+## [1.2.7] - 2026-11-25
 
-**蜜蜂编辑器、旧版搜索与整合包制作维护更新。** 客户端与服务端须一起更新。 / **Bee editor, legacy search and modpack authoring maintenance update.** Update clients and servers together.
+**蜜蜂编辑器与整合包制作维护更新。** 客户端与服务端须一起更新。 / **Bee editor and modpack authoring maintenance update.** Update clients and servers together.
+
+### 新增
+
+- **实例数据包安装**：不用 KubeJS 也能直接安装到整合包的 `datapacks/bee-designer/`，默认覆盖当前实例所有世界。保留创世并重启后，新建和已有存档自动加载蜜蜂、配方与名称。也可选择当前单人世界，生成标准世界数据包及自动启用的名称资源包；普通 PB 内容可脱离创世运行，仍需 PB 本体与引用的其它模组。
+- **扩展依赖提示**：相关编辑入口、检查页及导出预览明确列出扩展资源、容器花源、创世物品／组件、旧身份迁移等依赖及对应蜂种；蜂种 ID 使用创世命名空间本身不要求安装创世。
+- **文件夹选择与批量蜂蛋配方**：浏览其他整合包可选择文件夹并自动刷新。多选蜜蜂可使用共享获得／机器配方模板生成各自的蜂蛋配方草稿。
+
+### 变更
+
+- **导出用途与工程备份**：统一数据包安装、KubeJS 安装、数据包 ZIP、KubeJS ZIP、蜜蜂工程备份五种用途。运行 ZIP 默认精简，保留玩法、名称、必要身份映射及署名；独立开关可附带编辑源稿和来源快照。工程备份保存所选蜜蜂设计、已读取草稿与当前编辑，不包含编辑器偏好或整个草稿库。各方式明确安装位置、依赖、生效范围和继续编辑方法。
+- **安装、来源与选择保留**：安装前可查看实际文件计划，合并名称、备份替换内容；失败保留恢复材料并重新预览。来源页显示实际加载的数据包、ZIP 内项与 KubeJS 定义／关联脚本。导出可命名、搜索及只读预览，同名不覆盖；返回保留多选及临时移除结果。
+- **蜂种 ID 与材料编辑**：外观和发布总览支持直接修改 ID，未完成输入随草稿保存；已有可配置蜂种迁移保留旧身份兼容、数量、已付生产进度和产物。九宫格可从背包或 JEI 拖入材料，有序／无序用紧凑按钮选择；重复材料保存为 ABA／key，普通 KubeJS 合成使用 shaped／shapeless，复杂字段保持完整。
+- **草稿库与物品栏**：草稿卡片按窗口宽度显示 1–3 列和对应蜂蛋，支持 Ctrl 点选、Shift 范围、Ctrl+Shift 追加、框选／Esc 撤回及最多 100 项的筛选全选。标题栏可切换物品栏，设置提供自动、始终显示或始终隐藏。
+- **批量应用**：目录、草稿和导出页提供批量应用，导出／安装后可自动应用同一批蜜蜂。文件保存与世界应用分别报告结果，应用拒绝仍保留文件。
 
 ### 修复
 
-- **旧注册蜂搜索**：升级后首次 JEI 加载自动修复中文拼音索引，同时支持英文名称和完整蜂种 ID，无需打开编辑器或重新应用。改名后的正式蜂种本体不会被旧兼容别名隐藏。
-- **名称与应用结果**：世界应用生成并同步中英文翻译键；修复查看最近成功应用时的页面崩溃，保留当前编辑内容。
-- **草稿与首次载入**：修复未修改草稿之间切换时的误报，状态栏可查看并跳转到实际改动。首次打开自动校验已加载内容并继续读取所选蜂种。
-- **紧凑说明文字**：有序／无序提示和导出蜂名摘要关闭文字阴影，避免平滑字体出现重影。
-- **手册搜索**：为蜂蜂应援手册补充 JEI 名称别名，可用“蜂蜂”“fengfeng”“蜜蜂编辑器”和完整物品 ID 搜索。
-- **身份故障与应用取消**：坏身份映射保留原蜂、实体元数据、已付周期和账户请求，只隔离实际故障范围，映射修复后自动续跑。应用准备期间关闭、断线或换会话，会保留原操作可查询的取消结果。
-- **批量导出冲突**：同一旧身份被多个迁移候选声明时，中文提示具体文件及两个蜂种 ID；可在导出页移除候选后继续，切换格式清除旧错误。便携工程可保管这些候选。
-
-### 改进
-
-- **蜂种身份迁移**：外观和发布总览支持直接编辑 ID，未完成输入随草稿恢复；已有可配置蜂种通过作者迁移保留旧身份兼容、数量、已付生产进度和产物。
-- **九宫格与批量蜂蛋配方**：可直接从背包或 JEI 拖入材料；有序／无序用高亮小按钮和简短规则同行展示。重复材料保存为 ABA／key，普通 KubeJS 合成使用 shaped／shapeless 简写，精确组件、条件及扩展字段保留完整声明。多选蜜蜂可用共享获得／机器模板生成蜂蛋配方草稿。
-- **密集草稿库与物品栏**：按窗口宽度显示 1–3 列，卡片展示对应蜂蛋。标题栏可临时显示／隐藏物品栏，设置可选择自动、始终显示或始终隐藏；自动模式在材料页显示、浏览页隐藏。支持 Ctrl 点选、Shift 范围、Ctrl+Shift 追加、框选／Esc 撤回，以及最多 100 项的筛选结果全选。
-- **导出与文件预览**：单蜂或多蜂共用一个可命名的导出包，默认名称含蜂种或蜂数、格式与时间，确认前可搜索并只读查看文件，同名拒绝覆盖。精简发布包保留运行内容、名称、必要身份映射及署名，可编辑收藏另存。
-- **KubeJS 实例安装与来源**：保留完整作者 ZIP；精简 KubeJS 改为直接安装到当前实例，预览文件操作、合并名称并备份替换文件；失败后保留恢复材料并要求重新预览。五种选项分别说明用途、位置、重启和分发要求，提醒排除草稿／测试工作目录。来源页显示已加载的数据包、ZIP 内文件和 KubeJS 定义／关联脚本位置。多选导出取消返回后保留选择，临时移除的结果也回交父页。
-- **批量应用与预览布局**：目录多选、草稿和导出页提供明确的批量应用入口，可在导出／安装成功后自动应用同一批蜜蜂并重载。文件保存和世界应用结果分别显示，拒绝应用仍保留已导出文件。修复滚动文件行被页脚误缩而出现重叠的大小标记，修正语言文件类型，安装说明改为更好理解的口语。
-- **KubeJS 即时应用核验**：普通有序／无序合成使用 KubeJS 对应类型时按完整内容核验，避免把相同配方误报为覆盖；额外材料动作和镜像限制仍严格检查。重载结果未明时保留活动 ZIP 和回执，避免 Windows 文件占用阻碍恢复。
+- **旧蜂及手册搜索**：升级后首次 JEI 加载自动修复中文拼音索引，同时支持英文名称和完整 ID，无需重新应用；旧兼容别名不再隐藏新蜂。手册可用“蜂蜂”“fengfeng”“蜜蜂编辑器”及物品 ID 搜索。
+- **名称、草稿与首次载入**：应用名称生成并同步正确翻译键；修复查看最近应用的崩溃、未修改草稿切换误报及字段差异提示。首次打开自动校验已加载内容并继续读取选中蜂种。
+- **身份故障与应用取消**：坏身份映射保留原蜂、元数据、已付周期和账户请求，只隔离实际故障范围，映射修复后自动续跑。准备期间关闭、断线或换会话保留原操作可查询的取消结果。
+- **导出冲突、布局与目录**：旧身份被多个候选声明时，错误指出具体文件及蜂种，可移除候选继续或用工程备份保留。修复预览文件行与大小重叠、语言文件类型及过长说明；简短提示关闭文字阴影，文件夹选择的初始父目录正确定位。
+- **KubeJS 即时应用**：普通合成的对应 KubeJS 类型按完整内容核验，避免误报覆盖；额外动作与镜像限制仍严格检查。重载未明时保留活动 ZIP 和回执，避免 Windows 文件占用阻碍恢复。
 
 ### English
 
+#### Added
+
+- **Instance datapack installation**: install directly in the modpack's `datapacks/bee-designer/` without KubeJS, defaulting to all worlds in this instance. Keep Genesis and restart to load bees, recipes and names in existing and newly created saves. Current singleplayer world installation also creates a standard world datapack and enables a name resource pack. Ordinary PB content works without Genesis, while PB and referenced mods remain required.
+- **Extension requirements**: editing pages, review and export previews identify affected bees and requirements for extended resources, container flowers, Genesis items/components and identity migration. A bee ID in the Genesis namespace alone does not require Genesis.
+- **Folder selection and batch egg recipes**: Browse other modpacks supports folder selection and automatic refresh. Selected bees can receive egg recipe drafts from a shared acquisition or machine template.
+
+#### Changed
+
+- **Exports and project backups**: five purposes cover datapack installation, KubeJS installation, datapack ZIPs, KubeJS ZIPs and bee project backups. Slim runtime ZIPs retain gameplay, names, required identity mappings and attribution; one switch adds editable sources and origins. Project backups retain selected designs, loaded drafts and current edits, not preferences or the entire draft library. Each option explains locations, dependencies, scope and further editing.
+- **Installation, sources and selection**: preview actual file operations, merge names and back up replacements; failed plans retain recovery materials and need a fresh preview. Sources locate loaded datapacks, ZIP entries and KubeJS definitions or related scripts. Exports support names, search and read-only previews without overwriting existing ZIPs; returning retains selection and temporary removals.
+- **Bee IDs and ingredients**: edit IDs in Appearance and publication, retaining unfinished input in drafts. Existing configurable bee migrations preserve compatibility, quantities, paid progress and outputs. Drag inventory or JEI ingredients into the crafting grid; compact Shaped/Shapeless controls and ABA/key reuse repeated materials. Ordinary KubeJS crafting uses shaped/shapeless while complex fields remain intact.
+- **Drafts and inventory**: adaptive 1–3 column cards show bee eggs, with Ctrl-click, Shift ranges, Ctrl+Shift additions, box selection/Esc rollback and filtered selection of up to 100 drafts. Toggle inventory from the title bar or select Automatic, Always show or Always hide.
+- **Batch application**: catalog, drafts and exports can apply selected bees together, including after exporting/installing. File saving and world application results are separate; rejected applications retain saved files.
+
 #### Fixed
 
-- **Legacy bee search**: the first JEI load after updating repairs Chinese pinyin indexing and adds English name and full bee ID aliases without reopening the editor or reapplying projects. Old compatibility aliases no longer hide the renamed bee ingredient.
-- **Names and application results**: applying a project creates and synchronizes translated name keys. Viewing the last successful application no longer crashes or changes the current draft.
-- **Drafts and initial loading**: switching between unchanged drafts no longer reports false edits. The status bar shows real changes and links to their fields. Opening the editor automatically verifies loaded content and continues reading the selected bee.
-- **Compact text**: crafting mode hints and export bee summaries render without shadows, avoiding doubled glyphs with smooth fonts.
-- **Handbook search**: JEI aliases support “蜂蜂”, “fengfeng”, “bee designer” and the full item ID for the BeeBee Support Handbook.
-- **Identity failures and cancelled applications**: invalid identity mappings retain the original bee, entity metadata, paid cycles and account requests. Only the affected scope is held and resumes after the mapping is repaired. Closing, disconnecting or changing sessions during preparation leaves a queryable cancellation result for the original operation.
-- **Batch export conflicts**: when migration candidates claim the same old identity, localized errors name the file and both bee IDs. Remove a candidate on the export page to continue; switching formats clears the previous error. Portable projects can retain these candidates.
-
-#### Improved
-
-- **Bee identity migration**: edit IDs directly in Appearance and the publication overview, with unfinished input retained in drafts. Author migrations preserve old identity compatibility, quantities, paid progress and outputs for existing configurable bees.
-- **Crafting and batch egg recipes**: drag ingredients directly from inventory or JEI. Compact highlighted Shaped / Shapeless buttons share a row with their rules. Repeated ingredients use ABA/key; ordinary KubeJS crafting uses shaped/shapeless declarations while exact components, conditions and extension fields remain intact. Selected bees can receive egg recipe drafts from a shared acquisition or machine template.
-- **Dense local drafts and inventory**: adaptive 1–3 column cards show the corresponding bee eggs. Toggle inventory from the title bar, or choose Automatic, Always show or Always hide in settings; Automatic shows it on material pages and hides it while browsing. Ctrl-click, Shift ranges, Ctrl+Shift additions, box selection with Esc rollback and filtered selection of up to 100 drafts are supported.
-- **Export and file preview**: selected bees share a named bundle. Default names include the bee ID or count, format and timestamp; preview, search and read-only file browsing precede writing, and existing filenames are not overwritten. Compact release files retain runtime content, names, required identity mappings and credits; editable collections remain a separate export.
-- **KubeJS installation and sources**: the complete author ZIP remains available; compact KubeJS installs directly into this instance, with a file operation preview, merged names and replacement backups. Failed plans retain recovery files and require a fresh preview. All five options explain purpose, location, restart and distribution requirements, including excluding draft and test work folders. The source page locates loaded datapack entries, files inside ZIPs and KubeJS definitions or related scripts. Cancelling a multi-bee export retains selection, including temporary removals made on that page.
-- **Batch application and preview layout**: catalog selections, drafts and exports provide clear batch application actions. Successful exports or installations can apply the same bees and reload resources automatically. File saving and world application results are separate; rejected applications retain saved exports. Scrolling file rows no longer shrink when mistaken for footer buttons, language files have the correct type, and installation guidance uses plain language.
-- **KubeJS application verification**: equivalent ordinary shaped and shapeless recipes using KubeJS serializers are checked by their complete contents instead of falsely reported as overrides. Extra ingredient actions and mirror restrictions remain strict. Uncertain reloads retain active ZIPs and receipts so Windows file locks do not obstruct recovery.
+- **Legacy bee and handbook search**: the first JEI load repairs Chinese pinyin indexing and supports English names/full IDs without reapplying bees. Compatibility aliases no longer hide renamed bees. Handbook aliases include “蜂蜂”, “fengfeng”, “bee designer” and its item ID.
+- **Names, drafts and initial loading**: applying names synchronizes correct translation keys. Fixed crashes viewing the last application, false changes between unchanged drafts and field change feedback. Opening the editor verifies loaded content and continues reading the selected bee.
+- **Identity failures and cancellation**: invalid mappings retain original bees, metadata, paid cycles and requests, holding only the affected scope until repaired. Closing, disconnecting or changing sessions during preparation leaves a queryable cancellation result.
+- **Export conflicts, layout and folders**: competing old-ID claims identify files/bees; remove a candidate to continue or retain designs in a project backup. Fixed overlapping preview rows/sizes, language file types, long guidance and the initial folder parent. Compact hints render without doubled shadows.
+- **KubeJS immediate application**: equivalent ordinary KubeJS crafting types are checked by complete contents without false override errors; extra actions and mirror restrictions remain strict. Uncertain reloads retain active ZIPs and receipts, avoiding recovery failures from Windows file locks.
 
 ## [1.2.6] - 2026-11-21
 

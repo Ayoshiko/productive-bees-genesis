@@ -162,12 +162,23 @@ public final class BeeDesignerArchive {
 			case "portable" -> BeeDesignerCollection.files(documents, credits);
 			case "datapack" -> dataFiles(documents, credits, true);
 			case "runtime_datapack" -> dataFiles(documents, credits, false);
+			case "install_datapack", "install_world_datapack" -> installedDataFiles(documents, credits);
 			case "kubejs" -> kubeJsFiles(documents, credits, true);
-			case "runtime_kubejs" -> kubeJsFiles(documents, credits, false);
+			case "runtime_kubejs", "install_kubejs" -> kubeJsFiles(documents, credits, false);
 			default -> throw new IllegalArgumentException("designer.error.collection_format");
 		};
 		if (format.endsWith("datapack")) {
 			BeeDesignerStore.validateFiles(files);
+		}
+		return Map.copyOf(files);
+	}
+
+	private static Map<String, String> installedDataFiles(Map<String, String> documents, JsonObject credits) {
+		Map<String, String> files = new LinkedHashMap<>(dataFiles(documents, credits, false));
+		for (var entry : documents.entrySet()) {
+			ResourceLocation bee = ResourceLocation.parse(entry.getKey());
+			files.put("data/productivebeesgenesis/bee_designer/credits/" + bee.getNamespace() + "/" + bee.getPath() + ".json",
+					creditsFile(Map.of(entry.getKey(), entry.getValue()), credits, false));
 		}
 		return Map.copyOf(files);
 	}

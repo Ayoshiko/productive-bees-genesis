@@ -1,7 +1,8 @@
 package com.ayoshiko.productivebeesgenesis.client.screen.authoring;
 
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerArchive;
-import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerKubeJsInstall;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerInstallation;
+import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCompatibility;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCollection;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerCredits;
 import com.ayoshiko.productivebeesgenesis.authoring.BeeDesignerDrafts;
@@ -170,14 +171,10 @@ final class DesignerProjectFiles {
 				BeeDesignerExportName.suggest(documents.keySet(), format), exported, failed), failed);
 	}
 
-	record PreparedExport(String format, Map<String, String> files, long bytes, BeeDesignerKubeJsInstall.Plan installation) {
-		PreparedExport(String format, Map<String, String> files) {
-			this(format, Map.copyOf(files), files.values().stream()
-					.mapToLong(value -> value.getBytes(StandardCharsets.UTF_8).length).sum(), null);
-		}
-
-		PreparedExport(String format, Map<String, String> files, long bytes) {
-			this(format, Map.copyOf(files), bytes, null);
+	record PreparedExport(String format, Map<String, String> files, long bytes, BeeDesignerInstallation.Plan installation,
+			BeeDesignerCompatibility.Report compatibility) {
+		PreparedExport {
+			files = Map.copyOf(files);
 		}
 	}
 
@@ -186,29 +183,51 @@ final class DesignerProjectFiles {
 		Map<String, String> snapshot = Map.copyOf(documents);
 		JsonObject source = credits.deepCopy();
 		Path instance = Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath().normalize();
+		Path world = null;
+		if (format.equals("install_world_datapack")) {
+			var server = Minecraft.getInstance().getSingleplayerServer();
+			if (server == null) {
+				throw new IllegalStateException("designer.error.world_install_local");
+			}
+			world = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toAbsolutePath().normalize();
+		}
+		Path worldDirectory = world;
 		submit(() -> {
 			Map<String, String> files = BeeDesignerArchive.exportFiles(snapshot, source, format);
-			if (format.equals("runtime_kubejs")) {
-				BeeDesignerKubeJsInstall.Plan installation = BeeDesignerKubeJsInstall.prepare(instance, files);
-				long bytes = installation.files().values().stream().mapToLong(value -> value.getBytes(StandardCharsets.UTF_8).length).sum();
-				return new PreparedExport(format, installation.files(), bytes, installation);
+			BeeDesignerInstallation.Plan installation = null;
+			if (format.startsWith("install_")) {
+				installation = switch (format) {
+					case "install_kubejs" -> BeeDesignerInstallation.prepareKubeJs(instance, files);
+					case "install_world_datapack" -> BeeDesignerInstallation.prepareWorldDatapack(instance, worldDirectory, files);
+					default -> BeeDesignerInstallation.prepareDatapack(instance, files);
+				};
+				files = installation.files();
 			}
-			return new PreparedExport(format, files);
+			long bytes = files.values().stream().mapToLong(value -> value.getBytes(StandardCharsets.UTF_8).length).sum();
+			return new PreparedExport(format, files, bytes, installation, BeeDesignerCompatibility.describe(snapshot));
 		}, prepared, failed);
 	}
 
 	static void writeExport(PreparedExport preview, String name, Consumer<Path> exported, Consumer<String> failed) {
 		Path directory = workspace();
 		submit(() -> {
-			if (preview.format().equals("runtime_kubejs")) {
-				if (preview.installation() == null) {
-					throw new IOException("designer.error.kubejs_install_plan");
-				}
-				return BeeDesignerKubeJsInstall.install(preview.installation());
+			if (preview.installation() != null) {
+				return BeeDesignerInstallation.install(preview.installation());
 			}
 			return BeeDesignerArchive.writeExport(directory, preview.files(), preview.format(), name);
 		}, path -> {
 			lastExport = path;
+			if (preview.format().equals("install_world_datapack")) {
+				var client = Minecraft.getInstance();
+				var repository = client.getResourcePackRepository();
+				repository.reload();
+				var selected = new java.util.ArrayList<>(repository.getSelectedIds());
+				if (!selected.contains("file/bee-designer")) {
+					selected.add("file/bee-designer");
+					repository.setSelected(selected);
+				}
+				client.options.updateResourcePacks(repository);
+			}
 			exported.accept(path);
 		}, failed);
 	}

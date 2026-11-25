@@ -79,7 +79,8 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 			note("", tr("install_retry_preview"));
 		}
 		note("collection_format", tr("option." + preview.format()));
-		DesignerCollectionScreen.addFormatHelp(this, preview.format());
+		note("", tr("collection_contents." + preview.format()));
+		DesignerCompatibilityNotes.add(this, preview.compatibility());
 		if (installation) {
 			var plan = preview.installation();
 			note("", Component.translatable("designer.install_target", plan.target().toString()));
@@ -91,7 +92,7 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 			field("export_file_name", options, "name", "");
 			note("", tr("export_file_name_help"));
 		}
-		if (preview.format().endsWith("datapack")) {
+		if (!installation && preview.format().endsWith("datapack")) {
 			note("", tr("export_names_companion"));
 		}
 		note("", Component.translatable("designer.export_list_summary", bees.size(), files.size(), formatBytes(preview.bytes())));
@@ -183,6 +184,9 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 			manifestPath = "bee-collection.json";
 		} else if (preview.format().endsWith("kubejs")) {
 			manifestPath = "kubejs/" + manifestPath;
+		} else if (preview.format().equals("install_datapack") || preview.format().equals("install_world_datapack")) {
+			manifestPath = preview.files().keySet().stream().filter(path -> path.endsWith("/" + "data/productivebeesgenesis/bee_designer/credits.json"))
+					.findFirst().orElseThrow();
 		}
 		JsonObject manifest = JsonParser.parseString(preview.files().get(manifestPath)).getAsJsonObject();
 		List<PreviewBee> selected = new ArrayList<>();
@@ -238,7 +242,11 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 				writing = false;
 				result = path;
 				exported.accept(path);
-				status = Component.translatable(installation ? "designer.install_complete" : "designer.status.exported", path.toString()).getString();
+				String success = installation ? "designer.install_complete" : "designer.status.exported";
+				if (preview.format().equals("install_world_datapack")) {
+					success = "designer.world_install_complete";
+				}
+				status = Component.translatable(success, path.toString()).getString();
 				if (minecraft.screen == this) {
 					rebuild();
 				}
@@ -283,6 +291,13 @@ final class DesignerExportPreviewScreen extends DesignerFormScreen {
 
 		private static String type(String path) {
 			String contentPath = path.startsWith("kubejs/") ? path.substring("kubejs/".length()) : path;
+			if (contentPath.startsWith("datapacks/bee-designer/")) {
+				contentPath = contentPath.substring("datapacks/bee-designer/".length());
+			} else if (contentPath.startsWith("saves/") && contentPath.contains("/datapacks/bee-designer/")) {
+				contentPath = contentPath.substring(contentPath.indexOf("/datapacks/bee-designer/") + "/datapacks/bee-designer/".length());
+			} else if (contentPath.startsWith("resourcepacks/bee-designer/")) {
+				contentPath = contentPath.substring("resourcepacks/bee-designer/".length());
+			}
 			if (contentPath.startsWith("assets/") && contentPath.contains("/lang/") && contentPath.endsWith(".json")) {
 				return "names";
 			}

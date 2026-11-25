@@ -1697,7 +1697,7 @@ public final class BeeDesignerScreen extends DesignerFormScreen {
 	}
 
 	void exportLocal() {
-		minecraft.setScreen(new DesignerCollectionScreen(this, List.of(document.get("id").getAsString()), document, "datapack"));
+		minecraft.setScreen(new DesignerCollectionScreen(this, List.of(document.get("id").getAsString()), document));
 	}
 
 	JsonObject editingDocument() {

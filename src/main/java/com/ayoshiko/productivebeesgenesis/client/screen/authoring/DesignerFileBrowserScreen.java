@@ -28,6 +28,12 @@ import java.util.function.Consumer;
 
 /** 只读本机目录；独立队列不会阻塞草稿保存，迟到结果不能覆盖新的目录。 */
 final class DesignerFileBrowserScreen extends DesignerFormScreen {
+	enum Mode {
+		PROJECT,
+		MACHINE,
+		DIRECTORY
+	}
+
 	private static final ThreadPoolExecutor DIRECTORY = new ThreadPoolExecutor(1, 1, 20L, TimeUnit.SECONDS,
 			new ArrayBlockingQueue<>(1), runnable -> {
 		Thread thread = new Thread(runnable, "Bee designer directory");
@@ -39,7 +45,7 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 	}
 	private final Screen parent;
 	private final Consumer<Path> selected;
-	private final boolean machineSources;
+	private final Mode mode;
 	private final ArrayDeque<Path> history = new ArrayDeque<>();
 	private Path location;
 	private Path chosen;
@@ -51,15 +57,20 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 	private long searchAt;
 	private boolean reading;
 	private boolean initialized;
+	private boolean listed;
 	private long generation;
 	private boolean truncated;
 	private long lastClick;
 
 	DesignerFileBrowserScreen(Screen parent, String initial, boolean machineSources, Consumer<Path> selected) {
-		super(tr("browse_file"));
+		this(parent, initial, machineSources ? Mode.MACHINE : Mode.PROJECT, selected);
+	}
+
+	DesignerFileBrowserScreen(Screen parent, String initial, Mode mode, Consumer<Path> selected) {
+		super(tr(mode == Mode.DIRECTORY ? "browse_folder" : "browse_file"));
 		this.parent = parent;
 		editorParent = parent;
-		this.machineSources = machineSources;
+		this.mode = mode;
 		this.selected = selected;
 		try {
 			location = initial.isBlank() ? Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath()
@@ -97,7 +108,7 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 			query = value;
 			chosen = null;
 			if (openButton != null) {
-				openButton.active = false;
+				openButton.active = mode == Mode.DIRECTORY && listed && !reading;
 			}
 			searchAt = System.currentTimeMillis() + 150;
 		});
@@ -117,7 +128,7 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 				DesignerSearch.indexed(entry.path().getFileName().toString()), List.of())).toList();
 		if (frameHeight >= 240) {
 			fixedNote(Component.translatable("designer.browser_results", visible.size()).append("  ·  ")
-					.append(tr(machineSources ? "browser_machine_types" : "browser_project_types")),
+					.append(tr(mode == Mode.DIRECTORY ? "browser_directory_help" : mode == Mode.MACHINE ? "browser_machine_types" : "browser_project_types")),
 					left, contentTop, contentWidth, 16);
 			contentTop += 18;
 		}
@@ -133,8 +144,8 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 		finishRows();
 		int cell = (contentWidth - 6) / 2;
 		button(left, footerY(), cell, Component.translatable("gui.cancel"), this::onClose);
-		openButton = primaryButton(left + cell + 6, footerY(), cell, tr("browser_open_selected"), this::openSelected);
-		openButton.active = chosen != null && !reading;
+		openButton = primaryButton(left + cell + 6, footerY(), cell, tr(mode == Mode.DIRECTORY ? "browser_select_directory" : "browser_open_selected"), this::openSelected);
+		openButton.active = (mode == Mode.DIRECTORY ? listed : chosen != null) && !reading;
 		if (!initialized) {
 			initialized = true;
 			read(location, false);
@@ -184,8 +195,8 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 	}
 
 	private void openSelected() {
-		if (chosen != null && !reading) {
-			selected.accept(chosen);
+		if ((mode == Mode.DIRECTORY ? listed : chosen != null) && !reading) {
+			selected.accept(mode == Mode.DIRECTORY ? location : chosen);
 			minecraft.setScreen(parent);
 		}
 	}
@@ -196,7 +207,7 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 		status = "designer.browser_loading";
 		Path absolute = requested.toAbsolutePath().normalize();
 		try {
-			CompletableFuture.supplyAsync(() -> list(absolute, machineSources), DIRECTORY).whenComplete((result, failure) ->
+			CompletableFuture.supplyAsync(() -> list(absolute, mode), DIRECTORY).whenComplete((result, failure) ->
 					minecraft.execute(() -> {
 				if (generation != request) {
 					return;
@@ -212,6 +223,7 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 					location = result.directory();
 					pathText = location.toString();
 					entries = result.entries();
+					listed = true;
 					truncated = result.truncated();
 					chosen = null;
 					query = "";
@@ -231,7 +243,7 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 		rebuild();
 	}
 
-	private static Listing list(Path requested, boolean machineSources) {
+	private static Listing list(Path requested, Mode mode) {
 		Path directory = Files.isRegularFile(requested, LinkOption.NOFOLLOW_LINKS) ? requested.getParent() : requested;
 		List<Entry> values = new ArrayList<>();
 		int scanned = 0;
@@ -245,7 +257,8 @@ final class DesignerFileBrowserScreen extends DesignerFormScreen {
 				}
 				boolean folder = Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS);
 				String name = child.getFileName().toString().toLowerCase(Locale.ROOT);
-				boolean supported = name.endsWith(".json") || name.endsWith(".zip") || machineSources && name.endsWith(".js");
+				boolean supported = mode != Mode.DIRECTORY && (name.endsWith(".json") || name.endsWith(".zip")
+						|| mode == Mode.MACHINE && name.endsWith(".js"));
 				if (folder || supported && Files.isRegularFile(child, LinkOption.NOFOLLOW_LINKS)) {
 					values.add(new Entry(child.toAbsolutePath().normalize(), folder));
 				}

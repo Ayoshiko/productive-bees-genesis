@@ -19,7 +19,7 @@ final class DesignerInstanceScreen extends DesignerFormScreen {
 		super(tr("browse_instances"));
 		this.editor = editor;
 		editorParent = editor;
-		Path game = net.minecraft.client.Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath();
+		Path game = net.minecraft.client.Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath().normalize();
 		Path directory = game.getParent();
 		options.addProperty("path", directory == null ? game.toString() : directory.toString());
 	}
@@ -29,7 +29,15 @@ final class DesignerInstanceScreen extends DesignerFormScreen {
 		begin();
 		note("", tr("instance_browser_help"));
 		field("instance_directory", options, "path", "");
-		rows.add(new Row("", (x, y, w) -> button(x, y, w, tr("refresh"), this::refresh).active = !reading));
+		rows.add(new Row("", (x, y, w) -> {
+			int cell = (w - 6) / 2;
+			button(x, y, cell, tr("browse_folder"), () -> minecraft.setScreen(new DesignerFileBrowserScreen(this,
+					options.get("path").getAsString(), DesignerFileBrowserScreen.Mode.DIRECTORY, directory -> {
+				options.addProperty("path", directory.toString());
+				refresh();
+			}))).active = !reading;
+			button(x + cell + 6, y, cell, tr("refresh"), this::refresh).active = !reading;
+		}));
 		for (Path instance : instances) {
 			rows.add(new Row("", (x, y, w) -> button(x, y, w, Component.literal(instance.getFileName().toString()),
 					() -> minecraft.setScreen(new DesignerInstanceBeesScreen(editor, this, instance)))));

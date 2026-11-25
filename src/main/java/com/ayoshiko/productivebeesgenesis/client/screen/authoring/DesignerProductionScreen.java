@@ -71,6 +71,7 @@ final class DesignerProductionScreen extends DesignerFormScreen {
 		anchor("");
 		anchor("route");
 		section("production_route");
+		note("", tr("compat.production_help"));
 		rows.add(new Row("route", (x, y, w) -> selection(x, y, w, options.get("route").getAsString(),
 				new String[]{"centrifuge", "direct"}, value -> {
 			options.addProperty("route", value);

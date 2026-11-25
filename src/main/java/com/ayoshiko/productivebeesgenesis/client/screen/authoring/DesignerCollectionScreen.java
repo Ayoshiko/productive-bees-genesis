@@ -34,7 +34,7 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 	private final ArrayDeque<String> pending;
 	private final boolean localDrafts;
 	private JsonObject credits = BeeDesignerCredits.empty();
-	private String format = "portable";
+	private String format = "install_datapack";
 	private String current = "";
 	private long request = -1;
 	private long requestedAt;
@@ -54,6 +54,10 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 	DesignerCollectionScreen(DesignerFormScreen parent, List<String> ids, JsonObject editing, String format) {
 		this(parent, ids, editing, false);
 		this.format = format;
+		if (format.equals("datapack") || format.equals("kubejs")) {
+			exportOptions.addProperty("include_project", true);
+			this.format = "runtime_" + format;
+		}
 	}
 
 	DesignerCollectionScreen(DesignerFormScreen parent, List<String> ids, JsonObject editing, boolean localDrafts) {
@@ -132,7 +136,7 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 				if (writing) {
 					fixedNote(tr("option." + format), x, y, w, 20);
 				} else {
-					selection(x, y, w, format, new String[]{"portable", "datapack", "kubejs", "runtime_datapack", "runtime_kubejs"}, value -> {
+					selection(x, y, w, format, new String[]{"install_datapack", "install_kubejs", "runtime_datapack", "runtime_kubejs", "portable"}, value -> {
 						format = value;
 						status = "";
 						exported = null;
@@ -141,9 +145,32 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 					});
 				}
 			}));
-			addFormatHelp(this, format);
-			if (editor != null) {
-				String applyLabel = format.equals("runtime_kubejs") ? "collection_apply_after_install" : "collection_apply_after_export";
+			if (format.equals("install_datapack")) {
+				String scope = BeeDesignerDocument.text(exportOptions, "datapack_scope",
+						"instance_datapack");
+				rows.add(new Row("collection_datapack_scope", (x, y, w) -> dropdown(x, y, w, scope,
+						new String[]{"instance_datapack", "world_datapack"},
+						value -> !value.equals("world_datapack") || minecraft.getSingleplayerServer() != null, value -> {
+					exportOptions.addProperty("datapack_scope", value);
+					exported = null;
+					rebuild();
+				})));
+				note("", tr("compat.scope." + scope));
+			}
+			if (format.startsWith("runtime_")) {
+				rows.add(new Row("collection_include_project", (x, y, w) -> {
+					boolean included = includeProject();
+					var toggle = addRenderableWidget(new DesignerTheme.Switch(x, y, Math.min(w, 74), included, () -> {
+						exportOptions.addProperty("include_project", !includeProject());
+						exported = null;
+						rebuild();
+					}));
+					toggle.active = !writing;
+				}, 20, false, 74));
+			}
+			addFormatHelp(this, exportFormat());
+			if (editor != null && !format.equals("portable")) {
+				String applyLabel = format.startsWith("install_") ? "collection_apply_after_install" : "collection_apply_after_export";
 				anchor("apply_after_export");
 				rows.add(new Row(applyLabel, (x, y, w) -> {
 					boolean enabled = exportOptions.has("apply") && exportOptions.get("apply").getAsBoolean();
@@ -235,7 +262,7 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 		int columns = editor != null && !applicationEntry ? 3 : 2;
 		int cell = (contentWidth - (columns - 1) * 6) / columns;
 		if (!applicationEntry) {
-			primaryButton(left, footerY(), cell, tr(format.equals("runtime_kubejs") ? "install_preview" : "collection_preview_export"), this::export).active = ready() && !writing;
+			primaryButton(left, footerY(), cell, tr(format.startsWith("install_") ? "install_preview" : "collection_preview_export"), this::export).active = ready() && !writing;
 		}
 		if (editor != null) {
 			int x = applicationEntry ? left : left + cell + 6;
@@ -254,18 +281,34 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 
 	static void addFormatHelp(DesignerFormScreen screen, String format) {
 		screen.note("", tr("collection_format_help." + format));
+		screen.note("", tr("collection_contents." + format));
+		if (format.equals("portable")) {
+			screen.note("", tr("collection_project_scope"));
+		} else if (format.startsWith("runtime_") || format.equals("datapack") || format.equals("kubejs")) {
+			screen.note("", tr(format.startsWith("runtime_") ? "collection_slim_contents" : "collection_full_contents"));
+		}
 		screen.group("collection_format_guide", true, () -> {
-			for (String part : List.of("contents", "install", "reload", "editing")) {
+			for (String part : List.of("install", "reload", "editing")) {
 				screen.note("", tr("collection_guide." + part).copy().append(": ")
 						.append(tr("collection_" + part + "." + format)));
 			}
 			screen.note("", tr("collection_guide_dependencies"));
-			screen.note("", tr("collection_guide_apply"));
-			screen.note("", tr("collection_guide_packaging"));
 			if (!format.equals("portable")) {
 				screen.note("", tr("collection_guide_one_install"));
 			}
 		});
+	}
+
+	private boolean includeProject() {
+		return exportOptions.has("include_project") && exportOptions.get("include_project").getAsBoolean();
+	}
+
+	private String exportFormat() {
+		if (format.equals("install_datapack") && BeeDesignerDocument.text(exportOptions, "datapack_scope",
+				"instance_datapack").equals("world_datapack")) {
+			return "install_world_datapack";
+		}
+		return format.startsWith("runtime_") && includeProject() ? format.substring("runtime_".length()) : format;
 	}
 
 	@Override
@@ -413,7 +456,7 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 		}
 		try {
 			Map<String, String> named = namedDocuments();
-			boolean alsoApply = exportOptions.has("apply") && exportOptions.get("apply").getAsBoolean();
+			boolean alsoApply = !format.equals("portable") && exportOptions.has("apply") && exportOptions.get("apply").getAsBoolean();
 			if (alsoApply && !canApply()) {
 				throw new IllegalArgumentException(editor.canPublish ? "designer.apply_world_busy" : "designer.apply_world_requires_author");
 			}
@@ -423,8 +466,8 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 				throw new IllegalArgumentException("designer.error.credits_pack");
 			}
 			writing = true;
-			status = format.equals("runtime_kubejs") ? "designer.install_preparing" : "designer.status.exporting";
-			DesignerProjectFiles.prepareExport(named, credits, format, preview -> {
+			status = format.startsWith("install_") ? "designer.install_preparing" : "designer.status.exporting";
+			DesignerProjectFiles.prepareExport(named, credits, exportFormat(), preview -> {
 				writing = false;
 				if (!closed && minecraft.screen == this) {
 					status = "";
@@ -432,7 +475,11 @@ final class DesignerCollectionScreen extends DesignerFormScreen {
 					minecraft.setScreen(new DesignerExportPreviewScreen(this, preview, name, path -> {
 						exported = path;
 						installedResult = preview.installation() != null;
-						status = Component.translatable(installedResult ? "designer.install_complete" : "designer.status.exported", path.toString()).getString();
+						String success = installedResult ? "designer.install_complete" : "designer.status.exported";
+						if (preview.format().equals("install_world_datapack")) {
+							success = "designer.world_install_complete";
+						}
+						status = Component.translatable(success, path.toString()).getString();
 						rebuildIfVisible();
 						if (generation >= 0 && !localDrafts && minecraft.getSingleplayerServer() != null) {
 							List<String> registered = BeeDesignerEggs.bees();

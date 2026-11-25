@@ -33,7 +33,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /** 预览保持只读；安装只提交封闭文件计划，失败时保管备份并明确报告回滚结果。 */
-public final class BeeDesignerKubeJsInstall {
+public final class BeeDesignerInstallation {
 	public enum Operation {
 		CREATE,
 		REPLACE,
@@ -52,10 +52,42 @@ public final class BeeDesignerKubeJsInstall {
 
 	private record Existing(String text, String digest, long bytes) {}
 
-	private BeeDesignerKubeJsInstall() {
+	private BeeDesignerInstallation() {
 	}
 
-	public static Plan prepare(Path instance, Map<String, String> generated) throws IOException {
+	public static Plan prepareKubeJs(Path instance, Map<String, String> generated) throws IOException {
+		return prepare(instance, instance.toAbsolutePath().normalize().resolve("kubejs"), "kubejs-installations", generated);
+	}
+
+	public static Plan prepareDatapack(Path instance, Map<String, String> generated) throws IOException {
+		String relative = "datapacks/bee-designer";
+		Map<String, String> files = new LinkedHashMap<>();
+		generated.forEach((path, text) -> files.put(relative + "/" + path, text));
+		files.put(relative + "/pack.mcmeta", "{\"pack\":{\"pack_format\":48,\"supported_formats\":{\"min_inclusive\":34,\"max_inclusive\":48},\"description\":\"Bee Designer installed bees\"}}");
+		return prepare(instance, instance.toAbsolutePath().normalize().resolve(relative), "datapack-installations", files);
+	}
+
+	public static Plan prepareWorldDatapack(Path instance, Path world, Map<String, String> generated) throws IOException {
+		instance = instance.toAbsolutePath().normalize();
+		world = world.toAbsolutePath().normalize();
+		if (!world.startsWith(instance.resolve("saves")) || world.getNameCount() != instance.getNameCount() + 2) {
+			throw new IOException("designer.error.kubejs_install_path|" + world);
+		}
+		String data = instance.relativize(world.resolve("datapacks/bee-designer")).toString().replace('\\', '/');
+		String names = "resourcepacks/bee-designer";
+		Map<String, String> files = new LinkedHashMap<>();
+		generated.forEach((path, text) -> {
+			if (path.startsWith("assets/")) {
+				files.put(names + "/" + path, text);
+			} else {
+				files.put(data + "/" + path, text);
+			}
+		});
+		files.put(names + "/pack.mcmeta", "{\"pack\":{\"pack_format\":34,\"description\":\"Bee Designer names\"}}");
+		return prepare(instance, world.resolve("datapacks/bee-designer"), "world-datapack-installations", files);
+	}
+
+	private static Plan prepare(Path instance, Path target, String backupFolder, Map<String, String> generated) throws IOException {
 		instance = instance.toAbsolutePath().normalize();
 		Path inspecting = instance;
 		try {
@@ -73,6 +105,9 @@ public final class BeeDesignerKubeJsInstall {
 			int unchanged = 0;
 			for (String relative : generated.keySet().stream().sorted().toList()) {
 				Path path = runtimePath(instance, relative);
+				if (!withinTarget(instance, target, path)) {
+					throw new IOException("designer.error.kubejs_install_path|" + path);
+				}
 				inspecting = path;
 				checkPath(instance, path, false);
 				String incoming = generated.get(relative);
@@ -85,7 +120,7 @@ public final class BeeDesignerKubeJsInstall {
 					}
 				}
 				String actual = incoming;
-				if (relative.matches("kubejs/assets/[a-z0-9_.-]+/lang/[a-z0-9_.-]+\\.json")) {
+				if (relative.matches("(?:kubejs|datapacks/bee-designer|resourcepacks/bee-designer)/assets/[a-z0-9_.-]+/lang/[a-z0-9_.-]+\\.json")) {
 					actual = mergeLanguage(relative, incoming, existing);
 				}
 				long bytes = encode(actual).length;
@@ -107,15 +142,15 @@ public final class BeeDesignerKubeJsInstall {
 				files.put(relative, actual);
 				changes.add(new FileChange(relative, operation, existing == null ? null : existing.digest(), bytes));
 			}
-			Path backups = instance.resolve("bee-designer/kubejs-installations").resolve(UUID.randomUUID().toString());
+			Path backups = instance.resolve("bee-designer").resolve(backupFolder).resolve(UUID.randomUUID().toString());
 			inspecting = backups;
 			checkPath(instance, backups, true);
-			return new Plan(instance, instance.resolve("kubejs"), backups, files, changes, created, replaced, unchanged);
+			return new Plan(instance, target, backups, files, changes, created, replaced, unchanged);
 		} catch (IOException failure) {
 			if (failure.getMessage() != null && failure.getMessage().startsWith("designer.error.")) {
 				throw failure;
 			}
-			ProductiveBeesGenesis.LOGGER.warn("Cannot inspect KubeJS installation file {}", inspecting, failure);
+			ProductiveBeesGenesis.LOGGER.warn("Cannot inspect bee installation file {}", inspecting, failure);
 			throw new IOException("designer.error.kubejs_install_read|" + inspecting, failure);
 		}
 	}
@@ -130,7 +165,7 @@ public final class BeeDesignerKubeJsInstall {
 			Files.createDirectories(plan.backupDirectory().getParent());
 			Files.createDirectory(plan.backupDirectory());
 		} catch (IOException failure) {
-			ProductiveBeesGenesis.LOGGER.warn("Cannot prepare KubeJS installation backup {}", plan.backupDirectory(), failure);
+			ProductiveBeesGenesis.LOGGER.warn("Cannot prepare bee installation backup {}", plan.backupDirectory(), failure);
 			throw new IOException("designer.error.kubejs_install_backup|" + plan.backupDirectory(), failure);
 		}
 		List<FileChange> committed = new ArrayList<>();
@@ -179,7 +214,7 @@ public final class BeeDesignerKubeJsInstall {
 			} catch (IOException journalFailure) {
 				failure.addSuppressed(journalFailure);
 			}
-			ProductiveBeesGenesis.LOGGER.warn("KubeJS installation failed; backup={}, unresolved={}", plan.backupDirectory(), unresolved, failure);
+			ProductiveBeesGenesis.LOGGER.warn("Bee installation failed; backup={}, unresolved={}", plan.backupDirectory(), unresolved, failure);
 			String key = unresolved.isEmpty() ? "designer.error.kubejs_install_failed" : "designer.error.kubejs_install_rollback";
 			throw new IOException(key + "|" + plan.backupDirectory() + "|" + String.join(", ", unresolved), failure);
 		}
@@ -187,8 +222,17 @@ public final class BeeDesignerKubeJsInstall {
 
 	private static void verify(Plan plan) throws IOException {
 		checkPath(plan.instance(), plan.instance(), true);
-		if (!plan.target().equals(plan.instance().resolve("kubejs"))
-				|| !plan.backupDirectory().getParent().equals(plan.instance().resolve("bee-designer/kubejs-installations"))
+		boolean kubeJs = plan.target().equals(plan.instance().resolve("kubejs"));
+		boolean datapack = plan.target().equals(plan.instance().resolve("datapacks/bee-designer"));
+		boolean world = worldTarget(plan.instance(), plan.target());
+		String backupFolder = "datapack-installations";
+		if (kubeJs) {
+			backupFolder = "kubejs-installations";
+		} else if (world) {
+			backupFolder = "world-datapack-installations";
+		}
+		if ((!kubeJs && !datapack && !world)
+				|| !plan.backupDirectory().getParent().equals(plan.instance().resolve("bee-designer").resolve(backupFolder))
 				|| !plan.files().keySet().equals(plan.changes().stream().map(FileChange::path)
 						.collect(java.util.stream.Collectors.toSet()))) {
 			throw new IOException("designer.error.kubejs_install_path|" + plan.target());
@@ -207,6 +251,9 @@ public final class BeeDesignerKubeJsInstall {
 
 	private static void verifyFile(Plan plan, FileChange change) throws IOException {
 		Path path = runtimePath(plan.instance(), change.path());
+		if (!withinTarget(plan.instance(), plan.target(), path)) {
+			throw new IOException("designer.error.kubejs_install_path|" + path);
+		}
 		checkPath(plan.instance(), path, false);
 		Existing current = read(path);
 		if (change.operation() == Operation.CREATE ? current != null
@@ -278,7 +325,7 @@ public final class BeeDesignerKubeJsInstall {
 		if (encode(text).length > BeeDesignerStore.MAX_PACK_BYTES) {
 			throw new IOException("designer.error.export_budget");
 		}
-		if (path.endsWith(".json")) {
+		if (path.endsWith(".json") || path.endsWith(".mcmeta")) {
 			json(path, text);
 		}
 	}
@@ -328,7 +375,10 @@ public final class BeeDesignerKubeJsInstall {
 	private static Path runtimePath(Path instance, String relative) throws IOException {
 		if (!relative.matches("kubejs/(?:data|assets)/[a-z0-9_.-]+/[a-z0-9_./-]+\\.json")
 				&& !relative.matches("kubejs/server_scripts/[a-z0-9_./-]+\\.js")
-				|| relative.contains("..") || relative.contains("//")) {
+				&& !relative.matches("datapacks/bee-designer/(?:(?:data|assets)/[a-z0-9_.-]+/[a-z0-9_./-]+\\.json|pack\\.mcmeta)")
+				&& !relative.matches("saves/[^/\\\\:]+/datapacks/bee-designer/(?:data/[a-z0-9_.-]+/[a-z0-9_./-]+\\.json|pack\\.mcmeta)")
+				&& !relative.matches("resourcepacks/bee-designer/(?:assets/[a-z0-9_.-]+/[a-z0-9_./-]+\\.json|pack\\.mcmeta)")
+				|| java.util.Arrays.asList(relative.split("/")).contains("..") || relative.contains("//")) {
 			throw new IOException("designer.error.kubejs_install_path|" + relative);
 		}
 		for (String segment : relative.split("/")) {
@@ -338,6 +388,15 @@ public final class BeeDesignerKubeJsInstall {
 			}
 		}
 		return instance.resolve(relative);
+	}
+
+	private static boolean worldTarget(Path instance, Path target) {
+		return target.startsWith(instance.resolve("saves")) && target.getNameCount() == instance.getNameCount() + 4
+				&& target.endsWith(Path.of("datapacks/bee-designer"));
+	}
+
+	private static boolean withinTarget(Path instance, Path target, Path file) {
+		return file.startsWith(target) || worldTarget(instance, target) && file.startsWith(instance.resolve("resourcepacks/bee-designer"));
 	}
 
 	private static void checkPath(Path instance, Path target, boolean directory) throws IOException {
