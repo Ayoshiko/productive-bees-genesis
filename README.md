@@ -26,7 +26,7 @@ Use **Minecraft 1.21.1 and Java 21**. Install these required mods and their own 
 
 Install matching Genesis versions on **both client and server**, and update them together. Mekanism is required for the mod; AE2 and the other integrations below are optional.
 
-**Helpful additions:** JEI for recipes and flowers, Jade for machine status, and Patchouli for the craftable **Productive Bees Genesis Guide**.
+**Helpful additions:** JEI **19.36.0.360 or newer** for recipes and flowers, Jade for machine status, and Patchouli for the craftable **Productive Bees Genesis Guide**.
 
 This page covers the NeoForge edition. For Forge 1.20.1, see the separate [Forge branch](https://github.com/Ayoshiko/productive-bees-genesis/tree/forge/1.20.1).
 

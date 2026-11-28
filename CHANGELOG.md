@@ -31,6 +31,20 @@
 
 ## [Unreleased]
 
+## [1.2.8] - 2026-11-28
+
+### 修复
+
+- 修复使用新版 JEI 时客户端在构建物品搜索索引时崩溃的问题。切换语言或给蜂种改名后，搜索结果会随之更新。
+- 将可选客户端依赖 JEI 的最低版本更正为 19.36.0.360。更早的版本缺少蜂蜂应援手册注册搜索别名所需的接口。
+
+### English
+
+#### Fixed
+
+- Fixed a client crash while newer JEI versions were building the ingredient search index. Search results now update after a language change or bee rename.
+- Corrected the minimum version for the optional JEI client integration to 19.36.0.360. Earlier versions lack the API the BeeBee Support Handbook uses to register search aliases.
+
 ## [1.2.7] - 2026-11-25
 
 **蜜蜂编辑器与整合包制作维护更新。** 客户端与服务端须一起更新。 / **Bee editor and modpack authoring maintenance update.** Update clients and servers together.

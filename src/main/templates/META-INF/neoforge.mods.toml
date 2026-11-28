@@ -256,7 +256,7 @@ config="${mod_id}.iris.mixins.json"
 [[dependencies.${mod_id}]]
     modId="jei"
     type="optional"
-    versionRange="[19.0.0,)"
+    versionRange="[19.36.0.360,)"
     ordering="AFTER"
     side="CLIENT"
 

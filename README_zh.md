@@ -26,7 +26,7 @@
 
 **客户端与服务端均需安装相同版本的 Genesis，并一起更新。** Mekanism 是整个模组的必需依赖；AE2 及下方其他集成为可选。
 
-**推荐搭配：** JEI 查看配方与花源，Jade 查看机器状态，Patchouli 提供可合成的 **《资源蜜蜂：创世指南》**。
+**推荐搭配：** JEI **19.36.0.360 或更高版本**可用于查看配方与花源，Jade 查看机器状态，Patchouli 提供可合成的 **《资源蜜蜂：创世指南》**。
 
 本页介绍 NeoForge 版。Forge 1.20.1 请查看独立的 [Forge 分支](https://github.com/Ayoshiko/productive-bees-genesis/tree/forge/1.20.1)。
 
